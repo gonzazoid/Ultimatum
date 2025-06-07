@@ -6,7 +6,7 @@
 <translation id="1011749477052068769">Skuif hierheen</translation>
 <translation id="1014147525163127655">Daar is geen wagwoordsleutels vir <ph name="ORIGIN" /> op hierdie toestel nie</translation>
 <translation id="1016498331642356377">Soek vinnig met jou stem. Raak en hou om hierdie kortpad te wysig.</translation>
-<translation id="1024113959924243553">Chrome Dev</translation>
+<translation id="1024113959924243553">Ultimatum Dev</translation>
 <translation id="1028699632127661925">Stuur tans na <ph name="DEVICE_NAME" /> toe …</translation>
 <translation id="103269572468856066">Vee ook dié data uit?</translation>
 <translation id="1034259925032978114">Venster is oop</translation>
@@ -25,7 +25,7 @@
 <translation id="1094555143448724771">Sinkroniseer jou oortjies en geskiedenis om oortjies van jou ander toestelle af te sien</translation>
 <translation id="1095761715416917775">Maak seker dat jy altyd toegang tot jou gesinkroniseerde data het</translation>
 <translation id="1100066534610197918">Open in nuwe oortjie in groep</translation>
-<translation id="1103142993930332957">Help om Chrome te verbeter?</translation>
+<translation id="1103142993930332957">Help om Ultimatum te verbeter?</translation>
 <translation id="1105960400813249514">Skermskoot</translation>
 <translation id="1108214977745280468">Bekyk bladinsigte</translation>
 <translation id="1108938384783527433">Geskiedenissinkronisering</translation>
@@ -37,12 +37,12 @@
 <translation id="1140317858355046628">As jy dit uitvee sal almal onmiddellik toegang tot die “<ph name="GROUP_NAME" />”-oortjiegroep verloor, en dit sal van alle toestelle af uitgevee word.</translation>
 <translation id="1142732900304639782">Moenie aanbied om hierdie werwe te vertaal nie</translation>
 <translation id="1145536944570833626">Vee bestaande data uit.</translation>
-<translation id="1150263420752757504"><ph name="APP_NAME" /> sal in Chrome oopmaak. Deur voort te gaan, stem jy in tot <ph name="BEGIN_LINK1" />Google se diensbepalings<ph name="END_LINK1" /> en <ph name="BEGIN_LINK2" />Google Chrome en Chrome-bedryfstelsel se bykomende diensbepalings<ph name="END_LINK2" />.</translation>
+<translation id="1150263420752757504"><ph name="APP_NAME" /> sal in Ultimatum oopmaak. Deur voort te gaan, stem jy in tot <ph name="BEGIN_LINK1" />Google se diensbepalings<ph name="END_LINK1" /> en <ph name="BEGIN_LINK2" />Ultimatum en Ultimatum-bedryfstelsel se bykomende diensbepalings<ph name="END_LINK2" />.</translation>
 <translation id="1154555449933432029">Jy het nie wagwoorde wat in Google Wagwoordbestuurder gestoor is nie.</translation>
 <translation id="115483310321669804">Gebruik wagwoord <ph name="PASSWORD" /></translation>
 <translation id="1173894706177603556">Hernoem</translation>
-<translation id="1174479719160874822">Chrome sal die mobiele werf versoek wanneer die skerm smal is</translation>
-<translation id="1175241315203286684">Jou administrateur kan oor ’n afstand veranderinge aan jou profiel en blaaier maak, inligting oor die blaaier ontleed deur middel van verslagdoening, en ander nodige take uitvoer. Aktiwiteit op hierdie toestel kan ook buite Chrome bestuur word.</translation>
+<translation id="1174479719160874822">Ultimatum sal die mobiele werf versoek wanneer die skerm smal is</translation>
+<translation id="1175241315203286684">Jou administrateur kan oor ’n afstand veranderinge aan jou profiel en blaaier maak, inligting oor die blaaier ontleed deur middel van verslagdoening, en ander nodige take uitvoer. Aktiwiteit op hierdie toestel kan ook buite Ultimatum bestuur word.</translation>
 <translation id="1177863135347784049">Gepasmaak</translation>
 <translation id="1181037720776840403">Verwyder</translation>
 <translation id="1183189057400844278">Verifieer dis jy om seker te maak dat jy altyd die wagwoorde in jou Google-rekening kan gebruik</translation>
@@ -78,8 +78,8 @@
 <translation id="1318262688555255786">Deel skakel na webbladsy <ph name="PAGE_TITLE" />. Bron: <ph name="PAGE_URL" /></translation>
 <translation id="1320912611264252795">Boekmerkstoorvloei se vouers is teen volle hoogte oopgemaak</translation>
 <translation id="1327257854815634930">Navigasiegeskiedenis is oopgemaak</translation>
-<translation id="1331212799747679585">Chrome kan nie opdateer nie. Meer opsies</translation>
-<translation id="1332501820983677155">Google Chrome-kenmerkkortpaaie</translation>
+<translation id="1331212799747679585">Ultimatum kan nie opdateer nie. Meer opsies</translation>
+<translation id="1332501820983677155">Ultimatum-kenmerkkortpaaie</translation>
 <translation id="1333491156693005331">Onlangs gekontroleer</translation>
 <translation id="1336996151357442890">Uitgeteken van <ph name="SITE_NAME" />. Jy sal weer gevra word wanneer jy dit weer besoek.</translation>
 <translation id="1340839264183302272">Verlaat groep</translation>
@@ -96,28 +96,28 @@
 <translation id="1383876407941801731">Soek</translation>
 <translation id="1384704387250346179">Vertaal prent met Google Lens <ph name="BEGIN_NEW" />Nuut<ph name="END_NEW" /></translation>
 <translation id="1386674309198842382"><ph name="LAST_UPDATED" /> dae gelede aktief</translation>
-<translation id="1390418506739274310">Jy kan moontlik die geskiedenis sien van ander apps wat skakels in Chrome oopmaak. Jou Google-rekening kan dalk ander vorme van blaaigeskiedenis hê by <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
+<translation id="1390418506739274310">Jy kan moontlik die geskiedenis sien van ander apps wat skakels in Ultimatum oopmaak. Jou Google-rekening kan dalk ander vorme van blaaigeskiedenis hê by <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="139752016751285248">Prysinsigte se onderste blad het teen volle hoogte oopgemaak</translation>
 <translation id="1397811292916898096">Soek met <ph name="PRODUCT_NAME" /></translation>
-<translation id="1398057416966591719">Jy kan <ph name="BEGIN_LINK1" />bestuur watter Chrome-data gestoor word<ph name="END_LINK1" /> in jou Google-rekening.
+<translation id="1398057416966591719">Jy kan <ph name="BEGIN_LINK1" />bestuur watter Ultimatum-data gestoor word<ph name="END_LINK1" /> in jou Google-rekening.
 
-Gaan na <ph name="BEGIN_LINK2" />Google-dienste<ph name="END_LINK2" /> vir meer instellings wat data gebruik om jou Chrome-ervaring te verbeter.</translation>
+Gaan na <ph name="BEGIN_LINK2" />Google-dienste<ph name="END_LINK2" /> vir meer instellings wat data gebruik om jou Ultimatum-ervaring te verbeter.</translation>
 <translation id="1407069428457324124">Donkertema</translation>
 <translation id="1407135791313364759">Maak alles oop</translation>
 <translation id="1409879593029778104">Aflaai van <ph name="FILE_NAME" /> is verhinder omdat die lêer reeds bestaan.</translation>
 <translation id="1413446866325418126">Stoor data in jou Google-rekening</translation>
 <translation id="1416550906796893042">Programweergawe</translation>
-<translation id="1419753403124156396">Herbegin Chrome?</translation>
+<translation id="1419753403124156396">Herbegin Ultimatum?</translation>
 <translation id="1428770807407000502">Skakel sinkronisering af?</translation>
 <translation id="1430915738399379752">Druk uit</translation>
 <translation id="1435593198351412143">Maak PDF’s outomaties oop</translation>
 <translation id="1437543266176261764">Loop tans in <ph name="APP_NAME" /></translation>
 <translation id="1448440926884431741">Organiseer jou nagespoorde produkte in Boekmerke</translation>
 <translation id="1460751212339734034">Spaar tyd, tik minder</translation>
-<translation id="1466383950273130737">Kies Chrome se taal</translation>
+<translation id="1466383950273130737">Kies Ultimatum se taal</translation>
 <translation id="1477626028522505441">Kon <ph name="FILE_NAME" /> weens bedienerkwessies nie aflaai nie.</translation>
 <translation id="147982357559798527">Het verander</translation>
-<translation id="1480287803138246127">Sommige van jou geskiedenis sal dalk nie hier verskyn nie. Maak die volle Chrome-geskiedenis oop om al jou Chrome-geskiedenis te sien.</translation>
+<translation id="1480287803138246127">Sommige van jou geskiedenis sal dalk nie hier verskyn nie. Maak die volle Ultimatum-geskiedenis oop om al jou Ultimatum-geskiedenis te sien.</translation>
 <translation id="1492417797159476138">Jy het hierdie gebruikernaam reeds vir hierdie werf gestoor</translation>
 <translation id="1493287004536771723">Jy volg tans <ph name="SITE_NAME" /></translation>
 <translation id="1496514951988037011">gebruikernaam</translation>
@@ -128,15 +128,15 @@ Gaan na <ph name="BEGIN_LINK2" />Google-dienste<ph name="END_LINK2" /> vir meer 
 <translation id="1513858653616922153">Vee wagwoord uit</translation>
 <translation id="1515901671075971249">Kortpaaie vir oortjienavigasie</translation>
 <translation id="1521774566618522728">Aktief vandag</translation>
-<translation id="153446405401665083">Nuwe weergawe van Chrome is beskikbaar</translation>
+<translation id="153446405401665083">Nuwe weergawe van Ultimatum is beskikbaar</translation>
 <translation id="1540012742443808215">Adresbalk is tans bo</translation>
 <translation id="1543379346429265919">{BOOKMARKS_COUNT,plural, =1{1 boekmerk is net op hierdie toestel gestoor. Stoor dit in jou Google-rekening, <ph name="ACCOUNT_EMAIL" />, om dit op jou ander toestelle te gebruik.}other{# boekmerke word net op hierdie toestel gestoor. As jy hulle op jou ander toestelle wil gebruik, moet jy hulle in jou Google-rekening, <ph name="ACCOUNT_EMAIL" />, stoor.}}</translation>
-<translation id="1544084554881119930">Betaalmetodes en adresse sal nie geënkripteer word nie. Blaaigeskiedenis van Chrome af sal nie sinkroniseer nie.
-Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word nie na Google toe gestuur of deur Google geberg nie. <ph name="BEGIN_LINK" />Vee die Chrome-data in jou rekening uit<ph name="END_LINK" /> indien jy jou wagfrase vergeet of hierdie instelling wil verander.</translation>
+<translation id="1544084554881119930">Betaalmetodes en adresse sal nie geënkripteer word nie. Blaaigeskiedenis van Ultimatum af sal nie sinkroniseer nie.
+Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word nie na Google toe gestuur of deur Google geberg nie. <ph name="BEGIN_LINK" />Vee die Ultimatum-data in jou rekening uit<ph name="END_LINK" /> indien jy jou wagfrase vergeet of hierdie instelling wil verander.</translation>
 <translation id="1544826120773021464">Tik op die "Bestuur rekening"-knoppie om jou Google-rekening te bestuur</translation>
 <translation id="1549000191223877751">Beweeg na 'n ander venster</translation>
-<translation id="1553358976309200471">Dateer Chrome op</translation>
-<translation id="1554532453982918912">Help om Chrome beter te maak vir mense wat dit op dieselfde manier as jy gebruik</translation>
+<translation id="1553358976309200471">Dateer Ultimatum op</translation>
+<translation id="1554532453982918912">Help om Ultimatum beter te maak vir mense wat dit op dieselfde manier as jy gebruik</translation>
 <translation id="1568636008098739136">Luister na hierdie bladsy. Raak en hou om hierdie kortpad te wysig.</translation>
 <translation id="1571041387761170095">Geen swak of hergebruikte wagwoorde nie</translation>
 <translation id="1571304935088121812">Kopieer gebruikernaam</translation>
@@ -161,7 +161,7 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="1702907158640575240">Bestuurde blaaier</translation>
 <translation id="1718835860248848330">Afgelope uur</translation>
 <translation id="1724977129262658800">Ontsluit om jou wagwoord te wysig</translation>
-<translation id="1726477445370128854">Jy kan vinniger blaai en soek wanneer Chrome bladsye vooraf laai wat dit dink jy dalk gaan besoek</translation>
+<translation id="1726477445370128854">Jy kan vinniger blaai en soek wanneer Ultimatum bladsye vooraf laai wat dit dink jy dalk gaan besoek</translation>
 <translation id="1728803206919861584">Stoor toegangsleutel buite Incognito?</translation>
 <translation id="1732514748744806741">Ons sal jou laat weet as jou wagwoorde gekompromitteer is</translation>
 <translation id="1747593111377567311">{NUM_SITES,plural, =1{1 werf het onlangs baie kennisgewings gestuur}other{# werwe het onlangs baie kennisgewings gestuur}}</translation>
@@ -171,7 +171,7 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="1755203724116202818">Om die werkverrigting van ’n advertensie te meet, word beperkte soorte data tussen werwe gedeel, soos of jy ’n aankoop gedoen het nadat jy ’n werf besoek het.</translation>
 <translation id="1757620656501361327">Google Wagwoordbestuurder-opdatering</translation>
 <translation id="1760873718737761808">{FILE_COUNT,plural, =1{Bladsye, 1 bladsy in lys}other{Bladsye, # bladsye in lys}}</translation>
-<translation id="1771929606532798550">Inligting oor jou Chrome-gebruik word na Google toe gestuur, maar dit word nie met jou verbind nie\n\nAs Chrome omval, kan besonderhede oor die omval sekere persoonlike inligting insluit\n\nAs jy jou geskiedenis met jou Google-rekening sinkroniseer, kan maatstawwe ook inligting insluit oor URL'e wat jy besoek</translation>
+<translation id="1771929606532798550">Inligting oor jou Ultimatum-gebruik word na Google toe gestuur, maar dit word nie met jou verbind nie\n\nAs Ultimatum omval, kan besonderhede oor die omval sekere persoonlike inligting insluit\n\nAs jy jou geskiedenis met jou Google-rekening sinkroniseer, kan maatstawwe ook inligting insluit oor URL'e wat jy besoek</translation>
 <translation id="1778457539567749232">Merk as ongelees</translation>
 <translation id="1779766957982586368">Maak venster toe</translation>
 <translation id="1780023393214832643">Wagwoorde is na <ph name="USERNAME" /> gestoor</translation>
@@ -183,13 +183,13 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="1810845389119482123">Aanvanklike sinkronisering-opstelling is nie klaar nie</translation>
 <translation id="1812027881030482584"><ph name="SITE_ETLD_PLUS_ONE" /> kan nie voortgaan om <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> te gebruik nie</translation>
 <translation id="1820408774134375111">Aanmelding se onderste blad</translation>
-<translation id="1825772852827001597">Betaalmetodes en adresse van Google Pay af sal nie geënkripteer word nie. Blaaigeskiedenis van Chrome af sal nie sinkroniseer nie.
-Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word nie na Google toe gestuur of deur Google geberg nie. <ph name="BEGIN_LINK" />Vee die Chrome-data in jou rekening uit<ph name="END_LINK" /> indien jy jou wagfrase vergeet of hierdie instelling wil verander.</translation>
+<translation id="1825772852827001597">Betaalmetodes en adresse van Google Pay af sal nie geënkripteer word nie. Blaaigeskiedenis van Ultimatum af sal nie sinkroniseer nie.
+Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word nie na Google toe gestuur of deur Google geberg nie. <ph name="BEGIN_LINK" />Vee die Ultimatum-data in jou rekening uit<ph name="END_LINK" /> indien jy jou wagfrase vergeet of hierdie instelling wil verander.</translation>
 <translation id="1829244130665387512">Vind op bladsy</translation>
 <translation id="1832459821645506983">Ja, ek is in</translation>
-<translation id="1845958458910716240">Chrome het toestemmings verwyder, van werwe wat jy nie onlangs besoek het nie, om jou data te beskerm</translation>
-<translation id="1871098866036088250">Maak in Chrome-blaaier oop</translation>
-<translation id="1877026089748256423">Chrome is verouderd</translation>
+<translation id="1845958458910716240">Ultimatum het toestemmings verwyder, van werwe wat jy nie onlangs besoek het nie, om jou data te beskerm</translation>
+<translation id="1871098866036088250">Maak in Ultimatum-blaaier oop</translation>
+<translation id="1877026089748256423">Ultimatum is verouderd</translation>
 <translation id="1877073879466606884">Die profiel waarmee jy aangemeld is, is ’n bestuurde profiel. Jou administrateur kan oor ’n afstand veranderinge aan jou profielinstellings maak, inligting oor die blaaier ontleed deur middel van verslagdoening, en ander nodige take uitvoer.</translation>
 <translation id="1879904908408734349">Aanmelding se onderste blad is toegemaak</translation>
 <translation id="1883903952484604915">My lêers</translation>
@@ -200,7 +200,7 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="1910950723001426294">Lys deelopsies is gesluit.</translation>
 <translation id="191726024256261717">Gaan toestemmings na</translation>
 <translation id="1917766536967060661">Jy sal onmiddellik toegang tot die “<ph name="GROUP_NAME" />”-oortjiegroep verloor, en <ph name="BLOCKED_MEMBER_FULL_NAME" /> (<ph name="BLOCKED_MEMBER_EMAIL" />) sal nie meer met jou oor Google-dienste kan kommunikeer nie.</translation>
-<translation id="1919130412786645364">Laat Chrome-aanmelding toe</translation>
+<translation id="1919130412786645364">Laat Ultimatum-aanmelding toe</translation>
 <translation id="1922362554271624559">Voorgestelde tale</translation>
 <translation id="1924255092154549435">Oortjie is uitgevou</translation>
 <translation id="1925021887439448749">Voer gepasmaakte webadres in</translation>
@@ -212,11 +212,11 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="1944535645109964458">Geen toegangsleutels beskikbaar nie</translation>
 <translation id="1957557050935255529">Laai tans PDF …</translation>
 <translation id="1959679933317802873">Wag tans vir inhoud</translation>
-<translation id="1960290143419248813">Chrome-opdaterings word nie meer vir hierdie weergawe van Android gesteun nie</translation>
+<translation id="1960290143419248813">Ultimatum-opdaterings word nie meer vir hierdie weergawe van Android gesteun nie</translation>
 <translation id="1963056249988316027">Identiteitskontrole is aan en kan nie verifieer dat dit jy is nie</translation>
 <translation id="1963976881984600709">Standaardbeskerming</translation>
 <translation id="1966710179511230534">Dateer asseblief jou aanmeldbesonderhede op.</translation>
-<translation id="1969037871259811890">Jy word nie by jou Google-rekening afgemeld wanneer jy blaaierdata uitvee nie. <ph name="BEGIN_LINK1" />Meld by Chrome af<ph name="END_LINK1" /> om dit te doen.</translation>
+<translation id="1969037871259811890">Jy word nie by jou Google-rekening afgemeld wanneer jy blaaierdata uitvee nie. <ph name="BEGIN_LINK1" />Meld by Ultimatum af<ph name="END_LINK1" /> om dit te doen.</translation>
 <translation id="197288927597451399">Behou</translation>
 <translation id="1973912524893600642">Hou data</translation>
 <translation id="1974060860693918893">Gevorderd</translation>
@@ -226,7 +226,7 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="200114059308480249">Sluit omringende teks by Google-soektogte in?</translation>
 <translation id="2021896219286479412">Volskermwerfkontroles</translation>
 <translation id="2038563949887743358">Skakel Versoek rekenaarwerf aan</translation>
-<translation id="204321170514947529"><ph name="APP_NAME" /> het ook data in Chrome</translation>
+<translation id="204321170514947529"><ph name="APP_NAME" /> het ook data in Ultimatum</translation>
 <translation id="2047378580182589770">Raak en hou om uit Incognito te skakel</translation>
 <translation id="2049574241039454490"><ph name="FILE_SIZE_OF_TOTAL" /> <ph name="SEPARATOR" /> <ph name="DESCRIPTION" /></translation>
 <translation id="2051669996101374349">Gebruik HTTPS waar moontlik en word gewaarsku voordat werwe laai wat dit nie steun nie. Jy kan nie hierdie instelling verander nie omdat Gevorderde Beskerming geaktiveer is.</translation>
@@ -236,7 +236,7 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="2067805253194386918">teks</translation>
 <translation id="2079545284768500474">Ontdoen</translation>
 <translation id="2082238445998314030">Resultaat <ph name="RESULT_NUMBER" /> van <ph name="TOTAL_RESULTS" /></translation>
-<translation id="2088833076121753253">Herbegin Chrome nou om outovul klaar op te stel. Jou oortjies sal outomaties weer oopmaak.</translation>
+<translation id="2088833076121753253">Herbegin Ultimatum nou om outovul klaar op te stel. Jou oortjies sal outomaties weer oopmaak.</translation>
 <translation id="2091863218454846791">Wys tans kompakte aansig</translation>
 <translation id="2093731487903423814">afgelope 15 minute</translation>
 <translation id="2100273922101894616">Outomatiese aanmelding</translation>
@@ -246,10 +246,10 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="2122601567107267586">Kon nie app oopmaak nie</translation>
 <translation id="213279576345780926">Het <ph name="TAB_TITLE" /> toegemaak</translation>
 <translation id="2141396931810938595">Gegrond op jou gebruik</translation>
-<translation id="2145315049852051678">Chrome kontroleer gereeld om seker te maak dat jou blaaier die veiligste instellings het. Ons sal jou laat weet as enigiets nagegaan moet word.</translation>
+<translation id="2145315049852051678">Ultimatum kontroleer gereeld om seker te maak dat jou blaaier die veiligste instellings het. Ons sal jou laat weet as enigiets nagegaan moet word.</translation>
 <translation id="2149973817440762519">Wysig boekmerk</translation>
-<translation id="2158408438301413340">Chrome kon nie alle wagwoorde nagaan nie</translation>
-<translation id="2163089732491971196">Voer jou wagfrase in om Chrome-data in jou Google-rekening te gebruik en te stoor</translation>
+<translation id="2158408438301413340">Ultimatum kon nie alle wagwoorde nagaan nie</translation>
+<translation id="2163089732491971196">Voer jou wagfrase in om Ultimatum-data in jou Google-rekening te gebruik en te stoor</translation>
 <translation id="2166228530126694506">Weergawe <ph name="VERSION_NUMBER" /></translation>
 <translation id="2172688499998841696">Prentbeskrywings is af</translation>
 <translation id="2172905120685242547">Maak venster toe?</translation>
@@ -261,7 +261,7 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="219283042927675668">Oortjies in groep</translation>
 <translation id="2194856509914051091">Dinge om in ag te neem</translation>
 <translation id="22091350895006575">Voeg gebruikernaam by</translation>
-<translation id="221494669172414749">As jy Chrome sonder ’n profielsluit oopmaak, sal jou gestoorde wagwoorde en betaalmetodes uit die motor verwyder word. Die gebruik van ’n profielsluit hou hierdie data veilig.</translation>
+<translation id="221494669172414749">As jy Ultimatum sonder ’n profielsluit oopmaak, sal jou gestoorde wagwoorde en betaalmetodes uit die motor verwyder word. Die gebruik van ’n profielsluit hou hierdie data veilig.</translation>
 <translation id="2227444325776770048">Gaan voort as <ph name="USER_FULL_NAME" /></translation>
 <translation id="2230777942707397948">Leë venster</translation>
 <translation id="223356358902285214">Web- en App-aktiwiteit</translation>
@@ -287,7 +287,7 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="2332515770639153015">Verbeterde Veiligblaai is aan</translation>
 <translation id="233375395665273385">Vee uit en meld af</translation>
 <translation id="2341410551640223969">Kon nie <ph name="WEBAPK_NAME" /> installeer nie.</translation>
-<translation id="2349710944427398404">Alle data deur Chrome gebruik, insluitend rekeninge, boekmerke en gestoorde instellings</translation>
+<translation id="2349710944427398404">Alle data deur Ultimatum gebruik, insluitend rekeninge, boekmerke en gestoorde instellings</translation>
 <translation id="2349954856814571872">Boekmerkbalkknoppie-ikoon</translation>
 <translation id="235789365079050412">Google-privaatheidsbeleid</translation>
 <translation id="2359808026110333948">Gaan voort</translation>
@@ -307,7 +307,7 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="2433507940547922241">Voorkoms</translation>
 <translation id="2435457462613246316">Wys wagwoord</translation>
 <translation id="2439153523196674349"><ph name="SITE_NAME" />-voorskou</translation>
-<translation id="2449931042095204989">Chrome enkripteer en laai bladsye vooraf deur Google-bedieners sonder webkoekies wanneer ’n Google-werf of -app vra om skakels op hul bladsy privaat vooraf te laai. Dit versteek jou identiteit vir die voorafgelaaide werf.</translation>
+<translation id="2449931042095204989">Ultimatum enkripteer en laai bladsye vooraf deur Google-bedieners sonder webkoekies wanneer ’n Google-werf of -app vra om skakels op hul bladsy privaat vooraf te laai. Dit versteek jou identiteit vir die voorafgelaaide werf.</translation>
 <translation id="2450083983707403292">Wil jy <ph name="FILE_NAME" /> weer begin aflaai?</translation>
 <translation id="2451607499823206582">Spoor tans na</translation>
 <translation id="2453860139492968684">Voltooi</translation>
@@ -315,17 +315,17 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="2461822463642141190">Huidig</translation>
 <translation id="2463770278804271243">BLADSY</translation>
 <translation id="2468444275314013497">Jou blaaier lyk goed</translation>
-<translation id="2472163211318554013">Meld aan om Chrome ten beste te benut</translation>
+<translation id="2472163211318554013">Meld aan om Ultimatum ten beste te benut</translation>
 <translation id="247737702124049222">Prentbeskrywings is aan</translation>
 <translation id="2479148705183875116">Gaan na Instellings</translation>
 <translation id="2482878487686419369">Kennisgewings</translation>
 <translation id="2496180316473517155">Blaaigeskiedenis</translation>
 <translation id="2497852260688568942">Jou administrateur het sinkronisering gedeaktiveer</translation>
-<translation id="250020030759455918">Jy sal jou <ph name="SITE_NAME" />-aanmeldingstatus, -blaaierdata en -werfdata in Chrome sien</translation>
+<translation id="250020030759455918">Jy sal jou <ph name="SITE_NAME" />-aanmeldingstatus, -blaaierdata en -werfdata in Ultimatum sien</translation>
 <translation id="2510106555128151389">Installeer tans <ph name="WEBAPK_NAME" /> …</translation>
 <translation id="2512234228327349533">Soek koopopsies</translation>
 <translation id="2513403576141822879">Sien <ph name="BEGIN_LINK" />Sinkornisering en Google-dienste<ph name="END_LINK" /> vir meer instellings wat verband hou met privaatheid, sekuriteit en data-insameling</translation>
-<translation id="2515921719039583189">Vee jou Chrome-data op hierdie toestel uit?</translation>
+<translation id="2515921719039583189">Vee jou Ultimatum-data op hierdie toestel uit?</translation>
 <translation id="2517113738956581680">Volgrootteblad</translation>
 <translation id="2523184218357549926">Stuur URL'e van bladsye wat jy besoek na Google toe</translation>
 <translation id="2524132927880411790">Gaan na stemsoektog van Google-app</translation>
@@ -343,10 +343,10 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="2569733278091928697">Jy sal mediakontroles, Incognito-sessies, aflaaie, en meer maklik kan bestuur</translation>
 <translation id="2571711316400087311">Bied aan om bladsye in ander tale na Google Vertaal te stuur</translation>
 <translation id="2571834852878229351">Skep my eie</translation>
-<translation id="2574249610672786438">Meld op al jou toestelle aan om jou oortjies te sien van waar ook al jy Chrome gebruik</translation>
+<translation id="2574249610672786438">Meld op al jou toestelle aan om jou oortjies te sien van waar ook al jy Ultimatum gebruik</translation>
 <translation id="2577981599306533385"><ph name="MEMBER_FULL_NAME" /> (<ph name="EMAIL" />) sal onmiddellik toegang tot die “<ph name="GROUP_NAME" />”-oortjiegroep verloor en sal nie meer met jou in Google-dienste kan kommunikeer nie.</translation>
 <translation id="2579297619530305344">Wagwoorde op al jou toestelle is teen volle hoogte oopgemaak</translation>
-<translation id="2581165646603367611">Dit sal koekies, kas en ander data uitvee van werwe wat Chrome nie dink belangrik is nie.</translation>
+<translation id="2581165646603367611">Dit sal koekies, kas en ander data uitvee van werwe wat Ultimatum nie dink belangrik is nie.</translation>
 <translation id="2587052924345400782">Nuwer weergawe is beskikbaar</translation>
 <translation id="2593272815202181319">Enkelspasie</translation>
 <translation id="260403163289591229">Volg tans</translation>
@@ -386,7 +386,7 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="2779651927720337254">misluk</translation>
 <translation id="2781151931089541271">1 sekonde oor</translation>
 <translation id="2789486458103222910">OK</translation>
-<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Chrome het ’n hergebruikte wagwoord gevind wat jy kan verbeter}other{Chrome het # hergebruikte wagwoorde gevind wat jy kan verbeter}}</translation>
+<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Ultimatum het ’n hergebruikte wagwoord gevind wat jy kan verbeter}other{Ultimatum het # hergebruikte wagwoorde gevind wat jy kan verbeter}}</translation>
 <translation id="2800066122460699237">Die oortjie <ph name="TAB_TITLE" /> sal toegemaak word</translation>
 <translation id="2805756323405976993">Programme</translation>
 <translation id="281504910091592009">Bekyk en bestuur gestoorde wagwoorde in jou <ph name="BEGIN_LINK" />Google-rekening<ph name="END_LINK" /></translation>
@@ -402,14 +402,14 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="2842985007712546952">Moedervouer</translation>
 <translation id="2854916915045135148">Raak en hou om na Incognito oor te skakel</translation>
 <translation id="2860954141821109167">Maak seker dat 'n foonprogram op hierdie toestel geaktiveer is</translation>
-<translation id="2861923151411510142">Sommige Chrome-kenmerke sal nie meer beskikbaar wees nie</translation>
+<translation id="2861923151411510142">Sommige Ultimatum-kenmerke sal nie meer beskikbaar wees nie</translation>
 <translation id="2869430948265924908">Jy moet ’n motorprofielslot skep om jou sensitiewe inhoud in die motor te beskerm.  Jy kan dit met ’n PIN, kode of wagwoord doen.</translation>
 <translation id="2870560284913253234">Werf</translation>
 <translation id="2871733351037274014">Laai bladsye vooraf</translation>
 <translation id="2876136027428473467"><ph name="CHILD_NAME" /> wil hê jy moet hierdie webwerf goedkeur:</translation>
-<translation id="2876628302275096482">Kom meer te wete oor <ph name="BEGIN_LINK" />hoe Chrome jou data privaat hou<ph name="END_LINK" /></translation>
+<translation id="2876628302275096482">Kom meer te wete oor <ph name="BEGIN_LINK" />hoe Ultimatum jou data privaat hou<ph name="END_LINK" /></translation>
 <translation id="2883644600102358131">Wagwoorde sal binnekort ophou om op hierdie toestel te werk. Dateer Google Play Dienste op om aan te hou om jou wagwoorde te gebruik.</translation>
-<translation id="2888126860611144412">Meer oor Chrome</translation>
+<translation id="2888126860611144412">Meer oor Ultimatum</translation>
 <translation id="2891154217021530873">Stop bladsylaai</translation>
 <translation id="2894821468041866720">Veroorsaak nie dat jou blaaier of toestel merkbaar stadiger is nie.</translation>
 <translation id="2895521649038438824">Jy kan na hierdie bladsy luister</translation>
@@ -424,14 +424,14 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="2923908459366352541">Naam is ongeldig</translation>
 <translation id="2932150158123903946">Google <ph name="APP_NAME" />-berging</translation>
 <translation id="2932222164150889403">Jou sleutelbord sal nie verander nie</translation>
-<translation id="2936980480904111527">Chrome-kennisgewings maak dinge makliker</translation>
+<translation id="2936980480904111527">Ultimatum-kennisgewings maak dinge makliker</translation>
 <translation id="2940075786175545812">Opsie om ’n webwerf goed te keur of nie goed te keur nie</translation>
 <translation id="2942036813789421260">Voorskou-oortjie is toegemaak</translation>
 <translation id="2951071800649516099">Voeg bladsye by jou leeslys vir later</translation>
 <translation id="2954586176076923855">Skuif adresbalk na bo</translation>
 <translation id="2961208450284224863">{READING_LIST_UNREAD_PAGE_COUNT,plural, =1{<ph name="READING_LIST_UNREAD_PAGE_COUNT_ONE" /> ongeleesde bladsy}other{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> ongeleesde bladsye}}</translation>
 <translation id="2972109037780336501">Verwyder toestemmings outomaties</translation>
-<translation id="2976550651269220761">Sommige van jou Chrome-data is nog nie in jou Google-rekening gestoor nie.\nProbeer om ’n paar minute te wag voordat jy afmeld. As jy nou afmeld, sal hierdie data uitgevee word.</translation>
+<translation id="2976550651269220761">Sommige van jou Ultimatum-data is nog nie in jou Google-rekening gestoor nie.\nProbeer om ’n paar minute te wag voordat jy afmeld. As jy nou afmeld, sal hierdie data uitgevee word.</translation>
 <translation id="2977350910003566746">Sorteer volgens laas oopgemaak</translation>
 <translation id="297771753501244313">Sorteer: laas oopgemaak</translation>
 <translation id="2979639724566107830">Maak in nuwe venster oop</translation>
@@ -451,14 +451,14 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="3029704984691124060">Wagwoordfrases stem nie ooreen nie</translation>
 <translation id="3036750288708366620"><ph name="BEGIN_LINK" />Kry hulp<ph name="END_LINK" /></translation>
 <translation id="3037177537145227281">Spoor tans prys na</translation>
-<translation id="3037517125981011456">Wys porboodskappe om by Chrome aan te meld.</translation>
+<translation id="3037517125981011456">Wys porboodskappe om by Ultimatum aan te meld.</translation>
 <translation id="3038272154009688107">Sien alle werwe</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> boekmerk}other{<ph name="BOOKMARKS_COUNT_MANY" /> boekmerke}}</translation>
-<translation id="3062802207422175757">Artikels oor jou belangstellings op Chrome</translation>
+<translation id="3062802207422175757">Artikels oor jou belangstellings op Ultimatum</translation>
 <translation id="3066573403916685335">Beweeg Af</translation>
 <translation id="3067505415088964188">Prys is laag</translation>
 <translation id="3070005020161560471">Vertaal outomaties</translation>
-<translation id="3072980200212375806"><ph name="APP_NAME" /> sal in Chrome oopmaak. Deur voort te gaan, stem jy in tot <ph name="BEGIN_LINK1" />Google se diensbepalings<ph name="END_LINK1" /> en <ph name="BEGIN_LINK2" />Google Chrome en Chrome-bedryfstelsel se bykomende diensbepalings<ph name="END_LINK2" />. Die <ph name="BEGIN_LINK3" />privaatheidsbeleid<ph name="END_LINK3" /> geld ook.</translation>
+<translation id="3072980200212375806"><ph name="APP_NAME" /> sal in Ultimatum oopmaak. Deur voort te gaan, stem jy in tot <ph name="BEGIN_LINK1" />Google se diensbepalings<ph name="END_LINK1" /> en <ph name="BEGIN_LINK2" />Ultimatum en Ultimatum-bedryfstelsel se bykomende diensbepalings<ph name="END_LINK2" />. Die <ph name="BEGIN_LINK3" />privaatheidsbeleid<ph name="END_LINK3" /> geld ook.</translation>
 <translation id="3080525922482950719">Jy kan bladsye stoor om later of vanlyn te lees</translation>
 <translation id="3087734570205094154">Onderkant</translation>
 <translation id="3091010850649238832">Wys knipbordinhoud</translation>
@@ -467,12 +467,12 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="3122883569442693641">Meer besonderhede</translation>
 <translation id="3123734510202723619">Aankondigings</translation>
 <translation id="3148237711805373460">Neem my daarheen</translation>
-<translation id="314939179385989105">Chrome se tuisblad</translation>
+<translation id="314939179385989105">Ultimatum se tuisblad</translation>
 <translation id="3158667104057012316">Sorteer tans orde handmatig</translation>
 <translation id="3159335509547415276">Kry meer inligting oor geblokkeerde rekeninge</translation>
 <translation id="3161699713309727585"><ph name="BUTTON_TEXT" />, maak in ’n nuwe oortjie oop</translation>
 <translation id="3166827708714933426">Oortjie- en vensterkortpaaie</translation>
-<translation id="316694332262407393">Chrome werk reeds hier.</translation>
+<translation id="316694332262407393">Ultimatum werk reeds hier.</translation>
 <translation id="3167258285411721858">Jy kan die mobiele werf vir <ph name="HOST_NAME" /> versoek</translation>
 <translation id="3169472444629675720">Discover</translation>
 <translation id="3172472771272043251">{PASSWORDS_COUNT,plural, =1{1 wagwoord en ander items word net op hierdie toestel gestoor. As jy hulle op jou ander toestelle wil gebruik, moet jy hulle in jou Google-rekening, <ph name="ACCOUNT_EMAIL" />, stoor.}other{# wagwoorde en ander items word net op hierdie toestel gestoor. As jy hulle op jou ander toestelle wil gebruik, moet jy hulle in jou Google-rekening, <ph name="ACCOUNT_EMAIL" />, stoor.}}</translation>
@@ -488,7 +488,7 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="3236059992281584593">1 minuut oor</translation>
 <translation id="3237087289225714896">Standaardvooraflaai:</translation>
 <translation id="3244271242291266297">MM</translation>
-<translation id="3245429137663807393">As jy ook Chrome-gebruiksverslae deel, sluit daardie verslae die URL'e in wat jy besoek</translation>
+<translation id="3245429137663807393">As jy ook Ultimatum-gebruiksverslae deel, sluit daardie verslae die URL'e in wat jy besoek</translation>
 <translation id="3250563604907490871">Prentbeskrywings sal hervat wanneer jy aan wi-fi koppel</translation>
 <translation id="3254409185687681395">Boekmerk hierdie bladsy</translation>
 <translation id="3259831549858767975">Maak alles op die bladsy kleiner</translation>
@@ -496,7 +496,7 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="3269093882174072735">Laai prent</translation>
 <translation id="327204079441056603">Ons het verander hoe wagwoorde op hierdie toestel gestoor word</translation>
 <translation id="3280562213547448728">Stemsoektog</translation>
-<translation id="3282568296779691940">Meld by Chrome aan</translation>
+<translation id="3282568296779691940">Meld by Ultimatum aan</translation>
 <translation id="3285065882678541460">{TAB_COUNT,plural, =1{<ph name="TAB_GROUPS_PART" />, <ph name="TAB_COUNT_ONE" /> oortjie}other{<ph name="TAB_GROUPS_PART" />, <ph name="TAB_COUNT_MANY" /> oortjies}}</translation>
 <translation id="3293181007446299124">Jou blaai-aktiwiteit word privaat op jou toestel gehou en verslae word met ’n vertraging gestuur om jou identiteit te beskerm</translation>
 <translation id="3301936297336370235">Bevestiging van wagwoordvoorstel</translation>
@@ -513,7 +513,7 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="3351165113450806415">’n Nuwe manier om te swiep</translation>
 <translation id="3359667936385849800">Gebruik jou huidige diensverskaffer</translation>
 <translation id="3373701465337594448">Indien dit aan is, verskyn ’n lys werwe wat jy besoek wat jou belangstellings raai hier</translation>
-<translation id="3374023511497244703">Jou boekmerke, geskiedenis, wagwoorde en ander Chrome-data sal nie meer met jou Google-rekening gesinkroniseer word nie</translation>
+<translation id="3374023511497244703">Jou boekmerke, geskiedenis, wagwoorde en ander Ultimatum-data sal nie meer met jou Google-rekening gesinkroniseer word nie</translation>
 <translation id="3384347053049321195">Deel prent</translation>
 <translation id="3387650086002190359">Kon <ph name="FILE_NAME" /> weens lêerstelselfoute nie aflaai nie.</translation>
 <translation id="3398320232533725830">Maak die boekmerkbestuurder oop</translation>
@@ -528,19 +528,19 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="3443221991560634068">Herlaai die huidige bladsy</translation>
 <translation id="3444179773590444986">Deel terugvoer oor donkertema vir werwe?</translation>
 <translation id="3448874648066942074">Som bladsy op met KI</translation>
-<translation id="3452832259067974318">Om jou privaatheid te beskerm, sal Chrome nie outomaties jou wagwoord in hierdie veld invul nie.</translation>
+<translation id="3452832259067974318">Om jou privaatheid te beskerm, sal Ultimatum nie outomaties jou wagwoord in hierdie veld invul nie.</translation>
 <translation id="3467081767799433066">Met advertensiemeting word beperkte soorte data tussen werwe gedeel om die werkverrigting van hul advertensies te meet, soos of jy ’n aankoop gedoen het nadat jy ’n werf besoek het.</translation>
 <translation id="3474624961160222204">Gaan voort as <ph name="NAME" /></translation>
 <translation id="3478363558367712427">Jy kan jou soekenjin kies</translation>
 <translation id="3479552764303398839">Nie nou nie</translation>
 <translation id="3482805106082349287">Soek met behulp van sleutelbord, stem, Incognito of kamera</translation>
-<translation id="3487903178221457900">Die uitgevoerde lêer kan toeganklik wees vir ander, insluitend apps. Sodra jy uitvoer, sal jou wagwoorde van Chrome af uitgevee word.</translation>
+<translation id="3487903178221457900">Die uitgevoerde lêer kan toeganklik wees vir ander, insluitend apps. Sodra jy uitvoer, sal jou wagwoorde van Ultimatum af uitgevee word.</translation>
 <translation id="3488199663160411179">naam</translation>
 <translation id="3493531032208478708"><ph name="BEGIN_LINK" />Kom meer te wete<ph name="END_LINK" /> oor voorgestelde inhoud</translation>
 <translation id="3499246418971111862">chrome_qrcode_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="350276055892098337">Rangskik volgens oudste</translation>
 <translation id="3507132249039706973">Standaardbeskerming is aan</translation>
-<translation id="3509330069915219067">Vanlyn. Chrome kan nie nagaan of daar opdaterings is nie.</translation>
+<translation id="3509330069915219067">Vanlyn. Ultimatum kan nie nagaan of daar opdaterings is nie.</translation>
 <translation id="3513019849832307207">Sluit aan en maak oop</translation>
 <translation id="3513704683820682405">Aangevulde realiteit</translation>
 <translation id="3516053221628030540">Gaan na Google Play</translation>
@@ -573,10 +573,10 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="3627893290277153986">Maak opsies oop om bladsy te stoor</translation>
 <translation id="3631987586758005671">Deel tans na <ph name="DEVICE_NAME" /></translation>
 <translation id="363484704507524488">Jy kan Identiteitskontrole in die instellings vir diefstalbeskerming bestuur. <ph name="BEGIN_LINK" />Gaan na instellings<ph name="END_LINK" /></translation>
-<translation id="3635073343384702370">Chrome kan jou wagwoorde nagaan wanneer jy hulle stoor</translation>
+<translation id="3635073343384702370">Ultimatum kan jou wagwoorde nagaan wanneer jy hulle stoor</translation>
 <translation id="363596933471559332">Meld outomaties met gebergde eiebewyse by webwerwe aan. As die kenmerk af is, sal jy elke keer om verifikasie gevra word voordat jy by 'n webwerf aanmeld.</translation>
 <translation id="3636940436873918441">Voorkeurtale</translation>
-<translation id="3637744895182738742"><ph name="BEGIN_LINK" />Vee die Chrome-data in jou rekening uit<ph name="END_LINK" /> indien jy jou wagfrase vergeet het of hierdie instelling wil verander.</translation>
+<translation id="3637744895182738742"><ph name="BEGIN_LINK" />Vee die Ultimatum-data in jou rekening uit<ph name="END_LINK" /> indien jy jou wagfrase vergeet het of hierdie instelling wil verander.</translation>
 <translation id="3653111872753786013"><ph name="WEBSITE_TITLE" />: <ph name="WEBSITE_URL" /></translation>
 <translation id="3674208116086565128">Gaan na tuisblad van Google-app</translation>
 <translation id="368329460027487650">Afgemeld. Maak opsies oop om aan te meld.</translation>
@@ -592,7 +592,7 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="3710501561113687889">Om voort te gaan, sal <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> jou <ph name="FIELDS_STRING" /> met hierdie werf deel.</translation>
 <translation id="3710560693796335511">Samewerking</translation>
 <translation id="3714981814255182093">Maak die Vindbalk oop</translation>
-<translation id="3718765429352682176">Jy kan moontlik die geskiedenis sien van ander apps wat skakels in Chrome oopmaak.</translation>
+<translation id="3718765429352682176">Jy kan moontlik die geskiedenis sien van ander apps wat skakels in Ultimatum oopmaak.</translation>
 <translation id="3721119614952978349">Jy en Google</translation>
 <translation id="3737319253362202215">Vertaalinstellings</translation>
 <translation id="3738139272394829648">Raak om te soek</translation>
@@ -640,8 +640,8 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="3950820424414687140">Meld aan</translation>
 <translation id="395377504920307820">Gebruik sonder 'n rekening</translation>
 <translation id="3955219620682768253">Gaan na die vorige bladsy in Geskiedenis</translation>
-<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Chrome sal jou bladsy laai wanneer dit gereed is}other{Chrome sal jou bladsye laai wanneer dit gereed is}}</translation>
-<translation id="3969142555815019568">Chrome kan nie jou wagwoorde nagaan nie</translation>
+<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Ultimatum sal jou bladsy laai wanneer dit gereed is}other{Ultimatum sal jou bladsye laai wanneer dit gereed is}}</translation>
+<translation id="3969142555815019568">Ultimatum kan nie jou wagwoorde nagaan nie</translation>
 <translation id="3969863827134279083">Beweeg op</translation>
 <translation id="397105322502079400">Bereken tans …</translation>
 <translation id="397583555483684758">Sinkronisering het ophou werk</translation>
@@ -678,7 +678,7 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="4132137475637520539">Laat enigiemand met die skakel aansluit</translation>
 <translation id="4135200667068010335">Lys toestelle om 'n oortjie mee te deel, is toegemaak.</translation>
 <translation id="4137746084635924146">Huidige toesteltaal</translation>
-<translation id="4139654229316918773">Chrome Kanarie</translation>
+<translation id="4139654229316918773">Ultimatum Kanarie</translation>
 <translation id="414128724510021958">Rekenaarwerwe wat by verstek versoek is</translation>
 <translation id="4162867837470729563">Lys deelopsies teen volle hoogte.</translation>
 <translation id="4170011742729630528">Die diens is nie beskikbaar nie, probeer later weer.</translation>
@@ -691,14 +691,14 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="4197828496439691735">{NUM_TABS,plural, =1{1 oortjie op hierdie toestel}other{# oortjies op hierdie toestel}}</translation>
 <translation id="4198423547019359126">Geen beskikbare aflaailiggings nie</translation>
 <translation id="4209029522667123437"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> • Jy het op hierdie werf gebruik</translation>
-<translation id="4214315110991671325">As jy webkoekies toelaat, kan Chrome hulle vir vooraflaai gebruik.</translation>
+<translation id="4214315110991671325">As jy webkoekies toelaat, kan Ultimatum hulle vir vooraflaai gebruik.</translation>
 <translation id="4216511743389425832">Luister na hierdie bladsy</translation>
 <translation id="4225725533026049334">Volg tans</translation>
 <translation id="4225895483398857530">Nutsbalkkortpad</translation>
 <translation id="4232376164796433044">Wagwoorde en outovul</translation>
 <translation id="4242533952199664413">Maak instellings oop</translation>
 <translation id="4248098802131000011">Beskerm jou wagwoorde teen dataskendings en ander sekuriteitsprobleme</translation>
-<translation id="424864128008805179">Meld af uit Chrome?</translation>
+<translation id="424864128008805179">Meld af uit Ultimatum?</translation>
 <translation id="4249955472157341256">Rangskik volgens Jongste</translation>
 <translation id="4255841059940367080">Intydse, AI-aangedrewe beskerming teen gevaarlike werwe, aflaaie en uitbreidings wat gegrond is op blaaierdata wat na Google toe gestuur word</translation>
 <translation id="4256782883801055595">Oopbronlisensies</translation>
@@ -707,7 +707,7 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="4270730597186910506">Begin of stop nasporing van ’n produk.</translation>
 <translation id="4277529130885813215">Gebruik ’n ander toestel</translation>
 <translation id="427987768447457592">Nuwe oortjiegroep</translation>
-<translation id="4282440837784183472">Jou organisasie, <ph name="MANAGED_DOMAIN" />, bestuur die rekening waarby jy aanmeld en hoe Chrome gebruik kan word. Jou administrateur kan sekere kenmerke opstel of beperk.</translation>
+<translation id="4282440837784183472">Jou organisasie, <ph name="MANAGED_DOMAIN" />, bestuur die rekening waarby jy aanmeld en hoe Ultimatum gebruik kan word. Jou administrateur kan sekere kenmerke opstel of beperk.</translation>
 <translation id="4285498937028063278">Ontspeld</translation>
 <translation id="4285846616383034558">Webkoekies, kasgeheue en ander werfdata</translation>
 <translation id="4291407919474070700"><ph name="BEGIN_LINK" />Skakel skermslot in Android-instellings aan<ph name="END_LINK" /></translation>
@@ -717,7 +717,7 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="4307992518367153382">Basies</translation>
 <translation id="4311652497846705514">Maak PDF oop?</translation>
 <translation id="4320177379694898372">Geen internetverbinding nie</translation>
-<translation id="4326079409704643112">Verifieer dis jy om Chrome-data in jou Google-rekening te gebruik en te stoor</translation>
+<translation id="4326079409704643112">Verifieer dis jy om Ultimatum-data in jou Google-rekening te gebruik en te stoor</translation>
 <translation id="433213510553688132">Volg tans …</translation>
 <translation id="4335835283689002019">Veiligblaai is af</translation>
 <translation id="4351244548802238354">Maak dialoog toe</translation>
@@ -745,15 +745,15 @@ Net iemand met jou wagfrase kan jou geënkripteerde data lees. Die wagfrase word
 <translation id="4452548195519783679">Geboekmerk in <ph name="FOLDER_NAME" /></translation>
 <translation id="4460861538906892109">{ITEMS_COUNT,plural, =1{1 boekmerk}other{# boekmerke}}</translation>
 <translation id="4478161224666880173">Jy kan jou <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />-rekening op hierdie werf gebruik. Meld aan by <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> om voort te gaan.</translation>
-<translation id="4479972344484327217">Installeer tans <ph name="MODULE" /> vir Chrome …</translation>
+<translation id="4479972344484327217">Installeer tans <ph name="MODULE" /> vir Ultimatum …</translation>
 <translation id="4484496141267039529">Geen verbinding nie. Probeer later weer.</translation>
-<translation id="4487967297491345095">Al Chrome se programdata sal permanent uitgevee word. Dit sluit in alle lêers, instellings, rekeninge, databasisse, ens.</translation>
+<translation id="4487967297491345095">Al Ultimatum se programdata sal permanent uitgevee word. Dit sluit in alle lêers, instellings, rekeninge, databasisse, ens.</translation>
 <translation id="4494806687727322324">Die stoor van wagwoorde is deur jou administrateur aangeskakel</translation>
 <translation id="4508528996305412043">Stroomkaartkieslys is oop</translation>
 <translation id="4509741852167209430">Beperkte soorte data tussen werwe gedeel om die werkverrigting van hul advertensies te meet, soos of jy ’n aankoop gedoen het nadat jy ’n werf besoek het</translation>
 <translation id="4513387527876475750">{DAYS,plural, =1{# dag gelede}other{# dae gelede}}</translation>
 <translation id="451872707440238414">Deursoek jou boekmerke</translation>
-<translation id="4521489764227272523">Die gekose data is van Chrome en jou gesinkroniseerde toestelle verwyder.
+<translation id="4521489764227272523">Die gekose data is van Ultimatum en jou gesinkroniseerde toestelle verwyder.
 
 Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en aktiwiteit van ander Google-dienste af, by <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="4523326818319942067">laaste uur</translation>
@@ -772,10 +772,10 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="4594952190837476234">Hierdie vanlyn bladsy is van <ph name="CREATION_TIME" /> af en kan van die aanlyn weergawe verskil.</translation>
 <translation id="4595805675102978678">Fout met Google-rekening</translation>
 <translation id="4601095002996233687">Omvattende skanderings vir verdagte aflaaie.</translation>
-<translation id="4606559747793337066">Chrome enkripteer en laai bladsye vooraf deur Google-bedieners sonder webkoekies wanneer ’n werf of app vra om skakels op hul bladsy privaat vooraf te laai. Dit versteek jou identiteit vir die voorafgelaaide werf.</translation>
+<translation id="4606559747793337066">Ultimatum enkripteer en laai bladsye vooraf deur Google-bedieners sonder webkoekies wanneer ’n werf of app vra om skakels op hul bladsy privaat vooraf te laai. Dit versteek jou identiteit vir die voorafgelaaide werf.</translation>
 <translation id="4616150815774728855">Maak <ph name="WEBAPK_NAME" /> oop</translation>
 <translation id="4619564267100705184">Verifieer dis jy</translation>
-<translation id="4624065194742029982">Chrome Incognito</translation>
+<translation id="4624065194742029982">Ultimatum Incognito</translation>
 <translation id="4634124774493850572">Gebruik wagwoord</translation>
 <translation id="4640331037679501949">{NUM_PASSWORDS,plural, =1{1 gekompromitteerde wagwoord}other{# gekompromitteerde wagwoorde}}</translation>
 <translation id="4642472735733036929">Prysnasporing is gestop</translation>
@@ -786,7 +786,7 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="4663756553811254707"><ph name="NUMBER_OF_BOOKMARKS" /> boekmerke is uitgevee</translation>
 <translation id="4668279686271488041">Advertensiemetingdata word gereeld van jou toestel af uitgevee</translation>
 <translation id="4668347365065281350">Alle data wat deur werwe geberg is, insluitend webkoekies en ander data wat plaaslik gestoor is</translation>
-<translation id="4678082183394354975">Donkertema vir werwe is aan in Chrome</translation>
+<translation id="4678082183394354975">Donkertema vir werwe is aan in Ultimatum</translation>
 <translation id="4684427112815847243">Sinkroniseer alles</translation>
 <translation id="4685741273709472646">Kies op die aftreklys</translation>
 <translation id="4687718960473379118">Werfvoorgestelde advertensies</translation>
@@ -807,7 +807,7 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="4738836084190194332">Laas gesinkroniseer: <ph name="WHEN" /></translation>
 <translation id="474121291218385686">Filtreer volgens app</translation>
 <translation id="4741753828624614066">Jy sal verbeterde voorstelle in die adresbalk kry</translation>
-<translation id="4742795653798179840">Chrome-data is uitgevee</translation>
+<translation id="4742795653798179840">Ultimatum-data is uitgevee</translation>
 <translation id="4742970037960872810">Verwyder kleurmerk</translation>
 <translation id="4749960740855309258">Maak 'n nuwe oortjie oop</translation>
 <translation id="4753600213727157212">Aangemeld as <ph name="USER_NAME" />. <ph name="USER_EMAIL" />. Fout met Google-rekening. Maak instellings oop.</translation>
@@ -816,7 +816,7 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="4763480195061959176">video</translation>
 <translation id="4766313118839197559">Wagwoorde word op hierdie toestel in Wagwoordbestuurder gestoor</translation>
 <translation id="4766678251456904326">Voeg rekening by toestel</translation>
-<translation id="4767947714785277816">Ons stel ’n nuwe advertensieprivaatheidkenmerk genaamd advertensiemeting bekend. Chrome deel net baie beperkte inligting tussen werwe en apps, soos wanneer ’n advertensie vir jou gewys is, om werwe te help om advertensieprestasie te meet.</translation>
+<translation id="4767947714785277816">Ons stel ’n nuwe advertensieprivaatheidkenmerk genaamd advertensiemeting bekend. Ultimatum deel net baie beperkte inligting tussen werwe en apps, soos wanneer ’n advertensie vir jou gewys is, om werwe te help om advertensieprestasie te meet.</translation>
 <translation id="4769095993849849966">Nuwe lêernaam</translation>
 <translation id="4769632191812288342">Jy kry tans standaardbeskerming</translation>
 <translation id="4773122030389014189">Deel “<ph name="GROUP_NAME" />”-oortjiegroep</translation>
@@ -826,13 +826,13 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="4782929588435725897"><ph name="SEARCH_ENGINE" /> is jou versteksoekenjin</translation>
 <translation id="4784349455504343791"><ph name="WEBSITE_ORIGIN" /> wil persoonlike inligting gebruik wat in jou digitale beursie is.</translation>
 <translation id="4787736314074622408">Wil jy <ph name="ITEM_TITLE" /> uitvee?</translation>
-<translation id="4793679854893018356">Vinnd uit hoe Chrome jou veilig hou</translation>
+<translation id="4793679854893018356">Vinnd uit hoe Ultimatum jou veilig hou</translation>
 <translation id="4794291718671962615">(<ph name="MEGABYTES" />) <ph name="URL" /></translation>
 <translation id="4807098396393229769">Naam op kaart</translation>
 <translation id="480990236307250886">Maak die tuisblad oop</translation>
 <translation id="4822710610088666676"><ph name="TAB_GROUP_TITLE" />-oortjiegroep is toegemaak en gestoor</translation>
 <translation id="4834250788637067901">Betaalmetodes, aanbiedings en adresse wat Google Pay gebruik</translation>
-<translation id="4835385943915508971">Chrome het nie toegang tot die hulpbron wat versoek is nie.</translation>
+<translation id="4835385943915508971">Ultimatum het nie toegang tot die hulpbron wat versoek is nie.</translation>
 <translation id="483742037940503070">{TAB_COUNT,plural, =1{Stel oortjiegroep van <ph name="TAB_COUNT_ONE" /> oortjie, kleur <ph name="COLOR_NAME" />, terug as ’n nuwe agtergrondoortjiegroep.}other{Stel oortjiegroep van <ph name="TAB_COUNT_MANY" /> oortjies, kleur <ph name="COLOR_NAME" />, terug as ’n nuwe agtergrondoortjiegroep.}}</translation>
 <translation id="4837753911714442426">Maak opsies oop om bladsy te druk</translation>
 <translation id="4844633725025837809">Jy kan vir bykomende veiligheid wagwoorde op jou toestel enkripteer voordat hulle in Google Wagwoordbestuurder gestoor word</translation>
@@ -841,7 +841,7 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="4852014461738377247">Meld tans aan …</translation>
 <translation id="4860895144060829044">Bel</translation>
 <translation id="4864369630010738180">Meld tans aan …</translation>
-<translation id="4866368707455379617">Kan nie <ph name="MODULE" /> vir Chrome installeer nie</translation>
+<translation id="4866368707455379617">Kan nie <ph name="MODULE" /> vir Ultimatum installeer nie</translation>
 <translation id="4871568871368204250">Skakel sinkronisering af</translation>
 <translation id="4875775213178255010">Inhoudvoorstelle</translation>
 <translation id="4877678010818027629">Gebruik Incognitomodus</translation>
@@ -849,7 +849,7 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="4880127995492972015">Vertaal …</translation>
 <translation id="4881695831933465202">Maak oop</translation>
 <translation id="488187801263602086">Hernoem lêer</translation>
-<translation id="4885273946141277891">Ongesteunde aantal Chrome-gevalle.</translation>
+<translation id="4885273946141277891">Ongesteunde aantal Ultimatum-gevalle.</translation>
 <translation id="4890973535105146893">Geen gestoorde wagwoorde in jou Google-rekening nie</translation>
 <translation id="4905823827770127520">Sluit 'n skakel na die bladsy toe in</translation>
 <translation id="4908869848243824489">Ontdek deur Google</translation>
@@ -858,15 +858,15 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="4913169188695071480">Hou op herlaai</translation>
 <translation id="4925120120285606924">Skermkiekie <ph name="CURRENT_DATE_ISO" /></translation>
 <translation id="4926901776383726965">Jy kan prente en lêers stoor om vanlyn te bekyk of in ander apps te deel</translation>
-<translation id="4932247056774066048">Jou Chrome-data sal van hierdie toestel af uitgevee word omdat jy uitteken by 'n rekening wat deur <ph name="DOMAIN_NAME" /> bestuur word. Dit sal in jou Google-rekening bly.</translation>
+<translation id="4932247056774066048">Jou Ultimatum-data sal van hierdie toestel af uitgevee word omdat jy uitteken by 'n rekening wat deur <ph name="DOMAIN_NAME" /> bestuur word. Dit sal in jou Google-rekening bly.</translation>
 <translation id="4943703118917034429">Virtuele realiteit</translation>
 <translation id="4943872375798546930">Geen resultate nie</translation>
 <translation id="4957722034734105353">Kom meer te wete …</translation>
 <translation id="4959115606310463263">Aanmelding se onderste blad is teen halwe hoogte oopgemaak</translation>
 <translation id="4961107849584082341">Vertaal hierdie bladsy in enige taal</translation>
-<translation id="4964614743143953889">Chrome waarsku jou oor onveilige werwe en aflaaie</translation>
+<translation id="4964614743143953889">Ultimatum waarsku jou oor onveilige werwe en aflaaie</translation>
 <translation id="496607651705915226">Dateer Google Play-dienste op om nuwe wagwoorde in jou Google-rekening te stoor en te gebruik</translation>
-<translation id="4971753085054504448">Probeer om vir iets anders te soek of maak die volle Chrome-geskiedenis oop om meer resultate te sien.</translation>
+<translation id="4971753085054504448">Probeer om vir iets anders te soek of maak die volle Ultimatum-geskiedenis oop om meer resultate te sien.</translation>
 <translation id="497421865427891073">Gaan vorentoe</translation>
 <translation id="498624032394115435">Enigiemand met die skakel kan alle oortjies wysig.</translation>
 <translation id="4987271110129728827">Kan nie daardie bladsy kry nie. Gaan jou spelling na of probeer ’n websoektog.</translation>
@@ -890,7 +890,7 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="506254248375231072">Geen oortjies nie</translation>
 <translation id="5062960805900435602">Opdatering oor wagwoordsamevoeging is toe</translation>
 <translation id="5075939510584558547">Stoor sonder enkripsie</translation>
-<translation id="5085038751173179818">Meld by hierdie werf en Chrome aan om jou boekmerke en meer op al jou toestelle te kry</translation>
+<translation id="5085038751173179818">Meld by hierdie werf en Ultimatum aan om jou boekmerke en meer op al jou toestelle te kry</translation>
 <translation id="5091199029769593641">Jy sal binnekort stories van <ph name="SITE_NAME" /> af sien wanneer jy 'n nuwe oortjie oopmaak. Werwe wat jy volg, word in jou Google-rekening gestoor. Jy kan hulle bestuur in Ontdek-instellings.</translation>
 <translation id="509429900233858213">'n Fout het voorgekom.</translation>
 <translation id="5096775069898886423">Kry waarskuwings oor werwe wat nie veilige verbindings steun nie, voordat jy die werf besoek</translation>
@@ -898,7 +898,7 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="510275257476243843">1 uur oor</translation>
 <translation id="5114895953710637392">Appfilterblad is toe.</translation>
 <translation id="5115811374190515607">na <ph name="PRODUCT_NAME" /></translation>
-<translation id="5116239826668864748">Jy kan Chrome enige tyd gebruik wanneer jy tik op skakels in boodskappe, dokumente en ander apps.</translation>
+<translation id="5116239826668864748">Jy kan Ultimatum enige tyd gebruik wanneer jy tik op skakels in boodskappe, dokumente en ander apps.</translation>
 <translation id="5118713593561876160">Belangstellings</translation>
 <translation id="5122378528687922675">Vra jou ouer (<ph name="PARENT_NAME_1" /> of <ph name="PARENT_NAME_2" />) as jy hulp benodig</translation>
 <translation id="5123685120097942451">Incognito-oortjie</translation>
@@ -922,7 +922,7 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="5210286577605176222">Spring na die vorige oortjie</translation>
 <translation id="5210365745912300556">Maak oortjie toe</translation>
 <translation id="5215957675041756913">Beheer jou data en rekening</translation>
-<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> en meer <ph name="SEPARATOR" /> Chrome het hierdie toestemmings verwyder want jy het nie onlangs die werf besoek nie</translation>
+<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> en meer <ph name="SEPARATOR" /> Ultimatum het hierdie toestemmings verwyder want jy het nie onlangs die werf besoek nie</translation>
 <translation id="5222676887888702881">Meld af</translation>
 <translation id="5226378907213531272">Jy sal elke keer as jy die motor gebruik jou skerm ontsluit</translation>
 <translation id="5227554086496586518">Tik om soekresultate te sien</translation>
@@ -940,7 +940,7 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="5308380583665731573">Koppel</translation>
 <translation id="5316947901395241499">Die stoor van wagwoorde is deur jou administrateur afgeskakel</translation>
 <translation id="5317780077021120954">Berg</translation>
-<translation id="5319359161174645648">Google beveel Chrome aan</translation>
+<translation id="5319359161174645648">Google beveel Ultimatum aan</translation>
 <translation id="5326246328175179736">Jy kan nie met hierdie rekening aanmeld nie</translation>
 <translation id="5327248766486351172">Naam</translation>
 <translation id="5328542107300944283">Gebruik met <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
@@ -952,7 +952,7 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="5375577065097716013">Soek prent met Google Lens <ph name="BEGIN_NEW" />Nuut<ph name="END_NEW" /></translation>
 <translation id="5390367025924544771"><ph name="WEBSITE_ORIGIN" /> wil persoonlike inligting gebruik wat in jou digitale beursie is. Gaan net voort as jy hierdie werf vertrou. Gevaarlike werwe kan jou dalk mislei om dinge soos jou wetlike naam of ID-nommer bekend te maak.</translation>
 <translation id="5394331612381306435">Skakel oor vanaf Incognito</translation>
-<translation id="5395376160638294582">Maak seker dat jy altyd die Chrome-data in jou Google-rekening kan gebruik</translation>
+<translation id="5395376160638294582">Maak seker dat jy altyd die Ultimatum-data in jou Google-rekening kan gebruik</translation>
 <translation id="539881862970320163">Sterk wagwoord word voorgestel. Sleutelbord is versteek.</translation>
 <translation id="5409881200985013443">Dien <ph name="ONE_TIME_CODE" /> op <ph name="CLIENT_NAME" /> in?</translation>
 <translation id="5410300144953132176"><ph name="OWNER_FULL_NAME" /> (<ph name="OWNER_EMAIL" />) wil hê jy moet by ’n oortjiegroep aansluit. Enigiemand met die skakel kan alle oortjies wysig, so sluit versigtig aan. Skakel verval oor 48 uur.</translation>
@@ -966,7 +966,7 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="5433691172869980887">Gebruikernaam is gekopieer</translation>
 <translation id="5436928407363358055">Sinkroniseer jou geskiedenis en oortjies om maklik aan te gaan waar jy opgehou het</translation>
 <translation id="5438292632479953702">Laai weer af</translation>
-<translation id="5439191312780166229">Waarsku jou oor gevaarlike werwe – selfs werwe waarvan Google nie voorheen geweet het nie – deur meer data van werwe te ontleed as standaardbeskerming. Jy kan kies om Chrome-waarskuwings oor te slaan.</translation>
+<translation id="5439191312780166229">Waarsku jou oor gevaarlike werwe – selfs werwe waarvan Google nie voorheen geweet het nie – deur meer data van werwe te ontleed as standaardbeskerming. Jy kan kies om Ultimatum-waarskuwings oor te slaan.</translation>
 <translation id="5441137934526263133">Werk werf nie? Derdepartywebkoekies word geblokkeer</translation>
 <translation id="5441466871879044658">Vertaal in hierdie taal</translation>
 <translation id="5441522332038954058">Spring na die adresbalk</translation>
@@ -986,7 +986,7 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="5517326820028369152">Onderste blad van onlangse aktiwiteit</translation>
 <translation id="5526281268548144413">Kan nie op verskeie vensters toegemaak word nie</translation>
 <translation id="5548606607480005320">Veiligheidskontrole</translation>
-<translation id="5554520618550346933">Wanneer jy ’n wagwoord gebruik, waarsku Chrome jou as dit aanlyn gepubliseer is. Wanneer dit gedoen word, word jou wagwoorde en gebruikername geënkripteer sodat niemand, insluitend Google, hulle kan lees nie.</translation>
+<translation id="5554520618550346933">Wanneer jy ’n wagwoord gebruik, waarsku Ultimatum jou as dit aanlyn gepubliseer is. Wanneer dit gedoen word, word jou wagwoorde en gebruikername geënkripteer sodat niemand, insluitend Google, hulle kan lees nie.</translation>
 <translation id="5555525474779371165">Kies jou Veiligblaai-beskerming</translation>
 <translation id="5556459405103347317">Herlaai</translation>
 <translation id="555671485580955310">Sinkroniseer geskiedenis en oortjies</translation>
@@ -998,7 +998,7 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="5578795271662203820">Deursoek <ph name="SEARCH_ENGINE" /> vir hierdie prent</translation>
 <translation id="5596627076506792578">Meer opsies</translation>
 <translation id="5599455543593328020">Incognitomodus</translation>
-<translation id="5601180634394228718">Gaan na <ph name="BEGIN_LINK" />Google-dienste<ph name="END_LINK" /> vir meer instellings wat data gebruik om jou Chrome-ervaring te verbeter.</translation>
+<translation id="5601180634394228718">Gaan na <ph name="BEGIN_LINK" />Google-dienste<ph name="END_LINK" /> vir meer instellings wat data gebruik om jou Ultimatum-ervaring te verbeter.</translation>
 <translation id="5611398002774823980">Stoor in rekening</translation>
 <translation id="5614625640221885312">Meld aan om jou boekmerke, wagwoorde en meer op al jou toestelle te kry</translation>
 <translation id="5619633276517849615">Jou organisasie het Veiligblaai aangeskakel</translation>
@@ -1014,23 +1014,23 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="5657871969392618475">Jou inligting word deur ’n profielslot beskerm</translation>
 <translation id="5659593005791499971">E-pos</translation>
 <translation id="5665379678064389456">Skep geleentheid in <ph name="APP_NAME" /></translation>
-<translation id="5683547024293500885">Chrome kan nie nagaan of daar opdaterings is nie</translation>
+<translation id="5683547024293500885">Ultimatum kan nie nagaan of daar opdaterings is nie</translation>
 <translation id="5683916195767086779">Oortjiegroep</translation>
 <translation id="5686790454216892815">Lêernaam is te lank</translation>
-<translation id="5687606994963670306">Chrome vee werwe wat ouer as 30 dae is outomaties uit. ’n Werf wat jy weer besoek, kan weer op die lys verskyn. Of jy kan ’n werf keer om vir jou advertensies voor te stel. Kom meer te wete oor hoe om <ph name="BEGIN_LINK" />jou advertensieprivaatheid in Chrome te bestuur.<ph name="END_LINK" /></translation>
+<translation id="5687606994963670306">Ultimatum vee werwe wat ouer as 30 dae is outomaties uit. ’n Werf wat jy weer besoek, kan weer op die lys verskyn. Of jy kan ’n werf keer om vir jou advertensies voor te stel. Kom meer te wete oor hoe om <ph name="BEGIN_LINK" />jou advertensieprivaatheid in Ultimatum te bestuur.<ph name="END_LINK" /></translation>
 <translation id="569536719314091526">Vertaal hierdie bladsy in enige taal vanaf die Meer Opsies-knoppie</translation>
-<translation id="5696597120588531049">Chrome kan help om jou teen dataskendings, onveilige webwerwe, en meer te beskerm</translation>
+<translation id="5696597120588531049">Ultimatum kan help om jou teen dataskendings, onveilige webwerwe, en meer te beskerm</translation>
 <translation id="5698878456427040674">Kyk of die gekose rekening gesteun word.</translation>
 <translation id="570347048394355941">Wissel Na Oortjie</translation>
 <translation id="5709213329446699338"><ph name="SITE" /> wil aan 'n seriepoort koppel</translation>
 <translation id="5715150588940290235">Vee gestoorde sekuriteitskodes uit?</translation>
-<translation id="571930967925877633">Jou boekmerke, geskiedenis en ander Chrome-data sal nie meer met jou Google-rekening gesinkroniseer word nie</translation>
+<translation id="571930967925877633">Jou boekmerke, geskiedenis en ander Ultimatum-data sal nie meer met jou Google-rekening gesinkroniseer word nie</translation>
 <translation id="572328651809341494">Onlangse oortjies</translation>
 <translation id="5726692708398506830">Maak alles op die bladsy groter</translation>
 <translation id="5728072125198221967">Gekoppelde Google-dienste</translation>
 <translation id="5744751019568455640">Hier is die stemme wat jy kan kies om jou webblaaie te lees. As jy van hierdie stem hou en wil hê ek moet dit aanhou gebruik, tik net op die stemnaam.</translation>
 <translation id="574845902699630049">Deel as <ph name="OWNER_FULL_NAME" /></translation>
-<translation id="5749068826913805084">Chrome het bergingtoegang nodig om lêers af te laai.</translation>
+<translation id="5749068826913805084">Ultimatum het bergingtoegang nodig om lêers af te laai.</translation>
 <translation id="5749237766298580851">Af <ph name="SEPARATOR" /> Nie aanbeveel nie</translation>
 <translation id="5752232708629533680">Deel net GIF</translation>
 <translation id="5754350196967618083">Kan nie Ontdek herlaai nie</translation>
@@ -1047,11 +1047,11 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="5809361687334836369">{HOURS,plural, =1{# uur gelede}other{# uur gelede}}</translation>
 <translation id="5810288467834065221">Kopiereg <ph name="YEAR" /> Google LLC. Alle regte voorbehou.</translation>
 <translation id="5814749351757353073">Bly op hoogte van jou gunstelingwerwe</translation>
-<translation id="5828921839638612740">Jy kan die data in Chrome-instellings uitvee</translation>
+<translation id="5828921839638612740">Jy kan die data in Ultimatum-instellings uitvee</translation>
 <translation id="5829586821381540080">Gestoor in <ph name="FOLDER_NAME" /></translation>
 <translation id="583281660410589416">Onbekend</translation>
 <translation id="5833984609253377421">Deel skakel</translation>
-<translation id="5839058148541733625">Chrome-dinosourusspeletjie</translation>
+<translation id="5839058148541733625">Ultimatum-dinosourusspeletjie</translation>
 <translation id="5848257610304005265">Maak PDF oop met <ph name="APP_NAME" />?</translation>
 <translation id="5849288995120328556">Hou op deel?</translation>
 <translation id="5853623416121554550">laat wag</translation>
@@ -1063,9 +1063,9 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="5864419784173784555">Wag tans vir nog 'n aflaai …</translation>
 <translation id="5865733239029070421">Stuur gebruikstatistieke en omvalverslae outomaties na Google</translation>
 <translation id="5869522115854928033">Gestoorde wagwoorde</translation>
-<translation id="587735546353481577">Om 'n werf te volg, moet jy na die werf gaan, die Chrome-kieslys oopmaak, en op Volg tik.</translation>
+<translation id="587735546353481577">Om 'n werf te volg, moet jy na die werf gaan, die Ultimatum-kieslys oopmaak, en op Volg tik.</translation>
 <translation id="5883855034004058011">Biometrie het te veel keer misluk. Sluit en ontsluit jou toestel om weer te probeer.</translation>
-<translation id="5885378508678660271">Kennisgewings <ph name="SEPARATOR" /> Chrome het hierdie toestemmings verwyder want die werf is gevaarlik</translation>
+<translation id="5885378508678660271">Kennisgewings <ph name="SEPARATOR" /> Ultimatum het hierdie toestemmings verwyder want die werf is gevaarlik</translation>
 <translation id="5895834791314695851">Wagwoorde mag dalk binnekort ophou om op hierdie toestel te werk. Dateer Google Play Dienste op om aan te hou om jou wagwoorde te gebruik. <ph name="BEGIN_LINK" />Meer inligting<ph name="END_LINK" /></translation>
 <translation id="5899667542927581604">Geen toegangsleutelblad is toegemaak nie</translation>
 <translation id="5907542076239273525">Boekmerk gestoor in <ph name="FOLDER_NAME" /></translation>
@@ -1076,7 +1076,7 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="5942872142862698679">Gebruik Google om te soek</translation>
 <translation id="5945035219773565305">Huidige aanbeveling:  <ph name="RECOMMENDATION" /></translation>
 <translation id="5951119116059277034">Bekyk tans regstreekse bladsy</translation>
-<translation id="5956665950594638604">Maak die Chrome-hulpsentrum in 'n nuwe oortjie oop</translation>
+<translation id="5956665950594638604">Maak die Ultimatum-hulpsentrum in 'n nuwe oortjie oop</translation>
 <translation id="59577092665511740">Kies ’n rekening.</translation>
 <translation id="5958275228015807058">Kry jou lêers en bladsye in Aflaaie</translation>
 <translation id="5958994127112619898">Vereenvoudig bladsy</translation>
@@ -1085,13 +1085,13 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="5977976211062815271">Op hierdie toestel</translation>
 <translation id="5978661847409534366">{ITEMS_COUNT,plural, =1{1 bladsy op jou leeslys}other{# bladsye op jou leeslys}}</translation>
 <translation id="5979084224081478209">Gaan wagwoorde na</translation>
-<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Chrome het hierdie toestemmings verwyder want jy het nie onlangs die werf besoek nie</translation>
+<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Ultimatum het hierdie toestemmings verwyder want jy het nie onlangs die werf besoek nie</translation>
 <translation id="5995726099713306770">Laai bladsy weer af?</translation>
 <translation id="6000066717592683814">Hou Google</translation>
 <translation id="6000203700195075278">Volg weer</translation>
 <translation id="6011308810877101166">Verbeter soekvoorstelle</translation>
 <translation id="6013305291643746595">Sorteer volgens oudste</translation>
-<translation id="6022659036123304283">Maak Chrome jou eie</translation>
+<translation id="6022659036123304283">Maak Ultimatum jou eie</translation>
 <translation id="6026538407078977628">Vou uit na volskerm</translation>
 <translation id="6030719887161080597">Bestuur inligting wat deur werwe gebruik word om advertensieprestasie te meet</translation>
 <translation id="6039379616847168523">Spring na die volgende oortjie</translation>
@@ -1125,17 +1125,17 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 <translation id="6146563240635539929">Video's</translation>
 <translation id="614890671148262506">Laat altyd kennisgewings van hierdie werf af toe</translation>
 <translation id="6150320133806434356">Boekmerk is gestoor</translation>
-<translation id="6150706324143004339">Dateer Chrome op om Chrome-data in jou Google-rekening te gebruik en te stoor</translation>
+<translation id="6150706324143004339">Dateer Ultimatum op om Ultimatum-data in jou Google-rekening te gebruik en te stoor</translation>
 <translation id="6154478581116148741">Skakel skermslot in Instellings aan om jou wagwoorde van hierdie toestel af uit te voer</translation>
 <translation id="6156323911414505561">Wys boekmerkbalk</translation>
-<translation id="6162892189396105610">Laai bladsye vooraf wat Chrome dink jy waarskynlik gaan besoek.</translation>
+<translation id="6162892189396105610">Laai bladsye vooraf wat Ultimatum dink jy waarskynlik gaan besoek.</translation>
 <translation id="6170675927290506430">Gaan na kennisgewinginstellings</translation>
 <translation id="6186394685773237175">Geen gekompromitteerde wagwoorde gekry nie</translation>
 <translation id="6192907950379606605">Kry prentbeskrywings</translation>
 <translation id="6193448654517602979">Kies oortjies</translation>
 <translation id="6196315980958524839">Wagwoorde word op hierdie toestel in Google Wagwoordbestuurder gestoor</translation>
 <translation id="6202812185118613467">Meld weer aan om sinkronisering te begin</translation>
-<translation id="6204781143409202534">Chrome het moontlike strooipos van <ph name="DOMAIN" /> af bespeur.</translation>
+<translation id="6204781143409202534">Ultimatum het moontlike strooipos van <ph name="DOMAIN" /> af bespeur.</translation>
 <translation id="6205314730813004066">Advertensieprivaatheid</translation>
 <translation id="6210748933810148297">Nie <ph name="EMAIL" /> nie?</translation>
 <translation id="6211386937064921208">Voorbeskou tans hierdie bladsy</translation>
@@ -1146,10 +1146,10 @@ Jou Google-rekening het dalk ander vorme van blaaigeskiedenis, soos soektogte en
 
 Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advertensies te wys wat nie gegrond is op ander webwerwe wat jy besoek het nie. Baie webwerwe sal steeds jou blaaidata insamel en gebruik – byvoorbeeld om sekuriteit te verbeter, om inhoud, advertensies en aanbevelings te verskaf en om verslagdoeningstatistiek te genereer.</translation>
 <translation id="6247557882553405851">Google Wagwoordbestuurder</translation>
-<translation id="6251449557817521191">Bekyk hier jou Chrome-geskiedenis</translation>
+<translation id="6251449557817521191">Bekyk hier jou Ultimatum-geskiedenis</translation>
 <translation id="6253680439349691381">{ITEMS_COUNT,plural, =1{1 item word net op hierdie toestel gestoor. As jy dit op jou ander toestelle wil gebruik, moet jy dit in jou Google-rekening, <ph name="ACCOUNT_EMAIL" />, stoor.}other{# items word net op hierdie toestel gestoor. As jy hulle op jou ander toestelle wil gebruik, moet jy hulle in jou Google-rekening, <ph name="ACCOUNT_EMAIL" />, stoor.}}</translation>
 <translation id="6254139308321626268">Jy bekyk ’n PDF-lêer</translation>
-<translation id="6255809143828972562">Met nutsgoed van Chrome af kan jy veilig blaai en in beheer bly</translation>
+<translation id="6255809143828972562">Met nutsgoed van Ultimatum af kan jy veilig blaai en in beheer bly</translation>
 <translation id="6264376385120300461">Laai in elk geval af</translation>
 <translation id="6264485186158353794">Terug na veiligheid</translation>
 <translation id="6277522088822131679">Kon nie die bladsy uitdruk nie. Probeer asseblief weer.</translation>
@@ -1179,14 +1179,14 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="6356893102071098867">Maak seker dat jy die regte rekening gekies het</translation>
 <translation id="6363990818884053551">Verifieer dis jy om sinkronisering te begin</translation>
 <translation id="6364438453358674297">Verwyder voorstel uit geskiedenis?</translation>
-<translation id="6380100320871303656">Laai meer gereeld bladsye vooraf wat Chrome dink jy waarskynlik gaan besoek. Hierdie instelling kan groter datagebruik tot gevolg hê.</translation>
+<translation id="6380100320871303656">Laai meer gereeld bladsye vooraf wat Ultimatum dink jy waarskynlik gaan besoek. Hierdie instelling kan groter datagebruik tot gevolg hê.</translation>
 <translation id="6382848304055775421">Voer uit</translation>
 <translation id="6388152137132427505">Deel altyd verstandig. Skakels verval oor 48 uur.</translation>
 <translation id="6394791151443660613">Soek vir: <ph name="SEARCH_QUERY" /></translation>
 <translation id="6395288395575013217">SKAKEL</translation>
 <translation id="6397616442223433927">Weer aanlyn</translation>
 <translation id="6399363707848566877">Jy kan nou maklik hier oortjies by groepe voeg</translation>
-<translation id="6401458660421980302">Om hierdie oortjie na ’n ander toestel toe te stuur, moet jy daar by Chrome aanmeld</translation>
+<translation id="6401458660421980302">Om hierdie oortjie na ’n ander toestel toe te stuur, moet jy daar by Ultimatum aanmeld</translation>
 <translation id="6404511346730675251">Wysig boekmerk</translation>
 <translation id="6406506848690869874">Sinkronisering</translation>
 <translation id="6410883413783534063">Maak oortjies oop om verskillende bladsye op dieselfde tyd te besoek</translation>
@@ -1202,22 +1202,22 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="6452534462676960500">Nuwe aktiwiteit</translation>
 <translation id="6459045781120991510">Opnames</translation>
 <translation id="6461962085415701688">Kan nie lêer oopmaak nie</translation>
-<translation id="6464977750820128603">Jy kan werwe sien wat jy in Chrome besoek en tydtellers vir hulle stel.\n\nGoogle kry inligting oor die werwe waarvoor jy tydtellers stel en hoe lank jy hulle besoek. Hierdie inligting word gebruik om Digitale Welstand te verbeter.</translation>
+<translation id="6464977750820128603">Jy kan werwe sien wat jy in Ultimatum besoek en tydtellers vir hulle stel.\n\nGoogle kry inligting oor die werwe waarvoor jy tydtellers stel en hoe lank jy hulle besoek. Hierdie inligting word gebruik om Digitale Welstand te verbeter.</translation>
 <translation id="6468703991511753953">Adresbalk is tans onder</translation>
-<translation id="6470181189905173055">Die bladsye wat jy in Chrome oopgemaak het terwyl jy <ph name="APP_LABEL" /> gebruik het, sal hier verskyn.</translation>
+<translation id="6470181189905173055">Die bladsye wat jy in Ultimatum oopgemaak het terwyl jy <ph name="APP_LABEL" /> gebruik het, sal hier verskyn.</translation>
 <translation id="6473086018775716761">Lys deelopsies wat teen halwe hoogte oopgemaak is.</translation>
 <translation id="6475951671322991020">Laai video af</translation>
 <translation id="6477928892249167417">Dit lyk of hierdie werwe vir jou belangrik is:</translation>
-<translation id="6481963882741794338">Koppel Chrome en ander Google-dienste vir personalisering en ander doeleindes</translation>
+<translation id="6481963882741794338">Koppel Ultimatum en ander Google-dienste vir personalisering en ander doeleindes</translation>
 <translation id="6482749332252372425">Kon <ph name="FILE_NAME" /> weens 'n gebrek aan bergingspasie nie aflaai nie.</translation>
 <translation id="6486420406192123355">Hierdie PDF-lêer is van ’n werf af wat ’n onveilige verbinding gebruik</translation>
 <translation id="650224091954855786">{FILE_COUNT,plural, =1{Lêer is afgelaai}other{# aflaaie is voltooi}}</translation>
-<translation id="6508722015517270189">Herbegin Chrome</translation>
+<translation id="6508722015517270189">Herbegin Ultimatum</translation>
 <translation id="6513924416597632811">Kopieer skakel na soekresultaatbladsy vir: <ph name="SEARCH_QUERY" />. Bron: <ph name="PAGE_URL" /></translation>
 <translation id="6518133107902771759">Verifieer</translation>
 <translation id="6527303717912515753">Deel</translation>
-<translation id="652948702951888897">Chrome-geskiedenis</translation>
-<translation id="6532866250404780454">Werwe wat jy in Chrome besoek, sal nie wys nie. Alle werftydtellers sal uitgevee word.</translation>
+<translation id="652948702951888897">Ultimatum-geskiedenis</translation>
+<translation id="6532866250404780454">Werwe wat jy in Ultimatum besoek, sal nie wys nie. Alle werftydtellers sal uitgevee word.</translation>
 <translation id="6539092367496845964">Iets is fout. Probeer later weer.</translation>
 <translation id="6541983376925655882">{NUM_HOURS,plural, =1{1 uur gelede nagegaan}other{# uur gelede nagegaan}}</translation>
 <translation id="6545017243486555795">Vee alle data uit</translation>
@@ -1226,12 +1226,12 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="6556542240154580383">{TAB_COUNT,plural, =1{<ph name="TAB_TITLE" /> en nog <ph name="TAB_COUNT_ONE" /> oortjie sal toegemaak word}other{<ph name="TAB_TITLE" /> en nog <ph name="TAB_COUNT_MANY" /> oortjies sal toegemaak word}}</translation>
 <translation id="6560414384669816528">Soek met Sogou</translation>
 <translation id="656065428026159829">Sien meer</translation>
-<translation id="6564820424018738527">Jou Android-toestel kan ’n soortgelyke instelling insluit. As advertensiemeting in Chrome en op jou Android-toestel aangeskakel is, kan ’n maatskappy dalk die doeltreffendheid van ’n advertensie meet op alle webwerwe wat jy besoek en apps wat jy gebruik.</translation>
+<translation id="6564820424018738527">Jou Android-toestel kan ’n soortgelyke instelling insluit. As advertensiemeting in Ultimatum en op jou Android-toestel aangeskakel is, kan ’n maatskappy dalk die doeltreffendheid van ’n advertensie meet op alle webwerwe wat jy besoek en apps wat jy gebruik.</translation>
 <translation id="6565959834589222080">Wi-fi word gebruik wanneer dit beskikbaar is</translation>
 <translation id="6569373978618239158">Jy sal nou stories van <ph name="SITE_NAME" /> af sien wanneer jy 'n nuwe oortjie oopmaak. Werwe wat jy volg, word in jou Google-rekening gestoor. Jy kan hulle bestuur in Ontdek-instellings.</translation>
 <translation id="657177046675873214">Skakel “Boekmerke” in instellings aan om jou boekmerke op al jou toestelle te kry</translation>
 <translation id="6573096386450695060">Laat altyd toe</translation>
-<translation id="6573431926118603307">Oortjies wat jy op jou ander toestelle in Chrome oopgemaak het, sal hier verskyn.</translation>
+<translation id="6573431926118603307">Oortjies wat jy op jou ander toestelle in Ultimatum oopgemaak het, sal hier verskyn.</translation>
 <translation id="6583199322650523874">Boekmerk die huidige bladsy</translation>
 <translation id="6588043302623806746">Gebruik beveiligde DNS</translation>
 <translation id="6590471736817333463">Bespaar tot 60% data</translation>
@@ -1239,13 +1239,13 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="6593061639179217415">Werkskermwerf</translation>
 <translation id="6594347733515723558">Rangskik en bekyk opsies</translation>
 <translation id="6595046016124923392">Prente word na Google toe gestuur om beskrywings vir jou beter te maak.</translation>
-<translation id="6604931690954120417">Wanneer jy by Chrome aangemeld is, sal wagwoorde wat jy stoor na jou Google-rekening toe gaan. <ph name="BEGIN_LINK" />Gaan na instellings<ph name="END_LINK" /> om dit af te skakel.</translation>
+<translation id="6604931690954120417">Wanneer jy by Ultimatum aangemeld is, sal wagwoorde wat jy stoor na jou Google-rekening toe gaan. <ph name="BEGIN_LINK" />Gaan na instellings<ph name="END_LINK" /> om dit af te skakel.</translation>
 <translation id="661266467055912436">Verbeter sekuriteit vir jou en almal op die web.</translation>
-<translation id="6621391692573306628">Om hierdie oortjie na ’n ander toestel toe te stuur, moet jy op albei toestelle by Chrome aanmeld</translation>
+<translation id="6621391692573306628">Om hierdie oortjie na ’n ander toestel toe te stuur, moet jy op albei toestelle by Ultimatum aanmeld</translation>
 <translation id="6627583120233659107">Wysig vouer</translation>
 <translation id="6633067410344541938">Ontsluit Incognito</translation>
 <translation id="6636623428211296678">Verken meer instellings hieronder of maak nou klaar</translation>
-<translation id="6637100877383020115">Chrome stuur gebruik- en omvaldata na Google toe om te help om die app beter te maak. <ph name="BEGIN_UMA_LINK" />Bestuur<ph name="END_UMA_LINK" /></translation>
+<translation id="6637100877383020115">Ultimatum stuur gebruik- en omvaldata na Google toe om te help om die app beter te maak. <ph name="BEGIN_UMA_LINK" />Bestuur<ph name="END_UMA_LINK" /></translation>
 <translation id="6640207029842583248">Blokkeer altyd</translation>
 <translation id="6641780377503683465">Verwyder <ph name="INTEREST" /></translation>
 <translation id="6647441008198474441">URL'e wat jy besoek, word na Google toe gestuur om te voorspel watter werwe jy dalk volgende sal besoek</translation>
@@ -1257,8 +1257,8 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="6672697278890207089">Voer jou wagfrase in</translation>
 <translation id="6672917148207387131">Voeg <ph name="DOMAIN" /> by</translation>
 <translation id="6674571176963658787">Voer jou wagfrase in om sinkronisering te begin</translation>
-<translation id="6676927815633975364">Meld by hierdie werf en Chrome aan</translation>
-<translation id="6684809838922667136">Maak Chrome beter</translation>
+<translation id="6676927815633975364">Meld by hierdie werf en Ultimatum aan</translation>
+<translation id="6684809838922667136">Maak Ultimatum beter</translation>
 <translation id="6700279777779583398">Keuses is gestoor</translation>
 <translation id="6704048624334633734">Voer die wagwoorde uit en vee hulle uit</translation>
 <translation id="670498945988402717">Gister nagegaan</translation>
@@ -1269,7 +1269,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="6723740634201835758">In jou Google-rekening</translation>
 <translation id="6734310707649923383">Jy kan die bladsye sien wat jy besoek het of hulle van jou geskiedenis uitvee</translation>
 <translation id="6738867403308150051">Laai tans af …</translation>
-<translation id="674388916582496364">Dit is algemeen vir werwe wat jy besoek om dinge te onthou waarin jy belangstel en jou ervaring te personaliseer. Werwe kan ook inligting oor jou belangstellings in Chrome stoor.</translation>
+<translation id="674388916582496364">Dit is algemeen vir werwe wat jy besoek om dinge te onthou waarin jy belangstel en jou ervaring te personaliseer. Werwe kan ook inligting oor jou belangstellings in Ultimatum stoor.</translation>
 <translation id="6746338529702829275">Gaan jou rekeningdata na</translation>
 <translation id="6751521182688001123">Maak vinnig 'n nuwe oortjie oop. Raak en hou om hierdie kortpad te wysig.</translation>
 <translation id="6756507620369789050">Deel terugvoer</translation>
@@ -1277,15 +1277,15 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="676305334223455055">Meld aan om inhoud gegrond op jou belangstellings te kry</translation>
 <translation id="6764137532716892442">Gedeelde <ph name="GROUP_TITLE" /> oortjiegroep met nuwe aktiwiteit</translation>
 <translation id="6767294960381293877">Lys toestelle om 'n oortjie mee te deel, is teen halwe hoogte oopgemaak.</translation>
-<translation id="6785476624617658922">Chrome en Chrome-bedryfstelsel se bykomende diensbepalings</translation>
+<translation id="6785476624617658922">Ultimatum en Ultimatum-bedryfstelsel se bykomende diensbepalings</translation>
 <translation id="6795633245022906657">Maak vinnig 'n nuwe oortjie oop. Gaan na Instellings om hierdie kortpad te wysig.</translation>
-<translation id="679588508577699489">Maak Chrome jou verstekblaaier</translation>
+<translation id="679588508577699489">Maak Ultimatum jou verstekblaaier</translation>
 <translation id="679956319013005046">As jy jou voorkeurdiens vir outovul wil stel, moet jy eers die diens in <ph name="BEGIN_LINK" />Android-instellings<ph name="END_LINK" /> byvoeg.</translation>
 <translation id="6802555630140434547">Die venster sal toegemaak word</translation>
 <translation id="6803791793483522764">Gaan kennisgewings na</translation>
 <translation id="6811034713472274749">Bladsy is gereed om bekyk te word</translation>
 <translation id="6813359536773993594">{FILE_COUNT,plural, =1{Prente, 1 prent in lys}other{Prente, # prente in lys}}</translation>
-<translation id="6813446258015311409">Meld by Chrome aan; oopgemaak.</translation>
+<translation id="6813446258015311409">Meld by Ultimatum aan; oopgemaak.</translation>
 <translation id="6817747507826986771">Deel hierdie bladsy vinnig. Raak en hou om hierdie kortpad te wysig.</translation>
 <translation id="6820686453637990663">CVC</translation>
 <translation id="6820942662346226299">Google Wagwoordbestuurder se opdatering is toegemaak</translation>
@@ -1317,7 +1317,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="688738109438487280">Voeg bestaande data by <ph name="TO_ACCOUNT" />.</translation>
 <translation id="6891726759199484455">Ontsluit om jou wagwoord te kopieer</translation>
 <translation id="6896758677409633944">Kopieer</translation>
-<translation id="6898797562238201317">Gebruik jou eie wagwoordfrase om al die Chrome-data in jou Google-rekening te enkripteer</translation>
+<translation id="6898797562238201317">Gebruik jou eie wagwoordfrase om al die Ultimatum-data in jou Google-rekening te enkripteer</translation>
 <translation id="6900532703269623216">Verbeterde beskerming</translation>
 <translation id="6903907808598579934">Skakel sinkronisering aan</translation>
 <translation id="6906448540340261898">Maak seker dat jy altyd die wagwoorde in jou Google-rekening kan gebruik</translation>
@@ -1326,7 +1326,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="6909589135458168665">Laai bladsye vooraf</translation>
 <translation id="6910211073230771657">Uitgevee</translation>
 <translation id="6918398787259831832"><ph name="BEGIN_LINK" />Kry meer inligting<ph name="END_LINK" /> by <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> as hierdie kwessie aanhou voorkom.</translation>
-<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Chrome het hierdie toestemmings verwyder want jy het nie onlangs die werf besoek nie</translation>
+<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Ultimatum het hierdie toestemmings verwyder want jy het nie onlangs die werf besoek nie</translation>
 <translation id="6927821422725196292">{TABS_COUNT,plural, =1{1 oortjie}other{<ph name="NUMBER_OF_TABS" /> oortjies}}</translation>
 <translation id="6929224077895306814">Alle sekuriteitskodes wat op jou toestel en in jou Google-rekening gestoor is, sal uitgevee word</translation>
 <translation id="6937524809504266803">Personalisering en koppeling</translation>
@@ -1347,7 +1347,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="6979737339423435258">Van die begin af</translation>
 <translation id="6983306615164277634">Jy kan ook die adresbalk raak en hou om die posisie te verander.</translation>
 <translation id="6987047470128880212">Incognito is nie op hierdie toestel beskikbaar nie</translation>
-<translation id="6991701761229081516">Jou wagwoorde sal as ’n CSV-lêer afgelaai word. Dit sal sigbaar wees vir enigiemand wat toegang tot die lêer het, insluitend apps. Uitgevoerde wagwoorde sal van Chrome uitgevee word.</translation>
+<translation id="6991701761229081516">Jou wagwoorde sal as ’n CSV-lêer afgelaai word. Dit sal sigbaar wees vir enigiemand wat toegang tot die lêer het, insluitend apps. Uitgevoerde wagwoorde sal van Ultimatum uitgevee word.</translation>
 <translation id="6996145122199359148">Laai hierdie bladsy af</translation>
 <translation id="7013762323294215682">Hierdie toegangsleutel sal in jou wagwoordbestuurder gestoor word. Enigiemand met toegang daartoe sal hierdie toegangsleutel kan gebruik.</translation>
 <translation id="7020741890149022655">Voeg by leeslys <ph name="BEGIN_NEW" />Nuut<ph name="END_NEW" /></translation>
@@ -1356,16 +1356,16 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="7053256416619638731">Versterk jou wagwoorde op hierdie toestel</translation>
 <translation id="7053983685419859001">Blokkeer</translation>
 <translation id="7054588988317389591">Kry prentbeskrywings?</translation>
-<translation id="7057969023583258980">Maak volledige Chrome-geskiedenis oop</translation>
+<translation id="7057969023583258980">Maak volledige Ultimatum-geskiedenis oop</translation>
 <translation id="7063006564040364415">Kon nie aan die sinkroniseringbediener koppel nie.</translation>
 <translation id="7071521146534760487">Bestuur rekening</translation>
 <translation id="707155805709242880">Kies hieronder wat om te sinkroniseer</translation>
 <translation id="7077143737582773186">SD-kaart</translation>
-<translation id="7078916049958741685">Vee ook jou Chrome-data op hierdie toestel uit</translation>
-<translation id="7085332316435785646">Kies of jy Chrome-geskiedenis wil insluit vir meer gepersonaliseerde ervarings in Google-dienste</translation>
-<translation id="7088681679121566888">Chrome is op datum</translation>
+<translation id="7078916049958741685">Vee ook jou Ultimatum-data op hierdie toestel uit</translation>
+<translation id="7085332316435785646">Kies of jy Ultimatum-geskiedenis wil insluit vir meer gepersonaliseerde ervarings in Google-dienste</translation>
+<translation id="7088681679121566888">Ultimatum is op datum</translation>
 <translation id="7106762743910369165">Jou organisasie bestuur jou blaaier</translation>
-<translation id="7111394291981742152">Chrome gee jou meer beheer oor die advertensies wat jy sien en beperk wat werwe oor jou kan uitvind wanneer hulle vir jou gepersonaliseerde advertensies wys.</translation>
+<translation id="7111394291981742152">Ultimatum gee jou meer beheer oor die advertensies wat jy sien en beperk wat werwe oor jou kan uitvind wanneer hulle vir jou gepersonaliseerde advertensies wys.</translation>
 <translation id="7117485132243600300">Bestuur inhoud wat jy volg en voorgestelde onderwerpe en soektogte</translation>
 <translation id="7136902389402789299">{NUM_SITES,plural, =1{Toestemmings is vir 1 werf gekontroleer}other{Toestemmings is vir # werwe gekontroleer}}</translation>
 <translation id="7138678301420049075">Ander</translation>
@@ -1375,7 +1375,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="7149893636342594995">Afgelope 24 uur</translation>
 <translation id="71503698506017927">Wagfrase-enkripsie sluit nie betaalmetodes en adresse van Google Pay af in nie.
 
-<ph name="BEGIN_LINK" />Vee die Chrome-data in jou rekening uit<ph name="END_LINK" /> om hierdie instelling te verander.</translation>
+<ph name="BEGIN_LINK" />Vee die Ultimatum-data in jou rekening uit<ph name="END_LINK" /> om hierdie instelling te verander.</translation>
 <translation id="7168323970702333693">Aangemeld as <ph name="USER_NAME" />. Maak instellings oop.</translation>
 <translation id="7173114856073700355">Maak Instellings oop</translation>
 <translation id="7173338713290252554">Prysgeskiedenis regoor die web</translation>
@@ -1390,28 +1390,28 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="7192397795254933433">{NUM_PASSWORDS,plural, =1{Jy moet dit nou verander}other{Jy moet hierdie nou verander}}</translation>
 <translation id="7196215469483532480">Privaatheidgidsverduideliking is teen volle hoogte oopgemaak</translation>
 <translation id="7207760545532569765">Stel <ph name="TAB_COUNT" /> oortjies as nuwe agtergrondoortjies terug.</translation>
-<translation id="7217781228893594884">Incognito-oortjies sal gesluit word wanneer jy Chrome verlaat</translation>
+<translation id="7217781228893594884">Incognito-oortjies sal gesluit word wanneer jy Ultimatum verlaat</translation>
 <translation id="7221869452894271364">Herlaai hierdie bladsy</translation>
-<translation id="7224097611345298931">Alle wagwoorde wat net op hierdie toestel vir Chrome en <ph name="CHROME_CHANNEL" /> gestoor is, is saamgevoeg. Jy kan al jou gestoorde wagwoorde op albei apps outomaties invul.</translation>
+<translation id="7224097611345298931">Alle wagwoorde wat net op hierdie toestel vir Ultimatum en <ph name="CHROME_CHANNEL" /> gestoor is, is saamgevoeg. Jy kan al jou gestoorde wagwoorde op albei apps outomaties invul.</translation>
 <translation id="7227218174981371415">{FILE_COUNT,plural, =1{1 aflaai hangende}other{# aflaaie hangende}}</translation>
 <translation id="7230064152164845085">Skakel oor na Incognito</translation>
 <translation id="7236515828900885295">Spring na soektog</translation>
 <translation id="7237724030342645845">Google Wagwoordbestuurder het opgehou werk</translation>
 <translation id="72415438529550637">Wagwoordvoorstel is toe.</translation>
 <translation id="7248671827512403053">App</translation>
-<translation id="7260367682327802201">Jou Android-toestel kan ’n soortgelyke instelling insluit. As advertensiemeting in Chrome en op jou Android-toestel aangeskakel is, kan ’n maatskappy dalk die doeltreffendheid van ’n advertensie meet op alle webwerwe wat jy besoek en apps wat jy gebruik.</translation>
+<translation id="7260367682327802201">Jou Android-toestel kan ’n soortgelyke instelling insluit. As advertensiemeting in Ultimatum en op jou Android-toestel aangeskakel is, kan ’n maatskappy dalk die doeltreffendheid van ’n advertensie meet op alle webwerwe wat jy besoek en apps wat jy gebruik.</translation>
 <translation id="727288900855680735">Dien <ph name="ONE_TIME_CODE" /> in by <ph name="ORIGIN" />?</translation>
 <translation id="7274013316676448362">Geblokkeerde werf</translation>
 <translation id="7276868533747677875">As jy voorheen wagwoorde uitgevoer het, moet jy ’n CSV-lêer op jou toestel soek en dit invoer na jou voorkeurwagwoordbestuurder.</translation>
-<translation id="7289049772085228972">Jy het Chrome se sterkste sekuriteit</translation>
+<translation id="7289049772085228972">Jy het Ultimatum se sterkste sekuriteit</translation>
 <translation id="7289303553784750393">Jy kan ander maniere probeer om voort te gaan op <ph name="SITE_ETLD_PLUS_ONE" /> as hierdie kwessie aanhou voorkom al is jy aanlyn.</translation>
 <translation id="7290209999329137901">Hernoeming is nie beskikbaar nie</translation>
 <translation id="7291910923717764901">Prentbeskrywings is vir hierdie bladsy bygevoeg</translation>
 <translation id="7293429513719260019">Kies taal</translation>
 <translation id="729975465115245577">Jou toestel het nie 'n app om die wagwoordlêer te berg nie.</translation>
-<translation id="7304072650267745798">Jou Android-toestel kan ’n soortgelyke instelling insluit. As hierdie instelling in Chrome en op jou Android-toestel aangeskakel is, kan ’n maatskappy dalk die doeltreffendheid van ’n advertensie meet op alle webwerwe wat jy besoek en apps wat jy gebruik.</translation>
+<translation id="7304072650267745798">Jou Android-toestel kan ’n soortgelyke instelling insluit. As hierdie instelling in Ultimatum en op jou Android-toestel aangeskakel is, kan ’n maatskappy dalk die doeltreffendheid van ’n advertensie meet op alle webwerwe wat jy besoek en apps wat jy gebruik.</translation>
 <translation id="7304806746406660416">{PASSWORDS_COUNT,plural, =1{1 wagwoord word net op hierdie toestel gestoor. As jy dit op jou ander toestelle wil gebruik, moet jy dit in jou Google-rekening, <ph name="ACCOUNT_EMAIL" />, stoor.}other{# wagwoorde word net op hierdie toestel gestoor. As jy hulle op jou ander toestelle wil gebruik, moet jy hulle in jou Google-rekening, <ph name="ACCOUNT_EMAIL" />, stoor.}}</translation>
-<translation id="7304873321153398381">Vanlyn. Chrome kan nie jou wagwoorde nagaan nie.</translation>
+<translation id="7304873321153398381">Vanlyn. Ultimatum kan nie jou wagwoorde nagaan nie.</translation>
 <translation id="7313188324932846546">Tik om sinkronisering op te stel</translation>
 <translation id="7314734791127433392">Kan nie wagwoorde kontroleer nie</translation>
 <translation id="7324354302972299151">Stuur ’n “Do Not Track”-versoek</translation>
@@ -1433,13 +1433,13 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="7388615499319468910">Werwe en adverteerders kan verstaan hoe advertensies vaar. Hierdie instelling is af.</translation>
 <translation id="7400003506822844357">{FILE_COUNT,plural, =1{Ander, 1 lêer in lys}other{Ander, # lêers in lys}}</translation>
 <translation id="7400418766976504921">URL</translation>
-<translation id="7403691278183511381">Chrome se eerste laatloopervaring</translation>
+<translation id="7403691278183511381">Ultimatum se eerste laatloopervaring</translation>
 <translation id="7411224099004328643">Google-rekeninggebruiker</translation>
 <translation id="7419565702166471774">Gebruik altyd veilige verbindings</translation>
 <translation id="7421293530411019405">Verlaat oortjiegroep?</translation>
 <translation id="7431991332293347422">Beheer hoe jou blaaigeskiedenis gebruik word om Search en meer te personaliseer</translation>
 <translation id="7435356471928173109">Afgeskakel deur jou administrateur</translation>
-<translation id="7437998757836447326">Meld af uit Chrome</translation>
+<translation id="7437998757836447326">Meld af uit Ultimatum</translation>
 <translation id="7439467816829380878">Skuif oortjie na groep toe</translation>
 <translation id="7453810262525006706">Vou in na kantaansig</translation>
 <translation id="7454641608352164238">Nie genoeg spasie nie</translation>
@@ -1470,7 +1470,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="7525248386620136756"><ph name="TAB_GROUPS_AND_TABS_PART" /> is toegemaak en gestoor</translation>
 <translation id="752731652852882757">Blokkeer terwyl Incognitomodus gebruik word</translation>
 <translation id="7545347190366646170">Mense met toegang</translation>
-<translation id="7554643625247105821">Kan nie Chrome-weergawe kontroleer nie</translation>
+<translation id="7554643625247105821">Kan nie Ultimatum-weergawe kontroleer nie</translation>
 <translation id="7557508262441527045">Afgemeld</translation>
 <translation id="7561260660702735877">Meer inligting oor koppeling vanaf werf</translation>
 <translation id="7573665567024262965">Kies jou verstekapps</translation>
@@ -1480,7 +1480,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="7583262514280211622">Jy sal jou leeslys hier kry</translation>
 <translation id="758603037873046260">Meld aan om hierdie bladsy te stoor</translation>
 <translation id="7588219262685291874">Skakel donkertema aan wanneer jou toestel se Batterybespaarder aan is</translation>
-<translation id="7592322927044331376">Voer eers die wagwoorde vanaf Chrome uit en vee dit uit</translation>
+<translation id="7592322927044331376">Voer eers die wagwoorde vanaf Ultimatum uit en vee dit uit</translation>
 <translation id="7594687499944811403">Laat <ph name="EMBEDDED_ORIGIN" /> verifieer dat dit jy is vir <ph name="TOP_ORIGIN" /></translation>
 <translation id="7596558890252710462">Bedryfstelsel</translation>
 <translation id="7597601275223325603">{NUMBER_OF_TABS,plural, =1{<ph name="TABS_COUNT_ONE" /> standaardoortjie}other{<ph name="TABS_COUNT_MANY" /> standaardoortjies}}</translation>
@@ -1490,7 +1490,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="7612989789287281429">Meld jou tans aan …</translation>
 <translation id="7619072057915878432">Kon <ph name="FILE_NAME" /> weens netwerkmislukkings nie aflaai nie.</translation>
 <translation id="762537095495606755">Wagwoorde sal ophou om op hierdie toestel te werk</translation>
-<translation id="7626032353295482388">Welkom by Chrome</translation>
+<translation id="7626032353295482388">Welkom by Ultimatum</translation>
 <translation id="7628417132421583481">Gaan na Wagwoordbestuurder</translation>
 <translation id="7630202231528827509">Verskaffer-URL</translation>
 <translation id="7638584964844754484">Verkeerde wagwoordfrase</translation>
@@ -1505,7 +1505,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="7666185984446444960"><ph name="TAB_GROUPS_AND_TABS_PART" /> is toegemaak</translation>
 <translation id="7682724950699840886">Probeer die volgende wenke: maak seker dat daar genoeg spasie op jou toestel is; probeer om weer uit te voer.</translation>
 <translation id="7686086654630106285">Meer oor advertensies wat deur ’n werf voorgestel is</translation>
-<translation id="7690596512217303514">Jou toestel kon nie Chrome oopmaak nie. Laai die jongste Chrome-opdatering uit jou appwinkel af om die kwessie reg te stel.</translation>
+<translation id="7690596512217303514">Jou toestel kon nie Ultimatum oopmaak nie. Laai die jongste Ultimatum-opdatering uit jou appwinkel af om die kwessie reg te stel.</translation>
 <translation id="7691043218961417207">Verken inhoud om te volg</translation>
 <translation id="7692761875510935111">Maak vinnig in blaaier oop. Raak en hou om hierdie kortpad te wysig.</translation>
 <translation id="7697383401610880082">Sleephandvatsel</translation>
@@ -1547,7 +1547,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="7866213166286285359">Vertaal bladsye hier</translation>
 <translation id="7875915731392087153">Skep e-pos</translation>
 <translation id="7876243839304621966">Verwyder alles</translation>
-<translation id="7886917304091689118">Werk in Chrome</translation>
+<translation id="7886917304091689118">Werk in Ultimatum</translation>
 <translation id="7887174313503389866">Begin 'n begeleide toer van belangrike privaatheid- en sekuriteitkontroles. Gaan na individuele instellings vir meer opsies.</translation>
 <translation id="7907478394153853634">Lorem Ipsum</translation>
 <translation id="7913993612870913335">{FILE_COUNT,plural, =1{1 is deur jou organisasie geblokkeer}other{# is deur jou organisasie geblokkeer}}</translation>
@@ -1556,7 +1556,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="7919123827536834358">Vertaal hierdie tale outomaties</translation>
 <translation id="7921782882718083488">Som hierdie bladsy op</translation>
 <translation id="7926975587469166629">Kaart se bynaam</translation>
-<translation id="7929587383660661825">Chrome verwyder outomaties toestemmings van werwe wat kennisgewings misbruik of wat jy nie onlangs besoek het nie</translation>
+<translation id="7929587383660661825">Ultimatum verwyder outomaties toestemmings van werwe wat kennisgewings misbruik of wat jy nie onlangs besoek het nie</translation>
 <translation id="7929962904089429003">Maak die kieslys oop</translation>
 <translation id="7934668619883965330">Kan nie lêer aflaai nie. Lêerformaat word nie gesteun nie.</translation>
 <translation id="7942131818088350342"><ph name="PRODUCT_NAME" /> is verouderd.</translation>
@@ -1573,7 +1573,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="7975379999046275268">Voorbeskou bladsy <ph name="BEGIN_NEW" />Nuwe<ph name="END_NEW" /></translation>
 <translation id="7977451675950311423">Waarsku jou as jy ’n wagwoord gebruik wat in ’n dataskending gekompromitteer is.</translation>
 <translation id="7986497153528221272">Stel eers 'n skermslot op jou toestel om wagwoorde te bekyk</translation>
-<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Chrome het hierdie toestemmings verwyder, want jy het nie onlangs die werf besoek nie</translation>
+<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Ultimatum het hierdie toestemmings verwyder, want jy het nie onlangs die werf besoek nie</translation>
 <translation id="7995059495660416932">Jy sal inhoud sien wanneer dit beskikbaar word</translation>
 <translation id="799576009106109668">Jy sal vinniger kan blaai omdat inhoud proaktief op grond van jou huidige webbladsybesoek gelaai word</translation>
 <translation id="8001245658307297681">Jy bekyk ’n plaaslike lêer</translation>
@@ -1590,7 +1590,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="804335162455518893">Kon nie SD-kaart kry nie</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> incognito-oortjie}other{<ph name="TAB_COUNT_NORMAL" /> incognito-oortjies}}</translation>
 <translation id="8051695050440594747"><ph name="MEGABYTES" /> MB beskikbaar</translation>
-<translation id="8058746566562539958">Open in nuwe Chrome-oortjie</translation>
+<translation id="8058746566562539958">Open in nuwe Ultimatum-oortjie</translation>
 <translation id="8062594758852531064">Uitgebreide vooraflaai:</translation>
 <translation id="8063895661287329888">Kon nie boekmerk byvoeg nie.</translation>
 <translation id="8066816452984416180">Boekmerk hierdie bladsy vinnig. Raak en hou om hierdie kortpad te wysig.</translation>
@@ -1601,16 +1601,16 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="8078348702936632821">Speld hierdie kortpad vas</translation>
 <translation id="8084114998886531721">Gestoorde wagwoord</translation>
 <translation id="8084285576995584326">Beheer jou Google-rekeningdata</translation>
-<translation id="8084864785646838999">Sommige van jou geskiedenis sal dalk nie hier verskyn nie. Maak die volle Chrome-geskiedenis oop om al jou Chrome-geskiedenis te sien. Jou Google-rekening kan dalk ook ander vorme van blaaigeskiedenis hê by <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
+<translation id="8084864785646838999">Sommige van jou geskiedenis sal dalk nie hier verskyn nie. Maak die volle Ultimatum-geskiedenis oop om al jou Ultimatum-geskiedenis te sien. Jou Google-rekening kan dalk ook ander vorme van blaaigeskiedenis hê by <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="8088176524274673045">Om met mense naby te deel, moet hulle hierdie QR-kode skandeer</translation>
 <translation id="8090732854597034573">Vra jou ouer as jy hulp benodig</translation>
 <translation id="8101414242770404289">Geen oortjies vanaf die <ph name="TIME_PERIOD" /></translation>
 <translation id="8103578431304235997">Incognito-oortjie</translation>
-<translation id="8105613260829665809">Deur voort te gaan, stem jy in tot die <ph name="BEGIN_TOS_LINK" />diensbepalings<ph name="END_TOS_LINK" />.\nChrome stuur gebruik- en omvaldata na Google toe om te help om die app beter te maak. <ph name="BEGIN_UMA_LINK" />Bestuur<ph name="END_UMA_LINK" /></translation>
+<translation id="8105613260829665809">Deur voort te gaan, stem jy in tot die <ph name="BEGIN_TOS_LINK" />diensbepalings<ph name="END_TOS_LINK" />.\nUltimatum stuur gebruik- en omvaldata na Google toe om te help om die app beter te maak. <ph name="BEGIN_UMA_LINK" />Bestuur<ph name="END_UMA_LINK" /></translation>
 <translation id="8105893657415066307"><ph name="DESCRIPTION" /> <ph name="SEPARATOR" /> <ph name="FILE_SIZE" /></translation>
 <translation id="8107530384992929318">Maak rangskikopsies toe</translation>
-<translation id="8110024788458304985">Help om Chrome se kenmerke en -werkverrigting beter te maak</translation>
-<translation id="8110087112193408731">Wys jou Chrome-aktiwiteit in Digitale Welstand?</translation>
+<translation id="8110024788458304985">Help om Ultimatum se kenmerke en -werkverrigting beter te maak</translation>
+<translation id="8110087112193408731">Wys jou Ultimatum-aktiwiteit in Digitale Welstand?</translation>
 <translation id="8118117428362942925">Vra jou ouer (<ph name="PARENT_NAME" />) as jy hulp benodig</translation>
 <translation id="8120286190326371840">Geen gekompromitteerde wagwoorde op hierdie toestel nie</translation>
 <translation id="8122623268651408616">Sorteer volgens nuutste</translation>
@@ -1633,7 +1633,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="8211101263765532799">Sommige wagwoorde sal binnekort ophou werk</translation>
 <translation id="8215740705341534369">Kantblad</translation>
 <translation id="8218622182176210845">Bestuur jou rekening</translation>
-<translation id="8221401890884589479">Jy kan werwe blokkeer wat jy nie wil hê nie. Chrome vee werwe wat ouer as 30 dae is, ook outomaties van die lys af uit. <ph name="BEGIN_LINK" />Kom meer te wete<ph name="END_LINK" /></translation>
+<translation id="8221401890884589479">Jy kan werwe blokkeer wat jy nie wil hê nie. Ultimatum vee werwe wat ouer as 30 dae is, ook outomaties van die lys af uit. <ph name="BEGIN_LINK" />Kom meer te wete<ph name="END_LINK" /></translation>
 <translation id="8221985041778490865">Vee tans blaaierdata uit</translation>
 <translation id="8223642481677794647">Stroomkaartkieslys</translation>
 <translation id="82296173028782770">Wysig soeknavraag: <ph name="SEARCH_QUERY" /></translation>
@@ -1643,7 +1643,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="8244387390464017490">Pasmaak Nuwe Oortjie-bladsy</translation>
 <translation id="8250920743982581267">Dokumente</translation>
 <translation id="8255617931166444521">Werwe kan jou webkoekies net gebruik om jou blaai-aktiwiteit op hul eie werf te sien</translation>
-<translation id="8256087213273124136">Chrome het jou van kennisgewings uitgeteken</translation>
+<translation id="8256087213273124136">Ultimatum het jou van kennisgewings uitgeteken</translation>
 <translation id="8258999165172757081">Bygevoeg</translation>
 <translation id="8259179246279078674">Google sal niks oor die voorafgelaaide bladsy se inhoud te wete kom nie omdat die voorafgelaaide bladsye geënkripteer word. Google-bedieners sal leer watter werwe privaat vooraf gelaai word. Hierdie inligting word slegs gebruik om die bladsye vooraf te laai en word nie aan ander inligting in jou Google-rekening gekoppel nie.</translation>
 <translation id="8260126382462817229">Probeer weer om aan te meld</translation>
@@ -1661,7 +1661,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="831192587911042850">Voeg die huidige webwerf by die lys webwerwe wat jy tans volg.</translation>
 <translation id="8320212361750431956">Onlangse aktiwiteit</translation>
 <translation id="832514020744584629"><ph name="PREF_TITLE" />  <ph name="BEGIN_NEW" />Nuut<ph name="END_NEW" /></translation>
-<translation id="8342727528718219152">Chrome sal jou laat weet van werwe wat moontlik te veel kennisgewings stuur</translation>
+<translation id="8342727528718219152">Ultimatum sal jou laat weet van werwe wat moontlik te veel kennisgewings stuur</translation>
 <translation id="834313815369870491">Moet nooit werwe vertaal nie</translation>
 <translation id="8348430946834215779">Gebruik HTTPS waar moontlik en word gewaarsku voordat werwe laai wat dit nie steun nie</translation>
 <translation id="8354977102499939946">Soek vinnig met jou stem. Gaan na Instellings om hierdie kortpad te wysig.</translation>
@@ -1675,12 +1675,12 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="8398389123831319859">Dubbeltik en hou om na Incognito oor te skakel</translation>
 <translation id="8402673309244746971">Gaan na Volg tans</translation>
 <translation id="8413126021676339697">Wys volle geskiedenis</translation>
-<translation id="8413795581997394485">Beskerm teen webwerwe, aflaaie en uitbreidings wat bekend is daarvoor dat hulle gevaarlik is. Wanneer jy ’n werf besoek, stuur Chrome ’n verdoeselde gedeelte van die URL na Google deur ’n privaatheidbediener wat jou IP-adres versteek. As ’n webwerf iets verdag doen, word volledige URL’e en stukkies van die bladsyinhoud ook gestuur.</translation>
+<translation id="8413795581997394485">Beskerm teen webwerwe, aflaaie en uitbreidings wat bekend is daarvoor dat hulle gevaarlik is. Wanneer jy ’n werf besoek, stuur Ultimatum ’n verdoeselde gedeelte van die URL na Google deur ’n privaatheidbediener wat jou IP-adres versteek. As ’n webwerf iets verdag doen, word volledige URL’e en stukkies van die bladsyinhoud ook gestuur.</translation>
 <translation id="8414396119627470038">Meld aan by <ph name="SITE_ETLD_PLUS_ONE" /> met <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8419144699778179708">Vee geskiedenis uit, ook in die soekkassie</translation>
 <translation id="8419244640277402268">Sluit in</translation>
 <translation id="8422250855136581222">Geen oortjies op hierdie toestel nie</translation>
-<translation id="842386925677997438">Chrome se veiligheidnutsgoed</translation>
+<translation id="842386925677997438">Ultimatum se veiligheidnutsgoed</translation>
 <translation id="8427875596167638501">Voorskou-oortjie is half oopgemaak</translation>
 <translation id="8428213095426709021">Instellings</translation>
 <translation id="8430824733382774043">Deel net skermskoot</translation>
@@ -1688,14 +1688,14 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="8438566539970814960">Maak soektogte en blaai-ervaring beter</translation>
 <translation id="8439974325294139057"><ph name="LANG" /> – taal is gereed; herbegin <ph name="APP_NAME" />.</translation>
 <translation id="8442258441309440798">Geen stories beskikbaar nie</translation>
-<translation id="8443209985646068659">Chrome dateer nie op nie</translation>
+<translation id="8443209985646068659">Ultimatum dateer nie op nie</translation>
 <translation id="8445448999790540984">Kan nie wagwoorde uitvoer nie</translation>
 <translation id="8446884382197647889">Kom meer te wete</translation>
 <translation id="8449781591250785734">{NUM_SITES,plural, =1{Toestemmings is van 1 werf verwyder}other{Toestemmings is van # werwe verwyder}}</translation>
 <translation id="8453310803815879010">Begin Dinosourusspeletjie</translation>
 <translation id="8455675988389029454">Kry jou boekmerke, wagwoorde en meer op al jou toestelle</translation>
 <translation id="8458413889418591446">Sinkroniseer jou geskiedenis en oortjies om vinnig terug te gaan na werwe wat jy besoek het</translation>
-<translation id="84594714173170813">Hou aan om die Chrome-data in jou Google-rekening te gebruik</translation>
+<translation id="84594714173170813">Hou aan om die Ultimatum-data in jou Google-rekening te gebruik</translation>
 <translation id="8460448946170646641">Gaan belangrike privaatheid- en sekuriteitkontroles na</translation>
 <translation id="8473863474539038330">Adresse en meer</translation>
 <translation id="8477178913400731244">Vee data uit</translation>
@@ -1709,7 +1709,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="8505766168025405649">Sien kennisgewing vir aflaaistatus</translation>
 <translation id="8506357771923193001">Jy sal jou aflaaie hier kry</translation>
 <translation id="8512053371384421952">Jy sal nie meer kennisgewings van<ph name="DOMAIN" /> ontvang nie.</translation>
-<translation id="8514477925623180633">Voer wagwoorde wat met Chrome gestoor word, uit</translation>
+<translation id="8514477925623180633">Voer wagwoorde wat met Ultimatum gestoor word, uit</translation>
 <translation id="8516012719330875537">Prentredigeerder</translation>
 <translation id="8523928698583292556">Vee gestoorde wagwoord uit</translation>
 <translation id="8526855376374973824">Kennisgewingtoestemmingvloei</translation>
@@ -1718,8 +1718,8 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="854522910157234410">Maak hierdie bladsy oop</translation>
 <translation id="8547025137714087639">{ARCHIVED_TAB_COUNT,plural, =1{Onaktiewe oortjie (1)}other{Onaktiewe oortjies (#)}}</translation>
 <translation id="8547466829003330976">Hersien PDF met KI</translation>
-<translation id="8551513938758868521">Sluit Incognito-oortjies wanneer jy Chrome verlaat</translation>
-<translation id="8559961053328923750">Chrome beperk die totale hoeveelheid data wat werwe deur die blaaier kan deel om advertensiewerkverrigting te meet</translation>
+<translation id="8551513938758868521">Sluit Incognito-oortjies wanneer jy Ultimatum verlaat</translation>
+<translation id="8559961053328923750">Ultimatum beperk die totale hoeveelheid data wat werwe deur die blaaier kan deel om advertensiewerkverrigting te meet</translation>
 <translation id="8559990750235505898">Aanbieding om bladsye in ander tale te vertaal</translation>
 <translation id="8560602726703398413">Kry jou leeslys in Boekmerke</translation>
 <translation id="8562452229998620586">Gestoorde wagwoorde sal hier verskyn.</translation>
@@ -1731,7 +1731,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="859046281437143747">Spoor pryse deur die Meer Opsies-knoppie na</translation>
 <translation id="859064343657890103"><ph name="TAB_GROUP_TITLE" />-oortjiegroep is uitgevee</translation>
 <translation id="860043288473659153">Kaarthouernaam</translation>
-<translation id="8602358303461588329">Meld by Chrome aan; toegemaak.</translation>
+<translation id="8602358303461588329">Meld by Ultimatum aan; toegemaak.</translation>
 <translation id="860282621117673749">Opletberigte oor prysverlagings</translation>
 <translation id="8611922158252451755">Enigiemand met die skakel kan alle oortjies wysig, so deel verstandig. Skakel verval oor 48 uur.</translation>
 <translation id="8616006591992756292">Jou Google-rekening kan dalk ander vorme van blaaigeskiedenis hê by <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /></translation>
@@ -1759,8 +1759,8 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="8748850008226585750">Inhoud word versteek</translation>
 <translation id="8754448020583829686">Kopieer sonder skakel</translation>
 <translation id="8756969031206844760">Dateer wagwoord op?</translation>
-<translation id="8765470054473112089">Wanneer jy iets in die adresbalk of soekkassie tik, stuur Chrome wat jy tik na jou versteksoekenjin toe om beter voorstelle te kry. Dit is af in Incognito.</translation>
-<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Chrome het ’n swak wagwoord gevind wat jy kan verbeter}other{Chrome het # swak wagwoorde gevind wat jy kan verbeter}}</translation>
+<translation id="8765470054473112089">Wanneer jy iets in die adresbalk of soekkassie tik, stuur Ultimatum wat jy tik na jou versteksoekenjin toe om beter voorstelle te kry. Dit is af in Incognito.</translation>
+<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Ultimatum het ’n swak wagwoord gevind wat jy kan verbeter}other{Ultimatum het # swak wagwoorde gevind wat jy kan verbeter}}</translation>
 <translation id="8766529642647037772">Skep 'n hoogtepuntskakel soos hierdie een?</translation>
 <translation id="8788265440806329501">Navigasiegeskiedenis is toegemaak.</translation>
 <translation id="8788968922598763114">Heropen oortjie wat laaste toegemaak is</translation>
@@ -1784,7 +1784,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="8856607253650333758">Kry beskrywings</translation>
 <translation id="8856931513242997049">Kennisgewingtoestemmingvloei is toegemaak</translation>
 <translation id="8863714995118816041">Toestemmings word weer toegelaat vir <ph name="SITE_NAME" /></translation>
-<translation id="8865415417596392024">Chrome-data in jou rekening</translation>
+<translation id="8865415417596392024">Ultimatum-data in jou rekening</translation>
 <translation id="8888527824584402177">Oortjies wat jy nie vir <ph name="DAYS_INACTIVE" /> dae gebruik het nie, word hierheen geskuif<ph name="AUTODELETE_SECTION" />. Jy kan dit enige tyd in <ph name="SETTINGS_TITLE" /> verander.</translation>
 <translation id="8890668505403261809">Soek deur jou Incognito-oortjies</translation>
 <translation id="8898822736010347272">Stuur URL'e van sommige bladsye wat jy besoek, beperkte stelselinligting en sekere bladsyinhoud na Google toe om te help om nuwe bedreigings te ontdek en almal op die web te beskerm.</translation>
@@ -1793,7 +1793,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="8922289737868596582">Laai bladsye vanaf die Meer Opsies-knoppie af om hulle vanlyn te gebruik</translation>
 <translation id="8924575305646776101"><ph name="BEGIN_LINK" />Kom meer te wete<ph name="END_LINK" /></translation>
 <translation id="892496902842311796"><ph name="LANG" /> is gereed</translation>
-<translation id="8937772741022875483">Verwyder jou Chrome-aktiwiteit van Digitale Welstand?</translation>
+<translation id="8937772741022875483">Verwyder jou Ultimatum-aktiwiteit van Digitale Welstand?</translation>
 <translation id="8942627711005830162">Maak in 'n ander venster oop</translation>
 <translation id="8945143127965743188"><ph name="LANG" /> – hierdie taal kon nie afgelaai word nie. Probeer later weer.</translation>
 <translation id="8946759102391960088">Behou toegang tot jou wagwoorde</translation>
@@ -1804,13 +1804,13 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="897061774231912216">Wagwoorde sal binnekort ophou werk omdat Google Play Dienste nie beskikbaar is nie. Meld aan met ’n ander toestel of gaan na passwords.google.com. om wagwoorde te gebruik wat in jou Google-rekening gestoor is.</translation>
 <translation id="8970887620466824814">Iets is fout.</translation>
 <translation id="8972098258593396643">Laai af na verstekvouer?</translation>
-<translation id="8992769679401294069">Jou data is met jou wagfrase geënkripteer. Voer dit in om Chrome-data in jou Google-rekening te gebruik en te stoor.</translation>
+<translation id="8992769679401294069">Jou data is met jou wagfrase geënkripteer. Voer dit in om Ultimatum-data in jou Google-rekening te gebruik en te stoor.</translation>
 <translation id="8993760627012879038">Maak 'n nuwe oortjie in incognitomodus oop</translation>
 <translation id="8995521496079646922">Die apps wat jy gekies het, sal by verstek gebruik word. As ’n app nie reeds op hierdie toestel is nie, sal dit binnekort afgelaai word.</translation>
 <translation id="8996847606757455498">Kies 'n ander verskaffer</translation>
 <translation id="8998289560386111590">Nie op jou toestel beskikbaar nie</translation>
 <translation id="8998837250940831980">Kon nie oortjie klein maak nie. Probeer later weer.</translation>
-<translation id="9001604755921395912">Maak in Incognito Chrome-oortjie oop</translation>
+<translation id="9001604755921395912">Maak in Incognito Ultimatum-oortjie oop</translation>
 <translation id="9007002441981613214">Stel probleem met gestoorde wagwoorde reg</translation>
 <translation id="9012585441087414258">Beskerm teen webwerwe, aflaaie en uitbreidings wat bekend is daarvoor dat hulle gevaarlik is. As ’n bladsy iets verdag doen, word URL’e en stukkies van die bladsyinhoud na Google Veiligblaai toe gestuur.</translation>
 <translation id="9019199799064251516">Gaan voort sonder ’n motorprofielsluitt?</translation>
@@ -1819,14 +1819,14 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="9027728231343310283">Ontdoen <ph name="SITE" /></translation>
 <translation id="9035378196785279980">Skuif na \u2026</translation>
 <translation id="9042893549633094279">Privaatheid en sekuriteit</translation>
-<translation id="9047347135558855162">Begin vinnig ’n soektog in Chrome</translation>
+<translation id="9047347135558855162">Begin vinnig ’n soektog in Ultimatum</translation>
 <translation id="9050666287014529139">Wagfrase</translation>
 <translation id="9055497320631373736">Werf is weer by potensiële werwe gevoeg</translation>
 <translation id="9057030985451135243">Kry meer inligting oor gedeelde oortjiegroepe</translation>
 <translation id="9063400323119781058">Uitgeteken</translation>
 <translation id="9063523880881406963">Skakel Versoek rekenaarwerf af</translation>
 <translation id="9065203028668620118">Wysig</translation>
-<translation id="9065383040763568503">Gebergde data wat Chrome nie dink belangrik is nie (bv. werwe met geen gestoorde instellings nie of wat jy nie dikwels besoek nie)</translation>
+<translation id="9065383040763568503">Gebergde data wat Ultimatum nie dink belangrik is nie (bv. werwe met geen gestoorde instellings nie of wat jy nie dikwels besoek nie)</translation>
 <translation id="9067341854474068781">Geen toegangsleutelblad is op volle hoogte oopgemaak nie</translation>
 <translation id="906781307897697745">in <ph name="PRODUCT_NAME" /></translation>
 <translation id="9069999660519089861">Geen ongeleesde bladsye nie</translation>
@@ -1835,7 +1835,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="9081543426177426948">Werwe wat jy besoek word nie in Incognito gestoor nie</translation>
 <translation id="9086302186042011942">Sinkroniseer tans</translation>
 <translation id="9086455579313502267">Kon nie by netwerk ingaan nie</translation>
-<translation id="909756639352028172">Sluit Web- en Appaktiwiteit en gekoppelde Google-dienste by Chrome in om die mees gepersonaliseerde ervaring te kry</translation>
+<translation id="909756639352028172">Sluit Web- en Appaktiwiteit en gekoppelde Google-dienste by Ultimatum in om die mees gepersonaliseerde ervaring te kry</translation>
 <translation id="9099220545925418560">Gegrond op jou blaaigeskiedenis. Hierdie instelling is af.</translation>
 <translation id="9100610230175265781">Wagwoordfrase word vereis</translation>
 <translation id="9101137867221042551">Bestuur</translation>
@@ -1856,7 +1856,7 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="9161172953291434881">Vertrou jy hierdie werf met jou data?</translation>
 <translation id="9168847423516963845">Skuif adresbalk na onder</translation>
 <translation id="9169507124922466868">Navigasiegeskiedenis is half oopgemaak</translation>
-<translation id="918419812064856259">Chrome Beta</translation>
+<translation id="918419812064856259">Ultimatum Beta</translation>
 <translation id="9190276265094487094">Jy sal jou geskiedenis op al jou gesinkroniseerde toestelle hê sodat jy kan voortgaan met dit waarmee jy besig was</translation>
 <translation id="9191906083913361689">Jy kan ook hierdie items in jou boekmerke, leeslys of wagwoordbestuurder bekyk en bestuur</translation>
 <translation id="9199368092038462496">{NUM_MINS,plural, =1{1 minuut gelede nagegaan}other{# minute gelede nagegaan}}</translation>
@@ -1868,14 +1868,14 @@ Byvoorbeeld, sommige webwerwe kan op hierdie versoek reageer deur vir jou advert
 <translation id="9212845824145208577">Kan nie laer gaan nie. Probeer om laer op die bladsy te begin.</translation>
 <translation id="9218430445555521422">Stel as verstek</translation>
 <translation id="9219103736887031265">Prente</translation>
-<translation id="924447568950697217">Maak Chrome jou verstekblaaier</translation>
-<translation id="926205370408745186">Verwyder jou Chrome-aktiwiteit van Digitale Welstand</translation>
-<translation id="927968626442779827">Gebruik Ligte Modus op Google Chrome</translation>
+<translation id="924447568950697217">Maak Ultimatum jou verstekblaaier</translation>
+<translation id="926205370408745186">Verwyder jou Ultimatum-aktiwiteit van Digitale Welstand</translation>
+<translation id="927968626442779827">Gebruik Ligte Modus op Ultimatum</translation>
 <translation id="928550791203542716">Volg tans <ph name="SITE_NAME" /></translation>
 <translation id="930124987204876019">Vee geskiedenis, webkoekies, werfdata, kasgeheue uit …</translation>
 <translation id="938850635132480979">Fout: <ph name="ERROR_CODE" /></translation>
 <translation id="939598580284253335">Tik wagfrase in</translation>
-<translation id="95817756606698420">Chrome kan <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> gebruik om soektogte in China uit te voer. Jy kan dit in <ph name="BEGIN_LINK" />Instellings<ph name="END_LINK" /> verander.</translation>
+<translation id="95817756606698420">Ultimatum kan <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> gebruik om soektogte in China uit te voer. Jy kan dit in <ph name="BEGIN_LINK" />Instellings<ph name="END_LINK" /> verander.</translation>
 <translation id="961856697154696964">Vee blaaierdata uit</translation>
 <translation id="963246339335003378">Maak Taakbestuurder oop</translation>
 <translation id="966131775676567255">Vee tans rekeningdata uit</translation>

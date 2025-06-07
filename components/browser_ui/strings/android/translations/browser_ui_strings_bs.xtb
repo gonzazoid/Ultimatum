@@ -3,21 +3,21 @@
 <translationbundle lang="bs">
 <translation id="1004806631856047384">Upravljajte u <ph name="BEGIN_LINK1" />postavkama Androida<ph name="END_LINK1" />
 
-Napredna zaštita upravlja ovim postavkama Chromea:
+Napredna zaštita upravlja ovim postavkama Ultimatuma:
 • Uključen je prekidač "Uvijek koristi sigurne veze".
 • Isključen je "Optimizator JavaScripta". <ph name="BEGIN_LINK2" />Upravljajte izuzecima web lokacija<ph name="END_LINK2" /></translation>
 <translation id="1006017844123154345">Otvori na mreži</translation>
 <translation id="1036348656032585052">Isključi</translation>
 <translation id="1044891598689252897">Web lokacije će normalno funkcionirati</translation>
 <translation id="1070329623210597193">Fajlovi koje ova web lokacija može pregledati ili urediti</translation>
-<translation id="1073417869336441572">Kažite nam zašto ste dozvolili kolačiće treće strane i pomozite nam da poboljšamo Chrome. <ph name="BEGIN_LINK" />Pošaljite povratne informacije<ph name="END_LINK" /></translation>
+<translation id="1073417869336441572">Kažite nam zašto ste dozvolili kolačiće treće strane i pomozite nam da poboljšamo Ultimatum. <ph name="BEGIN_LINK" />Pošaljite povratne informacije<ph name="END_LINK" /></translation>
 <translation id="1074758928858737435">Možete zatražiti da vidite računarsku verziju web lokacija</translation>
-<translation id="1085696779717592361">Koristite Chrome kao zadanu opciju</translation>
+<translation id="1085696779717592361">Koristite Ultimatum kao zadanu opciju</translation>
 <translation id="1178581264944972037">Pauziraj</translation>
 <translation id="1181037720776840403">Ukloni</translation>
 <translation id="1192844206376121885">Ovim će se izbrisati svi podaci i kolačići koje je pohranila web lokacija <ph name="ORIGIN" />.</translation>
 <translation id="1201402288615127009">Naprijed</translation>
-<translation id="1240190568154816272">Savjeti za Chrome</translation>
+<translation id="1240190568154816272">Savjeti za Ultimatum</translation>
 <translation id="1242008676835033345">Ugrađeno na <ph name="WEBSITE_URL" /></translation>
 <translation id="1263609676484797429">Dodirnite Aplikacije  &gt; Zadane aplikacije.</translation>
 <translation id="1272079795634619415">Zaustavi</translation>
@@ -34,7 +34,7 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="1396327438254055134">Dozvolite web lokaciji da koristi optimizator V8.</translation>
 <translation id="1409338233051621926">Dodir na Aplikacije, a zatim na Zadane aplikacije</translation>
 <translation id="1415402041810619267">URL je odsječen</translation>
-<translation id="1415855080660575082">Dozvolite Chromeu da dijeli nedavne kartice s uređajem da ih vidite na listi aplikacija i u rezultatima pretraživanja na uređaju. Možete uključiti ili isključiti u postavkama Chromea.</translation>
+<translation id="1415855080660575082">Dozvolite Ultimatumu da dijeli nedavne kartice s uređajem da ih vidite na listi aplikacija i u rezultatima pretraživanja na uređaju. Možete uključiti ili isključiti u postavkama Ultimatuma.</translation>
 <translation id="1448064542941920355">Smanjenje zumiranja</translation>
 <translation id="1464044141348608623">Nemoj dozvoliti web lokacijama da znaju kada se uređaj aktivno koristi</translation>
 <translation id="146867109637325312">{COUNT,plural, =1{<ph name="SITE_COUNT" /> web lokacija}one{<ph name="SITE_COUNT" /> web lokacija}few{<ph name="SITE_COUNT" /> web lokacije}other{<ph name="SITE_COUNT" /> web lokacija}}</translation>
@@ -43,7 +43,7 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="1510341833810331442">Web lokacijama nije dozvoljeno da pohranjuju podatke na uređaj</translation>
 <translation id="1538031354170655462">Web lokacije obično koriste komunikaciju bliskog polja (NFC) da rade s lokatorima ili uređajima u blizini, poput skeniranja znački ili beskontaktnog plaćanja</translation>
 <translation id="1547123415014299762">Kolačići treće strane su dozvoljeni</translation>
-<translation id="1569054338208717605">Ubrzavaj web lokacije pomoću Chromeovog pretraživača V8, ali učini Chrome malo otpornijim na napade</translation>
+<translation id="1569054338208717605">Ubrzavaj web lokacije pomoću Ultimatumovog pretraživača V8, ali učini Ultimatum malo otpornijim na napade</translation>
 <translation id="1593426485665524382">Nove radnje su dostupne pri vrhu ekrana</translation>
 <translation id="1615755956145364867">Web lokacije mogu tražiti da reproduciraju zaštićeni sadržaj</translation>
 <translation id="1620510694547887537">Kamera</translation>
@@ -64,8 +64,8 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="1779089405699405702">Dekoder slike</translation>
 <translation id="1785415724048343560">Preporučeno za najbolje iskustvo</translation>
 <translation id="1796588414813960292">Funkcije za koje je potreban zvuk neće funkcionirati</translation>
-<translation id="1799920918471566157">Savjeti za Chrome</translation>
-<translation id="1816835383954230954">Kada je ovo uključeno, Chrome radi brže i funkcije koje koriste JavaScript bi trebale raditi kako je predviđeno. Kada je ovo isključeno, ovo smanjuje performanse, ali postiže da V8 bude otporniji na napade.</translation>
+<translation id="1799920918471566157">Savjeti za Ultimatum</translation>
+<translation id="1816835383954230954">Kada je ovo uključeno, Ultimatum radi brže i funkcije koje koriste JavaScript bi trebale raditi kako je predviđeno. Kada je ovo isključeno, ovo smanjuje performanse, ali postiže da V8 bude otporniji na napade.</translation>
 <translation id="1818308510395330587">Da aplikaciji <ph name="APP_NAME" /> dozvolite korištenje AR-a, također uključite kameru u <ph name="BEGIN_LINK" />Postavkama Androida<ph name="END_LINK" />.</translation>
 <translation id="1887786770086287077">Pristup lokaciji je isključen za ovaj uređaj. Uključite ga u <ph name="BEGIN_LINK" />Postavkama Androida<ph name="END_LINK" />.</translation>
 <translation id="1906181697255754968">Web lokacije obično pristupaju fajlovima i folderima na vašem uređaju radi funkcija kao što je automatsko snimanje napretka</translation>
@@ -109,7 +109,7 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="2289270750774289114">Pitaj kada web lokacija želi otkriti Bluetooth uređaje u blizini (preporučeno)</translation>
 <translation id="2315043854645842844">Operativni sistem ne podržava odabir potvrde na strani klijenta.</translation>
 <translation id="2359808026110333948">Nastavi</translation>
-<translation id="2379925928934107488">Tamna tema će se primjenjivati na web lokacije kada Chrome koristi tamnu temu, kada je to moguće</translation>
+<translation id="2379925928934107488">Tamna tema će se primjenjivati na web lokacije kada Ultimatum koristi tamnu temu, kada je to moguće</translation>
 <translation id="2390272837142897736">Povećavanje zumiranja</translation>
 <translation id="2402980924095424747"><ph name="MEGABYTES" /> MB</translation>
 <translation id="2404630663942400771">{PERMISSIONS_SUMMARY_ALLOWED,plural, =1{Dozvoljeno: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> i još <ph name="NUM_MORE" />}one{Dozvoljeno: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> i još <ph name="NUM_MORE" />}few{Dozvoljeno: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> i još <ph name="NUM_MORE" />}other{Dozvoljeno: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> i još <ph name="NUM_MORE" />}}</translation>
@@ -118,7 +118,7 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="2438120137003069591">Ovoj web lokaciji ste privremeno dozvolili da koristi kolačiće trećih strana, što podrazumijeva manju zaštitu prilikom pregledanja, ali veću vjerovatnost da će funkcije web lokacije funkcionirati u skladu s očekivanjima. <ph name="BEGIN_LINK" />Pošaljite povratne informacije<ph name="END_LINK" /></translation>
 <translation id="244264527810019436">Funkcije na nekim web lokacijama možda neće funkcionirati u anonimnom načinu rada</translation>
 <translation id="2442870161001914531">Uvijek zatraži verziju web lokacije za računar</translation>
-<translation id="2445311670906052406">Chrome sada dijeli nedavne kartice s uređajem. Vidjet ćete ih na listi aplikacija i u rezultatima pretraživanja na uređaju. Možete isključiti ovo bilo kada u postavkama Chromea.</translation>
+<translation id="2445311670906052406">Ultimatum sada dijeli nedavne kartice s uređajem. Vidjet ćete ih na listi aplikacija i u rezultatima pretraživanja na uređaju. Možete isključiti ovo bilo kada u postavkama Ultimatuma.</translation>
 <translation id="245322989586167203">Web lokacije se obično povezuju sa serijskim priključcima radi funkcija prenosa podataka, kao što je postavljanje mreže</translation>
 <translation id="2469312991797799607">Ova radnja će izbrisati sve podatke i kolačiće za domenu <ph name="ORIGIN" /> i sve njene web lokacije</translation>
 <translation id="2482878487686419369">Obavještenja</translation>
@@ -143,14 +143,14 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="2685514716378236873">Nije dozvoljeno</translation>
 <translation id="2713106313042589954">Isključi kameru</translation>
 <translation id="2717722538473713889">Adrese e-pošte</translation>
-<translation id="2726059656860238749">Pokreni Chrome s fokusiranim višenamjenskim okvirom, što smanjuje vrijeme pokretanja na uređajima niže klase.</translation>
+<translation id="2726059656860238749">Pokreni Ultimatum s fokusiranim višenamjenskim okvirom, što smanjuje vrijeme pokretanja na uređajima niže klase.</translation>
 <translation id="2750481671343847896">Web lokacije vam mogu prikazati upite za prijavu koji potiču od usluga identiteta.</translation>
 <translation id="2787357173144933081">Odmah pokreni višenamjenski okvir</translation>
 <translation id="2789132527330338807">Web lokacije mogu zatražiti da kreiraju 3D mapu vašeg okruženja ili prate položaj kamere</translation>
 <translation id="2790501146643349491">Kada je postavka uključena, nedavno zatvorene web lokacije mogu završiti slanje i primanje podataka. Kada je postavka isključena, nedavno zatvorene web lokacije ne mogu završiti slanje ni primanje podataka.</translation>
 <translation id="2795716239552913152">Web lokacije obično koriste vašu lokaciju za relevantne funkcije ili informacije, kao što su lokalne vijesti ili trgovine u blizini</translation>
 <translation id="2802908157808345702">Nemoj dozvoliti web lokacijama da šalju skočne prozore niti da koriste preusmjeravanja</translation>
-<translation id="2814830417943086299">Chrome sada prikazuje nedavne kartice na listi aplikacija i u rezultatima pretraživanja na uređaju. Možete isključiti ovo bilo kada u postavkama Chromea.</translation>
+<translation id="2814830417943086299">Ultimatum sada prikazuje nedavne kartice na listi aplikacija i u rezultatima pretraživanja na uređaju. Možete isključiti ovo bilo kada u postavkama Ultimatuma.</translation>
 <translation id="2822354292072154809">Jeste li sigurni da želite poništiti sva odobrenja web lokacije za <ph name="CHOSEN_OBJECT_NAME" />?</translation>
 <translation id="2850913818900871965">Zahtijevaj prikaz na mobilnom uređaju</translation>
 <translation id="2870560284913253234">Web lokacija</translation>
@@ -187,7 +187,7 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="3242646949159196181">Kada je postavka uključena, web lokacije mogu reproducirati zvuk. Kada je postavka isključena, web lokacije ne mogu reproducirati zvuk.</translation>
 <translation id="3273479183583863618">Padovi cijena na karticama</translation>
 <translation id="3277252321222022663">Dozvolite web lokacijama pristup senzorima (preporučeno)</translation>
-<translation id="327891165872793509">Chrome ograničava većini web lokacija da koriste kolačiće trećih strana da vas prate dok pregledate. Idite u postavke da <ph name="BEGIN_LINK" />upravljate pristupom kolačićima trećih strana<ph name="END_LINK" />.</translation>
+<translation id="327891165872793509">Ultimatum ograničava većini web lokacija da koriste kolačiće trećih strana da vas prate dok pregledate. Idite u postavke da <ph name="BEGIN_LINK" />upravljate pristupom kolačićima trećih strana<ph name="END_LINK" />.</translation>
 <translation id="3285500645985761267">Dozvolite srodnim web lokacijama da vide vašu aktivnost u grupi</translation>
 <translation id="3295019059349372795">Poglavlje 11: Smaragdni grad Oz</translation>
 <translation id="3295602654194328831">Sakrij informacije</translation>
@@ -222,7 +222,7 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="3678318839615834650">Donja tabela kartica na stranici Nova kartica je otvorena u punoj visini</translation>
 <translation id="3697164069658504920">Kada je postavka uključena, web lokacije mogu zatražiti da koriste USB uređaje. Kada je postavka isključena, web lokacije ne mogu koristiti USB uređaje.</translation>
 <translation id="3703430731944883733">Upravljajte sažetkom sadržaja</translation>
-<translation id="3707034683772193706">Web lokacija koju posjećujete može putem Chromea sačuvati malu količinu informacija uglavnom da potvrdi da niste bot</translation>
+<translation id="3707034683772193706">Web lokacija koju posjećujete može putem Ultimatuma sačuvati malu količinu informacija uglavnom da potvrdi da niste bot</translation>
 <translation id="3708684582558000260">Nemoj dozvoliti zatvorenim web lokacijama završavanje slanja ili primanje podataka</translation>
 <translation id="3709818294139939629">Pristup fajlu je uklonjen</translation>
 <translation id="3721953990244350188">Odbacivanje i prikazivanje sljedeće dostupne radnje</translation>
@@ -236,7 +236,7 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="381841723434055211">Brojevi telefona</translation>
 <translation id="3826050100957962900">Prijava treće strane</translation>
 <translation id="3835233591525155343">Korištenje vašeg uređaja</translation>
-<translation id="3843916486309149084">Chrome će ponovo blokirati kolačiće danas</translation>
+<translation id="3843916486309149084">Ultimatum će ponovo blokirati kolačiće danas</translation>
 <translation id="385051799172605136">Nazad</translation>
 <translation id="3859306556332390985">Pomakni naprijed</translation>
 <translation id="389521680295183045">Web lokacije mogu tražiti da znaju kada aktivno koristite uređaj</translation>
@@ -276,12 +276,12 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="429312253194641664">Web lokacija reproducira medij</translation>
 <translation id="42981349822642051">Proširi</translation>
 <translation id="4336219115486912529">{COUNT,plural, =1{Ističe sutra}one{Ističe za # dan}few{Ističe za # dana}other{Ističe za # dana}}</translation>
-<translation id="4336566011000459927">Chrome će ponovo ograničiti kolačiće danas</translation>
+<translation id="4336566011000459927">Ultimatum će ponovo ograničiti kolačiće danas</translation>
 <translation id="4338831206024587507">Sve web lokacije pod domenom <ph name="DOMAIN" /></translation>
 <translation id="4340799661701629185">Nemoj dozvoliti web lokacijama slanje obavještenja</translation>
 <translation id="4402755511846832236">Blokirajte web lokacijama informacije o vašem aktivnom korištenju ovog uređaja</translation>
 <translation id="4412992751769744546">Dopusti kolačiće trećih strana</translation>
-<translation id="4419929467120297501">Chrome onemogućava web lokacijama da koriste kolačiće trećih strana da vas prate dok pregledate. Idite u postavke da <ph name="BEGIN_LINK" />upravljate pristupom kolačićima trećih strana<ph name="END_LINK" />.</translation>
+<translation id="4419929467120297501">Ultimatum onemogućava web lokacijama da koriste kolačiće trećih strana da vas prate dok pregledate. Idite u postavke da <ph name="BEGIN_LINK" />upravljate pristupom kolačićima trećih strana<ph name="END_LINK" />.</translation>
 <translation id="443121186588148776">Serijski priključak</translation>
 <translation id="4434045419905280838">Skočni proz. i preusmjeravanja</translation>
 <translation id="443552056913301231">Ova radnja će izbrisati sve lokalne podatke, uključujući kolačiće, i poništiti sva odobrenja za izvor <ph name="ORIGIN" /></translation>
@@ -300,7 +300,7 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="4644713492825682049">Izbriši i poništi</translation>
 <translation id="4645575059429386691">Upravlja roditelj</translation>
 <translation id="4670064810192446073">Virtuelna realnost</translation>
-<translation id="4672315773691449562">Dodir na aplikaciju Preglednik, a zatim na Chrome</translation>
+<translation id="4672315773691449562">Dodir na aplikaciju Preglednik, a zatim na Ultimatum</translation>
 <translation id="4676059169848868271">Da dozvolite aplikaciji <ph name="APP_NAME" /> da koristi praćenje ruku, također uključite praćenje ruku u <ph name="BEGIN_LINK" />postavkama sistema<ph name="END_LINK" />.</translation>
 <translation id="4751476147751820511">Senzori pokreta ili svjetla</translation>
 <translation id="4755971844837804407">Kada je postavka uključena, web lokacije vam mogu prikazivati bilo koje oglase. Kada je postavka isključena, web lokacije ne mogu prikazivati ometajuće ni obmanjujuće oglase.</translation>
@@ -335,7 +335,7 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="5091663350197390230">Kada je postavka uključena, web lokacije mogu koristiti JavaScript. Kada je postavka isključena, web lokacije ne mogu koristiti JavaScript.</translation>
 <translation id="5099358668261120049">Ovim će se izbrisati svi podaci i kolačići koje je pohranila web lokacija <ph name="ORIGIN" /> ili njena aplikacija na početnom ekranu.</translation>
 <translation id="5100237604440890931">Suženo – kliknite da proširite.</translation>
-<translation id="5116239826668864748">Sada možete koristiti Chrome svaki put kada dodirnete linkove u porukama, dokumentima i drugim aplikacijama</translation>
+<translation id="5116239826668864748">Sada možete koristiti Ultimatum svaki put kada dodirnete linkove u porukama, dokumentima i drugim aplikacijama</translation>
 <translation id="5123685120097942451">Anonimna kartica</translation>
 <translation id="5139253256813381453">{PRICE_DROP_COUNT,plural, =1{Pad cijene na otvorenim karticama}one{Padovi cijena na otvorenim karticama}few{Padovi cijena na otvorenim karticama}other{Padovi cijena na otvorenim karticama}}</translation>
 <translation id="5186036860380548585">Opcije su dostupne pri vrhu ekrana</translation>
@@ -368,7 +368,7 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="5527111080432883924">Web lokacije moraju tražiti dozvolu za čitanje teksta i pregled slika u međumemoriji (preporučeno)</translation>
 <translation id="5545693483061321551">Web lokacije ne mogu koristiti kolačiće da vide vašu aktivnost pregledanja na različitim web lokacijama, npr. radi personaliziranja oglasa. Moguće je da funkcije neće raditi na nekim web lokacijama.</translation>
 <translation id="5553374991681107062">Najnovije</translation>
-<translation id="5555115555607204100">Nemoj ubrzavati web lokacije pomoću Chromeovog pretraživača V8, ali učini Chrome malo otpornijim na napade</translation>
+<translation id="5555115555607204100">Nemoj ubrzavati web lokacije pomoću Ultimatumovog pretraživača V8, ali učini Ultimatum malo otpornijim na napade</translation>
 <translation id="5556459405103347317">Učitaj ponovo</translation>
 <translation id="5591840828808741583">Web lokacija <ph name="SITE_NAME" /> je blokirana</translation>
 <translation id="560980142378233747">Ovo znači da bi funkcije web lokacije trebale funkcionirati prema očekivanjima, ali ćete možda imati manju zaštitu prilikom pregledanja. <ph name="BEGIN_LINK" />Pošaljite povratne informacije<ph name="END_LINK" /></translation>
@@ -424,13 +424,13 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="6177128806592000436">Vaša veza s ovom web lokacijom nije sigurna</translation>
 <translation id="6181444274883918285">Dodaj izuzetak web lokaciji</translation>
 <translation id="6192792657125177640">Izuzeci</translation>
-<translation id="6194967801833346599">{DAYS,plural, =1{Chrome će ponovo blokirati kolačiće sutra}one{Kolačići će se ponovo blokirati za # dan}few{Kolačići će se ponovo blokirati za # dana}other{Kolačići će se ponovo blokirati za # dana}}</translation>
+<translation id="6194967801833346599">{DAYS,plural, =1{Ultimatum će ponovo blokirati kolačiće sutra}one{Kolačići će se ponovo blokirati za # dan}few{Kolačići će se ponovo blokirati za # dana}other{Kolačići će se ponovo blokirati za # dana}}</translation>
 <translation id="6195163219142236913">Kolačići treće strane su ograničeni</translation>
 <translation id="6196640612572343990">Blokiraj kolačiće treće strane</translation>
 <translation id="6205314730813004066">Privatnost pri izloženosti oglasima</translation>
 <translation id="6207207788774442484">Izbriši podatke i poništi odobrenja</translation>
 <translation id="6231752747840485235">Deinstalirati aplikaciju <ph name="APP_NAME" />?</translation>
-<translation id="6234351944623978659">Dodirnite aplikaciju Preglednik &gt; Chrome.</translation>
+<translation id="6234351944623978659">Dodirnite aplikaciju Preglednik &gt; Ultimatum.</translation>
 <translation id="6262191102408817757">Na osnovu vaše posljednje kartice</translation>
 <translation id="6262279340360821358">Blokirano: <ph name="PERMISSION_1" /> i <ph name="PERMISSION_2" /></translation>
 <translation id="6270391203985052864">Web lokacije mogu tražiti da šalju obavještenja</translation>
@@ -470,7 +470,7 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="6787751205395685251">Odaberite opciju za <ph name="SITE_NAME" /></translation>
 <translation id="6790428901817661496">Pokreni</translation>
 <translation id="6818926723028410516">Odaberite stavke</translation>
-<translation id="6838525730752203626">Koristite Chrome kao zadani preglednik</translation>
+<translation id="6838525730752203626">Koristite Ultimatum kao zadani preglednik</translation>
 <translation id="6840760312327750441">Da grupirate kartice, dodirnite i zadržite jednu karticu. Nakon toga je prevucite na drugu karticu.</translation>
 <translation id="6842868554183332230">Web lokacije obično otkriju kada aktivno koristite uređaj da postave vašu dostupnost u aplikacijama za chatanje</translation>
 <translation id="6864395892908308021">Ovaj uređaj ne može očitavati NFC</translation>
@@ -484,7 +484,7 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="6981982820502123353">Pristupačnost</translation>
 <translation id="6992289844737586249">Web lokacije moraju tražiti dopuštenje da koriste mikrofon (preporučeno)</translation>
 <translation id="7000754031042624318">Isključeno u postavkama Androida</translation>
-<translation id="702275896380648118">Ova web lokacija utvrđuje stvari koje vam se sviđaju, a zatim predlaže oglase drugim web lokacijama. Ova web lokacija prikuplja i vaše teme oglasa iz Chromea da vam prikazuje relevantnije oglase.</translation>
+<translation id="702275896380648118">Ova web lokacija utvrđuje stvari koje vam se sviđaju, a zatim predlaže oglase drugim web lokacijama. Ova web lokacija prikuplja i vaše teme oglasa iz Ultimatuma da vam prikazuje relevantnije oglase.</translation>
 <translation id="7053983685419859001">Blokiraj</translation>
 <translation id="7055552182600664515">Da reproduciraju sadržaj zaštićen autorskim pravima, web lokacije će možda trebati koristiti uslugu zaštite sadržaja. <ph name="BEGIN_LINK" />Saznajte više<ph name="END_LINK" /></translation>
 <translation id="7066151586745993502">{NUM_SELECTED,plural, =1{1 odabrana kartica}one{# odabrana kartica}few{# odabrane kartice}other{# odabranih kartica}}</translation>
@@ -528,7 +528,7 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="7658239707568436148">Otkaži</translation>
 <translation id="7667547420449112975">Čarobnjak iz Oza</translation>
 <translation id="7681597159868843240">Web lokacije obično koriste senzore kretanja vašeg uređaja radi funkcija kao što je virtuelna realnost ili praćenje fitnesa</translation>
-<translation id="7688240020069572972">Sakrij karticu sa savjetima za Chrome</translation>
+<translation id="7688240020069572972">Sakrij karticu sa savjetima za Ultimatum</translation>
 <translation id="7719367874908701697">Zumiranje stranice</translation>
 <translation id="7759147511335618829">Kontrola/reprogram. MIDI uređaja</translation>
 <translation id="7781829728241885113">Jučer</translation>
@@ -540,7 +540,7 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="7835852323729233924">Reproduciranje medija</translation>
 <translation id="783819812427904514">Uključi zvuk videozapisa</translation>
 <translation id="7846076177841592234">Otkazivanje odabira</translation>
-<translation id="7881140103901777395">Chrome ograničava većini web lokacija da koriste kolačiće trećih strana. Međutim, kolačići trećih strana su dozvoljeni na ovoj web lokaciji jer se ona oslanja na njih radi pružanja osnovnih usluga.\n\nIdite u postavke da <ph name="BEGIN_LINK" />upravljate pristupom kolačićima trećih strana<ph name="END_LINK" />.</translation>
+<translation id="7881140103901777395">Ultimatum ograničava većini web lokacija da koriste kolačiće trećih strana. Međutim, kolačići trećih strana su dozvoljeni na ovoj web lokaciji jer se ona oslanja na njih radi pružanja osnovnih usluga.\n\nIdite u postavke da <ph name="BEGIN_LINK" />upravljate pristupom kolačićima trećih strana<ph name="END_LINK" />.</translation>
 <translation id="7882806643839505685">Omogućavanje zvuka za određenu web lokaciju.</translation>
 <translation id="789180354981963912">Blokirajte kolačiće treće strane u anonimnom načinu rada:</translation>
 <translation id="789722939441020330">Nemoj dozvoliti web lokacijama automatsko preuzimanje više fajlova</translation>
@@ -560,7 +560,7 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="8087000398470557479">Ovaj sadržaj je iz domene <ph name="DOMAIN_NAME" />, a isporučio ga je Google.</translation>
 <translation id="8088603949666785339">Više opcija u baneru <ph name="BANNER_TITLE" /></translation>
 <translation id="8112925981674547014">Prikaži kartice na listi aplikacija</translation>
-<translation id="8113501330600751161">{DAYS,plural, =1{Chrome će ponovo ograničiti kolačiće sutra}one{Chrome će ponovo ograničiti kolačiće za # dan}few{Chrome će ponovo ograničiti kolačiće za # dana}other{Chrome će ponovo ograničiti kolačiće za # dana}}</translation>
+<translation id="8113501330600751161">{DAYS,plural, =1{Ultimatum će ponovo ograničiti kolačiće sutra}one{Ultimatum će ponovo ograničiti kolačiće za # dan}few{Ultimatum će ponovo ograničiti kolačiće za # dana}other{Ultimatum će ponovo ograničiti kolačiće za # dana}}</translation>
 <translation id="8116925261070264013">Isključen zvuk</translation>
 <translation id="8117244575099414087">Kada je postavka uključena, web lokacije mogu koristiti senzore uređaja. Kada je postavka isključena, web lokacije ne mogu koristiti senzore.</translation>
 <translation id="813082847718468539">Prikaz informacija o web lokaciji</translation>
@@ -600,10 +600,10 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="8514955299594277296">Nemojte dozvoliti web lokacijama da pohranjuju podatke na vašem uređaju (ne preporučuje se)</translation>
 <translation id="851751545965956758">Blokirajte web lokacije da se ne povezuju s uređajima</translation>
 <translation id="8525306231823319788">Cijeli ekran</translation>
-<translation id="8541410041357371550">Ova web lokacija prikuplja vaše teme oglasa iz Chromea da vam prikazuje relevantnije oglase</translation>
+<translation id="8541410041357371550">Ova web lokacija prikuplja vaše teme oglasa iz Ultimatuma da vam prikazuje relevantnije oglase</translation>
 <translation id="854876774113449365">Web lokacije koje posjetite mogu ugraditi sadržaj s drugih web lokacija, npr. slike, oglase i tekst. Te druge web lokacije mogu zatražiti odobrenje za korištenje sačuvanih informacija o vama dok pregledate web lokaciju. <ph name="BEGIN_LINK" />Saznajte više o ugrađenom sadržaju<ph name="END_LINK" /></translation>
 <translation id="8549127125482561383">Kako prikazati zahtjeve</translation>
-<translation id="8558480467877843976">Sada možete koristiti Chrome svaki put kada pregledate ili dodirnete linkove u porukama, dokumentima i drugim aplikacijama.</translation>
+<translation id="8558480467877843976">Sada možete koristiti Ultimatum svaki put kada pregledate ili dodirnete linkove u porukama, dokumentima i drugim aplikacijama.</translation>
 <translation id="857943718398505171">Dozvoljeno (preporučeno)</translation>
 <translation id="8593422116412089302">Kada je postavka uključena, web lokacije mogu zatražiti da koriste sačuvane informacije o vama. Kada je postavka isključena, web lokacije ne mogu zatražiti da koriste sačuvane informacije o vama.</translation>
 <translation id="8609465669617005112">Pomjeri nagore</translation>
@@ -624,13 +624,13 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="8751914237388039244">Odaberite sliku</translation>
 <translation id="8800034312320686233">Web lokacija ne funkcionira?</translation>
 <translation id="8801436777607969138">Blokiranje JavaScripta za određenu web lokaciju.</translation>
-<translation id="8801657293260363985">V8 je Chromeov pokretač programskih jezika JavaScript i WebAssembly koji se koristi za poboljšanje performansi web lokacija</translation>
+<translation id="8801657293260363985">V8 je Ultimatumov pokretač programskih jezika JavaScript i WebAssembly koji se koristi za poboljšanje performansi web lokacija</translation>
 <translation id="8803526663383843427">Kada je uključeno</translation>
 <translation id="8805385115381080995">Pregledanje je brže jer je malo vjerovatno da će web lokacija tražiti da potvrdite da ste stvarna osoba</translation>
 <translation id="8816026460808729765">Blokiranje web lokacijama pristup senzorima</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">Pokušajte privremeno dozvoliti kolačiće treće strane, što podrazumijeva manju zaštitu prilikom pregledanja, ali i veću vjerovatnost da će funkcije web lokacije funkcionirati prema očekivanjima.</translation>
-<translation id="8889294078294184559">Kako nastavljate pregledati, web lokacije mogu provjeravati u Chromeu i s prethodnom web lokacijom koju ste posjetili potvrditi da ste stvarna osoba</translation>
+<translation id="8889294078294184559">Kako nastavljate pregledati, web lokacije mogu provjeravati u Ultimatumu i s prethodnom web lokacijom koju ste posjetili potvrditi da ste stvarna osoba</translation>
 <translation id="8899807382908246773">Ometajući oglasi</translation>
 <translation id="8903921497873541725">Uvećaj</translation>
 <translation id="8921772741368021346"><ph name="POSITION" /> / <ph name="DURATION" /></translation>
@@ -653,7 +653,7 @@ Napredna zaštita upravlja ovim postavkama Chromea:
 <translation id="9109747640384633967">{PERMISSIONS_SUMMARY_MIXED,plural, =1{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> i još <ph name="NUM_MORE" />}one{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> i još <ph name="NUM_MORE" />}few{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> i još <ph name="NUM_MORE" />}other{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> i još <ph name="NUM_MORE" />}}</translation>
 <translation id="913657688200966289">Uključite odobrenja za aplikaciju <ph name="APP_NAME" /> u <ph name="BEGIN_LINK" />Postavkama Androida<ph name="END_LINK" />.</translation>
 <translation id="9138217887606523162">Trenutno zumiranje je <ph name="ZOOM_LEVEL" /> %%</translation>
-<translation id="9156722768168878035">Dozvolite Chromeu da vam prikazuje nedavne kartice na listi aplikacija i u rezultatima pretraživanja na uređaju. Možete isključiti ovo bilo kada u postavkama Chromea.</translation>
+<translation id="9156722768168878035">Dozvolite Ultimatumu da vam prikazuje nedavne kartice na listi aplikacija i u rezultatima pretraživanja na uređaju. Možete isključiti ovo bilo kada u postavkama Ultimatuma.</translation>
 <translation id="9162462602695099906">Ova stranica je opasna</translation>
 <translation id="9182556968660520230">Nemoj dozvoliti web lokacijama reproduciranje zaštićenog sadržaja</translation>
 <translation id="947156494302904893">Web lokacije koje posjećujete mogu potvrditi da ste stvarna osoba, a ne bot</translation>

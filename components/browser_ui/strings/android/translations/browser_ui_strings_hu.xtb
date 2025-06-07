@@ -3,21 +3,21 @@
 <translationbundle lang="hu">
 <translation id="1004806631856047384">Kezelés az <ph name="BEGIN_LINK1" />Android-beállításokban<ph name="END_LINK1" />
 
-A Speciális védelem a következő Chrome-beállításokat vezérli:
+A Speciális védelem a következő Ultimatum-beállításokat vezérli:
 • A „Mindig használjon biztonságos kapcsolatokat” beállítás be van kapcsolva.
 • A „JavaScript-optimalizáló” ki van kapcsolva. <ph name="BEGIN_LINK2" />Webhelykivételek kezelése.<ph name="END_LINK2" /></translation>
 <translation id="1006017844123154345">Online megnyitás</translation>
 <translation id="1036348656032585052">Kikapcsolás</translation>
 <translation id="1044891598689252897">A webhelyek a megszokott módon fognak működni</translation>
 <translation id="1070329623210597193">A webhely által megtekinthető vagy szerkeszthető fájlok</translation>
-<translation id="1073417869336441572">Segítsen a Chrome fejlesztésében. Mondja el, miért engedélyezte a harmadik féltől származó cookie-kat. <ph name="BEGIN_LINK" />Visszajelzés küldése<ph name="END_LINK" /></translation>
+<translation id="1073417869336441572">Segítsen a Ultimatum fejlesztésében. Mondja el, miért engedélyezte a harmadik féltől származó cookie-kat. <ph name="BEGIN_LINK" />Visszajelzés küldése<ph name="END_LINK" /></translation>
 <translation id="1074758928858737435">Kérheti a webhelyek asztali verziójának megjelenítését.</translation>
-<translation id="1085696779717592361">A Chrome használata alapértelmezettként</translation>
+<translation id="1085696779717592361">A Ultimatum használata alapértelmezettként</translation>
 <translation id="1178581264944972037">Szünet</translation>
 <translation id="1181037720776840403">Eltávolítás</translation>
 <translation id="1192844206376121885">Ezzel törli a(z) <ph name="ORIGIN" /> által tárolt összes adatot és cookie-t.</translation>
 <translation id="1201402288615127009">Tovább</translation>
-<translation id="1240190568154816272">Chrome-tippek</translation>
+<translation id="1240190568154816272">Ultimatum-tippek</translation>
 <translation id="1242008676835033345">Beágyazva itt: <ph name="WEBSITE_URL" /></translation>
 <translation id="1263609676484797429">Koppintson az Alkalmazások  &gt; Alapértelmezett alkalmazások elemre</translation>
 <translation id="1272079795634619415">Leállítás</translation>
@@ -34,7 +34,7 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="1396327438254055134">A V8-optimalizáló használatának engedélyezése az alábbi webhely számára.</translation>
 <translation id="1409338233051621926">Koppintson az Alkalmazások, majd az Alapértelmezett alkalmazások lehetőségre</translation>
 <translation id="1415402041810619267">URL csonkolva</translation>
-<translation id="1415855080660575082">Engedélyezze a Chrome-nak, hogy megossza eszközével a nemrég megnyitott lapokat, hogy azok megjelenjenek az eszköz alkalmazáslistáján és a keresési találatok között is. Ezt a Chrome beállításai között kapcsolhatja be vagy ki.</translation>
+<translation id="1415855080660575082">Engedélyezze a Ultimatum-nak, hogy megossza eszközével a nemrég megnyitott lapokat, hogy azok megjelenjenek az eszköz alkalmazáslistáján és a keresési találatok között is. Ezt a Ultimatum beállításai között kapcsolhatja be vagy ki.</translation>
 <translation id="1448064542941920355">Nagyítás csökkentése</translation>
 <translation id="1464044141348608623">A webhelyek nem tudhatják, hogy Ön mikor használja aktívan az eszközt</translation>
 <translation id="146867109637325312">{COUNT,plural, =1{<ph name="SITE_COUNT" /> webhely}other{<ph name="SITE_COUNT" /> webhely}}</translation>
@@ -43,7 +43,7 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="1510341833810331442">Webhelyek nem menthetnek adatokat az eszközére</translation>
 <translation id="1538031354170655462">A webhelyek általában a közeli rádiófrekvenciás kommunikáció (NFC) technológiát használják a közeli címkékkel vagy eszközökkel való együttműködéshez, például jelvények beolvasásához vagy érintkezés nélküli fizetéshez.</translation>
 <translation id="1547123415014299762">A harmadik féltől származó cookie-k engedélyezve vannak</translation>
-<translation id="1569054338208717605">A Chrome V8 motorjával felgyorsítja a webhelyeket, de kissé kevésbé ellenállóvá teszi a Chrome-ot a támadásokkal szemben</translation>
+<translation id="1569054338208717605">A Ultimatum V8 motorjával felgyorsítja a webhelyeket, de kissé kevésbé ellenállóvá teszi a Ultimatum-ot a támadásokkal szemben</translation>
 <translation id="1593426485665524382">Új műveletek állnak rendelkezésre a képernyő tetejéhez közel</translation>
 <translation id="1615755956145364867">A webhelyek rákérdezhetnek arra, hogy lejátszhatnak-e védett tartalmakat</translation>
 <translation id="1620510694547887537">Kamera</translation>
@@ -64,8 +64,8 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="1779089405699405702">Képdekóder</translation>
 <translation id="1785415724048343560">Ajánlott a legjobb élmény érdekében</translation>
 <translation id="1796588414813960292">A hangot igénylő funkciók nem működnek majd</translation>
-<translation id="1799920918471566157">Chrome-tippek</translation>
-<translation id="1816835383954230954">Ha be van kapcsolva, a Chrome gyorsabban fut, a JavaScriptet használó funkcióknak pedig a tervezett módon kell működniük. Ha ki van kapcsolva, csökken a teljesítmény, de ellenállóbb lesz a V8 a támadásokkal szemben.</translation>
+<translation id="1799920918471566157">Ultimatum-tippek</translation>
+<translation id="1816835383954230954">Ha be van kapcsolva, a Ultimatum gyorsabban fut, a JavaScriptet használó funkcióknak pedig a tervezett módon kell működniük. Ha ki van kapcsolva, csökken a teljesítmény, de ellenállóbb lesz a V8 a támadásokkal szemben.</translation>
 <translation id="1818308510395330587">Ahhoz, hogy a(z) <ph name="APP_NAME" /> használhassa az AR-t, a kamerát az <ph name="BEGIN_LINK" />Android-beállítások<ph name="END_LINK" /> között is be kell kapcsolni.</translation>
 <translation id="1887786770086287077">A helyhozzáférés ki van kapcsolva ennél az eszköznél. A funkciót az <ph name="BEGIN_LINK" />Android-beállításokban<ph name="END_LINK" /> tudja bekapcsolni.</translation>
 <translation id="1906181697255754968">A webhelyek általában bizonyos funkciók (például a munkák automatikus mentése) érdekében férnek hozzá az Ön eszközén lévő fájlokhoz és mappákhoz</translation>
@@ -109,7 +109,7 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="2289270750774289114">Kérdezzen rá, ha valamelyik webhely szeretné felfedezni a közeli Bluetooth-eszközöket (ajánlott)</translation>
 <translation id="2315043854645842844">Az ügyféloldali tanúsítványválasztást az operációs rendszer nem támogatja.</translation>
 <translation id="2359808026110333948">Tovább</translation>
-<translation id="2379925928934107488">A sötét téma alkalmazása a webhelyekre (amikor lehetséges), ha a Chrome-ban sötét téma van beállítva</translation>
+<translation id="2379925928934107488">A sötét téma alkalmazása a webhelyekre (amikor lehetséges), ha a Ultimatum-ban sötét téma van beállítva</translation>
 <translation id="2390272837142897736">Nagyítás növelése</translation>
 <translation id="2402980924095424747"><ph name="MEGABYTES" /> MB</translation>
 <translation id="2404630663942400771">{PERMISSIONS_SUMMARY_ALLOWED,plural, =1{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> és további <ph name="NUM_MORE" /> engedélyezve}other{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> és további <ph name="NUM_MORE" /> engedélyezve}}</translation>
@@ -118,7 +118,7 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="2438120137003069591">Átmenetileg engedélyezte a webhely számára a harmadik féltől származó cookie-k használatát, ami azt jelenti, hogy kisebb védelemben van része böngészés közben, de a webhelyfunkciók nagyobb valószínűséggel működnek majd a várt módon. <ph name="BEGIN_LINK" />Visszajelzés küldése<ph name="END_LINK" /></translation>
 <translation id="244264527810019436">Előfordulhat, hogy bizonyos webhelyek funkciói nem működnek inkognitó módban</translation>
 <translation id="2442870161001914531">Mindig az asztali webhely kérése</translation>
-<translation id="2445311670906052406">A Chrome mostantól megosztja az eszközével a nemrég megnyitott lapokat. Ezeket az eszköz alkalmazáslistájában és a keresési találatok között láthatja. Ezt bármikor kikapcsolhatja a Chrome beállításai között.</translation>
+<translation id="2445311670906052406">A Ultimatum mostantól megosztja az eszközével a nemrég megnyitott lapokat. Ezeket az eszköz alkalmazáslistájában és a keresési találatok között láthatja. Ezt bármikor kikapcsolhatja a Ultimatum beállításai között.</translation>
 <translation id="245322989586167203">A webhelyek általában bizonyos adatátviteli funkciók (például hálózat beállításának) biztosítása érdekében csatlakoznak soros portokhoz</translation>
 <translation id="2469312991797799607">A művelet minden adatot és cookie-t töröl a(z) <ph name="ORIGIN" /> domainről és az alatta lévő összes webhelyről.</translation>
 <translation id="2482878487686419369">Értesítések</translation>
@@ -143,14 +143,14 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="2685514716378236873">Nincs engedélyezve</translation>
 <translation id="2713106313042589954">Kamera kikapcsolása</translation>
 <translation id="2717722538473713889">E-mail-címek</translation>
-<translation id="2726059656860238749">A Chrome elindítása a cím- és keresősávra fókuszálva, ami csökkenti az indulási időt alsóbb kategóriás eszközökön.</translation>
+<translation id="2726059656860238749">A Ultimatum elindítása a cím- és keresősávra fókuszálva, ami csökkenti az indulási időt alsóbb kategóriás eszközökön.</translation>
 <translation id="2750481671343847896">A webhelyek megjeleníthetnek identitásszolgáltatásoktól származó bejelentkezési értesítéseket.</translation>
 <translation id="2787357173144933081">Gyorsindítás a cím- és keresősávval</translation>
 <translation id="2789132527330338807">A webhelyek kérhetik az Ön környezetéről készített 3D-s térkép létrehozását, valamint a kamera pozíciójának nyomon követését</translation>
 <translation id="2790501146643349491">Ha be van kapcsolva, a nemrégiben bezárt webhelyek befejezhetik az adatok küldését és fogadását. Ha ki van kapcsolva, a nemrégiben bezárt webhelyek nem tudják befejezni az adatok küldését és fogadását.</translation>
 <translation id="2795716239552913152">A webhelyek általában arra használják az Ön helyadatait, hogy releváns szolgáltatásokat vagy információkat biztosítsanak (például helyi hírekről vagy közeli üzletekről)</translation>
 <translation id="2802908157808345702">A webhelyek nem jeleníthetnek meg előugró ablakokat és nem használhatnak átirányításokat</translation>
-<translation id="2814830417943086299">A Chrome mostantól megjeleníti a legutóbbi lapokat az eszköz alkalmazáslistáján és a keresési találatok között is. Ezt bármikor kikapcsolhatja a Chrome beállításai között.</translation>
+<translation id="2814830417943086299">A Ultimatum mostantól megjeleníti a legutóbbi lapokat az eszköz alkalmazáslistáján és a keresési találatok között is. Ezt bármikor kikapcsolhatja a Ultimatum beállításai között.</translation>
 <translation id="2822354292072154809">Biztosan visszaállítja a(z) <ph name="CHOSEN_OBJECT_NAME" /> minden webhelyengedélyét?</translation>
 <translation id="2850913818900871965">Mobilnézet kérelmezése</translation>
 <translation id="2870560284913253234">Webhely</translation>
@@ -187,7 +187,7 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="3242646949159196181">Ha be van kapcsolva, a webhelyek lejátszhatnak hangot. Ha ki van kapcsolva, a webhelyek nem játszhatnak le hangot.</translation>
 <translation id="3273479183583863618">Árcsökkenések a lapokon</translation>
 <translation id="3277252321222022663">Az érzékelőkhöz való hozzáférés engedélyezése a webhelyek számára (ajánlott)</translation>
-<translation id="327891165872793509">A Chrome a legtöbb webhely számára korlátozza, hogy harmadik féltől származó cookie-kat használjanak az Ön nyomon követésére böngészés közben. A beállítások között <ph name="BEGIN_LINK" />kezelheti a harmadik féltől származó cookie-khoz való hozzáférést<ph name="END_LINK" />.</translation>
+<translation id="327891165872793509">A Ultimatum a legtöbb webhely számára korlátozza, hogy harmadik féltől származó cookie-kat használjanak az Ön nyomon követésére böngészés közben. A beállítások között <ph name="BEGIN_LINK" />kezelheti a harmadik féltől származó cookie-khoz való hozzáférést<ph name="END_LINK" />.</translation>
 <translation id="3285500645985761267">A csoportban végzett tevékenységei megtekintésének engedélyezése a kapcsolódó webhelyek számára</translation>
 <translation id="3295019059349372795">11. fejezet: A Smaragdváros csodái</translation>
 <translation id="3295602654194328831">Információk elrejtése…</translation>
@@ -222,7 +222,7 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="3678318839615834650">Az Új lap oldal kártyáinak alsó lapja teljes magasságban megnyitva</translation>
 <translation id="3697164069658504920">Ha be van kapcsolva, a webhelyek engedélyt kérhetnek USB-eszközök használatára. Ha ki van kapcsolva, a webhelyek nem használhatnak USB-eszközöket.</translation>
 <translation id="3703430731944883733">A feed kezelése</translation>
-<translation id="3707034683772193706">A felkeresett webhelyek menthetnek kis mennyiségű adatot a Chrome-ban, elsősorban annak ellenőrzéséhez, hogy Ön nem robot.</translation>
+<translation id="3707034683772193706">A felkeresett webhelyek menthetnek kis mennyiségű adatot a Ultimatum-ban, elsősorban annak ellenőrzéséhez, hogy Ön nem robot.</translation>
 <translation id="3708684582558000260">A bezárt webhelyek nem fejezhetik be az adatküldést és -fogadást</translation>
 <translation id="3709818294139939629">Webhely fájlhozzáférése megvonva</translation>
 <translation id="3721953990244350188">Elvetés és a következő rendelkezésre álló művelet megjelenítése</translation>
@@ -236,7 +236,7 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="381841723434055211">Telefonszámok</translation>
 <translation id="3826050100957962900">Harmadik fél bejelentkezése</translation>
 <translation id="3835233591525155343">Aktív eszközhasználat</translation>
-<translation id="3843916486309149084">A Chrome ma ismét letiltja a cookie-kat</translation>
+<translation id="3843916486309149084">A Ultimatum ma ismét letiltja a cookie-kat</translation>
 <translation id="385051799172605136">Vissza</translation>
 <translation id="3859306556332390985">Ugrás előre</translation>
 <translation id="389521680295183045">A webhelyek engedélyt kérhetnek arra, hogy észleljék, hogy Ön mikor használja aktívan az eszközt</translation>
@@ -276,12 +276,12 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="429312253194641664">Az egyik webhely médiatartalmat játszik le</translation>
 <translation id="42981349822642051">Kibontás</translation>
 <translation id="4336219115486912529">{COUNT,plural, =1{Holnap jár le}other{# nap múlva jár le}}</translation>
-<translation id="4336566011000459927">A Chrome ma ismét korlátozza a cookie-kat</translation>
+<translation id="4336566011000459927">A Ultimatum ma ismét korlátozza a cookie-kat</translation>
 <translation id="4338831206024587507">Minden <ph name="DOMAIN" /> alatti webhely</translation>
 <translation id="4340799661701629185">A webhelyek nem küldhetnek értesítéseket</translation>
 <translation id="4402755511846832236">A webhelyek nem kaphatnak információt arról, hogy Ön mikor használja aktívan ezt az eszközt.</translation>
 <translation id="4412992751769744546">Harmadik felektől származó cookie-k engedélyezése</translation>
-<translation id="4419929467120297501">A Chrome megakadályozza a webhelyek számára, hogy harmadik féltől származó cookie-kat használjanak az Ön nyomon követésére böngészés közben. A beállítások között <ph name="BEGIN_LINK" />kezelheti a harmadik féltől származó cookie-khoz való hozzáférést<ph name="END_LINK" />.</translation>
+<translation id="4419929467120297501">A Ultimatum megakadályozza a webhelyek számára, hogy harmadik féltől származó cookie-kat használjanak az Ön nyomon követésére böngészés közben. A beállítások között <ph name="BEGIN_LINK" />kezelheti a harmadik féltől származó cookie-khoz való hozzáférést<ph name="END_LINK" />.</translation>
 <translation id="443121186588148776">Soros port</translation>
 <translation id="4434045419905280838">Előugró ablakok és átirányítások</translation>
 <translation id="443552056913301231">A művelet törli az összes helyi adatot (a cookie-kat is), és alaphelyzetbe állítja a(z) <ph name="ORIGIN" /> összes engedélyét</translation>
@@ -300,7 +300,7 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="4644713492825682049">Törlés és alaphelyzetbe állítás</translation>
 <translation id="4645575059429386691">A szülő kezeli</translation>
 <translation id="4670064810192446073">Virtuális valóság</translation>
-<translation id="4672315773691449562">Koppintson a Böngésző alkalmazás, majd a Chrome lehetőségre</translation>
+<translation id="4672315773691449562">Koppintson a Böngésző alkalmazás, majd a Ultimatum lehetőségre</translation>
 <translation id="4676059169848868271">Ahhoz, hogy a <ph name="APP_NAME" /> használhassa a kézkövetést, kapcsolja be a kézkövetést a <ph name="BEGIN_LINK" />rendszerbeállításokban<ph name="END_LINK" /> is.</translation>
 <translation id="4751476147751820511">Mozgás- és fényérzékelők</translation>
 <translation id="4755971844837804407">Ha be van kapcsolva, a webhelyek bármilyen hirdetést megjeleníthetnek Önnek. Ha ki van kapcsolva, a webhelyek nem jeleníthetnek meg tolakodó vagy félrevezető hirdetéseket.</translation>
@@ -335,7 +335,7 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="5091663350197390230">Ha be van kapcsolva, a webhelyek használhatnak JavaScriptet. Ha ki van kapcsolva, a webhelyek nem használhatnak JavaScriptet.</translation>
 <translation id="5099358668261120049">Ezzel törli a(z) <ph name="ORIGIN" /> vagy az alkalmazása által tárolt összes adatot és cookie-t a kezdőképernyőn.</translation>
 <translation id="5100237604440890931">Összecsukva – kattintson a kibontáshoz.</translation>
-<translation id="5116239826668864748">Bármikor használhatja a Chrome-ot, amikor üzenetekben, dokumentumokban és más alkalmazásokban linkekre kattint</translation>
+<translation id="5116239826668864748">Bármikor használhatja a Ultimatum-ot, amikor üzenetekben, dokumentumokban és más alkalmazásokban linkekre kattint</translation>
 <translation id="5123685120097942451">Inkognitó lap</translation>
 <translation id="5139253256813381453">{PRICE_DROP_COUNT,plural, =1{Árcsökkenés a megnyitott lapokon}other{Árcsökkenések a megnyitott lapokon}}</translation>
 <translation id="5186036860380548585">A lehetőség a képernyő tetején található</translation>
@@ -368,7 +368,7 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="5527111080432883924">Kérdezzen rá, mielőtt engedélyezi a webhelyeknek, hogy megtekintsék a vágólapon található szövegeket és képeket (ajánlott)</translation>
 <translation id="5545693483061321551">A webhelyek nem használhatnak cookie-kat az Ön böngészési tevékenységeinek megismeréséhez a különböző webhelyeken például arra, hogy a hirdetéseket személyre szabják. Előfordulhat, hogy bizonyos webhelyek funkciói nem működnek majd megfelelően.</translation>
 <translation id="5553374991681107062">Legutóbbi</translation>
-<translation id="5555115555607204100">Nem gyorsítja fel a webhelyeket a Chrome V8 motorjával, de kissé ellenállóbbá teszi a Chrome-ot a támadásokkal szemben</translation>
+<translation id="5555115555607204100">Nem gyorsítja fel a webhelyeket a Ultimatum V8 motorjával, de kissé ellenállóbbá teszi a Ultimatum-ot a támadásokkal szemben</translation>
 <translation id="5556459405103347317">Újratöltés</translation>
 <translation id="5591840828808741583"><ph name="SITE_NAME" /> letiltva</translation>
 <translation id="560980142378233747">Ez azt jelenti, hogy a webhely funkciói valószínűleg a várt módon fognak működni, de előfordulhat, hogy kevésbé lesz hatékony a böngészési védelem. <ph name="BEGIN_LINK" />Visszajelzés küldése<ph name="END_LINK" /></translation>
@@ -424,13 +424,13 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="6177128806592000436">Kapcsolata a webhellyel nem biztonságos</translation>
 <translation id="6181444274883918285">Webhelykivétel hozzáadása</translation>
 <translation id="6192792657125177640">Kivételek</translation>
-<translation id="6194967801833346599">{DAYS,plural, =1{A Chrome holnap ismét letiltja a cookie-kat}other{# nap múlva ismét le lesznek tiltva a cookie-k}}</translation>
+<translation id="6194967801833346599">{DAYS,plural, =1{A Ultimatum holnap ismét letiltja a cookie-kat}other{# nap múlva ismét le lesznek tiltva a cookie-k}}</translation>
 <translation id="6195163219142236913">A harmadik féltől származó cookie-k korlátozva vannak</translation>
 <translation id="6196640612572343990">Harmadik féltől származó cookie-k letiltása</translation>
 <translation id="6205314730813004066">Hirdetésekhez kapcsolódó adatvédelem</translation>
 <translation id="6207207788774442484">Adatok törlése és engedélyek alaphelyzetbe állítása</translation>
 <translation id="6231752747840485235">Eltávolítja ezt az alkalmazást: <ph name="APP_NAME" />?</translation>
-<translation id="6234351944623978659">Koppintson a Böngésző &gt; Chrome lehetőségre</translation>
+<translation id="6234351944623978659">Koppintson a Böngésző &gt; Ultimatum lehetőségre</translation>
 <translation id="6262191102408817757">A legutóbbi lap alapján</translation>
 <translation id="6262279340360821358"><ph name="PERMISSION_1" /> és <ph name="PERMISSION_2" /> letiltva</translation>
 <translation id="6270391203985052864">A webhelyek rákérdezhetnek, hogy küldjenek-e Önnek értesítéseket</translation>
@@ -470,7 +470,7 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="6787751205395685251">Válassza ki a kívánt lehetőséget a következőhöz: <ph name="SITE_NAME" /></translation>
 <translation id="6790428901817661496">Lejátszás</translation>
 <translation id="6818926723028410516">Válasszon elemeket</translation>
-<translation id="6838525730752203626">A Chrome használata alapértelmezettként</translation>
+<translation id="6838525730752203626">A Ultimatum használata alapértelmezettként</translation>
 <translation id="6840760312327750441">Lapok csoportosításához tartsa nyomva az egyik lapot, majd húzza rá a másikra.</translation>
 <translation id="6842868554183332230">A webhelyek általában észlelhetik, hogy Ön mikor használja aktívan az eszközt, hogy be tudják állítani az Ön elérhetőségét a csevegőalkalmazásokban</translation>
 <translation id="6864395892908308021">Ez az eszköz nem képes az NFC-alapú kommunikáció olvasására</translation>
@@ -484,7 +484,7 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="6981982820502123353">Kisegítő lehetőségek</translation>
 <translation id="6992289844737586249">Kérdezzen rá, mielőtt engedélyezné a webhelyek számára a mikrofon használatát (ajánlott)</translation>
 <translation id="7000754031042624318">Kikapcsolva az Android beállításaiban</translation>
-<translation id="702275896380648118">Ez a webhely kikövetkezteti az Ön által kedvelt dolgokat, majd hirdetéseket ajánl más webhelyeknek. Emellett lekéri az Önre vonatkozó hirdetéstémákat a Chrome-ból, hogy relevánsabb hirdetéseket jelenítsen meg Önnek.</translation>
+<translation id="702275896380648118">Ez a webhely kikövetkezteti az Ön által kedvelt dolgokat, majd hirdetéseket ajánl más webhelyeknek. Emellett lekéri az Önre vonatkozó hirdetéstémákat a Ultimatum-ból, hogy relevánsabb hirdetéseket jelenítsen meg Önnek.</translation>
 <translation id="7053983685419859001">Letiltás</translation>
 <translation id="7055552182600664515">Lehetséges, hogy a szerzői joggal védett tartalmak lejátszásához a webhelyeknek tartalomvédelmi szolgáltatásokat kell használniuk. <ph name="BEGIN_LINK" />További információ<ph name="END_LINK" />.</translation>
 <translation id="7066151586745993502">{NUM_SELECTED,plural, =1{1 elem kijelölve}other{# elem kijelölve}}</translation>
@@ -528,7 +528,7 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="7658239707568436148">Mégse</translation>
 <translation id="7667547420449112975">Óz, a csodák csodája</translation>
 <translation id="7681597159868843240">A webhelyek általában bizonyos funkciókhoz (például virtuális valósághoz vagy edzéskövetéshez) használják az eszköz mozgásérzékelőit.</translation>
-<translation id="7688240020069572972">Chrome-tippek kártyájának elrejtése</translation>
+<translation id="7688240020069572972">Ultimatum-tippek kártyájának elrejtése</translation>
 <translation id="7719367874908701697">Oldal nagyítása/kicsinyítése</translation>
 <translation id="7759147511335618829">MIDI-eszköz vezérlése/átprogramozása</translation>
 <translation id="7781829728241885113">Tegnap</translation>
@@ -540,7 +540,7 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="7835852323729233924">Médiatartalom lejátszása…</translation>
 <translation id="783819812427904514">Videó némításának feloldása</translation>
 <translation id="7846076177841592234">Kijelölés törlése</translation>
-<translation id="7881140103901777395">A Chrome a legtöbb webhely számára korlátozza, hogy harmadik féltől származó cookie-kat használjanak. A harmadik féltől származó cookie-k azonban engedélyezettek ezen a webhelyen, mivel az alapvető szolgáltatások nyújtásához szüksége van rájuk.\n\nA beállítások között <ph name="BEGIN_LINK" />kezelheti a harmadik féltől származó cookie-khoz való hozzáférést<ph name="END_LINK" />.</translation>
+<translation id="7881140103901777395">A Ultimatum a legtöbb webhely számára korlátozza, hogy harmadik féltől származó cookie-kat használjanak. A harmadik féltől származó cookie-k azonban engedélyezettek ezen a webhelyen, mivel az alapvető szolgáltatások nyújtásához szüksége van rájuk.\n\nA beállítások között <ph name="BEGIN_LINK" />kezelheti a harmadik féltől származó cookie-khoz való hozzáférést<ph name="END_LINK" />.</translation>
 <translation id="7882806643839505685">Egy adott webhely hangjának engedélyezése.</translation>
 <translation id="789180354981963912">Harmadik felektől származó cookie-k letiltása Inkognitó módban:</translation>
 <translation id="789722939441020330">A webhelyek nem kérhetnek engedélyt több fájl automatikus letöltésére</translation>
@@ -560,7 +560,7 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="8087000398470557479">Ez a Google által megjelenített tartalom a(z) <ph name="DOMAIN_NAME" /> domainről származik.</translation>
 <translation id="8088603949666785339">További lehetőségek itt: <ph name="BANNER_TITLE" /></translation>
 <translation id="8112925981674547014">Nézetlapok az alkalmazáslistában</translation>
-<translation id="8113501330600751161">{DAYS,plural, =1{A Chrome holnap ismét korlátozza a cookie-kat}other{# nap múlva a Chrome ismét korlátozza a cookie-kat}}</translation>
+<translation id="8113501330600751161">{DAYS,plural, =1{A Ultimatum holnap ismét korlátozza a cookie-kat}other{# nap múlva a Ultimatum ismét korlátozza a cookie-kat}}</translation>
 <translation id="8116925261070264013">Némítva</translation>
 <translation id="8117244575099414087">Ha be van kapcsolva, a webhelyek használhatják az eszköz érzékelőit. Ha ki van kapcsolva, a webhelyek nem használhatnak érzékelőket.</translation>
 <translation id="813082847718468539">Az oldalinformációk megtekintése</translation>
@@ -600,10 +600,10 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="8514955299594277296">A webhelyek nem menthetnek adatokat az eszközre (nem ajánlott)</translation>
 <translation id="851751545965956758">Az eszközökhöz való csatlakozás megtiltása a webhelyeknek</translation>
 <translation id="8525306231823319788">Teljes képernyő</translation>
-<translation id="8541410041357371550">Ez a webhely lekéri az Önre vonatkozó hirdetéstémákat a Chrome-ból, hogy relevánsabb hirdetéseket jelenítsen meg Önnek</translation>
+<translation id="8541410041357371550">Ez a webhely lekéri az Önre vonatkozó hirdetéstémákat a Ultimatum-ból, hogy relevánsabb hirdetéseket jelenítsen meg Önnek</translation>
 <translation id="854876774113449365">A felkeresett webhelyek beágyazhatnak más webhelyekről származó tartalmakat, például képeket, hirdetéseket és szöveget. Ezek az egyéb webhelyek engedélyt kérhetnek arra, hogy a webhelyen való böngészése során felhasználhassák az Önről elmentett adatokat. <ph name="BEGIN_LINK" />További információ a beágyazott tartalmakról<ph name="END_LINK" />.</translation>
 <translation id="8549127125482561383">A kérelmek megjelenítésének módja</translation>
-<translation id="8558480467877843976">Mostantól mindig a Chrome-ot használhatja, amikor üzenetekben, dokumentumokban és más alkalmazásokban linkekre kattint (illetve böngészik köztük).</translation>
+<translation id="8558480467877843976">Mostantól mindig a Ultimatum-ot használhatja, amikor üzenetekben, dokumentumokban és más alkalmazásokban linkekre kattint (illetve böngészik köztük).</translation>
 <translation id="857943718398505171">Engedélyezve (ajánlott)</translation>
 <translation id="8593422116412089302">Ha be van kapcsolva, a webhelyek engedélyt kérhetnek arra, hogy felhasználják az Önről mentett adatokat. Ha ki van kapcsolva, a webhelyek nem kérhetik az Önről mentett adatok használatát.</translation>
 <translation id="8609465669617005112">Mozgatás felfelé</translation>
@@ -624,13 +624,13 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="8751914237388039244">Válasszon képet</translation>
 <translation id="8800034312320686233">Nem működik a webhely?</translation>
 <translation id="8801436777607969138">JavaScript letiltása adott webhelynél.</translation>
-<translation id="8801657293260363985">A V8 a Chrome JavaScript- és WebAssembly-motorja, amely a webhelyek teljesítményének javítására szolgál</translation>
+<translation id="8801657293260363985">A V8 a Ultimatum JavaScript- és WebAssembly-motorja, amely a webhelyek teljesítményének javítására szolgál</translation>
 <translation id="8803526663383843427">Amikor be van kapcsolva</translation>
 <translation id="8805385115381080995">Így gyorsabb a böngészés, mert a webhelyek kisebb valószínűséggel kérik meg arra, hogy igazolja, Ön valódi személy.</translation>
 <translation id="8816026460808729765">Az érzékelőkhöz való hozzáférés tiltása a webhelyek számára</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">Próbálja meg átmenetileg engedélyezni a harmadik felektől származó cookie-kat, ami kisebb böngészési védelmet jelent, de a webhelyfunkciók nagyobb valószínűséggel működnek majd megfelelően.</translation>
-<translation id="8889294078294184559">Böngészési tevékenységei során a webhelyek egyeztethetnek a Chrome-mal, és az előzőleg felkeresett webhely segítségével meggyőződhetnek arról, hogy Ön valószínűleg valódi felhasználó.</translation>
+<translation id="8889294078294184559">Böngészési tevékenységei során a webhelyek egyeztethetnek a Ultimatum-mal, és az előzőleg felkeresett webhely segítségével meggyőződhetnek arról, hogy Ön valószínűleg valódi felhasználó.</translation>
 <translation id="8899807382908246773">Tolakodó hirdetések</translation>
 <translation id="8903921497873541725">Nagyítás</translation>
 <translation id="8921772741368021346"><ph name="POSITION" />/<ph name="DURATION" /></translation>
@@ -653,7 +653,7 @@ A Speciális védelem a következő Chrome-beállításokat vezérli:
 <translation id="9109747640384633967">{PERMISSIONS_SUMMARY_MIXED,plural, =1{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> és további <ph name="NUM_MORE" />}other{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> és további <ph name="NUM_MORE" />}}</translation>
 <translation id="913657688200966289">A(z) <ph name="APP_NAME" /> alkalmazásra vonatkozó engedélyeket az <ph name="BEGIN_LINK" />Android-beállítások<ph name="END_LINK" /> között lehet aktiválni.</translation>
 <translation id="9138217887606523162">Jelenlegi nagyítási szint: <ph name="ZOOM_LEVEL" />%%</translation>
-<translation id="9156722768168878035">Engedélyezze a Chrome-nak, hogy megjeleníthesse a legutóbbi lapokat az eszköz alkalmazáslistáján és a keresési találatok között. Ezt bármikor kikapcsolhatja a Chrome beállításai között.</translation>
+<translation id="9156722768168878035">Engedélyezze a Ultimatum-nak, hogy megjeleníthesse a legutóbbi lapokat az eszköz alkalmazáslistáján és a keresési találatok között. Ezt bármikor kikapcsolhatja a Ultimatum beállításai között.</translation>
 <translation id="9162462602695099906">Ez az oldal veszélyes</translation>
 <translation id="9182556968660520230">A webhelyek nem játszhatnak le védett tartalmakat</translation>
 <translation id="947156494302904893">A felkeresett webhelyek ellenőrizni tudják, hogy Ön valódi személy, nem pedig robot</translation>

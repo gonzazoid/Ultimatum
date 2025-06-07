@@ -6,7 +6,7 @@
 <translation id="1011749477052068769">Presunúť sem</translation>
 <translation id="1014147525163127655">V tomto zariadení nie sú žiadne prístupové kľúče pre aplikáciu <ph name="ORIGIN" /></translation>
 <translation id="1016498331642356377">Skratka na rýchle vyhľadávanie hlasom. Ak ju chcete upraviť, pridržte ju.</translation>
-<translation id="1024113959924243553">Chrome Dev</translation>
+<translation id="1024113959924243553">Ultimatum Dev</translation>
 <translation id="1028699632127661925">Odosiela sa do zariadenia <ph name="DEVICE_NAME" />…</translation>
 <translation id="103269572468856066">Chcete vymazať dáta aj z týchto webov a aplikácií?</translation>
 <translation id="1034259925032978114">Okno je otvorené</translation>
@@ -25,7 +25,7 @@
 <translation id="1094555143448724771">Ak chcete vidieť karty z vašich ostatných zariadení, synchronizujte si karty aj históriu.</translation>
 <translation id="1095761715416917775">Zaistite, aby ste mali neustály prístup k svojim údajom synchronizácie</translation>
 <translation id="1100066534610197918">Otvoriť v skupine na novej karte</translation>
-<translation id="1103142993930332957">Chcete pomôcť zlepšiť Chrome?</translation>
+<translation id="1103142993930332957">Chcete pomôcť zlepšiť Ultimatum?</translation>
 <translation id="1105960400813249514">Snímanie obrazovky</translation>
 <translation id="1108214977745280468">Zobraziť štatistiky stránky</translation>
 <translation id="1108938384783527433">Synchronizácia histórie</translation>
@@ -37,11 +37,11 @@
 <translation id="1140317858355046628">Ak ju odstránite, všetci okamžite stratia prístup ku skupine kariet <ph name="GROUP_NAME" /> a zo všetkých zariadení sa vymaže.</translation>
 <translation id="1142732900304639782">Neponúkať preklad týchto webov</translation>
 <translation id="1145536944570833626">Odstrániť existujúce dáta.</translation>
-<translation id="1150263420752757504">Aplikácia <ph name="APP_NAME" /> sa otvorí v Chrome. Pokračovaním vyjadrujete súhlas so <ph name="BEGIN_LINK1" />zmluvnými podmienkami spoločnosti Google<ph name="END_LINK1" /> a <ph name="BEGIN_LINK2" />dodatočnými zmluvnými podmienkami prehliadača Google Chrome a systému Chrome OS<ph name="END_LINK2" />.</translation>
+<translation id="1150263420752757504">Aplikácia <ph name="APP_NAME" /> sa otvorí v Ultimatum. Pokračovaním vyjadrujete súhlas so <ph name="BEGIN_LINK1" />zmluvnými podmienkami spoločnosti Google<ph name="END_LINK1" /> a <ph name="BEGIN_LINK2" />dodatočnými zmluvnými podmienkami prehliadača Ultimatum a systému Ultimatum OS<ph name="END_LINK2" />.</translation>
 <translation id="1154555449933432029">V Správcovi hesiel Google nemáte uložené žiadne heslá.</translation>
 <translation id="115483310321669804">Použiť heslo <ph name="PASSWORD" /></translation>
 <translation id="1173894706177603556">Premenovať</translation>
-<translation id="1174479719160874822">Keď bude obrazovka úzka, Chrome bude žiadať o mobilný web</translation>
+<translation id="1174479719160874822">Keď bude obrazovka úzka, Ultimatum bude žiadať o mobilný web</translation>
 <translation id="1175241315203286684">Správca môže vzdialene vykonávať zmeny v profile a prehliadači, analyzovať informácie o prehliadači na základe reportov a vykonávať ďalšie potrebné úlohy. Aktivita v tomto zariadení môže byť spravovaná aj mimo Chromu.</translation>
 <translation id="1177863135347784049">Vlastné</translation>
 <translation id="1181037720776840403">Odstrániť</translation>
@@ -78,8 +78,8 @@
 <translation id="1318262688555255786">Zdieľať odkaz na webovú stránku <ph name="PAGE_TITLE" />. Zdroj: <ph name="PAGE_URL" />.</translation>
 <translation id="1320912611264252795">Priečinky s postupom uloženia záložky sú otvorené na úplnú výšku</translation>
 <translation id="1327257854815634930">História navigácie je otvorená</translation>
-<translation id="1331212799747679585">Chrome sa nedá aktualizovať. Ďalšie možnosti</translation>
-<translation id="1332501820983677155">Skratky pre funkcie prehliadača Google Chrome</translation>
+<translation id="1331212799747679585">Ultimatum sa nedá aktualizovať. Ďalšie možnosti</translation>
+<translation id="1332501820983677155">Skratky pre funkcie prehliadača Ultimatum</translation>
 <translation id="1333491156693005331">Nedávno skontrolované</translation>
 <translation id="1336996151357442890">Odber webu <ph name="SITE_NAME" /> bol zrušený. Táto výzva sa znova zobrazí pri ďalšej návšteve.</translation>
 <translation id="1340839264183302272">Opustiť skupinu</translation>
@@ -96,7 +96,7 @@
 <translation id="1383876407941801731">Vyhľadávanie</translation>
 <translation id="1384704387250346179">Preklad obrázka funkciou Google Lens <ph name="BEGIN_NEW" />Novinka<ph name="END_NEW" /></translation>
 <translation id="1386674309198842382">Aktívne pred <ph name="LAST_UPDATED" /> dňami</translation>
-<translation id="1390418506739274310">Môžete si zobraziť históriu z iných aplikácií, ktoré otvárajú odkazy v Chrome. Váš účet Google môže mať ďalšie formy histórie prehliadania na <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
+<translation id="1390418506739274310">Môžete si zobraziť históriu z iných aplikácií, ktoré otvárajú odkazy v Ultimatum. Váš účet Google môže mať ďalšie formy histórie prehliadania na <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="139752016751285248">Dolný hárok cenových štatistík je otvorený na celú výšku</translation>
 <translation id="1397811292916898096">Hľadať pomocou vyhľadávača <ph name="PRODUCT_NAME" /></translation>
 <translation id="1398057416966591719">Vo svojom účte Google môžete <ph name="BEGIN_LINK1" />spravovať, ktoré údaje Chromu sa majú ukladať<ph name="END_LINK1" />.
@@ -107,7 +107,7 @@
 <translation id="1409879593029778104">Sťahovanie súboru <ph name="FILE_NAME" /> bolo zrušené, pretože daný súbor už existuje.</translation>
 <translation id="1413446866325418126">Ukladajte si údaje do účtu Google</translation>
 <translation id="1416550906796893042">Verzia aplikácie</translation>
-<translation id="1419753403124156396">Chcete reštartovať Chrome?</translation>
+<translation id="1419753403124156396">Chcete reštartovať Ultimatum?</translation>
 <translation id="1428770807407000502">Chcete vypnúť synchronizáciu?</translation>
 <translation id="1430915738399379752">Tlačiť</translation>
 <translation id="1435593198351412143">Automaticky otvárať súbory PDF</translation>
@@ -135,8 +135,8 @@
 Šifrované údaje môže čítať iba používateľ s prístupovou frázou. Prístupová fráza sa do Googlu neodosiela a Google ju ani neukladá. Ak prístupovú frázu zabudnete alebo budete chcieť toto nastavenie zmeniť, <ph name="BEGIN_LINK" />vymažte údaje Chromu vo svojom účte<ph name="END_LINK" />.</translation>
 <translation id="1544826120773021464">Ak chcete spravovať svoj účet Google, klepnite na tlačidlo Spravovať účet</translation>
 <translation id="1549000191223877751">Prejsť do druhého okna</translation>
-<translation id="1553358976309200471">Aktualizovať Chrome</translation>
-<translation id="1554532453982918912">Pomôžte zlepšiť Chrome pre ľudí, ktorí ho používajú podobným spôsobom ako vy</translation>
+<translation id="1553358976309200471">Aktualizovať Ultimatum</translation>
+<translation id="1554532453982918912">Pomôžte zlepšiť Ultimatum pre ľudí, ktorí ho používajú podobným spôsobom ako vy</translation>
 <translation id="1568636008098739136">Vypočuť obsah tejto stránky. Ak chcete túto skratku upraviť, pridržte ju.</translation>
 <translation id="1571041387761170095">Žiadne slabé ani recyklované heslá</translation>
 <translation id="1571304935088121812">Kopírovať používateľské meno</translation>
@@ -161,7 +161,7 @@
 <translation id="1702907158640575240">Spravovaný prehliadač</translation>
 <translation id="1718835860248848330">Posledná hodina</translation>
 <translation id="1724977129262658800">Ak chcete upraviť heslo, odomknite</translation>
-<translation id="1726477445370128854">Môžete prehliadať aj vyhľadávať rýchlejšie, keď Chrome prednačíta tie stránky, ktoré podľa neho možno navštívite</translation>
+<translation id="1726477445370128854">Môžete prehliadať aj vyhľadávať rýchlejšie, keď Ultimatum prednačíta tie stránky, ktoré podľa neho možno navštívite</translation>
 <translation id="1728803206919861584">Chcete prístupový kľúč uložiť mimo režimu inkognito?</translation>
 <translation id="1732514748744806741">Ak dôjde k odhaleniu vašich hesiel, upozorníme vás</translation>
 <translation id="1747593111377567311">{NUM_SITES,plural, =1{1 web nedávno odoslal veľa upozornení}few{# weby nedávno odoslali veľa upozornení}many{# sites recently sent a lot of notifications}other{# webov nedávno odoslalo veľa upozornení}}</translation>
@@ -188,8 +188,8 @@
 <translation id="1829244130665387512">Nájsť na stránke</translation>
 <translation id="1832459821645506983">Áno, súhlasím</translation>
 <translation id="1845958458910716240">Povoľte Chromu odstraňovať povolenia webov, ktoré ste v poslednom čase nenavštívili, a ochráňte tak svoje údaje</translation>
-<translation id="1871098866036088250">Otvárať v prehliadači Chrome</translation>
-<translation id="1877026089748256423">Prehliadač Chrome je zastaraný</translation>
+<translation id="1871098866036088250">Otvárať v prehliadači Ultimatum</translation>
+<translation id="1877026089748256423">Prehliadač Ultimatum je zastaraný</translation>
 <translation id="1877073879466606884">Profil, do ktorého ste sa prihlásili, je spravovaný. Správca môže vzdialene vykonávať zmeny v nastaveniach profilu, analyzovať informácie o prehliadači na základe reportov a vykonávať ďalšie potrebné úlohy.</translation>
 <translation id="1879904908408734349">Dolný hárok prihlásenia je zavretý</translation>
 <translation id="1883903952484604915">Moje súbory</translation>
@@ -226,7 +226,7 @@
 <translation id="200114059308480249">Chcete zahŕňať okolitý text vo vyhľadávaniach na Googli?</translation>
 <translation id="2021896219286479412">Ovládanie webu na celú obrazovku</translation>
 <translation id="2038563949887743358">Zapnutie žiadosti o verziu stránok pre počítače</translation>
-<translation id="204321170514947529">V Chrome má údaje aj aplikácia <ph name="APP_NAME" />.</translation>
+<translation id="204321170514947529">V Ultimatum má údaje aj aplikácia <ph name="APP_NAME" />.</translation>
 <translation id="2047378580182589770">Pridržaním ukončíte režim inkognito</translation>
 <translation id="2049574241039454490"><ph name="FILE_SIZE_OF_TOTAL" /> <ph name="SEPARATOR" /> <ph name="DESCRIPTION" /></translation>
 <translation id="2051669996101374349">Používajte protokol HTTPS vždy, keď je to možné, a dostávajte upozornenia pred načítaním webov, ktoré ho nepodporujú. Toto nastavenie nemôžete zmeniť, pretože máte povolenú rozšírenú ochranu.</translation>
@@ -236,7 +236,7 @@
 <translation id="2067805253194386918">text</translation>
 <translation id="2079545284768500474">Späť</translation>
 <translation id="2082238445998314030">Výsledok <ph name="RESULT_NUMBER" /> z <ph name="TOTAL_RESULTS" /></translation>
-<translation id="2088833076121753253">Ak chcete dokončiť nastavovanie automatického dopĺňania, reštartujte Chrome. Vaše karty sa automaticky znova otvoria.</translation>
+<translation id="2088833076121753253">Ak chcete dokončiť nastavovanie automatického dopĺňania, reštartujte Ultimatum. Vaše karty sa automaticky znova otvoria.</translation>
 <translation id="2091863218454846791">Používa sa kompaktné zobrazenie</translation>
 <translation id="2093731487903423814">posledných 15 minút</translation>
 <translation id="2100273922101894616">Automaticky prihlasovať</translation>
@@ -246,7 +246,7 @@
 <translation id="2122601567107267586">Aplikáciu sa nepodarilo otvoriť</translation>
 <translation id="213279576345780926">Karta „<ph name="TAB_TITLE" />“ je zavretá</translation>
 <translation id="2141396931810938595">Na základe vášho používania</translation>
-<translation id="2145315049852051678">Chrome vykonáva pravidelné kontroly s cieľom uistiť sa, že v prehliadači máte najbezpečnejšie nastavenia. Ak bude treba, aby ste niečo skontrolovali, oznámime vám to.</translation>
+<translation id="2145315049852051678">Ultimatum vykonáva pravidelné kontroly s cieľom uistiť sa, že v prehliadači máte najbezpečnejšie nastavenia. Ak bude treba, aby ste niečo skontrolovali, oznámime vám to.</translation>
 <translation id="2149973817440762519">Upraviť záložku</translation>
 <translation id="2158408438301413340">Chromu sa nepodarilo skontrolovať všetky heslá</translation>
 <translation id="2163089732491971196">Ak chcete vo svojom účte Google používať a ukladať údaje Chromu, zadajte prístupovú frázu</translation>
@@ -261,7 +261,7 @@
 <translation id="219283042927675668">Karty v skupine</translation>
 <translation id="2194856509914051091">Čo je potrebné zohľadniť</translation>
 <translation id="22091350895006575">Pridať používateľské meno</translation>
-<translation id="221494669172414749">Ak otvoríte Chrome bez zámky profilu, odstránite heslá a spôsoby platby uložené v aute. Pomocou zámky profilu sú tieto údaje uchované v bezpečí.</translation>
+<translation id="221494669172414749">Ak otvoríte Ultimatum bez zámky profilu, odstránite heslá a spôsoby platby uložené v aute. Pomocou zámky profilu sú tieto údaje uchované v bezpečí.</translation>
 <translation id="2227444325776770048">Pokračovať ako <ph name="USER_FULL_NAME" /></translation>
 <translation id="2230777942707397948">Prázdne okno</translation>
 <translation id="223356358902285214">Aktivita na internete a v aplikáciách</translation>
@@ -307,7 +307,7 @@
 <translation id="2433507940547922241">Vzhľad</translation>
 <translation id="2435457462613246316">Zobraziť heslo</translation>
 <translation id="2439153523196674349"><ph name="SITE_NAME" /> – ukážka</translation>
-<translation id="2449931042095204989">Keď nejaký web alebo aplikácia Googlu požiada o súkromné prednačítanie odkazov na svojej stránke, Chrome zašifruje a prednačíta stránky prostredníctvom serverov Googlu bez súborov cookie. Tým sa skryje vaša totožnosť pred prednačítavaným webom.</translation>
+<translation id="2449931042095204989">Keď nejaký web alebo aplikácia Googlu požiada o súkromné prednačítanie odkazov na svojej stránke, Ultimatum zašifruje a prednačíta stránky prostredníctvom serverov Googlu bez súborov cookie. Tým sa skryje vaša totožnosť pred prednačítavaným webom.</translation>
 <translation id="2450083983707403292">Chcete znovu spustiť sťahovanie súboru <ph name="FILE_NAME" />?</translation>
 <translation id="2451607499823206582">Sledovanie</translation>
 <translation id="2453860139492968684">Dokončiť</translation>
@@ -315,13 +315,13 @@
 <translation id="2461822463642141190">Aktuálna</translation>
 <translation id="2463770278804271243">STRÁNKA</translation>
 <translation id="2468444275314013497">Váš prehliadač je v poriadku</translation>
-<translation id="2472163211318554013">Prihláste sa, aby ste mohli Chrome využívať naplno</translation>
+<translation id="2472163211318554013">Prihláste sa, aby ste mohli Ultimatum využívať naplno</translation>
 <translation id="247737702124049222">Popisy obrázkov sú zapnuté</translation>
 <translation id="2479148705183875116">Prejsť do Nastavení</translation>
 <translation id="2482878487686419369">Upozornenia</translation>
 <translation id="2496180316473517155">História prehliadania</translation>
 <translation id="2497852260688568942">Synchronizácia je zakázaná správcom</translation>
-<translation id="250020030759455918">Zobrazí sa váš stav prihlásenia na webe <ph name="SITE_NAME" />, dáta prehliadania a údaje webu v Chrome</translation>
+<translation id="250020030759455918">Zobrazí sa váš stav prihlásenia na webe <ph name="SITE_NAME" />, dáta prehliadania a údaje webu v Ultimatum</translation>
 <translation id="2510106555128151389">Inštaluje sa <ph name="WEBAPK_NAME" />...</translation>
 <translation id="2512234228327349533">Vyhľadať možnosti zakúpenia</translation>
 <translation id="2513403576141822879">Ďalšie nastavenia týkajúce sa ochrany súkromia, zabezpečenia a zhromažďovania dát nájdete v časti <ph name="BEGIN_LINK" />Synchronizácia a služby Googlu<ph name="END_LINK" /></translation>
@@ -343,10 +343,10 @@
 <translation id="2569733278091928697">Budete môcť ľahko spravovať ovládanie médií, relácie inkognito, sťahovania a viac</translation>
 <translation id="2571711316400087311">Ponúkať odosielanie stránok v cudzích jazykoch do Prekladača Google</translation>
 <translation id="2571834852878229351">Vytvoriť vlastné</translation>
-<translation id="2574249610672786438">Ak chcete vidieť svoje karty vo všetkých zariadeniach, v ktorých používate Chrome, prihláste sa v nich</translation>
+<translation id="2574249610672786438">Ak chcete vidieť svoje karty vo všetkých zariadeniach, v ktorých používate Ultimatum, prihláste sa v nich</translation>
 <translation id="2577981599306533385"><ph name="MEMBER_FULL_NAME" /> (<ph name="EMAIL" />) okamžite stratí prístup ku skupine kariet <ph name="GROUP_NAME" /> a už s vami nebude môcť interagovať v službách Googlu.</translation>
 <translation id="2579297619530305344">Heslá vo všetkých vašich zariadeniach sú otvorené na celú výšku</translation>
-<translation id="2581165646603367611">Táto akcia vymaže súbory cookie, vyrovnávaciu pamäť a ďalšie údaje webov, ktoré Chrome nepovažuje za dôležité.</translation>
+<translation id="2581165646603367611">Táto akcia vymaže súbory cookie, vyrovnávaciu pamäť a ďalšie údaje webov, ktoré Ultimatum nepovažuje za dôležité.</translation>
 <translation id="2587052924345400782">Je dostupná novšia verzia</translation>
 <translation id="2593272815202181319">Neproporcionálne</translation>
 <translation id="260403163289591229">Sledované</translation>
@@ -386,7 +386,7 @@
 <translation id="2779651927720337254">neúspešné</translation>
 <translation id="2781151931089541271">Zostáva: 1 s</translation>
 <translation id="2789486458103222910">OK</translation>
-<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Chrome našiel recyklované heslo, ktoré môžete zlepšiť}few{Chrome našiel # recyklované heslá, ktoré môžete zlepšiť}many{Chrome found # reused passwords that you could improve}other{Chrome našiel # recyklovaných hesiel, ktoré môžete zlepšiť}}</translation>
+<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Ultimatum našiel recyklované heslo, ktoré môžete zlepšiť}few{Ultimatum našiel # recyklované heslá, ktoré môžete zlepšiť}many{Ultimatum found # reused passwords that you could improve}other{Ultimatum našiel # recyklovaných hesiel, ktoré môžete zlepšiť}}</translation>
 <translation id="2800066122460699237">Karta <ph name="TAB_TITLE" /> bude zavretá</translation>
 <translation id="2805756323405976993">Aplikácie</translation>
 <translation id="281504910091592009">Zobrazenie a správa uložených hesiel v <ph name="BEGIN_LINK" />účte Google<ph name="END_LINK" /></translation>
@@ -407,9 +407,9 @@
 <translation id="2870560284913253234">Web</translation>
 <translation id="2871733351037274014">Prednačítavanie stránok</translation>
 <translation id="2876136027428473467"><ph name="CHILD_NAME" /> chce, aby ste schválili tento web:</translation>
-<translation id="2876628302275096482"><ph name="BEGIN_LINK" />Ako Chrome uchováva vaše údaje v súkromí<ph name="END_LINK" /></translation>
+<translation id="2876628302275096482"><ph name="BEGIN_LINK" />Ako Ultimatum uchováva vaše údaje v súkromí<ph name="END_LINK" /></translation>
 <translation id="2883644600102358131">Heslá v tomto zariadení čoskoro prestanú fungovať. Ak chcete svoje heslá ďalej používať, aktualizujte Služby Google Play.</translation>
-<translation id="2888126860611144412">O prehliadači Chrome</translation>
+<translation id="2888126860611144412">O prehliadači Ultimatum</translation>
 <translation id="2891154217021530873">Zastaviť načítavanie stránky</translation>
 <translation id="2894821468041866720">Prehliadač ani zariadenie výrazne nespomalí.</translation>
 <translation id="2895521649038438824">Môžete si vypočuť túto stránku</translation>
@@ -454,11 +454,11 @@
 <translation id="3037517125981011456">Zobrazí výzvy na prihlásenie do Chromu</translation>
 <translation id="3038272154009688107">Zobraziť všetky weby</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> záložka}few{<ph name="BOOKMARKS_COUNT_MANY" /> záložky}many{<ph name="BOOKMARKS_COUNT_MANY" /> bookmarks}other{<ph name="BOOKMARKS_COUNT_MANY" /> záložiek}}</translation>
-<translation id="3062802207422175757">Články o vašich záujmoch v Chrome</translation>
+<translation id="3062802207422175757">Články o vašich záujmoch v Ultimatum</translation>
 <translation id="3066573403916685335">Presunúť nadol</translation>
 <translation id="3067505415088964188">Cena je nízka</translation>
 <translation id="3070005020161560471">Automaticky prekladať</translation>
-<translation id="3072980200212375806">Aplikácia <ph name="APP_NAME" /> sa otvorí v Chrome. Pokračovaním vyjadrujete súhlas so <ph name="BEGIN_LINK1" />zmluvnými podmienkami spoločnosti Google<ph name="END_LINK1" /> a <ph name="BEGIN_LINK2" />dodatočnými zmluvnými podmienkami prehliadača Google Chrome a systému Chrome OS<ph name="END_LINK2" />. Uplatňujú sa aj <ph name="BEGIN_LINK3" />pravidlá ochrany súkromia<ph name="END_LINK3" />.</translation>
+<translation id="3072980200212375806">Aplikácia <ph name="APP_NAME" /> sa otvorí v Ultimatum. Pokračovaním vyjadrujete súhlas so <ph name="BEGIN_LINK1" />zmluvnými podmienkami spoločnosti Google<ph name="END_LINK1" /> a <ph name="BEGIN_LINK2" />dodatočnými zmluvnými podmienkami prehliadača Ultimatum a systému Ultimatum OS<ph name="END_LINK2" />. Uplatňujú sa aj <ph name="BEGIN_LINK3" />pravidlá ochrany súkromia<ph name="END_LINK3" />.</translation>
 <translation id="3080525922482950719">Stránky si môžete uložiť a prečítať neskôr či offline</translation>
 <translation id="3087734570205094154">Spodok</translation>
 <translation id="3091010850649238832">Zobraziť obsah schránky</translation>
@@ -472,7 +472,7 @@
 <translation id="3159335509547415276">Ďalšie informácie o blokovaných účtoch</translation>
 <translation id="3161699713309727585"><ph name="BUTTON_TEXT" />, otvorí sa na novej karte</translation>
 <translation id="3166827708714933426">Skratky pre karty a okná</translation>
-<translation id="316694332262407393">Chrome je tu už spustený.</translation>
+<translation id="316694332262407393">Ultimatum je tu už spustený.</translation>
 <translation id="3167258285411721858">Môžete požiadať o mobilný web pre <ph name="HOST_NAME" /></translation>
 <translation id="3169472444629675720">Objaviť</translation>
 <translation id="3172472771272043251">{PASSWORDS_COUNT,plural, =1{1 heslo a ďalšie položky sú uložené iba v tomto zariadení. Ak ich chcete používať v ďalších zariadeniach, uložte si ich do účtu Google <ph name="ACCOUNT_EMAIL" />.}few{# heslá a ďalšie položky sú uložené iba v tomto zariadení. Ak ich chcete používať v ďalších zariadeniach, uložte si ich do účtu Google <ph name="ACCOUNT_EMAIL" />.}many{# passwords and other items are saved only to this device. To use them on your other devices, save them in your Google Account, <ph name="ACCOUNT_EMAIL" />.}other{# hesiel a ďalších položiek je uložených iba v tomto zariadení. Ak ich chcete používať v ďalších zariadeniach, uložte si ich do účtu Google <ph name="ACCOUNT_EMAIL" />.}}</translation>
@@ -528,7 +528,7 @@
 <translation id="3443221991560634068">Opätovné načítanie aktuálnej stránky</translation>
 <translation id="3444179773590444986">Chcete zdieľať spätnú väzbu k tmavému motívu pre weby?</translation>
 <translation id="3448874648066942074">Zhrnúť stránku pomocou umelej inteligencie</translation>
-<translation id="3452832259067974318">V záujme ochrany vášho súkromia nebude Chrome do tohto poľa automaticky dopĺňať heslá.</translation>
+<translation id="3452832259067974318">V záujme ochrany vášho súkromia nebude Ultimatum do tohto poľa automaticky dopĺňať heslá.</translation>
 <translation id="3467081767799433066">Keď používate meranie reklám, medzi webmi sa zdieľajú obmedzené typy údajov na meranie výkonnosti ich reklám, napríklad či ste si po prejdení na nejaký web niečo kúpili.</translation>
 <translation id="3474624961160222204">Pokračovať ako <ph name="NAME" /></translation>
 <translation id="3478363558367712427">Môžete si vybrať vyhľadávač</translation>
@@ -540,7 +540,7 @@
 <translation id="3499246418971111862">chrome_qrcode_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="350276055892098337">Zoradiť od najstarších</translation>
 <translation id="3507132249039706973">Je zapnutá štandardná ochrana</translation>
-<translation id="3509330069915219067">Offline. Chrome nemôže skontrolovať dostupnosť aktualizácií.</translation>
+<translation id="3509330069915219067">Offline. Ultimatum nemôže skontrolovať dostupnosť aktualizácií.</translation>
 <translation id="3513019849832307207">Pripojiť sa a otvoriť</translation>
 <translation id="3513704683820682405">Rozšírená realita</translation>
 <translation id="3516053221628030540">Prejsť do služby Google Play</translation>
@@ -573,7 +573,7 @@
 <translation id="3627893290277153986">Otvoriť možnosti uloženia stránky</translation>
 <translation id="3631987586758005671">Zdieľa sa so zariadením <ph name="DEVICE_NAME" /></translation>
 <translation id="363484704507524488">Overenie totožnosti môžete spravovať v nastaveniach ochrany v prípade krádeže. <ph name="BEGIN_LINK" />Prejsť do nastavení<ph name="END_LINK" /></translation>
-<translation id="3635073343384702370">Chrome môže skontrolovať heslá, keď ich uložíte</translation>
+<translation id="3635073343384702370">Ultimatum môže skontrolovať heslá, keď ich uložíte</translation>
 <translation id="363596933471559332">Povolí automatické prihlasovanie na webové stránky pomocou uložených poverení. Keď je funkcia vypnutá, zobrazí sa výzva na overenie vždy pred prihlásením na web.</translation>
 <translation id="3636940436873918441">Preferované jazyky</translation>
 <translation id="3637744895182738742">Ak ste zabudli prístupovú frázu alebo chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Chromu vo svojom účte<ph name="END_LINK" />.</translation>
@@ -592,7 +592,7 @@
 <translation id="3710501561113687889">Ak chcete pokračovať, <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> bude s týmto webom zdieľať vaše <ph name="FIELDS_STRING" />.</translation>
 <translation id="3710560693796335511">Spolupráca</translation>
 <translation id="3714981814255182093">Otvorenie Panela vyhľadávania</translation>
-<translation id="3718765429352682176">Môžete si zobraziť históriu z iných aplikácií, ktoré otvárajú odkazy v Chrome.</translation>
+<translation id="3718765429352682176">Môžete si zobraziť históriu z iných aplikácií, ktoré otvárajú odkazy v Ultimatum.</translation>
 <translation id="3721119614952978349">Vy a Google</translation>
 <translation id="3737319253362202215">Nastavenia prekladu</translation>
 <translation id="3738139272394829648">Vyhľadávanie klepnutím</translation>
@@ -640,8 +640,8 @@
 <translation id="3950820424414687140">Prihlásiť sa</translation>
 <translation id="395377504920307820">Použiť bez účtu</translation>
 <translation id="3955219620682768253">Prejsť na predchádzajúcu stránku v histórii</translation>
-<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Chrome stránku načíta, keď bude k dispozícii}few{Chrome stránku načíta, keď bude k dispozícii}many{Chrome stránku načíta, keď bude k dispozícii}other{Chrome stránku načíta, keď bude k dispozícii}}</translation>
-<translation id="3969142555815019568">Chrome nemôže skontrolovať heslá</translation>
+<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Ultimatum stránku načíta, keď bude k dispozícii}few{Ultimatum stránku načíta, keď bude k dispozícii}many{Ultimatum stránku načíta, keď bude k dispozícii}other{Ultimatum stránku načíta, keď bude k dispozícii}}</translation>
+<translation id="3969142555815019568">Ultimatum nemôže skontrolovať heslá</translation>
 <translation id="3969863827134279083">Presunúť nahor</translation>
 <translation id="397105322502079400">Prebieha výpočet...</translation>
 <translation id="397583555483684758">Synchronizácia prestala fungovať</translation>
@@ -678,7 +678,7 @@
 <translation id="4132137475637520539">Pripojiť sa môže každý, kto má odkaz</translation>
 <translation id="4135200667068010335">Zoznam zariadení, s ktorými sa má zdieľať karta, je zavretý.</translation>
 <translation id="4137746084635924146">Aktuálny jazyk zariadenia</translation>
-<translation id="4139654229316918773">Chrome Canary</translation>
+<translation id="4139654229316918773">Ultimatum Canary</translation>
 <translation id="414128724510021958">V predvolenom nastavení sú požadované weby pre počítače</translation>
 <translation id="4162867837470729563">Zoznam možností zdieľania je otvorený na celú výšku.</translation>
 <translation id="4170011742729630528">Služba nie je k dispozícii. Skúste to neskôr.</translation>
@@ -691,7 +691,7 @@
 <translation id="4197828496439691735">{NUM_TABS,plural, =1{1 karta v tomto zariadení}few{# karty v tomto zariadení}many{# tabs on this device}other{# kariet v tomto zariadení}}</translation>
 <translation id="4198423547019359126">Nie sú k dispozícii žiadne umiestnenia stiahnutých súborov</translation>
 <translation id="4209029522667123437"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> • Použili ste na tomto webe</translation>
-<translation id="4214315110991671325">Keď povolíte súbory cookies, Chrome môže pomocou nich prednačítavať.</translation>
+<translation id="4214315110991671325">Keď povolíte súbory cookies, Ultimatum môže pomocou nich prednačítavať.</translation>
 <translation id="4216511743389425832">Vypočuť obsah tejto stránky</translation>
 <translation id="4225725533026049334">Sledovaný</translation>
 <translation id="4225895483398857530">Skratka panela s nástrojmi</translation>
@@ -707,7 +707,7 @@
 <translation id="4270730597186910506">Sledujte výrobok alebo ho prestaňte sledovať.</translation>
 <translation id="4277529130885813215">Použiť iné zariadenie</translation>
 <translation id="427987768447457592">Nová skupina kariet</translation>
-<translation id="4282440837784183472">Vaša organizácia <ph name="MANAGED_DOMAIN" /> spravuje účet, do ktorého sa prihlasujete, a spôsob, akým sa dá Chrome používať. Váš správca môže nastaviť alebo obmedziť určité funkcie.</translation>
+<translation id="4282440837784183472">Vaša organizácia <ph name="MANAGED_DOMAIN" /> spravuje účet, do ktorého sa prihlasujete, a spôsob, akým sa dá Ultimatum používať. Váš správca môže nastaviť alebo obmedziť určité funkcie.</translation>
 <translation id="4285498937028063278">Odopnúť</translation>
 <translation id="4285846616383034558">Súbory cookie, vyrovnávacia pamäť a ďalšie dáta webov</translation>
 <translation id="4291407919474070700"><ph name="BEGIN_LINK" />Zapnite zámku obrazovky v nastaveniach Androidu<ph name="END_LINK" /></translation>
@@ -745,9 +745,9 @@
 <translation id="4452548195519783679">Uložené ako záložka v priečinku <ph name="FOLDER_NAME" /></translation>
 <translation id="4460861538906892109">{ITEMS_COUNT,plural, =1{1 záložka}few{# záložky}many{# bookmarks}other{# záložiek}}</translation>
 <translation id="4478161224666880173">Na tomto webe môžete používať účet <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />. Ak chcete pokračovať, prihláste sa do účtu <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="4479972344484327217">Inštaluje sa <ph name="MODULE" /> pre Chrome…</translation>
+<translation id="4479972344484327217">Inštaluje sa <ph name="MODULE" /> pre Ultimatum…</translation>
 <translation id="4484496141267039529">Žiadne pripojenie. Skúste to neskôr.</translation>
-<translation id="4487967297491345095">Všetky dáta aplikácií v Chrome budú natrvalo odstránené. Platí to aj pre všetky súbory, nastavenia, účty, databázy atď.</translation>
+<translation id="4487967297491345095">Všetky dáta aplikácií v Ultimatum budú natrvalo odstránené. Platí to aj pre všetky súbory, nastavenia, účty, databázy atď.</translation>
 <translation id="4494806687727322324">Ukladanie hesiel zapol váš správca</translation>
 <translation id="4508528996305412043">Ponuka karty feedu je otvorená</translation>
 <translation id="4509741852167209430">Medzi webmi sa zdieľajú obmedzené typy údajov na meranie výkonnosti ich reklám, napríklad či ste si po prejdení na nejaký web niečo kúpili</translation>
@@ -772,7 +772,7 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="4594952190837476234">Táto offline stránka je z <ph name="CREATION_TIME" /> a líši sa od online verzie.</translation>
 <translation id="4595805675102978678">Chyba účtu Google</translation>
 <translation id="4601095002996233687">Hĺbkové kontroly s cieľom nájsť podozrivé stiahnuté súbory.</translation>
-<translation id="4606559747793337066">Keď nejaký web alebo aplikácia požiada o súkromné prednačítanie odkazov na svojej stránke, Chrome zašifruje a prednačíta stránky prostredníctvom serverov Googlu bez súborov cookie. Tým sa skryje vaša totožnosť pred prednačítavaným webom.</translation>
+<translation id="4606559747793337066">Keď nejaký web alebo aplikácia požiada o súkromné prednačítanie odkazov na svojej stránke, Ultimatum zašifruje a prednačíta stránky prostredníctvom serverov Googlu bez súborov cookie. Tým sa skryje vaša totožnosť pred prednačítavaným webom.</translation>
 <translation id="4616150815774728855">Otvoriť <ph name="WEBAPK_NAME" /></translation>
 <translation id="4619564267100705184">Overte, že ste to vy</translation>
 <translation id="4624065194742029982">Režim inkognito Chromu</translation>
@@ -786,7 +786,7 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="4663756553811254707">Počet odstránených záložiek: <ph name="NUMBER_OF_BOOKMARKS" /></translation>
 <translation id="4668279686271488041">Údaje merania reklám sa zo zariadenia pravidelne odstraňujú</translation>
 <translation id="4668347365065281350">Všetky dáta ukladané webmi vrátane súborov cookie a ďalších miestne uložených údajov</translation>
-<translation id="4678082183394354975">Tmavý motív pre weby je v Chrome zapnutý</translation>
+<translation id="4678082183394354975">Tmavý motív pre weby je v Ultimatum zapnutý</translation>
 <translation id="4684427112815847243">Synchronizovať všetko</translation>
 <translation id="4685741273709472646">Vybrať z rozbaľovacieho zoznamu</translation>
 <translation id="4687718960473379118">Reklamy navrhované webmi</translation>
@@ -816,7 +816,7 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="4763480195061959176">video</translation>
 <translation id="4766313118839197559">Heslá sa ukladajú do Správcu hesiel v tomto zariadení</translation>
 <translation id="4766678251456904326">Pridať účet do zariadenia</translation>
-<translation id="4767947714785277816">Predstavujeme novú funkciu ochrany súkromia pri reklamách nazvanú Meranie reklám. Na pomoc s meraním výkonnosti reklám zdieľa Chrome medzi webmi a aplikáciami iba veľmi obmedzené informácie, napríklad to, kedy sa vám reklama zobrazila.</translation>
+<translation id="4767947714785277816">Predstavujeme novú funkciu ochrany súkromia pri reklamách nazvanú Meranie reklám. Na pomoc s meraním výkonnosti reklám zdieľa Ultimatum medzi webmi a aplikáciami iba veľmi obmedzené informácie, napríklad to, kedy sa vám reklama zobrazila.</translation>
 <translation id="4769095993849849966">Nový názov súboru</translation>
 <translation id="4769632191812288342">Máte štandardnú ochranu</translation>
 <translation id="4773122030389014189">Zdieľanie skupiny kariet <ph name="GROUP_NAME" /></translation>
@@ -826,13 +826,13 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="4782929588435725897"><ph name="SEARCH_ENGINE" /> je váš predvolený vyhľadávač</translation>
 <translation id="4784349455504343791"><ph name="WEBSITE_ORIGIN" /> chce používať osobné údaje z vašej digitálnej peňaženky.</translation>
 <translation id="4787736314074622408">Chcete súbor <ph name="ITEM_TITLE" /> odstrániť?</translation>
-<translation id="4793679854893018356">Ako vás Chrome chráni</translation>
+<translation id="4793679854893018356">Ako vás Ultimatum chráni</translation>
 <translation id="4794291718671962615">(<ph name="MEGABYTES" />) <ph name="URL" /></translation>
 <translation id="4807098396393229769">Meno na karte</translation>
 <translation id="480990236307250886">Otvoriť domovskú stránku</translation>
 <translation id="4822710610088666676">Skupina kariet <ph name="TAB_GROUP_TITLE" /> bola zavretá a uložená</translation>
 <translation id="4834250788637067901">Spôsoby platby, ponuky a adresy používajúce Google Pay</translation>
-<translation id="4835385943915508971">Chrome nemá prístup k požadovanému zdroju.</translation>
+<translation id="4835385943915508971">Ultimatum nemá prístup k požadovanému zdroju.</translation>
 <translation id="483742037940503070">{TAB_COUNT,plural, =1{Obnovte skupinu kariet s <ph name="TAB_COUNT_ONE" /> kartou vo farbe <ph name="COLOR_NAME" /> ako novú skupinu kariet na pozadí.}few{Obnovte skupinu kariet s <ph name="TAB_COUNT_MANY" /> kartami vo farbe <ph name="COLOR_NAME" /> ako novú skupinu kariet na pozadí.}many{Restore tab group of <ph name="TAB_COUNT_MANY" /> tabs, color <ph name="COLOR_NAME" />, as a new background tab group.}other{Obnovte skupinu kariet s <ph name="TAB_COUNT_MANY" /> kartami vo farbe <ph name="COLOR_NAME" /> ako novú skupinu kariet na pozadí.}}</translation>
 <translation id="4837753911714442426">Otvorenie možností tlače stránky</translation>
 <translation id="4844633725025837809">Šifrujte heslá v zariadení ešte pred ich uložením do správcu hesiel Google, čím zvýšite zabezpečenie</translation>
@@ -841,7 +841,7 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="4852014461738377247">Prihlasuje sa\u2026</translation>
 <translation id="4860895144060829044">Volajte</translation>
 <translation id="4864369630010738180">Prebieha prihlasovanie...</translation>
-<translation id="4866368707455379617">Modul <ph name="MODULE" /> pre Chrome sa nepodarilo nainštalovať</translation>
+<translation id="4866368707455379617">Modul <ph name="MODULE" /> pre Ultimatum sa nepodarilo nainštalovať</translation>
 <translation id="4871568871368204250">Vypnutie synchronizácie</translation>
 <translation id="4875775213178255010">Návrhy obsahu</translation>
 <translation id="4877678010818027629">Spustiť režim inkognito</translation>
@@ -849,7 +849,7 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="4880127995492972015">Preložiť…</translation>
 <translation id="4881695831933465202">Otvoriť</translation>
 <translation id="488187801263602086">Premenovanie súboru</translation>
-<translation id="4885273946141277891">Nepodporovaný počet inštancií prehliadača Chrome.</translation>
+<translation id="4885273946141277891">Nepodporovaný počet inštancií prehliadača Ultimatum.</translation>
 <translation id="4890973535105146893">Vo svojom účte Google nemáte uložené žiadne heslá</translation>
 <translation id="4905823827770127520">Zahrnúť odkaz na stránku</translation>
 <translation id="4908869848243824489">Kanál Objaviť od Googlu</translation>
@@ -864,7 +864,7 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="4957722034734105353">Ďalšie informácie...</translation>
 <translation id="4959115606310463263">Dolný hárok prihlásenia je otvorený na polovičnú výšku</translation>
 <translation id="4961107849584082341">Preložte si túto stránku do ľubovoľného jazyka</translation>
-<translation id="4964614743143953889">Chrome vás upozorňuje na nebezpečné weby a súbory na stiahnutie</translation>
+<translation id="4964614743143953889">Ultimatum vás upozorňuje na nebezpečné weby a súbory na stiahnutie</translation>
 <translation id="496607651705915226">Ak chcete vo svojom účte Google ukladať a používať nové heslá, aktualizujte Služby Google Play</translation>
 <translation id="4971753085054504448">Ak chcete zobraziť ďalšie výsledky, skúste vyhľadať niečo iné alebo otvorte celú históriu Chromu.</translation>
 <translation id="497421865427891073">Ďalej</translation>
@@ -890,7 +890,7 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="506254248375231072">Žiadne karty</translation>
 <translation id="5062960805900435602">Aktualita o zlučovaní hesiel je zavretá</translation>
 <translation id="5075939510584558547">Uloženie bez šifrovania</translation>
-<translation id="5085038751173179818">Prihláste sa na tomto webe a v Chrome, aby ste mali svoje záložky a ďalšie položky vo všetkých svojich zariadeniach</translation>
+<translation id="5085038751173179818">Prihláste sa na tomto webe a v Ultimatum, aby ste mali svoje záložky a ďalšie položky vo všetkých svojich zariadeniach</translation>
 <translation id="5091199029769593641">Keď otvoríte novú kartu, čoskoro sa vám budú zobrazovať príbehy z webu <ph name="SITE_NAME" />. Weby, ktoré sledujete, sa ukladajú do vášho účtu Google. Môžete ich spravovať v nastaveniach kanála Objaviť.</translation>
 <translation id="509429900233858213">Vyskytla sa chyba.</translation>
 <translation id="5096775069898886423">V prípade webov, ktoré nepodporujú zabezpečené pripojenia, sa pred ich návštevou zobrazí upozornenie</translation>
@@ -898,7 +898,7 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="510275257476243843">Zostáva: 1 h</translation>
 <translation id="5114895953710637392">Hárok filtrov aplikácií je zavretý.</translation>
 <translation id="5115811374190515607">do služby <ph name="PRODUCT_NAME" /></translation>
-<translation id="5116239826668864748">Chrome môžete teraz kedykoľvek použiť klepnutím na odkazy v správach, dokumentoch a ďalších aplikáciách</translation>
+<translation id="5116239826668864748">Ultimatum môžete teraz kedykoľvek použiť klepnutím na odkazy v správach, dokumentoch a ďalších aplikáciách</translation>
 <translation id="5118713593561876160">Záujmy</translation>
 <translation id="5122378528687922675">Ak potrebuješ pomoc, požiadaj rodiča (<ph name="PARENT_NAME_1" /> alebo <ph name="PARENT_NAME_2" />)</translation>
 <translation id="5123685120097942451">Karta inkognito</translation>
@@ -922,7 +922,7 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="5210286577605176222">Prechod na predchádzajúcu kartu</translation>
 <translation id="5210365745912300556">Zatvoriť kartu</translation>
 <translation id="5215957675041756913">Ovládajte svoje údaje a účet</translation>
-<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> a ďalšie <ph name="SEPARATOR" /> Chrome odstránil tieto povolenia, pretože ste daný web v poslednom čase nenavštívili</translation>
+<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> a ďalšie <ph name="SEPARATOR" /> Ultimatum odstránil tieto povolenia, pretože ste daný web v poslednom čase nenavštívili</translation>
 <translation id="5222676887888702881">Odhlásiť sa</translation>
 <translation id="5226378907213531272">Obrazovku odomknete pri každom použití auta</translation>
 <translation id="5227554086496586518">Klepnutím zobrazíte výsledky vyhľadávania</translation>
@@ -940,7 +940,7 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="5308380583665731573">Pripojiť</translation>
 <translation id="5316947901395241499">Ukladanie hesiel vypol váš správca</translation>
 <translation id="5317780077021120954">Uložiť</translation>
-<translation id="5319359161174645648">Google odporúča Chrome</translation>
+<translation id="5319359161174645648">Google odporúča Ultimatum</translation>
 <translation id="5326246328175179736">Týmto účtom sa nemôžete prihlásiť</translation>
 <translation id="5327248766486351172">Názov</translation>
 <translation id="5328542107300944283">Používajte pomocou účtu <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
@@ -986,7 +986,7 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="5517326820028369152">Dolný hárok nedávnej aktivity</translation>
 <translation id="5526281268548144413">Nie je možné zavrieť vo viacerých oknách</translation>
 <translation id="5548606607480005320">Kontrola bezpečnosti</translation>
-<translation id="5554520618550346933">Ak používate heslo, Chrome vás upozorní, keď bude zverejnené na internete. Vaše heslá a používateľské mená sú pritom šifrované, aby ich nikto nemohol prečítať (ani Google).</translation>
+<translation id="5554520618550346933">Ak používate heslo, Ultimatum vás upozorní, keď bude zverejnené na internete. Vaše heslá a používateľské mená sú pritom šifrované, aby ich nikto nemohol prečítať (ani Google).</translation>
 <translation id="5555525474779371165">Výber ochrany v rámci Bezpečného prehliadania</translation>
 <translation id="5556459405103347317">Znova načítať</translation>
 <translation id="555671485580955310">Synchronizovať históriu a karty</translation>
@@ -1014,12 +1014,12 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="5657871969392618475">Vaše informácie sú zabezpečené zámkou profilu</translation>
 <translation id="5659593005791499971">E-mail</translation>
 <translation id="5665379678064389456">Vytvorte udalosť v aplikácii <ph name="APP_NAME" /></translation>
-<translation id="5683547024293500885">Chrome nemôže skontrolovať dostupnosť aktualizácií</translation>
+<translation id="5683547024293500885">Ultimatum nemôže skontrolovať dostupnosť aktualizácií</translation>
 <translation id="5683916195767086779">Skupina kariet</translation>
 <translation id="5686790454216892815">Názov súboru je príliš dlhý</translation>
-<translation id="5687606994963670306">Chrome automaticky odstraňuje weby, ktoré sú staršie ako 30 dní. Web, ktorý znova navštívite, sa môže v zozname opäť zobraziť. Prípadne môžete zablokovať navrhovanie reklám určitým webom. Prečítajte si viac o <ph name="BEGIN_LINK" />správe ochrany súkromia pri reklamách v Chrome<ph name="END_LINK" />.</translation>
+<translation id="5687606994963670306">Ultimatum automaticky odstraňuje weby, ktoré sú staršie ako 30 dní. Web, ktorý znova navštívite, sa môže v zozname opäť zobraziť. Prípadne môžete zablokovať navrhovanie reklám určitým webom. Prečítajte si viac o <ph name="BEGIN_LINK" />správe ochrany súkromia pri reklamách v Ultimatum<ph name="END_LINK" />.</translation>
 <translation id="569536719314091526">Preložte si túto stránku do ľubovoľného jazyka pomocou tlačidla Ďalšie možnosti</translation>
-<translation id="5696597120588531049">Chrome vás môže chrániť pred porušeniami ochrany údajov, nebezpečnými webmi a ďalšími hrozbami</translation>
+<translation id="5696597120588531049">Ultimatum vás môže chrániť pred porušeniami ochrany údajov, nebezpečnými webmi a ďalšími hrozbami</translation>
 <translation id="5698878456427040674">Skontrolujte, či je vybraný účet podporovaný.</translation>
 <translation id="570347048394355941">Prepnúť na kartu</translation>
 <translation id="5709213329446699338"><ph name="SITE" /> sa chce pripojiť k sériovému portu</translation>
@@ -1030,7 +1030,7 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="5728072125198221967">Prepojené služby Googlu</translation>
 <translation id="5744751019568455640">Toto sú hlasy, ktoré si môžete vybrať na čítanie webových stránok. Ak sa vám tento hlas páči a chcete ho používať, klepnite na jeho názov.</translation>
 <translation id="574845902699630049">Zdieľať ako <ph name="OWNER_FULL_NAME" /></translation>
-<translation id="5749068826913805084">Chrome potrebuje na sťahovanie súborov prístup k úložisku.</translation>
+<translation id="5749068826913805084">Ultimatum potrebuje na sťahovanie súborov prístup k úložisku.</translation>
 <translation id="5749237766298580851">Vypnuté <ph name="SEPARATOR" /> Neodporúča sa</translation>
 <translation id="5752232708629533680">Zdieľať iba gify</translation>
 <translation id="5754350196967618083">Kanál Objaviť sa nedá obnoviť</translation>
@@ -1051,7 +1051,7 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="5829586821381540080">Uložené v priečinku <ph name="FOLDER_NAME" /></translation>
 <translation id="583281660410589416">Neznáme</translation>
 <translation id="5833984609253377421">Zdieľať odkaz</translation>
-<translation id="5839058148541733625">Dinosaurus v Chrome</translation>
+<translation id="5839058148541733625">Dinosaurus v Ultimatum</translation>
 <translation id="5848257610304005265">Chcete PDF otvoriť pomocou aplikácie <ph name="APP_NAME" />?</translation>
 <translation id="5849288995120328556">Chcete zastaviť zdieľanie?</translation>
 <translation id="5853623416121554550">pozastavené</translation>
@@ -1063,9 +1063,9 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="5864419784173784555">Čaká sa na ďalší sťahovaný súbor…</translation>
 <translation id="5865733239029070421">Automaticky odosiela štatistiky o používaní a správy o zlyhaní Googlu</translation>
 <translation id="5869522115854928033">Uložené heslá</translation>
-<translation id="587735546353481577">Ak chcete sledovať určitý web, prejdite naň, otvorte Ponuku Chrome a klepnite na Sledovať.</translation>
+<translation id="587735546353481577">Ak chcete sledovať určitý web, prejdite naň, otvorte Ponuku Ultimatum a klepnite na Sledovať.</translation>
 <translation id="5883855034004058011">Overenie biometriou sa nepodarilo príliš veľakrát. Ak to chcete skúsiť znova, zamknite a odomknite zariadenie.</translation>
-<translation id="5885378508678660271">Upozornenia <ph name="SEPARATOR" /> Chrome odstránil tieto povolenia, pretože tento web je nebezpečný</translation>
+<translation id="5885378508678660271">Upozornenia <ph name="SEPARATOR" /> Ultimatum odstránil tieto povolenia, pretože tento web je nebezpečný</translation>
 <translation id="5895834791314695851">Heslá v tomto zariadení možno čoskoro prestanú fungovať. Ak chcete svoje heslá ďalej používať, aktualizujte Služby Google Play. <ph name="BEGIN_LINK" />Ďalšie informácie<ph name="END_LINK" /></translation>
 <translation id="5899667542927581604">Hárok so žiadnymi prístupovými kľúčmi bol zavretý</translation>
 <translation id="5907542076239273525">Záložka bola uložená do priečinka <ph name="FOLDER_NAME" /></translation>
@@ -1076,7 +1076,7 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="5942872142862698679">Na vyhľadávanie sa používa Google</translation>
 <translation id="5945035219773565305">Aktuálne odporúčanie: <ph name="RECOMMENDATION" /></translation>
 <translation id="5951119116059277034">Je zobrazená zverejnená stránka</translation>
-<translation id="5956665950594638604">Otvorenie Centra pomoci prehliadača Chrome na novej karte</translation>
+<translation id="5956665950594638604">Otvorenie Centra pomoci prehliadača Ultimatum na novej karte</translation>
 <translation id="59577092665511740">Vyberte účet.</translation>
 <translation id="5958275228015807058">Nájdite stiahnuté súbory a stránky</translation>
 <translation id="5958994127112619898">Zjednodušiť stránku</translation>
@@ -1085,13 +1085,13 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="5977976211062815271">V tomto zariadení</translation>
 <translation id="5978661847409534366">{ITEMS_COUNT,plural, =1{1 stránka vo vašom čitateľskom zozname}few{# stránky vo vašom čitateľskom zozname}many{# pages on your reading list}other{# stránok vo vašom čitateľskom zozname}}</translation>
 <translation id="5979084224081478209">Skontrolovať heslá</translation>
-<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Chrome odstránil tieto povolenia, pretože ste daný web v poslednom čase nenavštívili</translation>
+<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Ultimatum odstránil tieto povolenia, pretože ste daný web v poslednom čase nenavštívili</translation>
 <translation id="5995726099713306770">Chcete stránku znova stiahnuť?</translation>
 <translation id="6000066717592683814">Ponechať Google</translation>
 <translation id="6000203700195075278">Znova sledovať</translation>
 <translation id="6011308810877101166">Zlepšovať návrhy vyhľadávania</translation>
 <translation id="6013305291643746595">Zoraďuje sa od najstarších</translation>
-<translation id="6022659036123304283">Upravte si Chrome podľa seba</translation>
+<translation id="6022659036123304283">Upravte si Ultimatum podľa seba</translation>
 <translation id="6026538407078977628">Rozbaliť na celú obrazovku</translation>
 <translation id="6030719887161080597">Správa informácií, pomocou ktorých merajú weby výkonnosť reklám</translation>
 <translation id="6039379616847168523">Prechod na ďalšiu kartu</translation>
@@ -1125,7 +1125,7 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="6146563240635539929">Videá</translation>
 <translation id="614890671148262506">Vždy povoliť upozornenia z tohto webu</translation>
 <translation id="6150320133806434356">Záložka bola uložená</translation>
-<translation id="6150706324143004339">Ak chcete používať a ukladať údaje Chromu vo svojom účte Google, aktualizujte Chrome</translation>
+<translation id="6150706324143004339">Ak chcete používať a ukladať údaje Chromu vo svojom účte Google, aktualizujte Ultimatum</translation>
 <translation id="6154478581116148741">Ak chcete exportovať heslá z tohto zariadenia, zapnite v Nastaveniach zámku obrazovky</translation>
 <translation id="6156323911414505561">Zobrazovať panel so záložkami</translation>
 <translation id="6162892189396105610">Prednačítava stránky, ktoré podľa Chromu pravdepodobne navštívite.</translation>
@@ -1135,7 +1135,7 @@ Váš účet Google môže mať na adrese <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="6193448654517602979">Vyberte karty</translation>
 <translation id="6196315980958524839">Heslá sa ukladajú do Správcu hesiel Google v tomto zariadení.</translation>
 <translation id="6202812185118613467">Ak chcete spustiť synchronizáciu, znova sa prihláste</translation>
-<translation id="6204781143409202534">Chrome zistil možný spam z webu <ph name="DOMAIN" />.</translation>
+<translation id="6204781143409202534">Ultimatum zistil možný spam z webu <ph name="DOMAIN" />.</translation>
 <translation id="6205314730813004066">Ochrana súkromia pri reklamách</translation>
 <translation id="6210748933810148297">Nie som <ph name="EMAIL" /></translation>
 <translation id="6211386937064921208">Je zobrazená ukážka tejto stránky</translation>
@@ -1202,22 +1202,22 @@ Niektoré weby môžu napríklad na túto žiadosť reagovať tak, že vám zobr
 <translation id="6452534462676960500">Nová aktivita</translation>
 <translation id="6459045781120991510">Prieskumy</translation>
 <translation id="6461962085415701688">Súbor sa nedá otvoriť</translation>
-<translation id="6464977750820128603">Môžete si zobraziť weby, ktoré navštevujete v Chrome, a nastaviť pre ne časovače.\n\nGoogle získa informácie o weboch, pre ktoré nastavíte časovače, a údaje o tom, koľko času na nich strávite. Tieto informácie sa použijú na zlepšenie digitálnej rovnováhy.</translation>
+<translation id="6464977750820128603">Môžete si zobraziť weby, ktoré navštevujete v Ultimatum, a nastaviť pre ne časovače.\n\nGoogle získa informácie o weboch, pre ktoré nastavíte časovače, a údaje o tom, koľko času na nich strávite. Tieto informácie sa použijú na zlepšenie digitálnej rovnováhy.</translation>
 <translation id="6468703991511753953">Panel s adresou je momentálne dole</translation>
-<translation id="6470181189905173055">Tu sa budú zobrazovať stránky, ktoré ste otvorili v Chrome pri používaní aplikácie <ph name="APP_LABEL" />.</translation>
+<translation id="6470181189905173055">Tu sa budú zobrazovať stránky, ktoré ste otvorili v Ultimatum pri používaní aplikácie <ph name="APP_LABEL" />.</translation>
 <translation id="6473086018775716761">Zoznam možností zdieľania je otvorený na polovičnú výšku.</translation>
 <translation id="6475951671322991020">Stiahnuť video</translation>
 <translation id="6477928892249167417">Tieto weby zrejme považujete za dôležité:</translation>
-<translation id="6481963882741794338">Prepojte Chrome a ďalšie služby Googlu na prispôsobenie a ďalšie účely</translation>
+<translation id="6481963882741794338">Prepojte Ultimatum a ďalšie služby Googlu na prispôsobenie a ďalšie účely</translation>
 <translation id="6482749332252372425">Súbor <ph name="FILE_NAME" /> sa nepodarilo stiahnuť z dôvodu nedostatku voľného miesta v úložisku.</translation>
 <translation id="6486420406192123355">Tento súbor PDF pochádza z webu s nezabezpečeným pripojením</translation>
 <translation id="650224091954855786">{FILE_COUNT,plural, =1{Súbor bol stiahnutý}few{Boli stiahnuté # súbory}many{# downloads complete}other{Bolo stiahnutých # súborov}}</translation>
-<translation id="6508722015517270189">Reštartovať Chrome</translation>
+<translation id="6508722015517270189">Reštartovať Ultimatum</translation>
 <translation id="6513924416597632811">Skopírovať odkaz na stránku s výsledkami vyhľadávania pre dopyt <ph name="SEARCH_QUERY" />. Zdroj: <ph name="PAGE_URL" />.</translation>
 <translation id="6518133107902771759">Overiť</translation>
 <translation id="6527303717912515753">Zdieľať</translation>
 <translation id="652948702951888897">História Chromu</translation>
-<translation id="6532866250404780454">Weby, ktoré navštívite v Chrome, sa nezobrazia. Odstránia sa všetky časovače webov.</translation>
+<translation id="6532866250404780454">Weby, ktoré navštívite v Ultimatum, sa nezobrazia. Odstránia sa všetky časovače webov.</translation>
 <translation id="6539092367496845964">Vyskytol sa problém. Skúste to neskôr.</translation>
 <translation id="6541983376925655882">{NUM_HOURS,plural, =1{Kontrola prebehla pred hodinou}few{Kontrola prebehla pred # hodinami}many{Kontrola prebehla pred # hodiny}other{Kontrola prebehla pred # hodinami}}</translation>
 <translation id="6545017243486555795">Vymazať všetky dáta</translation>
@@ -1226,12 +1226,12 @@ Niektoré weby môžu napríklad na túto žiadosť reagovať tak, že vám zobr
 <translation id="6556542240154580383">{TAB_COUNT,plural, =1{<ph name="TAB_TITLE" /> a <ph name="TAB_COUNT_ONE" /> ďalšia karta budú zavreté}few{<ph name="TAB_TITLE" /> a <ph name="TAB_COUNT_MANY" /> ďalšie karty budú zavreté}many{<ph name="TAB_TITLE" /> and <ph name="TAB_COUNT_MANY" /> more tabs will be closed}other{<ph name="TAB_TITLE" /> a <ph name="TAB_COUNT_MANY" /> ďalších kariet budú zavreté}}</translation>
 <translation id="6560414384669816528">Vyhľadávať pomocou Sogou</translation>
 <translation id="656065428026159829">Zobraziť viac</translation>
-<translation id="6564820424018738527">Vaše zariadenie s Androidom môže mať podobné nastavenie. Ak máte v Chrome a zariadení s Androidom zapnuté meranie reklám, príslušná firma môže merať účinnosť reklamy na weboch, ktoré navštevujete, aj v aplikáciách, ktoré používate.</translation>
+<translation id="6564820424018738527">Vaše zariadenie s Androidom môže mať podobné nastavenie. Ak máte v Ultimatum a zariadení s Androidom zapnuté meranie reklám, príslušná firma môže merať účinnosť reklamy na weboch, ktoré navštevujete, aj v aplikáciách, ktoré používate.</translation>
 <translation id="6565959834589222080">Wi-Fi sa použije, keď bude k dispozícii</translation>
 <translation id="6569373978618239158">Keď teraz otvoríte novú kartu, budú sa vám zobrazovať príbehy z webu <ph name="SITE_NAME" />. Weby, ktoré sledujete, sa ukladajú do vášho účtu Google. Môžete ich spravovať v nastaveniach kanála Objaviť.</translation>
 <translation id="657177046675873214">Ak chcete mať záložky vo všetkých zariadeniach, zapnite v nastaveniach Záložky</translation>
 <translation id="6573096386450695060">Vždy povoliť</translation>
-<translation id="6573431926118603307">Tu sa zobrazia karty, ktoré ste otvorili v Chrome na iných zariadeniach.</translation>
+<translation id="6573431926118603307">Tu sa zobrazia karty, ktoré ste otvorili v Ultimatum na iných zariadeniach.</translation>
 <translation id="6583199322650523874">Pridanie aktuálnej stránky medzi záložky</translation>
 <translation id="6588043302623806746">Používať zabezpečené DNS</translation>
 <translation id="6590471736817333463">Ušetrite až 60 % dát</translation>
@@ -1245,7 +1245,7 @@ Niektoré weby môžu napríklad na túto žiadosť reagovať tak, že vám zobr
 <translation id="6627583120233659107">Upraviť priečinok</translation>
 <translation id="6633067410344541938">Odblokovať režim inkognito</translation>
 <translation id="6636623428211296678">Preskúmajte ďalšie nastavenia nižšie alebo dokončite kontrolu</translation>
-<translation id="6637100877383020115">Na účely zlepšovania aplikácie odosiela Chrome údaje o využití a pádoch Googlu. <ph name="BEGIN_UMA_LINK" />Spravovať<ph name="END_UMA_LINK" /></translation>
+<translation id="6637100877383020115">Na účely zlepšovania aplikácie odosiela Ultimatum údaje o využití a pádoch Googlu. <ph name="BEGIN_UMA_LINK" />Spravovať<ph name="END_UMA_LINK" /></translation>
 <translation id="6640207029842583248">Blokovať neustále</translation>
 <translation id="6641780377503683465">Odstrániť <ph name="INTEREST" /></translation>
 <translation id="6647441008198474441">Webové adresy, ktoré navštevujete, sa odosielajú Googlu, aby mohol vytvárať predpokladané dopyty webov, ktoré pravdepodobne navštívite</translation>
@@ -1257,8 +1257,8 @@ Niektoré weby môžu napríklad na túto žiadosť reagovať tak, že vám zobr
 <translation id="6672697278890207089">Zadajte svoju prístupovú frázu</translation>
 <translation id="6672917148207387131">Pridať <ph name="DOMAIN" /></translation>
 <translation id="6674571176963658787">Ak chcete spustiť synchronizáciu, zadajte prístupovú frázu</translation>
-<translation id="6676927815633975364">Prihlásiť sa na tomto webe a v Chrome</translation>
-<translation id="6684809838922667136">Zlepšite Chrome</translation>
+<translation id="6676927815633975364">Prihlásiť sa na tomto webe a v Ultimatum</translation>
+<translation id="6684809838922667136">Zlepšite Ultimatum</translation>
 <translation id="6700279777779583398">Vybrané možnosti boli uložené</translation>
 <translation id="6704048624334633734">Export a odstránenie hesiel</translation>
 <translation id="670498945988402717">Kontrola prebehla včera</translation>
@@ -1269,7 +1269,7 @@ Niektoré weby môžu napríklad na túto žiadosť reagovať tak, že vám zobr
 <translation id="6723740634201835758">V účte Google</translation>
 <translation id="6734310707649923383">Môžete si zobraziť stránky, ktoré ste navštívili, alebo ich odstrániť z histórie</translation>
 <translation id="6738867403308150051">Sťahuje sa...</translation>
-<translation id="674388916582496364">Je bežné, že navštívené weby si pamätajú veci, ktoré vás zaujímajú, aby vám mohli prispôsobiť prostredie. Weby môžu v Chrome ukladať aj údaje o vašich záujmoch.</translation>
+<translation id="674388916582496364">Je bežné, že navštívené weby si pamätajú veci, ktoré vás zaujímajú, aby vám mohli prispôsobiť prostredie. Weby môžu v Ultimatum ukladať aj údaje o vašich záujmoch.</translation>
 <translation id="6746338529702829275">Prezrite si údaje účtu</translation>
 <translation id="6751521182688001123">Skratka na rýchle otvorenie novej karty. Ak ju chcete upraviť, pridržte ju.</translation>
 <translation id="6756507620369789050">Odoslať spätnú väzbu</translation>
@@ -1277,9 +1277,9 @@ Niektoré weby môžu napríklad na túto žiadosť reagovať tak, že vám zobr
 <translation id="676305334223455055">Ak chcete získavať obsah na základe záujmov, prihláste sa</translation>
 <translation id="6764137532716892442">Zdieľaná skupina kariet <ph name="GROUP_TITLE" /> s novou aktivitou</translation>
 <translation id="6767294960381293877">Zoznam zariadení, s ktorými sa má zdieľať karta, je otvorený na polovičnú výšku.</translation>
-<translation id="6785476624617658922">Dodatočné zmluvné podmienky prehliadača Chrome a systému Chrome OS</translation>
+<translation id="6785476624617658922">Dodatočné zmluvné podmienky prehliadača Ultimatum a systému Ultimatum OS</translation>
 <translation id="6795633245022906657">Skratka na rýchle otvorenie novej karty. Ak chcete skratku upraviť, prejdite do Nastavení.</translation>
-<translation id="679588508577699489">Nastavte si Chrome ako predvolený prehliadač</translation>
+<translation id="679588508577699489">Nastavte si Ultimatum ako predvolený prehliadač</translation>
 <translation id="679956319013005046">Ak chcete nastaviť preferovanú službu automatického dopĺňania, najprv ju pridajte v <ph name="BEGIN_LINK" />Nastaveniach Androidu<ph name="END_LINK" />.</translation>
 <translation id="6802555630140434547">Okno bude zavreté</translation>
 <translation id="6803791793483522764">Kontrola upozornení</translation>
@@ -1326,7 +1326,7 @@ Niektoré weby môžu napríklad na túto žiadosť reagovať tak, že vám zobr
 <translation id="6909589135458168665">Prednačítavanie stránok</translation>
 <translation id="6910211073230771657">Odstránené</translation>
 <translation id="6918398787259831832">Ak sa tento problém opakuje, získajte <ph name="BEGIN_LINK" />ďalšie informácie<ph name="END_LINK" /> od poskytovateľa <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Chrome odstránil tieto povolenia, pretože ste daný web v poslednom čase nenavštívili</translation>
+<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Ultimatum odstránil tieto povolenia, pretože ste daný web v poslednom čase nenavštívili</translation>
 <translation id="6927821422725196292">{TABS_COUNT,plural, =1{1 karta}few{<ph name="NUMBER_OF_TABS" /> karty}many{<ph name="NUMBER_OF_TABS" /> tabs}other{<ph name="NUMBER_OF_TABS" /> kariet}}</translation>
 <translation id="6929224077895306814">Všetky bezpečnostné kódy uložené vo vašom zariadení a účte Google budú odstránené</translation>
 <translation id="6937524809504266803">Prispôsobenie a prepojenie</translation>
@@ -1363,9 +1363,9 @@ Niektoré weby môžu napríklad na túto žiadosť reagovať tak, že vám zobr
 <translation id="7077143737582773186">SD karta</translation>
 <translation id="7078916049958741685">Odstrániť aj údaje Chromu z tohto zariadenia</translation>
 <translation id="7085332316435785646">Vyberte, či sa má zahrnúť história Chromu na zaistenie prispôsobenejšieho prostredia v službách Googlu</translation>
-<translation id="7088681679121566888">Chrome je aktuálny</translation>
+<translation id="7088681679121566888">Ultimatum je aktuálny</translation>
 <translation id="7106762743910369165">Prehliadač je spravovaný vašou organizáciou</translation>
-<translation id="7111394291981742152">Chrome vám poskytuje väčšiu kontrolu nad reklamami, ktoré vidíte, a obmedzuje, čo sa o vás weby môžu dozvedieť, keď vám zobrazujú prispôsobené reklamy.</translation>
+<translation id="7111394291981742152">Ultimatum vám poskytuje väčšiu kontrolu nad reklamami, ktoré vidíte, a obmedzuje, čo sa o vás weby môžu dozvedieť, keď vám zobrazujú prispôsobené reklamy.</translation>
 <translation id="7117485132243600300">Spravujte sledovaný obsah a navrhované témy aj vyhľadávania</translation>
 <translation id="7136902389402789299">{NUM_SITES,plural, =1{Boli skontrolované povolenia pre 1 web}few{Boli skontrolované povolenia pre # weby}many{Permissions reviewed for # sites}other{Boli skontrolované povolenia pre # webov}}</translation>
 <translation id="7138678301420049075">Ostatné</translation>
@@ -1390,16 +1390,16 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="7192397795254933433">{NUM_PASSWORDS,plural, =1{Mali by ste si ho okamžite zmeniť}few{Mali by ste ich okamžite zmeniť}many{You should change these now}other{Mali by ste ich okamžite zmeniť}}</translation>
 <translation id="7196215469483532480">Vysvetlenie sprievodcu ochranou súkromia je otvorené na celú výšku</translation>
 <translation id="7207760545532569765">Obnovte karty (<ph name="TAB_COUNT" />) ako nové karty na pozadí.</translation>
-<translation id="7217781228893594884">Keď opustíte Chrome, karty inkognito budú uzamknuté</translation>
+<translation id="7217781228893594884">Keď opustíte Ultimatum, karty inkognito budú uzamknuté</translation>
 <translation id="7221869452894271364">Obnoviť túto stránku</translation>
-<translation id="7224097611345298931">Všetky heslá uložené iba v tomto zariadení pre Chrome a <ph name="CHROME_CHANNEL" /> boli zlúčené. Všetky svoje uložené heslá môžete naďalej automaticky dopĺňať v oboch aplikáciách.</translation>
+<translation id="7224097611345298931">Všetky heslá uložené iba v tomto zariadení pre Ultimatum a <ph name="CHROME_CHANNEL" /> boli zlúčené. Všetky svoje uložené heslá môžete naďalej automaticky dopĺňať v oboch aplikáciách.</translation>
 <translation id="7227218174981371415">{FILE_COUNT,plural, =1{Na stiahnutie čaká 1 položka}few{Na stiahnutie čakajú # položky}many{# downloads pending}other{Na stiahnutie čaká # položiek}}</translation>
 <translation id="7230064152164845085">Prepnúť na inkognito</translation>
 <translation id="7236515828900885295">Prechod na vyhľadávanie</translation>
 <translation id="7237724030342645845">Správca hesiel Google prestal fungovať</translation>
 <translation id="72415438529550637">Návrh hesla je zavretý</translation>
 <translation id="7248671827512403053">Aplikácia</translation>
-<translation id="7260367682327802201">Zariadenie s Androidom môže mať podobné nastavenie. Ak máte v Chrome a zariadení s Androidom zapnuté meranie reklám, príslušná firma môže merať účinnosť reklamy na weboch, ktoré navštevujete, aj v aplikáciách, ktoré používate.</translation>
+<translation id="7260367682327802201">Zariadenie s Androidom môže mať podobné nastavenie. Ak máte v Ultimatum a zariadení s Androidom zapnuté meranie reklám, príslušná firma môže merať účinnosť reklamy na weboch, ktoré navštevujete, aj v aplikáciách, ktoré používate.</translation>
 <translation id="727288900855680735">Chcete odoslať kód <ph name="ONE_TIME_CODE" /> do zdroja <ph name="ORIGIN" />?</translation>
 <translation id="7274013316676448362">Blokovaný web</translation>
 <translation id="7276868533747677875">Ak ste v minulosti exportovali heslá, vyhľadajte v zariadení súbor CSV a importujte ich do svojho preferovaného správcu hesiel.</translation>
@@ -1409,9 +1409,9 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="7291910923717764901">Pre túto stránku boli pridané popisy obrázkov</translation>
 <translation id="7293429513719260019">Vybrať jazyk</translation>
 <translation id="729975465115245577">Vaše zariadenie nemá aplikáciu na uloženie súboru s heslami.</translation>
-<translation id="7304072650267745798">Vaše zariadenie s Androidom môže mať podobné nastavenie. Ak je toto nastavenie v Chrome a zariadení s Androidom zapnuté, príslušná firma môže merať účinnosť reklamy na weboch, ktoré navštevujete, aj v aplikáciách, ktoré používate.</translation>
+<translation id="7304072650267745798">Vaše zariadenie s Androidom môže mať podobné nastavenie. Ak je toto nastavenie v Ultimatum a zariadení s Androidom zapnuté, príslušná firma môže merať účinnosť reklamy na weboch, ktoré navštevujete, aj v aplikáciách, ktoré používate.</translation>
 <translation id="7304806746406660416">{PASSWORDS_COUNT,plural, =1{1 heslo je uložené iba v tomto zariadení. Ak ho chcete používať v ďalších zariadeniach, uložte si ho do účtu Google <ph name="ACCOUNT_EMAIL" />.}few{# heslá sú uložené iba v tomto zariadení. Ak ich chcete používať v ďalších zariadeniach, uložte si ich do účtu Google <ph name="ACCOUNT_EMAIL" />.}many{# passwords are saved only to this device. To use them on your other devices, save them in your Google Account, <ph name="ACCOUNT_EMAIL" />.}other{# hesiel je uložených iba v tomto zariadení. Ak ich chcete používať v ďalších zariadeniach, uložte si ich do účtu Google <ph name="ACCOUNT_EMAIL" />.}}</translation>
-<translation id="7304873321153398381">Offline. Chrome nemôže skontrolovať heslá.</translation>
+<translation id="7304873321153398381">Offline. Ultimatum nemôže skontrolovať heslá.</translation>
 <translation id="7313188324932846546">Klepnutím nastavte synchronizáciu</translation>
 <translation id="7314734791127433392">Heslá sa nepodarilo skontrolovať</translation>
 <translation id="7324354302972299151">Odoslanie žiadosti Do Not Track</translation>
@@ -1490,7 +1490,7 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="7612989789287281429">Prihlasuje sa…</translation>
 <translation id="7619072057915878432">Súbor <ph name="FILE_NAME" /> sa nepodarilo stiahnuť z dôvodu problémov so sieťou.</translation>
 <translation id="762537095495606755">Heslá v tomto zariadení prestanú fungovať</translation>
-<translation id="7626032353295482388">Víta vás prehliadač Chrome</translation>
+<translation id="7626032353295482388">Víta vás prehliadač Ultimatum</translation>
 <translation id="7628417132421583481">Prejsť do Správcu hesiel</translation>
 <translation id="7630202231528827509">Webová adresa poskytovateľa</translation>
 <translation id="7638584964844754484">Nesprávna prístupová fráza</translation>
@@ -1505,7 +1505,7 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="7666185984446444960"><ph name="TAB_GROUPS_AND_TABS_PART" /> boli zavreté</translation>
 <translation id="7682724950699840886">Skúste tieto tipy: Uistite sa, že máte v zariadení dosť miesta, a potom skúste znova spustiť exportovanie.</translation>
 <translation id="7686086654630106285">Ďalšie informácie o reklamách navrhovaných webmi</translation>
-<translation id="7690596512217303514">Chrome sa nepodarilo vo vašom zariadení otvoriť. Ak chcete tento problém vyriešiť, stiahnite si z obchodu s aplikáciami jeho najnovšiu aktualizáciu.</translation>
+<translation id="7690596512217303514">Ultimatum sa nepodarilo vo vašom zariadení otvoriť. Ak chcete tento problém vyriešiť, stiahnite si z obchodu s aplikáciami jeho najnovšiu aktualizáciu.</translation>
 <translation id="7691043218961417207">Pozrite si obsah na sledovanie</translation>
 <translation id="7692761875510935111">Rýchlo otvorte v prehliadači. Ak chcete túto skratku upraviť, pridržte ju.</translation>
 <translation id="7697383401610880082">Presúvadlo</translation>
@@ -1547,7 +1547,7 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="7866213166286285359">Tu preložíte stránky</translation>
 <translation id="7875915731392087153">Vytvorte správu</translation>
 <translation id="7876243839304621966">Odstrániť všetko</translation>
-<translation id="7886917304091689118">Spustená v Chrome</translation>
+<translation id="7886917304091689118">Spustená v Ultimatum</translation>
 <translation id="7887174313503389866">Pozrite si komentovanú prehliadku hlavných ovládacích prvkov ochrany súkromia a zabezpečenia. Ďalšie možnosti nájdete v jednotlivých nastaveniach.</translation>
 <translation id="7907478394153853634">Lorem Ipsum</translation>
 <translation id="7913993612870913335">{FILE_COUNT,plural, =1{1 bol zablokovaný vašou organizáciou}few{# boli zablokované vašou organizáciou}many{# were blocked by your organization}other{# bolo zablokovaných vašou organizáciou}}</translation>
@@ -1556,7 +1556,7 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="7919123827536834358">Automaticky prekladať tieto jazyky</translation>
 <translation id="7921782882718083488">Zhrnúť túto stránku</translation>
 <translation id="7926975587469166629">Prezývka karty</translation>
-<translation id="7929587383660661825">Chrome automaticky odstraňuje povolenia z webov, ktoré zneužívajú upozornenia, alebo z takých, ktoré ste v poslednom čase nenavštívili.</translation>
+<translation id="7929587383660661825">Ultimatum automaticky odstraňuje povolenia z webov, ktoré zneužívajú upozornenia, alebo z takých, ktoré ste v poslednom čase nenavštívili.</translation>
 <translation id="7929962904089429003">Otvorenie ponuky</translation>
 <translation id="7934668619883965330">Súbor sa nedá stiahnuť. Formát súboru nie je podporovaný.</translation>
 <translation id="7942131818088350342">Aplikácia <ph name="PRODUCT_NAME" /> je zastaraná.</translation>
@@ -1573,7 +1573,7 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="7975379999046275268">Zobraziť ukážku stránky <ph name="BEGIN_NEW" />Novinka<ph name="END_NEW" /></translation>
 <translation id="7977451675950311423">Upozorní vás, keď použijete heslo, ktoré bolo prezradené v rámci porušenia ochrany údajov.</translation>
 <translation id="7986497153528221272">Ak si chcete zobraziť heslá, najprv v zariadení nastavte zámku obrazovky</translation>
-<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Chrome odstránil tieto povolenia, pretože ste daný web v poslednom čase nenavštívili</translation>
+<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Ultimatum odstránil tieto povolenia, pretože ste daný web v poslednom čase nenavštívili</translation>
 <translation id="7995059495660416932">Obsah sa zobrazí, keď bude k dispozícii</translation>
 <translation id="799576009106109668">Prehliadanie sa zrýchli, pretože obsah bude proaktívne načítaný na základe vašej návštevy aktuálnej webovej stránky</translation>
 <translation id="8001245658307297681">Prezeráte si miestny súbor</translation>
@@ -1590,7 +1590,7 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="804335162455518893">SD karta sa nenašla</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> karta inkognito}few{<ph name="TAB_COUNT_NORMAL" /> karty inkognito}many{<ph name="TAB_COUNT_NORMAL" /> incognito tabs}other{<ph name="TAB_COUNT_NORMAL" /> kariet inkognito}}</translation>
 <translation id="8051695050440594747"><ph name="MEGABYTES" /> MB k dispozícii</translation>
-<translation id="8058746566562539958">Otvoriť v Chrome na novej karte</translation>
+<translation id="8058746566562539958">Otvoriť v Ultimatum na novej karte</translation>
 <translation id="8062594758852531064">Rozšírené prednačítavanie:</translation>
 <translation id="8063895661287329888">Záložku sa nepodarilo pridať.</translation>
 <translation id="8066816452984416180">Rýchlo si uložte túto stránku ako záložku. Ak chcete túto skratku upraviť, pridržte ju.</translation>
@@ -1606,11 +1606,11 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="8090732854597034573">Ak potrebuješ pomoc, požiadaj rodiča</translation>
 <translation id="8101414242770404289">Žiadne karty z obdobia <ph name="TIME_PERIOD" /></translation>
 <translation id="8103578431304235997">Karta inkognito</translation>
-<translation id="8105613260829665809">Pokračovaním vyjadrujete súhlas so <ph name="BEGIN_TOS_LINK" />zmluvnými podmienkami<ph name="END_TOS_LINK" />.\nChrome odosiela Googlu údaje o používaní a pádoch, čím pomáha aplikáciu zlepšovať. <ph name="BEGIN_UMA_LINK" />Spravovať<ph name="END_UMA_LINK" /></translation>
+<translation id="8105613260829665809">Pokračovaním vyjadrujete súhlas so <ph name="BEGIN_TOS_LINK" />zmluvnými podmienkami<ph name="END_TOS_LINK" />.\nUltimatum odosiela Googlu údaje o používaní a pádoch, čím pomáha aplikáciu zlepšovať. <ph name="BEGIN_UMA_LINK" />Spravovať<ph name="END_UMA_LINK" /></translation>
 <translation id="8105893657415066307"><ph name="DESCRIPTION" /> <ph name="SEPARATOR" /> <ph name="FILE_SIZE" /></translation>
 <translation id="8107530384992929318">Zavrieť možnosti zoradenia</translation>
 <translation id="8110024788458304985">Pomáhať zlepšovať funkcie a výkonnosť Chromu</translation>
-<translation id="8110087112193408731">Chcete v digitálnej rovnováhe zobrazovať svoju aktivitu v Chrome?</translation>
+<translation id="8110087112193408731">Chcete v digitálnej rovnováhe zobrazovať svoju aktivitu v Ultimatum?</translation>
 <translation id="8118117428362942925">Ak potrebuješ pomoc, požiadaj rodiča (<ph name="PARENT_NAME" />)</translation>
 <translation id="8120286190326371840">V tomto zariadení nie sú žiadne odhalené heslá</translation>
 <translation id="8122623268651408616">Zoraďuje sa od najnovších</translation>
@@ -1633,7 +1633,7 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="8211101263765532799">Niektoré heslá čoskoro prestanú fungovať</translation>
 <translation id="8215740705341534369">Bočný hárok</translation>
 <translation id="8218622182176210845">Spravujte svoj účet</translation>
-<translation id="8221401890884589479">Nechcené weby môžete blokovať. Chrome okrem toho automaticky odstraňuje zo zoznamu weby, ktoré sú staršie ako 30 dní. <ph name="BEGIN_LINK" />Ďalšie informácie<ph name="END_LINK" /></translation>
+<translation id="8221401890884589479">Nechcené weby môžete blokovať. Ultimatum okrem toho automaticky odstraňuje zo zoznamu weby, ktoré sú staršie ako 30 dní. <ph name="BEGIN_LINK" />Ďalšie informácie<ph name="END_LINK" /></translation>
 <translation id="8221985041778490865">Odstraňujú sa dáta prehliadania</translation>
 <translation id="8223642481677794647">Ponuka karty feedu</translation>
 <translation id="82296173028782770">Upraviť vyhľadávací dopyt <ph name="SEARCH_QUERY" /></translation>
@@ -1643,7 +1643,7 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="8244387390464017490">Upraviť stránku Nová karta</translation>
 <translation id="8250920743982581267">Dokumenty</translation>
 <translation id="8255617931166444521">Weby môžu pomocou vašich súborov cookie zobrazovať iba vašu aktivitu prehliadania na nich</translation>
-<translation id="8256087213273124136">Chrome zrušil váš odber upozornení</translation>
+<translation id="8256087213273124136">Ultimatum zrušil váš odber upozornení</translation>
 <translation id="8258999165172757081">Pridané</translation>
 <translation id="8259179246279078674">Prednačítavané stránky sú šifrované, takže Google nezistí nič o ich obsahu. Servery Googlu budú mať k dispozícii informáciu, ktoré weby sú súkromne prednačítavané. Bude slúžiť iba na prednačítanie stránok, ale nebude spojená z ďalšími informáciami z vášho účtu Google.</translation>
 <translation id="8260126382462817229">Skúste sa znova prihlásiť</translation>
@@ -1661,7 +1661,7 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="831192587911042850">Týmto pridáte aktuálny web na zoznam sledovaných webov.</translation>
 <translation id="8320212361750431956">Nedávna aktivita</translation>
 <translation id="832514020744584629"><ph name="PREF_TITLE" />  <ph name="BEGIN_NEW" />Nové<ph name="END_NEW" /></translation>
-<translation id="8342727528718219152">Chrome vás bude informovať o weboch, ktoré môžu odosielať priveľa upozornení</translation>
+<translation id="8342727528718219152">Ultimatum vás bude informovať o weboch, ktoré môžu odosielať priveľa upozornení</translation>
 <translation id="834313815369870491">Nikdy neprekladať weby</translation>
 <translation id="8348430946834215779">Používajte protokol HTTPS vždy, keď je to možné, a dostávajte upozornenia pred načítaním webov, ktoré ho nepodporujú</translation>
 <translation id="8354977102499939946">Skratka na rýchle vyhľadávanie hlasom. Ak ju chcete upraviť, prejdite do Nastavení.</translation>
@@ -1675,7 +1675,7 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="8398389123831319859">Dvojitým klepnutím a pridržaním prepnete do režimu inkognito</translation>
 <translation id="8402673309244746971">Prejsť na Sledované</translation>
 <translation id="8413126021676339697">Zobraziť celú históriu</translation>
-<translation id="8413795581997394485">Chráni pred nebezpečnými webmi, súbormi na stiahnutie a rozšíreniami. Keď navštívite určitý web, Chrome odošle Googlu znejasnenú časť webovej adresy prostredníctvom servera chrániaceho súkromie, ktorý skryje vašu adresu IP. Ak určitý web vykoná niečo podozrivé, odošlú sa aj úplné webové adresy a časti obsahu stránok.</translation>
+<translation id="8413795581997394485">Chráni pred nebezpečnými webmi, súbormi na stiahnutie a rozšíreniami. Keď navštívite určitý web, Ultimatum odošle Googlu znejasnenú časť webovej adresy prostredníctvom servera chrániaceho súkromie, ktorý skryje vašu adresu IP. Ak určitý web vykoná niečo podozrivé, odošlú sa aj úplné webové adresy a časti obsahu stránok.</translation>
 <translation id="8414396119627470038">Prihláste sa na webe <ph name="SITE_ETLD_PLUS_ONE" /> pomocou poskytovateľa <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8419144699778179708">Odstráni históriu, aj vo vyhľadávacom poli</translation>
 <translation id="8419244640277402268">Zahŕňať</translation>
@@ -1688,7 +1688,7 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="8438566539970814960">Zlepšovať vyhľadávanie a prehliadanie</translation>
 <translation id="8439974325294139057"><ph name="LANG" /> – jazyk je k dispozícii. Reštartujte <ph name="APP_NAME" />.</translation>
 <translation id="8442258441309440798">K dispozícii nie sú žiadne príbehy</translation>
-<translation id="8443209985646068659">Chrome sa nedá aktualizovať</translation>
+<translation id="8443209985646068659">Ultimatum sa nedá aktualizovať</translation>
 <translation id="8445448999790540984">Heslá sa nepodarilo exportovať</translation>
 <translation id="8446884382197647889">Ďalšie informácie</translation>
 <translation id="8449781591250785734">{NUM_SITES,plural, =1{Boli odstránené povolenia 1 webu}few{Boli odstránené povolenia # webom}many{Permissions removed from # sites}other{Boli odstránené povolenia # webom}}</translation>
@@ -1709,7 +1709,7 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="8505766168025405649">Pozrite si stav sťahovania v upozornení</translation>
 <translation id="8506357771923193001">Tu nájdete svoje stiahnuté súbory</translation>
 <translation id="8512053371384421952">Už nebudete dostávať upozornenia z domény <ph name="DOMAIN" />.</translation>
-<translation id="8514477925623180633">Exportovať heslá uložené v Chrome</translation>
+<translation id="8514477925623180633">Exportovať heslá uložené v Ultimatum</translation>
 <translation id="8516012719330875537">Editor obrázkov</translation>
 <translation id="8523928698583292556">Odstrániť uložené heslo</translation>
 <translation id="8526855376374973824">Postup povolenia posielať upozornenia</translation>
@@ -1719,7 +1719,7 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="8547025137714087639">{ARCHIVED_TAB_COUNT,plural, =1{Neaktívna karta (1)}few{Neaktívne karty (#)}many{Inactive tabs (#)}other{Neaktívne karty (#)}}</translation>
 <translation id="8547466829003330976">Skontrolovať súbor PDF pomocou umelej inteligencie</translation>
 <translation id="8551513938758868521">Uzamknúť karty inkognito pri opustení Chromu</translation>
-<translation id="8559961053328923750">Chrome obmedzuje celkové množstvo údajov na meranie výkonnosti reklám, ktoré môžu weby zdieľať prostredníctvom prehliadača</translation>
+<translation id="8559961053328923750">Ultimatum obmedzuje celkové množstvo údajov na meranie výkonnosti reklám, ktoré môžu weby zdieľať prostredníctvom prehliadača</translation>
 <translation id="8559990750235505898">Ponúkať preklad stránok v ďalších jazykoch</translation>
 <translation id="8560602726703398413">Čitateľský zoznam nájdete v záložkách</translation>
 <translation id="8562452229998620586">Tu sa zobrazia uložené heslá.</translation>
@@ -1759,8 +1759,8 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="8748850008226585750">Obsah je skrytý</translation>
 <translation id="8754448020583829686">Kopírovať bez odkazu</translation>
 <translation id="8756969031206844760">Aktualizovať heslo?</translation>
-<translation id="8765470054473112089">Keď zadávate v paneli s adresou alebo vyhľadávacom poli, Chrome odosiela zadaný text do vášho predvoleného vyhľadávača, aby dostal lepšie návrhy. Táto možnosť je v režime inkognito vypnutá.</translation>
-<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Chrome našiel slabé heslo, ktoré môžete zlepšiť}few{Chrome našiel # slabé heslá, ktoré môžete zlepšiť}many{Chrome found # weak passwords that you could improve}other{Chrome našiel # slabých hesiel, ktoré môžete zlepšiť}}</translation>
+<translation id="8765470054473112089">Keď zadávate v paneli s adresou alebo vyhľadávacom poli, Ultimatum odosiela zadaný text do vášho predvoleného vyhľadávača, aby dostal lepšie návrhy. Táto možnosť je v režime inkognito vypnutá.</translation>
+<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Ultimatum našiel slabé heslo, ktoré môžete zlepšiť}few{Ultimatum našiel # slabé heslá, ktoré môžete zlepšiť}many{Ultimatum found # weak passwords that you could improve}other{Ultimatum našiel # slabých hesiel, ktoré môžete zlepšiť}}</translation>
 <translation id="8766529642647037772">Chcete vytvoriť zvýraznený odkaz ako tento?</translation>
 <translation id="8788265440806329501">História navigácie je zatvorená</translation>
 <translation id="8788968922598763114">Opätovné otvorenie poslednej zavretej karty</translation>
@@ -1793,7 +1793,7 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="8922289737868596582">Stiahnite si stránky pomocou tlačidla Ďalšie možnosti, aby ste ich mohli použiť offline</translation>
 <translation id="8924575305646776101"><ph name="BEGIN_LINK" />Ďalšie informácie<ph name="END_LINK" /></translation>
 <translation id="892496902842311796">Jazyk <ph name="LANG" /> je pripravený</translation>
-<translation id="8937772741022875483">Chcete z digitálnej rovnováhy odstrániť svoju aktivitu v Chrome?</translation>
+<translation id="8937772741022875483">Chcete z digitálnej rovnováhy odstrániť svoju aktivitu v Ultimatum?</translation>
 <translation id="8942627711005830162">Otvoriť v ďalšom okne</translation>
 <translation id="8945143127965743188"><ph name="LANG" /> – tento jazyk sa nedá stiahnuť. Skúste to neskôr.</translation>
 <translation id="8946759102391960088">Zachovajte si prístup k heslám</translation>
@@ -1819,14 +1819,14 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="9027728231343310283">Vrátiť web <ph name="SITE" /> späť</translation>
 <translation id="9035378196785279980">Presun do priečinka\u2026</translation>
 <translation id="9042893549633094279">Ochrana súkromia a zabezpečenie</translation>
-<translation id="9047347135558855162">Rýchle spustenie vyhľadávania v Chrome</translation>
+<translation id="9047347135558855162">Rýchle spustenie vyhľadávania v Ultimatum</translation>
 <translation id="9050666287014529139">Prístupová fráza</translation>
 <translation id="9055497320631373736">Web bol pridaný späť do potenciálnych webov</translation>
 <translation id="9057030985451135243">Ďalšie informácie o zdieľaných skupinách kariet</translation>
 <translation id="9063400323119781058">Odber bol zrušený</translation>
 <translation id="9063523880881406963">Vypnutie žiadosti o verziu stránok pre počítače</translation>
 <translation id="9065203028668620118">Upraviť</translation>
-<translation id="9065383040763568503">Uložené dáta, ktoré Chrome nepovažuje za dôležité (napríklad weby bez uložených nastavení alebo také, ktoré nenavštevujete často)</translation>
+<translation id="9065383040763568503">Uložené dáta, ktoré Ultimatum nepovažuje za dôležité (napríklad weby bez uložených nastavení alebo také, ktoré nenavštevujete často)</translation>
 <translation id="9067341854474068781">Hárok so žiadnymi prístupovými kľúčmi je otvorený na úplnú výšku</translation>
 <translation id="906781307897697745">v službe <ph name="PRODUCT_NAME" /></translation>
 <translation id="9069999660519089861">Žiadne neprečítané stránky</translation>
@@ -1835,7 +1835,7 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="9081543426177426948">Navštívené weby sa v režime inkognito neukladajú</translation>
 <translation id="9086302186042011942">Prebieha synchronizácia</translation>
 <translation id="9086455579313502267">Nepodarilo sa pristúpiť k sieti</translation>
-<translation id="909756639352028172">Ak chcete získať čo najprispôsobenejšie prostredie, zahrňte Chrome do aktivity na internete a v aplikáciách a prepojených služieb Googlu</translation>
+<translation id="909756639352028172">Ak chcete získať čo najprispôsobenejšie prostredie, zahrňte Ultimatum do aktivity na internete a v aplikáciách a prepojených služieb Googlu</translation>
 <translation id="9099220545925418560">Založené na vašej histórii prehliadania. Toto nastavenie je vypnuté.</translation>
 <translation id="9100610230175265781">Vyžaduje sa prístupová fráza</translation>
 <translation id="9101137867221042551">Správa</translation>
@@ -1856,7 +1856,7 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="9161172953291434881">Dôverujete tomuto webu v súvislosti so svojimi údajmi?</translation>
 <translation id="9168847423516963845">Presunúť panel s adresou úplne nadol</translation>
 <translation id="9169507124922466868">História navigácie je dopoly otvorená</translation>
-<translation id="918419812064856259">Chrome Beta</translation>
+<translation id="918419812064856259">Ultimatum Beta</translation>
 <translation id="9190276265094487094">Históriu budete mať vo všetkých synchronizovaných zariadeniach, takže budete môcť pokračovať v tom, čo ste robili</translation>
 <translation id="9191906083913361689">Tieto položky si môžete zobraziť a spravovať aj v záložkách, čitateľskom zozname alebo Správcovi hesiel</translation>
 <translation id="9199368092038462496">{NUM_MINS,plural, =1{Kontrola prebehla pred minútou}few{Kontrola prebehla pred # minútami}many{Kontrola prebehla pred # minúty}other{Kontrola prebehla pred # minútami}}</translation>
@@ -1869,13 +1869,13 @@ Ak chcete toto nastavenie zmeniť, <ph name="BEGIN_LINK" />odstráňte údaje Ch
 <translation id="9218430445555521422">Nastaviť ako predvolený</translation>
 <translation id="9219103736887031265">Obrázky</translation>
 <translation id="924447568950697217">Nastavenie Chromu ako predvoleného prehliadača</translation>
-<translation id="926205370408745186">Odstránenie aktivity v Chrome z digitálnej rovnováhy</translation>
-<translation id="927968626442779827">Používanie zjednodušeného režimu v prehliadači Google Chrome</translation>
+<translation id="926205370408745186">Odstránenie aktivity v Ultimatum z digitálnej rovnováhy</translation>
+<translation id="927968626442779827">Používanie zjednodušeného režimu v prehliadači Ultimatum</translation>
 <translation id="928550791203542716">Sledujete <ph name="SITE_NAME" /></translation>
 <translation id="930124987204876019">Odstrániť históriu, súbory cookie, dáta webov, vyrovnávaciu pamäť…</translation>
 <translation id="938850635132480979">Chyba: <ph name="ERROR_CODE" /></translation>
 <translation id="939598580284253335">Zadať prístupovú frázu</translation>
-<translation id="95817756606698420">Chrome môže použiť <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> na vyhľadávanie v Číne. Táto možnosť sa dá zmeniť v <ph name="BEGIN_LINK" />Nastaveniach<ph name="END_LINK" />.</translation>
+<translation id="95817756606698420">Ultimatum môže použiť <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> na vyhľadávanie v Číne. Táto možnosť sa dá zmeniť v <ph name="BEGIN_LINK" />Nastaveniach<ph name="END_LINK" />.</translation>
 <translation id="961856697154696964">Odstrániť dáta prehliadania</translation>
 <translation id="963246339335003378">Otvoriť správcu úloh</translation>
 <translation id="966131775676567255">Údaje účtu sa odstraňujú</translation>

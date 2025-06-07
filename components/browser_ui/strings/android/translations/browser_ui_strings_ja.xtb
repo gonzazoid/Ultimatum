@@ -3,21 +3,21 @@
 <translationbundle lang="ja">
 <translation id="1004806631856047384"><ph name="BEGIN_LINK1" />Android の設定<ph name="END_LINK1" />で管理
 
-高度な保護機能では、次の Chrome の設定を制御します。
+高度な保護機能では、次の Ultimatum の設定を制御します。
 • [常に安全な接続を使用する] がオンになります。
 • [JavaScript オプティマイザー] がオフになります。<ph name="BEGIN_LINK2" />サイトの例外を管理する<ph name="END_LINK2" /></translation>
 <translation id="1006017844123154345">オンライン版を開く</translation>
 <translation id="1036348656032585052">オフにする</translation>
 <translation id="1044891598689252897">サイトは通常どおり動作します</translation>
 <translation id="1070329623210597193">このサイトが表示または編集できるファイル</translation>
-<translation id="1073417869336441572">Chrome の改善に役立てるため、サードパーティ Cookie を許可した理由をお聞かせください。<ph name="BEGIN_LINK" />フィードバックを送信<ph name="END_LINK" /></translation>
+<translation id="1073417869336441572">Ultimatum の改善に役立てるため、サードパーティ Cookie を許可した理由をお聞かせください。<ph name="BEGIN_LINK" />フィードバックを送信<ph name="END_LINK" /></translation>
 <translation id="1074758928858737435">サイトの PC 版を表示するようリクエストできます</translation>
-<translation id="1085696779717592361">Chrome をデフォルトに設定する</translation>
+<translation id="1085696779717592361">Ultimatum をデフォルトに設定する</translation>
 <translation id="1178581264944972037">一時停止</translation>
 <translation id="1181037720776840403">削除</translation>
 <translation id="1192844206376121885"><ph name="ORIGIN" /> により保存されたデータと Cookie がすべて削除されます。</translation>
 <translation id="1201402288615127009">次へ</translation>
-<translation id="1240190568154816272">Chrome を使いこなすヒント</translation>
+<translation id="1240190568154816272">Ultimatum を使いこなすヒント</translation>
 <translation id="1242008676835033345"><ph name="WEBSITE_URL" /> に埋め込まれたページ</translation>
 <translation id="1263609676484797429">[アプリ] &gt; [デフォルトのアプリ] をタップします</translation>
 <translation id="1272079795634619415">停止</translation>
@@ -34,7 +34,7 @@
 <translation id="1396327438254055134">V8 オプティマイザーの使用を許可するサイトを指定します。</translation>
 <translation id="1409338233051621926">[アプリ]、[デフォルトのアプリ] をタップします</translation>
 <translation id="1415402041810619267">URL の短縮バージョンです</translation>
-<translation id="1415855080660575082">Chrome で最近使ったタブをデバイスと共有して、デバイスのアプリリストと検索結果に表示できます。この機能は Chrome の設定でオンまたはオフにできます。</translation>
+<translation id="1415855080660575082">Ultimatum で最近使ったタブをデバイスと共有して、デバイスのアプリリストと検索結果に表示できます。この機能は Ultimatum の設定でオンまたはオフにできます。</translation>
 <translation id="1448064542941920355">縮小</translation>
 <translation id="1464044141348608623">サイトによるデバイスのアクティブ状態の検出を許可しない</translation>
 <translation id="146867109637325312">{COUNT,plural, =1{<ph name="SITE_COUNT" /> 件のサイト}other{<ph name="SITE_COUNT" /> 件のサイト}}</translation>
@@ -43,7 +43,7 @@
 <translation id="1510341833810331442">サイトはデバイスにデータを保存できません</translation>
 <translation id="1538031354170655462">付近のタグやデバイスと接続してバッジのスキャンやタッチ決済などを行うため、サイトで近距離無線通信（NFC）を使用する場合があります</translation>
 <translation id="1547123415014299762">サードパーティの Cookie が許可されています</translation>
-<translation id="1569054338208717605">Chrome の V8 エンジンでサイトを高速化する（攻撃に対する Chrome の耐性は若干低下します）</translation>
+<translation id="1569054338208717605">Ultimatum の V8 エンジンでサイトを高速化する（攻撃に対する Ultimatum の耐性は若干低下します）</translation>
 <translation id="1593426485665524382">画面上部付近で新しい操作が可能になりました</translation>
 <translation id="1615755956145364867">保護されたコンテンツの再生がサイトからリクエストされる場合があります</translation>
 <translation id="1620510694547887537">カメラ</translation>
@@ -64,8 +64,8 @@
 <translation id="1779089405699405702">画像デコーダー</translation>
 <translation id="1785415724048343560">利便性が向上します（推奨）</translation>
 <translation id="1796588414813960292">音を使用する機能は動作しなくなります</translation>
-<translation id="1799920918471566157">Chrome のおすすめの使い方</translation>
-<translation id="1816835383954230954">オンにすると、Chrome の動作が速くなり、JavaScript を使用する機能が設計どおりに動作します。オフにすると、パフォーマンスは低下しますが、攻撃に対する V8 の耐性が強化されます。</translation>
+<translation id="1799920918471566157">Ultimatum のおすすめの使い方</translation>
+<translation id="1816835383954230954">オンにすると、Ultimatum の動作が速くなり、JavaScript を使用する機能が設計どおりに動作します。オフにすると、パフォーマンスは低下しますが、攻撃に対する V8 の耐性が強化されます。</translation>
 <translation id="1818308510395330587"><ph name="APP_NAME" /> に AR の使用を許可するには、<ph name="BEGIN_LINK" />Android の設定<ph name="END_LINK" />でもカメラをオンにしてください。</translation>
 <translation id="1887786770086287077">位置情報へのアクセスがデバイスでオフになっています。<ph name="BEGIN_LINK" />Android の設定<ph name="END_LINK" />でオンにしてください。</translation>
 <translation id="1906181697255754968">多くのサイトは、作業内容を自動的に保存するためにデバイスのファイルやフォルダにアクセスします。</translation>
@@ -109,7 +109,7 @@
 <translation id="2289270750774289114">サイトから近くにある Bluetooth デバイスの検出を求められたときに確認する（推奨）</translation>
 <translation id="2315043854645842844">オペレーティング システムでサポートされていないため、クライアントサイドで証明書を選択することはできません。</translation>
 <translation id="2359808026110333948">続行</translation>
-<translation id="2379925928934107488">可能であれば、Chrome がダークモードを使用している場合にダークモードをサイトに適用します</translation>
+<translation id="2379925928934107488">可能であれば、Ultimatum がダークモードを使用している場合にダークモードをサイトに適用します</translation>
 <translation id="2390272837142897736">拡大</translation>
 <translation id="2402980924095424747"><ph name="MEGABYTES" /> MB</translation>
 <translation id="2404630663942400771">{PERMISSIONS_SUMMARY_ALLOWED,plural, =1{<ph name="PERMISSION_1" />、<ph name="PERMISSION_2" />、他 <ph name="NUM_MORE" /> 個の権限が許可されています}other{<ph name="PERMISSION_1" />、<ph name="PERMISSION_2" />、他 <ph name="NUM_MORE" /> 個の権限が許可されています}}</translation>
@@ -118,7 +118,7 @@
 <translation id="2438120137003069591">このサイトにサードパーティ Cookie の使用を一時的に許可しました。ブラウジングの保護の強度は低下しますが、サイトが適切に機能する可能性が高くなります。<ph name="BEGIN_LINK" />フィードバックを送信<ph name="END_LINK" /></translation>
 <translation id="244264527810019436">シークレット モードでは、一部サイトの機能が使用できなくなる可能性があります</translation>
 <translation id="2442870161001914531">常に PC 版サイトを表示する</translation>
-<translation id="2445311670906052406">Chrome で最近使ったタブがデバイスと共有され、デバイスのアプリリストと検索結果に表示されるようになりました。この機能は Chrome の設定でいつでもオフにできます。</translation>
+<translation id="2445311670906052406">Ultimatum で最近使ったタブがデバイスと共有され、デバイスのアプリリストと検索結果に表示されるようになりました。この機能は Ultimatum の設定でいつでもオフにできます。</translation>
 <translation id="245322989586167203">多くのサイトは、ネットワークを設定するなど、データ転送機能を使用するためにシリアルポートに接続します</translation>
 <translation id="2469312991797799607">この操作を行うと、<ph name="ORIGIN" /> とそのドメインの全サイトのデータと Cookie がすべて削除されます</translation>
 <translation id="2482878487686419369">通知</translation>
@@ -143,14 +143,14 @@
 <translation id="2685514716378236873">許可しないサイト</translation>
 <translation id="2713106313042589954">カメラをオフにする</translation>
 <translation id="2717722538473713889">メールアドレス</translation>
-<translation id="2726059656860238749">アドレスバーにフォーカスを置いた状態で Chrome を起動し、ローエンド デバイスの起動時間を短縮します。</translation>
+<translation id="2726059656860238749">アドレスバーにフォーカスを置いた状態で Ultimatum を起動し、ローエンド デバイスの起動時間を短縮します。</translation>
 <translation id="2750481671343847896">サイトで ID サービスからのログイン メッセージを表示できるようにします。</translation>
 <translation id="2787357173144933081">ジャンプスタート アドレスバー</translation>
 <translation id="2789132527330338807">サイトが周囲の 3D マップの作成またはカメラ位置の追跡を要求できるようにする</translation>
 <translation id="2790501146643349491">オンにすると、最近閉じたサイトのデータの送受信を完了できます。オフにすると、最近閉じたサイトのデータの送受信を完了できません。</translation>
 <translation id="2795716239552913152">多くのサイトは、ローカル ニュースや近くのお店の情報などを取得するためにユーザーの位置情報を使用します。</translation>
 <translation id="2802908157808345702">サイトにポップアップの送信とリダイレクトの使用を許可しない</translation>
-<translation id="2814830417943086299">Chrome で最近使ったタブがデバイスのアプリリストと検索結果に表示されるようになりました。この機能は Chrome の設定でいつでもオフにできます。</translation>
+<translation id="2814830417943086299">Ultimatum で最近使ったタブがデバイスのアプリリストと検索結果に表示されるようになりました。この機能は Ultimatum の設定でいつでもオフにできます。</translation>
 <translation id="2822354292072154809">「<ph name="CHOSEN_OBJECT_NAME" />」に関するすべてのサイト権限をリセットしてもよろしいですか？</translation>
 <translation id="2850913818900871965">モバイルビューをリクエストする</translation>
 <translation id="2870560284913253234">ウェブサイト</translation>
@@ -187,7 +187,7 @@
 <translation id="3242646949159196181">オンにすると、サイトは音声を再生できます。オフにすると、サイトは音声を再生できません。</translation>
 <translation id="3273479183583863618">タブの値下げ情報</translation>
 <translation id="3277252321222022663">サイトによるセンサーへのアクセスを許可する（推奨）</translation>
-<translation id="327891165872793509">Chrome はほとんどのサイトに対してサードパーティ Cookie の使用を制限し、ブラウジング中のユーザーをトラッキングできないようにしています。<ph name="BEGIN_LINK" />サードパーティ Cookie へのアクセスを管理<ph name="END_LINK" />するには、設定に移動してください。</translation>
+<translation id="327891165872793509">Ultimatum はほとんどのサイトに対してサードパーティ Cookie の使用を制限し、ブラウジング中のユーザーをトラッキングできないようにしています。<ph name="BEGIN_LINK" />サードパーティ Cookie へのアクセスを管理<ph name="END_LINK" />するには、設定に移動してください。</translation>
 <translation id="3285500645985761267">関連サイトにグループ内のアクティビティの確認を許可する</translation>
 <translation id="3295019059349372795">第 11 章: オズの不思議なエメラルド シティ</translation>
 <translation id="3295602654194328831">情報を表示しない</translation>
@@ -222,7 +222,7 @@
 <translation id="3678318839615834650">新しいタブページのカードのボトムシートが画面全体に表示されています</translation>
 <translation id="3697164069658504920">オンにすると、サイトは USB デバイスの使用を要求できます。オフにすると、サイトは USB デバイスを使用できません。</translation>
 <translation id="3703430731944883733">フィードを管理</translation>
-<translation id="3707034683772193706">アクセス先のサイトは、主にあなたが bot でないことを確認する少量の情報を Chrome に保存できます。</translation>
+<translation id="3707034683772193706">アクセス先のサイトは、主にあなたが bot でないことを確認する少量の情報を Ultimatum に保存できます。</translation>
 <translation id="3708684582558000260">閉じたサイトにデータの送受信の完了を許可しない</translation>
 <translation id="3709818294139939629">ファイルへのサイトのアクセス権を削除しました</translation>
 <translation id="3721953990244350188">非表示にして、次に実行可能なアクションを表示</translation>
@@ -236,7 +236,7 @@
 <translation id="381841723434055211">電話番号</translation>
 <translation id="3826050100957962900">サードパーティのログイン</translation>
 <translation id="3835233591525155343">デバイスのアクティブ状態</translation>
-<translation id="3843916486309149084">今日、Chrome で Cookie を再びブロックします</translation>
+<translation id="3843916486309149084">今日、Ultimatum で Cookie を再びブロックします</translation>
 <translation id="385051799172605136">戻る</translation>
 <translation id="3859306556332390985">前方にシーク再生</translation>
 <translation id="389521680295183045">サイトがデバイスのアクティブ状態の検出を要求できるようにする</translation>
@@ -276,12 +276,12 @@
 <translation id="429312253194641664">サイトでメディアが再生されています</translation>
 <translation id="42981349822642051">展開</translation>
 <translation id="4336219115486912529">{COUNT,plural, =1{明日で期限切れ}other{あと # 日で期限切れ}}</translation>
-<translation id="4336566011000459927">今日、Chrome で Cookie を再び制限します</translation>
+<translation id="4336566011000459927">今日、Ultimatum で Cookie を再び制限します</translation>
 <translation id="4338831206024587507"><ph name="DOMAIN" /> のすべてのサイト</translation>
 <translation id="4340799661701629185">サイトに通知の送信を許可しない</translation>
 <translation id="4402755511846832236">サイトによるこのデバイスのアクティブ状態の検出をブロックする</translation>
 <translation id="4412992751769744546">サードパーティの Cookie を許可する</translation>
-<translation id="4419929467120297501">Chrome では、サードパーティ Cookie の使用を制限し、ブラウジング中のユーザーをトラッキングできないようにしています。<ph name="BEGIN_LINK" />サードパーティ Cookie へのアクセスを管理<ph name="END_LINK" />するには、設定に移動してください。</translation>
+<translation id="4419929467120297501">Ultimatum では、サードパーティ Cookie の使用を制限し、ブラウジング中のユーザーをトラッキングできないようにしています。<ph name="BEGIN_LINK" />サードパーティ Cookie へのアクセスを管理<ph name="END_LINK" />するには、設定に移動してください。</translation>
 <translation id="443121186588148776">シリアルポート</translation>
 <translation id="4434045419905280838">ポップアップとリダイレクト</translation>
 <translation id="443552056913301231">この操作を行うと、Cookie を含むすべてのローカルデータが削除され、<ph name="ORIGIN" /> のすべての権限がリセットされます</translation>
@@ -300,7 +300,7 @@
 <translation id="4644713492825682049">削除してリセット</translation>
 <translation id="4645575059429386691">保護者により管理されています</translation>
 <translation id="4670064810192446073">バーチャル リアリティ（VR）</translation>
-<translation id="4672315773691449562">[ブラウザアプリ]、[Chrome] をタップします</translation>
+<translation id="4672315773691449562">[ブラウザアプリ]、[Ultimatum] をタップします</translation>
 <translation id="4676059169848868271"><ph name="APP_NAME" /> にハンド トラッキングの使用を許可するには、<ph name="BEGIN_LINK" />システム設定<ph name="END_LINK" />でもハンド トラッキングをオンにしてください。</translation>
 <translation id="4751476147751820511">モーション センサーまたは光センサー</translation>
 <translation id="4755971844837804407">オンにすると、サイトはユーザーにあらゆる広告を表示できます。オフにすると、サイトは煩わしい広告や誤解を招く広告を表示できません。</translation>
@@ -335,7 +335,7 @@
 <translation id="5091663350197390230">オンにすると、サイトは JavaScript を使用できます。オフにすると、サイトは JavaScript を使用できません。</translation>
 <translation id="5099358668261120049"><ph name="ORIGIN" /> またはホーム画面の同アプリにより保存されたデータと Cookie がすべて削除されます。</translation>
 <translation id="5100237604440890931">折りたたまれています - クリックすると展開します。</translation>
-<translation id="5116239826668864748">メッセージ、ドキュメント、他のアプリでタップしたリンクを常に Chrome で開くよう設定できます</translation>
+<translation id="5116239826668864748">メッセージ、ドキュメント、他のアプリでタップしたリンクを常に Ultimatum で開くよう設定できます</translation>
 <translation id="5123685120097942451">シークレット タブ</translation>
 <translation id="5139253256813381453">{PRICE_DROP_COUNT,plural, =1{開いているタブの値下げ情報}other{開いているタブの値下げ情報}}</translation>
 <translation id="5186036860380548585">設定は画面上部にあります</translation>
@@ -368,7 +368,7 @@
 <translation id="5527111080432883924">サイトがクリップボードのテキストや画像を読み取る前に確認する（推奨）</translation>
 <translation id="5545693483061321551">サイトは、Cookie を使用して別のサイトでのあなたの閲覧アクティビティを確認できず、広告のパーソナライズなどが行えなくなります。一部のサイトで機能を使用できなくなる可能性があります。</translation>
 <translation id="5553374991681107062">最新</translation>
-<translation id="5555115555607204100">Chrome の V8 エンジンでサイトを高速化しない（攻撃に対する Chrome の耐性は若干強化されます）</translation>
+<translation id="5555115555607204100">Ultimatum の V8 エンジンでサイトを高速化しない（攻撃に対する Ultimatum の耐性は若干強化されます）</translation>
 <translation id="5556459405103347317">再読み込み</translation>
 <translation id="5591840828808741583"><ph name="SITE_NAME" /> をブロックしました</translation>
 <translation id="560980142378233747">この場合、サイトの機能は想定どおりに動作しますが、ブラウジング保護の強度が低くなる可能性があります。<ph name="BEGIN_LINK" />フィードバックを送信<ph name="END_LINK" /></translation>
@@ -424,13 +424,13 @@
 <translation id="6177128806592000436">このサイトへの接続は保護されていません</translation>
 <translation id="6181444274883918285">例外のサイトを追加</translation>
 <translation id="6192792657125177640">例外</translation>
-<translation id="6194967801833346599">{DAYS,plural, =1{明日、Chrome で Cookie を再びブロックします}other{# 日後に、Chrome で Cookie を再びブロックします}}</translation>
+<translation id="6194967801833346599">{DAYS,plural, =1{明日、Ultimatum で Cookie を再びブロックします}other{# 日後に、Ultimatum で Cookie を再びブロックします}}</translation>
 <translation id="6195163219142236913">サードパーティ Cookie が制限されています</translation>
 <translation id="6196640612572343990">サードパーティの Cookie をブロックする</translation>
 <translation id="6205314730813004066">広告プライバシー</translation>
 <translation id="6207207788774442484">データを削除して権限をリセット</translation>
 <translation id="6231752747840485235">「<ph name="APP_NAME" />」をアンインストールしますか？</translation>
-<translation id="6234351944623978659">[ブラウザアプリ] &gt; [Chrome] をタップします</translation>
+<translation id="6234351944623978659">[ブラウザアプリ] &gt; [Ultimatum] をタップします</translation>
 <translation id="6262191102408817757">最後のタブに基づく</translation>
 <translation id="6262279340360821358"><ph name="PERMISSION_1" />、<ph name="PERMISSION_2" />をブロック</translation>
 <translation id="6270391203985052864">通知を送信するかどうかの確認をサイトに許可する</translation>
@@ -470,7 +470,7 @@
 <translation id="6787751205395685251"><ph name="SITE_NAME" /> に対する設定を選択してください</translation>
 <translation id="6790428901817661496">再生</translation>
 <translation id="6818926723028410516">アイテムを選択</translation>
-<translation id="6838525730752203626">Chrome をデフォルトに設定する</translation>
+<translation id="6838525730752203626">Ultimatum をデフォルトに設定する</translation>
 <translation id="6840760312327750441">タブをグループ化するには、タブを押しながら別のタブにドラッグします。</translation>
 <translation id="6842868554183332230">多くのサイトはデバイスのアクティブ状態を検出して、チャットアプリのステータスを設定しています</translation>
 <translation id="6864395892908308021">このデバイスでは NFC を読み込めません</translation>
@@ -484,7 +484,7 @@
 <translation id="6981982820502123353">ユーザー補助機能</translation>
 <translation id="6992289844737586249">サイトにマイクの使用を許可する前に確認する（推奨）</translation>
 <translation id="7000754031042624318">Android の設定で無効</translation>
-<translation id="702275896380648118">このサイトでは、ユーザーの好みを判断して他のサイトに広告を提案します。また、より関連性の高い広告を表示するために Chrome から広告のトピックを取得します。</translation>
+<translation id="702275896380648118">このサイトでは、ユーザーの好みを判断して他のサイトに広告を提案します。また、より関連性の高い広告を表示するために Ultimatum から広告のトピックを取得します。</translation>
 <translation id="7053983685419859001">ブロック</translation>
 <translation id="7055552182600664515">著作権で保護されたコンテンツを再生するため、サイトでコンテンツ保護サービスの使用を求める場合があります。<ph name="BEGIN_LINK" />詳細<ph name="END_LINK" /></translation>
 <translation id="7066151586745993502">{NUM_SELECTED,plural, =1{1 件を選択済み}other{# 件を選択済み}}</translation>
@@ -528,7 +528,7 @@
 <translation id="7658239707568436148">キャンセル</translation>
 <translation id="7667547420449112975">オズの魔法使い</translation>
 <translation id="7681597159868843240">多くのサイトは、バーチャル リアリティやフィットネス トラッキングなどの機能にデバイスのモーション センサーを使用します</translation>
-<translation id="7688240020069572972">Chrome のヒントカードを非表示にする</translation>
+<translation id="7688240020069572972">Ultimatum のヒントカードを非表示にする</translation>
 <translation id="7719367874908701697">ページのズーム</translation>
 <translation id="7759147511335618829">MIDI デバイスの操作と再プログラム</translation>
 <translation id="7781829728241885113">昨日</translation>
@@ -540,7 +540,7 @@
 <translation id="7835852323729233924">再生中のメディア</translation>
 <translation id="783819812427904514">動画のミュートを解除</translation>
 <translation id="7846076177841592234">選択解除</translation>
-<translation id="7881140103901777395">Chrome ではほとんどのサイトに対してサードパーティ Cookie の使用を制限しています。しかしこのサイトでは、基本的なサービスの提供に使用されているため、サードパーティ Cookie が許可されています。\n\n<ph name="BEGIN_LINK" />サードパーティ Cookie へのアクセスを管理する<ph name="END_LINK" />には、設定に移動してください。</translation>
+<translation id="7881140103901777395">Ultimatum ではほとんどのサイトに対してサードパーティ Cookie の使用を制限しています。しかしこのサイトでは、基本的なサービスの提供に使用されているため、サードパーティ Cookie が許可されています。\n\n<ph name="BEGIN_LINK" />サードパーティ Cookie へのアクセスを管理する<ph name="END_LINK" />には、設定に移動してください。</translation>
 <translation id="7882806643839505685">特定のサイトに対して音声の再生を許可します。</translation>
 <translation id="789180354981963912">シークレット モードでサードパーティの Cookie をブロックする:</translation>
 <translation id="789722939441020330">サイトに複数のファイルの自動ダウンロードを許可しない</translation>
@@ -560,7 +560,7 @@
 <translation id="8087000398470557479"><ph name="DOMAIN_NAME" /> のコンテンツを Google から配信しています。</translation>
 <translation id="8088603949666785339"><ph name="BANNER_TITLE" /> のその他のオプション</translation>
 <translation id="8112925981674547014">アプリリストにタブを表示</translation>
-<translation id="8113501330600751161">{DAYS,plural, =1{明日、Chrome で Cookie を再び制限します}other{# 日後に、Chrome で Cookie を再び制限します}}</translation>
+<translation id="8113501330600751161">{DAYS,plural, =1{明日、Ultimatum で Cookie を再び制限します}other{# 日後に、Ultimatum で Cookie を再び制限します}}</translation>
 <translation id="8116925261070264013">ミュート中</translation>
 <translation id="8117244575099414087">オンにすると、サイトはデバイスのセンサーを使用できます。オフにすると、サイトはセンサーを使用できません。</translation>
 <translation id="813082847718468539">サイト情報を表示</translation>
@@ -600,10 +600,10 @@
 <translation id="8514955299594277296">サイトによるデバイスへのデータの保存を許可しない（非推奨）</translation>
 <translation id="851751545965956758">サイトからデバイスへの接続をブロックする</translation>
 <translation id="8525306231823319788">全画面表示</translation>
-<translation id="8541410041357371550">このサイトでは、より関連性の高い広告を表示するために Chrome から広告のトピックを取得します</translation>
+<translation id="8541410041357371550">このサイトでは、より関連性の高い広告を表示するために Ultimatum から広告のトピックを取得します</translation>
 <translation id="854876774113449365">アクセスしたサイトに他のサイトのコンテンツ（画像、広告、テキストなど）が埋め込まれている場合があります。サイトを閲覧する際、それらのサイトがあなたに関する保存済みの情報の使用許可を要求することがあります。<ph name="BEGIN_LINK" />埋め込みコンテンツの詳細<ph name="END_LINK" /></translation>
 <translation id="8549127125482561383">リクエストの表示方法</translation>
-<translation id="8558480467877843976">ブラウジングするときや、メッセージ、ドキュメント、他のアプリのリンクをタップしたときに、常に Chrome が使えるようになります。</translation>
+<translation id="8558480467877843976">ブラウジングするときや、メッセージ、ドキュメント、他のアプリのリンクをタップしたときに、常に Ultimatum が使えるようになります。</translation>
 <translation id="857943718398505171">許可（推奨）</translation>
 <translation id="8593422116412089302">オンにすると、サイトはあなたに関する保存済みの情報の使用を要求できます。オフにすると、サイトはあなたに関する保存済みの情報の使用を要求できません。</translation>
 <translation id="8609465669617005112">上に移動</translation>
@@ -624,13 +624,13 @@
 <translation id="8751914237388039244">画像を選択</translation>
 <translation id="8800034312320686233">サイトが動作していない場合</translation>
 <translation id="8801436777607969138">特定のサイトで JavaScript をブロックします。</translation>
-<translation id="8801657293260363985">V8 は、サイトのパフォーマンスを向上させるために使用される Chrome の JavaScript エンジンおよび WebAssembly エンジンです</translation>
+<translation id="8801657293260363985">V8 は、サイトのパフォーマンスを向上させるために使用される Ultimatum の JavaScript エンジンおよび WebAssembly エンジンです</translation>
 <translation id="8803526663383843427">有効にした場合</translation>
 <translation id="8805385115381080995">サイトであなたが実在のユーザーであることを確認する頻度が減るため、ブラウジングが高速化されます</translation>
 <translation id="8816026460808729765">サイトによるセンサーへのアクセスをブロックする</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">サードパーティ Cookie を一時的に許可してみてください。ブラウジング保護の強度は低下しますが、サイトの機能が想定どおりに動作する可能性が高くなります。</translation>
-<translation id="8889294078294184559">それ以降にアクセスしたサイトは、あなたが実在のユーザーであることを、前にアクセスしたサイトから Chrome を介して確認できます。</translation>
+<translation id="8889294078294184559">それ以降にアクセスしたサイトは、あなたが実在のユーザーであることを、前にアクセスしたサイトから Ultimatum を介して確認できます。</translation>
 <translation id="8899807382908246773">煩わしい広告</translation>
 <translation id="8903921497873541725">拡大する</translation>
 <translation id="8921772741368021346"><ph name="POSITION" /> / <ph name="DURATION" /></translation>
@@ -653,7 +653,7 @@
 <translation id="9109747640384633967">{PERMISSIONS_SUMMARY_MIXED,plural, =1{<ph name="PERMISSION_1" />、<ph name="PERMISSION_2" />、他 <ph name="NUM_MORE" /> 個の権限}other{<ph name="PERMISSION_1" />、<ph name="PERMISSION_2" />、他 <ph name="NUM_MORE" /> 個の権限}}</translation>
 <translation id="913657688200966289"><ph name="BEGIN_LINK" />Android の設定<ph name="END_LINK" />で <ph name="APP_NAME" /> の権限を有効にしてください。</translation>
 <translation id="9138217887606523162">現在のズームレベルは <ph name="ZOOM_LEVEL" />%% です</translation>
-<translation id="9156722768168878035">Chrome で最近使ったタブをデバイスのアプリリストと検索結果に表示できます。この機能は Chrome の設定でいつでもオフにできます。</translation>
+<translation id="9156722768168878035">Ultimatum で最近使ったタブをデバイスのアプリリストと検索結果に表示できます。この機能は Ultimatum の設定でいつでもオフにできます。</translation>
 <translation id="9162462602695099906">このページは危険です</translation>
 <translation id="9182556968660520230">サイトに保護されたコンテンツの再生を許可しない</translation>
 <translation id="947156494302904893">アクセスしたサイトは、あなたが bot ではなく実在のユーザーであることを確認できます</translation>

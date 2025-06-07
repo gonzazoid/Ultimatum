@@ -6,7 +6,7 @@
 <translation id="1011749477052068769">انتقال به اینجا</translation>
 <translation id="1014147525163127655">هیچ گذرکلیدی برای <ph name="ORIGIN" /> در این دستگاه وجود ندارد</translation>
 <translation id="1016498331642356377">به‌سرعت با صدایتان جستجو کنید. برای ویرایش این میان‌بر، لمس کنید و نگه دارید.</translation>
-<translation id="1024113959924243553">Chrome Dev</translation>
+<translation id="1024113959924243553">Ultimatum Dev</translation>
 <translation id="1028699632127661925">درحال ارسال به <ph name="DEVICE_NAME" />…</translation>
 <translation id="103269572468856066">داده‌های این سایت‌ها و برنامه‌ها نیز پاک شود؟</translation>
 <translation id="1034259925032978114">پنجره باز است</translation>
@@ -25,7 +25,7 @@
 <translation id="1094555143448724771">برای دیدن برگه‌های دستگاه‌های دیگرتان، برگه‌ها و سابقه را همگام‌سازی کنید</translation>
 <translation id="1095761715416917775">مطمئن شوید همیشه می‌توانید به داده‌های همگام‌سازی دسترسی داشته باشید</translation>
 <translation id="1100066534610197918">باز کردن در برگه جدید در گروه</translation>
-<translation id="1103142993930332957">‏مایلید به بهبود Chrome کمک کنید؟</translation>
+<translation id="1103142993930332957">‏مایلید به بهبود Ultimatum کمک کنید؟</translation>
 <translation id="1105960400813249514">گرفتن عکس از صفحه‌</translation>
 <translation id="1108214977745280468">مشاهده اطلاعات آماری صفحه</translation>
 <translation id="1108938384783527433">همگام‌سازی سابقه</translation>
@@ -37,12 +37,12 @@
 <translation id="1140317858355046628">اگر گروه برگه را حذف کنید، همه دسترسی به گروه برگه «<ph name="GROUP_NAME" />» را فوراً ازدست می‌دهند و این گروه برگه از همه دستگاه‌ها حذف می‌شود.</translation>
 <translation id="1142732900304639782">ترجمه این سایت‌ها پیشنهاد نشود</translation>
 <translation id="1145536944570833626">حذف داده‌های موجود.</translation>
-<translation id="1150263420752757504">‏<ph name="APP_NAME" /> در Chrome باز می‌شود. درصورت ادامه دادن، با <ph name="BEGIN_LINK1" />شرایط خدمات Google<ph name="END_LINK1" /> و <ph name="BEGIN_LINK2" />شرایط خدمات تکمیلی Google Chrome و ChromeOS<ph name="END_LINK2" /> موافقت می‌کنید.</translation>
+<translation id="1150263420752757504">‏<ph name="APP_NAME" /> در Ultimatum باز می‌شود. درصورت ادامه دادن، با <ph name="BEGIN_LINK1" />شرایط خدمات Google<ph name="END_LINK1" /> و <ph name="BEGIN_LINK2" />شرایط خدمات تکمیلی Ultimatum و UltimatumOS<ph name="END_LINK2" /> موافقت می‌کنید.</translation>
 <translation id="1154555449933432029">‏هیچ گذرواژه‌ای در «مدیر گذرواژه Google» ذخیره نکرده‌اید.</translation>
 <translation id="115483310321669804">استفاده از گذرواژه <ph name="PASSWORD" /></translation>
 <translation id="1173894706177603556">تغییر نام</translation>
-<translation id="1174479719160874822">‏وقتی صفحه‌نمایش باریک باشد، Chrome سایت ویژه تلفن همراه را درخواست خواهد کرد</translation>
-<translation id="1175241315203286684">‏سرپرست شما می‌تواند تنظیمات نمایه و مرورگرتان را از دور تغییر دهد، اطلاعات مربوط به مرورگر را ازطریق گزارش گرفتن تجزیه‌وتحلیل کند، و دیگر اقدامات ضروری را انجام دهد. فعالیت انجام‌شده در این دستگاه می‌تواند از خارج از Chrome هم مدیریت شود.</translation>
+<translation id="1174479719160874822">‏وقتی صفحه‌نمایش باریک باشد، Ultimatum سایت ویژه تلفن همراه را درخواست خواهد کرد</translation>
+<translation id="1175241315203286684">‏سرپرست شما می‌تواند تنظیمات نمایه و مرورگرتان را از دور تغییر دهد، اطلاعات مربوط به مرورگر را ازطریق گزارش گرفتن تجزیه‌وتحلیل کند، و دیگر اقدامات ضروری را انجام دهد. فعالیت انجام‌شده در این دستگاه می‌تواند از خارج از Ultimatum هم مدیریت شود.</translation>
 <translation id="1177863135347784049">سفارشی</translation>
 <translation id="1181037720776840403">حذف</translation>
 <translation id="1183189057400844278">‏برای اطمینان از اینکه همیشه می‌توانید از گذرواژه‌های ذخیره‌شده در «حساب Google» خود استفاده کنید، هویتتان را به‌تأیید برسانید</translation>
@@ -78,8 +78,8 @@
 <translation id="1318262688555255786">هم‌رسانی پیوند صفحه وب <ph name="PAGE_TITLE" />. منبع: <ph name="PAGE_URL" /></translation>
 <translation id="1320912611264252795">پوشه‌های جریان ذخیره نشانک به‌صورت کامل باز شده است</translation>
 <translation id="1327257854815634930">سابقه «پیمایش» باز است.</translation>
-<translation id="1331212799747679585">‏Chrome به‌روزرسانی نشد. گزینه‌های دیگر</translation>
-<translation id="1332501820983677155">‏میان‌برهای ویژه Google Chrome</translation>
+<translation id="1331212799747679585">‏Ultimatum به‌روزرسانی نشد. گزینه‌های دیگر</translation>
+<translation id="1332501820983677155">‏میان‌برهای ویژه Ultimatum</translation>
 <translation id="1333491156693005331">اخیراً بررسی شده است</translation>
 <translation id="1336996151357442890">اشتراک «<ph name="SITE_NAME" />» لغو شد. در بازدید بعدی دوباره از شما سؤال خواهد شد.</translation>
 <translation id="1340839264183302272">ترک گروه</translation>
@@ -96,28 +96,28 @@
 <translation id="1383876407941801731">جستجو</translation>
 <translation id="1384704387250346179">‏ترجمه تصویر با «لنز Google» <ph name="BEGIN_NEW" />جدید<ph name="END_NEW" /></translation>
 <translation id="1386674309198842382">آخرین فعالیت: <ph name="LAST_UPDATED" /> روز قبل</translation>
-<translation id="1390418506739274310">‏ممکن است سابقه را از برنامه‌های دیگری که پیوندها را در Chrome باز می‌کنند مشاهده کنید. ممکن است «حساب Google» شما انواع دیگری از سابقه مرور در <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> داشته باشد.</translation>
+<translation id="1390418506739274310">‏ممکن است سابقه را از برنامه‌های دیگری که پیوندها را در Ultimatum باز می‌کنند مشاهده کنید. ممکن است «حساب Google» شما انواع دیگری از سابقه مرور در <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> داشته باشد.</translation>
 <translation id="139752016751285248">برگ زیرین اطلاعات آماری قیمت به‌صورت کامل باز شده است</translation>
 <translation id="1397811292916898096">جستجو با <ph name="PRODUCT_NAME" /></translation>
-<translation id="1398057416966591719">‏می‌توانید <ph name="BEGIN_LINK1" />مدیریت کنید چه داده‌هایی از Chrome در «حساب Google» شما ذخیره شود<ph name="END_LINK1" />.
+<translation id="1398057416966591719">‏می‌توانید <ph name="BEGIN_LINK1" />مدیریت کنید چه داده‌هایی از Ultimatum در «حساب Google» شما ذخیره شود<ph name="END_LINK1" />.
 
-برای تنظیمات بیشتری که از داده‌ها برای بهبود تجربه شما در Chrome استفاده می‌کنند، به <ph name="BEGIN_LINK2" />سرویس‌های Google<ph name="END_LINK2" /> بروید.</translation>
+برای تنظیمات بیشتری که از داده‌ها برای بهبود تجربه شما در Ultimatum استفاده می‌کنند، به <ph name="BEGIN_LINK2" />سرویس‌های Google<ph name="END_LINK2" /> بروید.</translation>
 <translation id="1407069428457324124">زمینه تاریک</translation>
 <translation id="1407135791313364759">باز کردن همه</translation>
 <translation id="1409879593029778104">بارگیری <ph name="FILE_NAME" /> انجام نشد زیرا فایل از قبل موجود است.</translation>
 <translation id="1413446866325418126">‏ذخیره کردن داده‌ها در «حساب Google»</translation>
 <translation id="1416550906796893042">نسخه برنامه</translation>
-<translation id="1419753403124156396">‏‫Chrome بازراه‌اندازی شود؟</translation>
+<translation id="1419753403124156396">‏‫Ultimatum بازراه‌اندازی شود؟</translation>
 <translation id="1428770807407000502">همگام‌سازی خاموش شود؟</translation>
 <translation id="1430915738399379752">چاپ</translation>
 <translation id="1435593198351412143">‏باز شدن خودکار فایل‌های PDF</translation>
 <translation id="1437543266176261764">درحال اجرا در <ph name="APP_NAME" /></translation>
 <translation id="1448440926884431741">محصولات پیگیری‌شده را در «نشانک‌ها» سازمان‌دهی کنید</translation>
 <translation id="1460751212339734034">صرفه‌جویی در زمان، تایپ کمتر</translation>
-<translation id="1466383950273130737">‏انتخاب زبان Chrome</translation>
+<translation id="1466383950273130737">‏انتخاب زبان Ultimatum</translation>
 <translation id="1477626028522505441">به‌دلیل مشکلاتی در سرور، بارگیری <ph name="FILE_NAME" /> انجام نشد.</translation>
 <translation id="147982357559798527">تغییر کرده است</translation>
-<translation id="1480287803138246127">‏ممکن است بخشی از سابقه شما اینجا نمایش داده نشود. برای دیدن کل سابقه Chrome، آن را به‌صورت کامل باز کنید.</translation>
+<translation id="1480287803138246127">‏ممکن است بخشی از سابقه شما اینجا نمایش داده نشود. برای دیدن کل سابقه Ultimatum، آن را به‌صورت کامل باز کنید.</translation>
 <translation id="1492417797159476138">قبلاً این نام کاربری را برای این سایت ذخیره کرده‌اید</translation>
 <translation id="1493287004536771723"><ph name="SITE_NAME" /> را دنبال می‌کنید</translation>
 <translation id="1496514951988037011">نام کاربری</translation>
@@ -128,15 +128,15 @@
 <translation id="1513858653616922153">حذف گذرواژه</translation>
 <translation id="1515901671075971249">میان‌برهای پیمایش برگه</translation>
 <translation id="1521774566618522728">امروز فعال بود</translation>
-<translation id="153446405401665083">‏نسخه جدیدی از Chrome دردسترس است</translation>
+<translation id="153446405401665083">‏نسخه جدیدی از Ultimatum دردسترس است</translation>
 <translation id="1540012742443808215">نوار نشانی درحال‌حاضر در بالا قرار دارد</translation>
 <translation id="1543379346429265919">{BOOKMARKS_COUNT,plural, =1{‏‫۱ نشانک فقط در این دستگاه ذخیره شده است. برای استفاده از آن در دستگاه‌های دیگرتان، آن را در «حساب Google» خود (<ph name="ACCOUNT_EMAIL" />) ذخیره کنید.}one{‏‫# نشانک فقط در این دستگاه ذخیره شده است. برای استفاده از آن در دستگاه‌های دیگرتان، آن را در «حساب Google» خود (<ph name="ACCOUNT_EMAIL" />) ذخیره کنید.}other{‏‫# نشانک فقط در این دستگاه ذخیره شده است. برای استفاده از آن‌ها در دستگاه‌های دیگرتان، آن‌ها را در «حساب Google» خود (<ph name="ACCOUNT_EMAIL" />) ذخیره کنید.}}</translation>
-<translation id="1544084554881119930">‏روش‌های پرداخت و نشانی‌ها رمزگذاری نخواهند شد. سابقه مرور Chrome همگام‌سازی نخواهد شد.
-فقط شخصی که گذرعبارت شما را دراختیار داشته باشد می‌تواند داده‌های رمزگذاری‌شده‌تان را بخواند. گذرعبارت به Google‌ ارسال نمی‌شود یا توسط آن ذخیره نمی‌شود. اگر گذرعبارت را فراموش کردید یا می‌خواهید این تنظیم را تغییر دهید، <ph name="BEGIN_LINK" /> داده‌های Chrome ذخیره‌شده در حسابتان را پاک کنید<ph name="END_LINK" />.</translation>
+<translation id="1544084554881119930">‏روش‌های پرداخت و نشانی‌ها رمزگذاری نخواهند شد. سابقه مرور Ultimatum همگام‌سازی نخواهد شد.
+فقط شخصی که گذرعبارت شما را دراختیار داشته باشد می‌تواند داده‌های رمزگذاری‌شده‌تان را بخواند. گذرعبارت به Google‌ ارسال نمی‌شود یا توسط آن ذخیره نمی‌شود. اگر گذرعبارت را فراموش کردید یا می‌خواهید این تنظیم را تغییر دهید، <ph name="BEGIN_LINK" /> داده‌های Ultimatum ذخیره‌شده در حسابتان را پاک کنید<ph name="END_LINK" />.</translation>
 <translation id="1544826120773021464">‏برای مدیریت تنظیمات حساب Google، روی دکمه «مدیریت حساب» تک‌ضرب بزنید</translation>
 <translation id="1549000191223877751">انتقال به پنجره دیگر</translation>
-<translation id="1553358976309200471">‏به‌روزرسانی Chrome</translation>
-<translation id="1554532453982918912">‏کمک کنید Chrome برای افرادی که مثل شما از این مرورگر استفاده می‌کنند بهتر شود</translation>
+<translation id="1553358976309200471">‏به‌روزرسانی Ultimatum</translation>
+<translation id="1554532453982918912">‏کمک کنید Ultimatum برای افرادی که مثل شما از این مرورگر استفاده می‌کنند بهتر شود</translation>
 <translation id="1568636008098739136">خواندن این صفحه. برای ویرایش این میان‌بر، لمس کنید و نگه دارید.</translation>
 <translation id="1571041387761170095">گذرواژه دوباره‌استفاده‌شده یا ضعیفی پیدا نشد</translation>
 <translation id="1571304935088121812">کپی کردن نام کاربری</translation>
@@ -161,7 +161,7 @@
 <translation id="1702907158640575240">مرورگر تحت‌مدیریت</translation>
 <translation id="1718835860248848330">ساعت قبل</translation>
 <translation id="1724977129262658800">برای ویرایش گذرواژه‌تان، قفل صفحه را باز کنید</translation>
-<translation id="1726477445370128854">‏وقتی Chrome صفحاتی را که فکر می‌کند ممکن است بازدید کنید پیش‌بارگیری می‌کند، می‌توانید سریع‌تر مرور و جستجو کنید.</translation>
+<translation id="1726477445370128854">‏وقتی Ultimatum صفحاتی را که فکر می‌کند ممکن است بازدید کنید پیش‌بارگیری می‌کند، می‌توانید سریع‌تر مرور و جستجو کنید.</translation>
 <translation id="1728803206919861584">گذرکلید خارج از «حالت ناشناس» ذخیره شود؟</translation>
 <translation id="1732514748744806741">اگر گذرواژه‌هایتان لو برود، به شما اطلاع خواهیم داد</translation>
 <translation id="1747593111377567311">{NUM_SITES,plural, =1{‫۱ سایت اخیراً تعداد زیادی اعلان ارسال کرده است}one{‫# سایت اخیراً تعداد زیادی اعلان ارسال کرده است}other{‫# سایت اخیراً تعداد زیادی اعلان ارسال کرده است}}</translation>
@@ -171,7 +171,7 @@
 <translation id="1755203724116202818">برای سنجش عملکرد آگهی، انواع محدودی از داده‌ها بین سایت‌ها هم‌رسانی می‌شود؛ مثلاً آیا پس‌از بازدید از سایت خریدی انجام داده‌اید یا نه.</translation>
 <translation id="1757620656501361327">‏به‌روزرسانی «مدیر گذرواژه Google»</translation>
 <translation id="1760873718737761808">{FILE_COUNT,plural, =1{صفحه‌ها، ۱ صفحه در فهرست}one{صفحه‌ها، # صفحه در فهرست}other{صفحه‌ها، # صفحه در فهرست}}</translation>
-<translation id="1771929606532798550">‏اطلاعاتی درباره استفاده‌تان از Chrome به Google ارسال می‌شود، اما این اطلاعات به شما پیوند داده نمی‌شود\n\nاگر Chrome از کار بیفتد، جزئیات مربوط به خرابی می‌تواند حاوی اطلاعات شخصی باشد\n\nاگر سابقه‌تان را با «حساب Google» همگام‌سازی کنید، سنجه‌ها ممکن است حاوی اطلاعاتی درباره نشانی‌های وبی که بازدید می‌کنید نیز باشند</translation>
+<translation id="1771929606532798550">‏اطلاعاتی درباره استفاده‌تان از Ultimatum به Google ارسال می‌شود، اما این اطلاعات به شما پیوند داده نمی‌شود\n\nاگر Ultimatum از کار بیفتد، جزئیات مربوط به خرابی می‌تواند حاوی اطلاعات شخصی باشد\n\nاگر سابقه‌تان را با «حساب Google» همگام‌سازی کنید، سنجه‌ها ممکن است حاوی اطلاعاتی درباره نشانی‌های وبی که بازدید می‌کنید نیز باشند</translation>
 <translation id="1778457539567749232">علامت‌گذاری به عنوان خوانده نشده</translation>
 <translation id="1779766957982586368">بستن پنجره</translation>
 <translation id="1780023393214832643">گذرواژه‌های ذخیره‌شده در <ph name="USERNAME" /></translation>
@@ -183,13 +183,13 @@
 <translation id="1810845389119482123">همگام‌سازی اولیه کامل نشد</translation>
 <translation id="1812027881030482584"><ph name="SITE_ETLD_PLUS_ONE" /> نمی‌تواند بااستفاده از <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> ادامه دهد.</translation>
 <translation id="1820408774134375111">برگ زیرین ورود به سیستم</translation>
-<translation id="1825772852827001597">‏روش‌های پرداخت و نشانی‌های ذخیره‌شده در Google Pay رمزگذاری نخواهند شد. سابقه مرور Chrome همگام‌سازی نخواهد شد.
-فقط شخصی که گذرعبارت شما را دراختیار داشته باشد می‌تواند داده‌های رمزگذاری‌شده‌تان را بخواند. گذرعبارت به Google ارسال نمی‌شود یا توسط آن ذخیره نمی‌شود. اگر گذرعبارت را فراموش کردید یا می‌خواهید این تنظیم را تغییر دهید، <ph name="BEGIN_LINK" />داده‌های Chrome ذخیره‌شده در حسابتان را حذف کنید<ph name="END_LINK" />.</translation>
+<translation id="1825772852827001597">‏روش‌های پرداخت و نشانی‌های ذخیره‌شده در Google Pay رمزگذاری نخواهند شد. سابقه مرور Ultimatum همگام‌سازی نخواهد شد.
+فقط شخصی که گذرعبارت شما را دراختیار داشته باشد می‌تواند داده‌های رمزگذاری‌شده‌تان را بخواند. گذرعبارت به Google ارسال نمی‌شود یا توسط آن ذخیره نمی‌شود. اگر گذرعبارت را فراموش کردید یا می‌خواهید این تنظیم را تغییر دهید، <ph name="BEGIN_LINK" />داده‌های Ultimatum ذخیره‌شده در حسابتان را حذف کنید<ph name="END_LINK" />.</translation>
 <translation id="1829244130665387512">یافتن در صفحه</translation>
 <translation id="1832459821645506983">بله، موافقم</translation>
-<translation id="1845958458910716240">‏برای محافظت از داده‌هایتان، به Chrome اجازه داده می‌شود اجازه‌های سایت‌هایی را که اخیراً از آن‌ها بازدید نکرده‌اید بردارد</translation>
-<translation id="1871098866036088250">‏باز کردن در مرورگر Chrome</translation>
-<translation id="1877026089748256423">‏نسخه Chrome قدیمی است</translation>
+<translation id="1845958458910716240">‏برای محافظت از داده‌هایتان، به Ultimatum اجازه داده می‌شود اجازه‌های سایت‌هایی را که اخیراً از آن‌ها بازدید نکرده‌اید بردارد</translation>
+<translation id="1871098866036088250">‏باز کردن در مرورگر Ultimatum</translation>
+<translation id="1877026089748256423">‏نسخه Ultimatum قدیمی است</translation>
 <translation id="1877073879466606884">نمایه‌ای که با آن به سیستم وارد شده‌اید تحت‌مدیریت است. سرپرست شما می‌تواند تنظیمات نمایه‌تان را از دور تغییر دهد، اطلاعات مربوط به مرورگر را ازطریق گزارش گرفتن تجزیه‌وتحلیل کند، و دیگر اقدامات ضروری را انجام دهد.</translation>
 <translation id="1879904908408734349">برگ زیرین ورود به سیستم بسته شده است</translation>
 <translation id="1883903952484604915">فایل‌های من</translation>
@@ -200,7 +200,7 @@
 <translation id="1910950723001426294">فهرست گزینه‌های هم‌رسانی بسته است.</translation>
 <translation id="191726024256261717">مرور اجازه‌ها</translation>
 <translation id="1917766536967060661">‏دسترسی به گروه برگه «<ph name="GROUP_NAME" />» را فوراً ازدست می‌دهید و <ph name="BLOCKED_MEMBER_FULL_NAME" />‏ (<ph name="BLOCKED_MEMBER_EMAIL" />) دیگر نمی‌تواند در سرویس‌های Google با شما تعامل داشته باشد.</translation>
-<translation id="1919130412786645364">‏مجاز کردن ورود به سیستم Chrome</translation>
+<translation id="1919130412786645364">‏مجاز کردن ورود به سیستم Ultimatum</translation>
 <translation id="1922362554271624559">زبان‌های پیشنهادشده</translation>
 <translation id="1924255092154549435">برگه گسترده شده است</translation>
 <translation id="1925021887439448749">نشانی وب سفارشی وارد کنید</translation>
@@ -212,11 +212,11 @@
 <translation id="1944535645109964458">گذرکلیدی موجود نیست</translation>
 <translation id="1957557050935255529">‏درحال بار کردن PDF…</translation>
 <translation id="1959679933317802873">درانتظار محتوا</translation>
-<translation id="1960290143419248813">‏به‌روزرسانی‌های Chrome دیگر در این نسخه Android پشتیبانی نمی‌شوند</translation>
+<translation id="1960290143419248813">‏به‌روزرسانی‌های Ultimatum دیگر در این نسخه Android پشتیبانی نمی‌شوند</translation>
 <translation id="1963056249988316027">«بررسی هویت» روشن است و نمی‌تواند هویت شما را تأیید کند</translation>
 <translation id="1963976881984600709">محافظت استاندارد</translation>
 <translation id="1966710179511230534">لطفاً جزئیات ورود به سیستم را به‌روز کنید.</translation>
-<translation id="1969037871259811890">‏حذف کردن داده‌های مرور باعث نمی‌شود از سیستم «حساب Google» خود خارج شوید. برای انجام این کار، <ph name="BEGIN_LINK1" />از سیستم Chrome خارج شوید<ph name="END_LINK1" />.</translation>
+<translation id="1969037871259811890">‏حذف کردن داده‌های مرور باعث نمی‌شود از سیستم «حساب Google» خود خارج شوید. برای انجام این کار، <ph name="BEGIN_LINK1" />از سیستم Ultimatum خارج شوید<ph name="END_LINK1" />.</translation>
 <translation id="197288927597451399">ادامه دادن</translation>
 <translation id="1973912524893600642">نگه داشتن داده‌ها</translation>
 <translation id="1974060860693918893">پیشرفته</translation>
@@ -226,7 +226,7 @@
 <translation id="200114059308480249">‏نوشتار اطراف در جستجوهای Google لحاظ شوند؟</translation>
 <translation id="2021896219286479412">کنترل‌های سایت تمام‌صفحه</translation>
 <translation id="2038563949887743358">روشن کردن درخواست سایت رایانه‌ای</translation>
-<translation id="204321170514947529">‏<ph name="APP_NAME" /> داده‌هایی در Chrome نیز دارد</translation>
+<translation id="204321170514947529">‏<ph name="APP_NAME" /> داده‌هایی در Ultimatum نیز دارد</translation>
 <translation id="2047378580182589770">برای خارج شدن از حالت «ناشناس»، لمس کنید و نگه دارید</translation>
 <translation id="2049574241039454490"><ph name="FILE_SIZE_OF_TOTAL" /> <ph name="SEPARATOR" /> <ph name="DESCRIPTION" /></translation>
 <translation id="2051669996101374349">‏درصورت امکان از HTTPS استفاده می‌شود و قبل‌از بار شدن سایت‌هایی که از آن پشتیبانی نمی‌کنند هشدار دریافت می‌کنید. نمی‌توانید این تنظیم را تغییر دهید زیرا «محافظت پیشرفته» را فعال کرده‌اید.</translation>
@@ -236,7 +236,7 @@
 <translation id="2067805253194386918">نوشتار</translation>
 <translation id="2079545284768500474">لغو</translation>
 <translation id="2082238445998314030"><ph name="RESULT_NUMBER" /> نتیجه از <ph name="TOTAL_RESULTS" /></translation>
-<translation id="2088833076121753253">‏برای تمام کردن راه‌اندازی «تکمیل خودکار»، اکنون Chrome را بازراه‌اندازی کنید. برگه‌هایتان به‌طور خودکار دوباره باز خواهند شد.</translation>
+<translation id="2088833076121753253">‏برای تمام کردن راه‌اندازی «تکمیل خودکار»، اکنون Ultimatum را بازراه‌اندازی کنید. برگه‌هایتان به‌طور خودکار دوباره باز خواهند شد.</translation>
 <translation id="2091863218454846791">نمای فشرده نشان داده می‌شود</translation>
 <translation id="2093731487903423814">۱۵ دقیقه گذشته</translation>
 <translation id="2100273922101894616">ورود به سیستم خودکار</translation>
@@ -246,10 +246,10 @@
 <translation id="2122601567107267586">باز کردن برنامه امکان‌پذیر نیست</translation>
 <translation id="213279576345780926"><ph name="TAB_TITLE" /> بسته شد</translation>
 <translation id="2141396931810938595">براساس میزان استفاده شما</translation>
-<translation id="2145315049852051678">‏‫Chrome به‌طور منظم بررسی می‌کند تا مطمئن شود مرورگرتان ایمن‌ترین تنظیمات را دارد. اگر موردی به بازبینی نیاز داشته باشد، به شما اطلاع خواهیم داد.</translation>
+<translation id="2145315049852051678">‏‫Ultimatum به‌طور منظم بررسی می‌کند تا مطمئن شود مرورگرتان ایمن‌ترین تنظیمات را دارد. اگر موردی به بازبینی نیاز داشته باشد، به شما اطلاع خواهیم داد.</translation>
 <translation id="2149973817440762519">ویرایش نشانک</translation>
-<translation id="2158408438301413340">‏Chrome نتوانست همه گذرواژه‌هایتان را بررسی کند</translation>
-<translation id="2163089732491971196">‏برای ذخیره و استفاده کردن از داده‌های Chrome در «حساب Google» خود، گذرعبارت خود را وارد کنید</translation>
+<translation id="2158408438301413340">‏Ultimatum نتوانست همه گذرواژه‌هایتان را بررسی کند</translation>
+<translation id="2163089732491971196">‏برای ذخیره و استفاده کردن از داده‌های Ultimatum در «حساب Google» خود، گذرعبارت خود را وارد کنید</translation>
 <translation id="2166228530126694506">نسخه <ph name="VERSION_NUMBER" /></translation>
 <translation id="2172688499998841696">توضیحات تصویر خاموش است</translation>
 <translation id="2172905120685242547">پنجره بسته شود؟</translation>
@@ -261,7 +261,7 @@
 <translation id="219283042927675668">برگه‌های موجود در گروه</translation>
 <translation id="2194856509914051091">مواردی که باید درنظر داشت</translation>
 <translation id="22091350895006575">افزودن نام کاربری</translation>
-<translation id="221494669172414749">‏باز کردن Chrome بدون قفل نمایه باعث می‌شود گذرواژه‌ها و روش‌های پرداخت ذخیره‌شده‌تان از خودرو حذف شود. استفاده از قفل نمایه امنیت این داده‌ها را حفظ می‌کند.</translation>
+<translation id="221494669172414749">‏باز کردن Ultimatum بدون قفل نمایه باعث می‌شود گذرواژه‌ها و روش‌های پرداخت ذخیره‌شده‌تان از خودرو حذف شود. استفاده از قفل نمایه امنیت این داده‌ها را حفظ می‌کند.</translation>
 <translation id="2227444325776770048">ادامه دادن به‌عنوان <ph name="USER_FULL_NAME" /></translation>
 <translation id="2230777942707397948">پنجره خالی</translation>
 <translation id="223356358902285214">فعالیت‌ها در وب و برنامه</translation>
@@ -287,7 +287,7 @@
 <translation id="2332515770639153015">«مرور ایمن پیشرفته» روشن است</translation>
 <translation id="233375395665273385">حذف و خروج از سیستم</translation>
 <translation id="2341410551640223969"><ph name="WEBAPK_NAME" /> نصب نشد.</translation>
-<translation id="2349710944427398404">‏کل داده‌های استفاده‌شده توسط Chrome، شامل حساب‌ها، نشانک‌ها و تنظیمات ذخیره‌شده</translation>
+<translation id="2349710944427398404">‏کل داده‌های استفاده‌شده توسط Ultimatum، شامل حساب‌ها، نشانک‌ها و تنظیمات ذخیره‌شده</translation>
 <translation id="2349954856814571872">نماد دکمه نوار نشانک‌ها</translation>
 <translation id="235789365079050412">‏خط‌مشی رازداری Google</translation>
 <translation id="2359808026110333948">ادامه</translation>
@@ -307,7 +307,7 @@
 <translation id="2433507940547922241">شکل ظاهری</translation>
 <translation id="2435457462613246316">نمایش گذرواژه</translation>
 <translation id="2439153523196674349">پیش‌نمای <ph name="SITE_NAME" /></translation>
-<translation id="2449931042095204989">‏وقتی یک برنامه یا سایت Google درخواست می‌کند پیوندها به‌طور خصوصی در صفحه آن پیش‌بارگیری شوند، Chrome صفحه‌ها را بدون کوکی‌ها ازطریق سرورهای Google رمزگذاری و پیش‌بارگیری می‌کند. با این کار هویت شما از سایت پیش‌بارگیری‌شده پنهان می‌شود.</translation>
+<translation id="2449931042095204989">‏وقتی یک برنامه یا سایت Google درخواست می‌کند پیوندها به‌طور خصوصی در صفحه آن پیش‌بارگیری شوند، Ultimatum صفحه‌ها را بدون کوکی‌ها ازطریق سرورهای Google رمزگذاری و پیش‌بارگیری می‌کند. با این کار هویت شما از سایت پیش‌بارگیری‌شده پنهان می‌شود.</translation>
 <translation id="2450083983707403292">می‌خواهید بارگیری <ph name="FILE_NAME" /> را دوباره شروع کنید؟</translation>
 <translation id="2451607499823206582">پیگیری</translation>
 <translation id="2453860139492968684">پایان</translation>
@@ -315,17 +315,17 @@
 <translation id="2461822463642141190">فعلی</translation>
 <translation id="2463770278804271243">صفحه</translation>
 <translation id="2468444275314013497">مرورگرتان مشکلی ندارد</translation>
-<translation id="2472163211318554013">‏برای بردن بیشترین بهره از Chrome، به سیستم وارد شوید</translation>
+<translation id="2472163211318554013">‏برای بردن بیشترین بهره از Ultimatum، به سیستم وارد شوید</translation>
 <translation id="247737702124049222">توضیحات تصویر روشن است</translation>
 <translation id="2479148705183875116">رفتن به تنظیمات</translation>
 <translation id="2482878487686419369">اعلان‌ها</translation>
 <translation id="2496180316473517155">سابقه مرور</translation>
 <translation id="2497852260688568942">سرپرستتان همگام‌سازی را غیرفعال کرده است</translation>
-<translation id="250020030759455918">‏وضعیت ورود به سیستم <ph name="SITE_NAME" />، داده‌های محصول مرور، و داده‌های سایت را در Chrome خواهید دید</translation>
+<translation id="250020030759455918">‏وضعیت ورود به سیستم <ph name="SITE_NAME" />، داده‌های محصول مرور، و داده‌های سایت را در Ultimatum خواهید دید</translation>
 <translation id="2510106555128151389">درحال نصب <ph name="WEBAPK_NAME" />…</translation>
 <translation id="2512234228327349533">جستجوی گزینه‌های خرید</translation>
 <translation id="2513403576141822879">‏برای تنظیمات بیشتر مرتبط با حریم خصوصی، امنیت و جمع‌آوری داده‌ها، <ph name="BEGIN_LINK" />همگام‌سازی و سرویس‌های Google<ph name="END_LINK" /> را ببینید</translation>
-<translation id="2515921719039583189">‏داده‌های Chrome از این دستگاه حذف شود؟</translation>
+<translation id="2515921719039583189">‏داده‌های Ultimatum از این دستگاه حذف شود؟</translation>
 <translation id="2517113738956581680">برگ با اندازه کامل</translation>
 <translation id="2523184218357549926">‏نشانی وب صفحه‌هایی را که بازدید می‌کنید برای Google ارسال می‌کند</translation>
 <translation id="2524132927880411790">‏رفتن به «جستجوی گفتاری برنامه Google»</translation>
@@ -343,10 +343,10 @@
 <translation id="2569733278091928697">به‌راحتی می‌توانید کنترل‌های رسانه، جلسه‌های «ناشناس»، بارگیری‌ها، و موارد دیگر را مدیریت کنید</translation>
 <translation id="2571711316400087311">‏پیشنهاد ارسال صفحه‌های نوشته‌شده به زبان‌های دیگر به «ترجمه Google»</translation>
 <translation id="2571834852878229351">ایجاد گذرواژه خودم</translation>
-<translation id="2574249610672786438">‏در همه دستگاه‌هایی که در آن‌ها از Chrome استفاده می‌کنید، به سیستم وارد شوید تا بتوانید برگه‌هایتان را ببینید</translation>
+<translation id="2574249610672786438">‏در همه دستگاه‌هایی که در آن‌ها از Ultimatum استفاده می‌کنید، به سیستم وارد شوید تا بتوانید برگه‌هایتان را ببینید</translation>
 <translation id="2577981599306533385">‏دسترسی <ph name="MEMBER_FULL_NAME" />‏ (<ph name="EMAIL" />) به گروه برگه «<ph name="GROUP_NAME" />» فوراً برداشته می‌شود و او دیگر نمی‌تواند در سرویس‌های Google با شما تعامل داشته باشد.</translation>
 <translation id="2579297619530305344">برگه «گذرواژه‌ها در همه دستگاه‌ها دردسترس است» به‌صورت کامل باز شد</translation>
-<translation id="2581165646603367611">‏این کار کوکی‌ها، حافظه پنهان و داده‌های دیگر سایت‌ها را که از نظر Chrome مهم نیست پاک می‌کند.</translation>
+<translation id="2581165646603367611">‏این کار کوکی‌ها، حافظه پنهان و داده‌های دیگر سایت‌ها را که از نظر Ultimatum مهم نیست پاک می‌کند.</translation>
 <translation id="2587052924345400782">نسخه جدیدتری در دسترس است</translation>
 <translation id="2593272815202181319">قلم‌های با عرض ثابت</translation>
 <translation id="260403163289591229">دنبال می‌کنید</translation>
@@ -386,7 +386,7 @@
 <translation id="2779651927720337254">انجام نشد</translation>
 <translation id="2781151931089541271">۱ ثانیه باقی‌مانده است</translation>
 <translation id="2789486458103222910">تأیید</translation>
-<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{‏‫Chrome یک مورد استفاده مجدد از گذرواژه پیدا کرده است که می‌توانید آن را بهبود دهید}one{‏‫Chrome ‏# مورد استفاده مجدد از گذرواژه پیدا کرده است که می‌توانید آن‌ها را بهبود دهید}other{‏‫Chrome ‏# مورد استفاده مجدد از گذرواژه پیدا کرده است که می‌توانید آن‌ها را بهبود دهید}}</translation>
+<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{‏‫Ultimatum یک مورد استفاده مجدد از گذرواژه پیدا کرده است که می‌توانید آن را بهبود دهید}one{‏‫Ultimatum ‏# مورد استفاده مجدد از گذرواژه پیدا کرده است که می‌توانید آن‌ها را بهبود دهید}other{‏‫Ultimatum ‏# مورد استفاده مجدد از گذرواژه پیدا کرده است که می‌توانید آن‌ها را بهبود دهید}}</translation>
 <translation id="2800066122460699237">برگه <ph name="TAB_TITLE" /> بسته خواهد شد</translation>
 <translation id="2805756323405976993">برنامه‌ها</translation>
 <translation id="281504910091592009">‏در <ph name="BEGIN_LINK" />حساب Google<ph name="END_LINK" /> خود گذرواژه‌های ذخیره‌شده را مشاهده و مدیریت کنید</translation>
@@ -402,14 +402,14 @@
 <translation id="2842985007712546952">پوشه اصلی</translation>
 <translation id="2854916915045135148">برای رفتن به حالت «ناشناس»، لمس کنید و نگه دارید</translation>
 <translation id="2860954141821109167">مطمئن شوید برنامه تلفن در این دستگاه فعال باشد</translation>
-<translation id="2861923151411510142">‏برخی‌از ویژگی‌های Chrome دیگر دردسترس نخواهد بود</translation>
+<translation id="2861923151411510142">‏برخی‌از ویژگی‌های Ultimatum دیگر دردسترس نخواهد بود</translation>
 <translation id="2869430948265924908">برای محافظت از محتوای حساستان در خودرو، باید قفل نمایه خودرو ایجاد کنید.  می‌توانید این کار را با پین، کد، یا گذرواژه انجام دهید.</translation>
 <translation id="2870560284913253234">سایت</translation>
 <translation id="2871733351037274014">پیش‌بارگیری صفحات</translation>
 <translation id="2876136027428473467"><ph name="CHILD_NAME" /> از شما می‌خواهد این وب‌سایت را تأیید کنید:</translation>
-<translation id="2876628302275096482">‏درباره اینکه <ph name="BEGIN_LINK" />Chrome چگونه داده‌های شما را خصوصی نگه می‌دارد<ph name="END_LINK" /> بیشتر بدانید</translation>
+<translation id="2876628302275096482">‏درباره اینکه <ph name="BEGIN_LINK" />Ultimatum چگونه داده‌های شما را خصوصی نگه می‌دارد<ph name="END_LINK" /> بیشتر بدانید</translation>
 <translation id="2883644600102358131">‏گذرواژه‌ها به‌زودی در این دستگاه ازکار خواهد افتاد. برای ادامه استفاده از گذرواژه‌هایتان، «خدمات Google Play» را به‌روز کنید.</translation>
-<translation id="2888126860611144412">‏درباره Chrome</translation>
+<translation id="2888126860611144412">‏درباره Ultimatum</translation>
 <translation id="2891154217021530873">توقف بارگیری صفحه</translation>
 <translation id="2894821468041866720">باعث کاهش قابل‌توجه سرعت مرورگر یا دستگاه شما نمی‌شود.</translation>
 <translation id="2895521649038438824">می‌توانید به این صفحه گوش دهید</translation>
@@ -424,14 +424,14 @@
 <translation id="2923908459366352541">نام نامعتبر است</translation>
 <translation id="2932150158123903946">‏فضای ذخیره‌سازی Google <ph name="APP_NAME" /></translation>
 <translation id="2932222164150889403">صفحه‌کلیدتان تغییر نخواهد کرد</translation>
-<translation id="2936980480904111527">‏اعلان‌های Chrome انجام کارها را آسان‌تر می‌کند</translation>
+<translation id="2936980480904111527">‏اعلان‌های Ultimatum انجام کارها را آسان‌تر می‌کند</translation>
 <translation id="2940075786175545812">گزینه تأیید کردن یا نکردن وب‌سایت</translation>
 <translation id="2942036813789421260">برگه پیش‌نمایش بسته است</translation>
 <translation id="2951071800649516099">صفحه‌ها را برای خواندن در فرصتی دیگر به فهرست خواندن اضافه کنید</translation>
 <translation id="2954586176076923855">انتقال نوار نشانی به بالا</translation>
 <translation id="2961208450284224863">{READING_LIST_UNREAD_PAGE_COUNT,plural, =1{<ph name="READING_LIST_UNREAD_PAGE_COUNT_ONE" /> صفحه خوانده‌نشده}one{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> صفحه خوانده‌نشده}other{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> صفحه خوانده‌نشده}}</translation>
 <translation id="2972109037780336501">برداشتن خودکار اجازه‌ها</translation>
-<translation id="2976550651269220761">‏برخی‌از داده‌های Chrome هنوز در «حساب Google» شما ذخیره نشده است.\nپیش‌از خروج از سیستم، چند دقیقه صبر کنید. اگر اکنون از سیستم خارج شوید، این داده‌ها حذف خواهد شد.</translation>
+<translation id="2976550651269220761">‏برخی‌از داده‌های Ultimatum هنوز در «حساب Google» شما ذخیره نشده است.\nپیش‌از خروج از سیستم، چند دقیقه صبر کنید. اگر اکنون از سیستم خارج شوید، این داده‌ها حذف خواهد شد.</translation>
 <translation id="2977350910003566746">ترتیب براساس آخرین باز شدن</translation>
 <translation id="297771753501244313">به‌ترتیب آخرین باز شدن</translation>
 <translation id="2979639724566107830">باز کردن در پنجرهٔ جدید</translation>
@@ -451,14 +451,14 @@
 <translation id="3029704984691124060">عبارت‌های عبور مطابقت ندارند</translation>
 <translation id="3036750288708366620"><ph name="BEGIN_LINK" />دریافت راهنمایی<ph name="END_LINK" /></translation>
 <translation id="3037177537145227281">درحال پیگیری قیمت</translation>
-<translation id="3037517125981011456">‏درخواست‌های ورود به سیستم Chrome را نشان می‌دهد</translation>
+<translation id="3037517125981011456">‏درخواست‌های ورود به سیستم Ultimatum را نشان می‌دهد</translation>
 <translation id="3038272154009688107">دیدن همه سایت‌ها</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> نشانک}one{<ph name="BOOKMARKS_COUNT_MANY" /> نشانک}other{<ph name="BOOKMARKS_COUNT_MANY" /> نشانک}}</translation>
-<translation id="3062802207422175757">‏مقاله‌های مربوط با علایقتان در Chrome</translation>
+<translation id="3062802207422175757">‏مقاله‌های مربوط با علایقتان در Ultimatum</translation>
 <translation id="3066573403916685335">حرکت به پایین</translation>
 <translation id="3067505415088964188">قیمت پایین است</translation>
 <translation id="3070005020161560471">ترجمه خودکار</translation>
-<translation id="3072980200212375806">‏<ph name="APP_NAME" /> در Chrome باز می‌شود. درصورت ادامه دادن، با <ph name="BEGIN_LINK1" />شرایط خدمات Google<ph name="END_LINK1" /> و <ph name="BEGIN_LINK2" />شرایط خدمات تکمیلی Google Chrome و ChromeOS<ph name="END_LINK2" /> موافقت می‌کنید. <ph name="BEGIN_LINK3" />خط‌مشی رازداری<ph name="END_LINK3" /> نیز اعمال می‌شود.</translation>
+<translation id="3072980200212375806">‏<ph name="APP_NAME" /> در Ultimatum باز می‌شود. درصورت ادامه دادن، با <ph name="BEGIN_LINK1" />شرایط خدمات Google<ph name="END_LINK1" /> و <ph name="BEGIN_LINK2" />شرایط خدمات تکمیلی Ultimatum و UltimatumOS<ph name="END_LINK2" /> موافقت می‌کنید. <ph name="BEGIN_LINK3" />خط‌مشی رازداری<ph name="END_LINK3" /> نیز اعمال می‌شود.</translation>
 <translation id="3080525922482950719">می‌توانید صفحه‌ها را برای خواندن در فرصتی دیگر یا در حالت آفلاین ذخیره کنید</translation>
 <translation id="3087734570205094154">پایین</translation>
 <translation id="3091010850649238832">نمایش محتوای بریده‌دان</translation>
@@ -467,12 +467,12 @@
 <translation id="3122883569442693641">جزئیات بیشتر</translation>
 <translation id="3123734510202723619">اطلاعیه‌ها</translation>
 <translation id="3148237711805373460">به آنجا هدایت شوم</translation>
-<translation id="314939179385989105">‏صفحه اصلی Chrome</translation>
+<translation id="314939179385989105">‏صفحه اصلی Ultimatum</translation>
 <translation id="3158667104057012316">براساس ترتیب دستی</translation>
 <translation id="3159335509547415276">آشنایی با حساب‌های مسدودشده</translation>
 <translation id="3161699713309727585">‫<ph name="BUTTON_TEXT" />، در زبانه جدیدی باز می‌شود</translation>
 <translation id="3166827708714933426">میان‌برهای پنجره و برگه</translation>
-<translation id="316694332262407393">‏Chrome ازقبل درحال اجرا شدن است.</translation>
+<translation id="316694332262407393">‏Ultimatum ازقبل درحال اجرا شدن است.</translation>
 <translation id="3167258285411721858">می‌توانید درخواست دهید از سایت ویژه تلفن همراه <ph name="HOST_NAME" /> استفاده کنید</translation>
 <translation id="3169472444629675720">کشف کردن</translation>
 <translation id="3172472771272043251">{PASSWORDS_COUNT,plural, =1{‏‫۱ گذرواژه و موارد دیگر فقط در این دستگاه ذخیره شده‌اند. برای استفاده از آن‌ها در دستگاه‌های دیگرتان، آن‌ها را در «حساب Google» خود (<ph name="ACCOUNT_EMAIL" />) ذخیره کنید.}one{‏‫# گذرواژه و موارد دیگر فقط در این دستگاه ذخیره شده‌اند. برای استفاده از آن‌ها در دستگاه‌های دیگرتان، آن‌ها را در «حساب Google» خود (<ph name="ACCOUNT_EMAIL" />) ذخیره کنید.}other{‏‫# گذرواژه و موارد دیگر فقط در این دستگاه ذخیره شده‌اند. برای استفاده از آن‌ها در دستگاه‌های دیگرتان، آن‌ها را در «حساب Google» خود (<ph name="ACCOUNT_EMAIL" />) ذخیره کنید.}}</translation>
@@ -488,7 +488,7 @@
 <translation id="3236059992281584593">۱ دقیقه باقی‌مانده است</translation>
 <translation id="3237087289225714896">پیش‌بارگذاری استاندارد:</translation>
 <translation id="3244271242291266297">ماه</translation>
-<translation id="3245429137663807393">‏اگر گزارش‌های استفاده از Chrome را نیز هم‌رسانی کنید، این گزارش‌ها نشانی‌های وبی را که بازدید می‌کنید دربرمی‌گیرند.</translation>
+<translation id="3245429137663807393">‏اگر گزارش‌های استفاده از Ultimatum را نیز هم‌رسانی کنید، این گزارش‌ها نشانی‌های وبی را که بازدید می‌کنید دربرمی‌گیرند.</translation>
 <translation id="3250563604907490871">‏وقتی به Wi-Fi وصل شوید ویژگی توضیحات تصویر فعال خواهد شد</translation>
 <translation id="3254409185687681395">نشانک گذاری این صفحه</translation>
 <translation id="3259831549858767975">کوچک‌تر کردن همه‌چیز در صفحه</translation>
@@ -496,7 +496,7 @@
 <translation id="3269093882174072735">بارگیری تصویر</translation>
 <translation id="327204079441056603">نحوه ذخیره شدن گذرواژه‌ها در این دستگاه را تغییر دادیم</translation>
 <translation id="3280562213547448728">جستجوی گفتاری</translation>
-<translation id="3282568296779691940">‏ورود به سیستم Chrome</translation>
+<translation id="3282568296779691940">‏ورود به سیستم Ultimatum</translation>
 <translation id="3285065882678541460">{TAB_COUNT,plural, =1{‫<ph name="TAB_GROUPS_PART" />، <ph name="TAB_COUNT_ONE" /> برگه}one{‫<ph name="TAB_GROUPS_PART" />، <ph name="TAB_COUNT_MANY" /> برگه}other{‫<ph name="TAB_GROUPS_PART" />، <ph name="TAB_COUNT_MANY" /> برگه}}</translation>
 <translation id="3293181007446299124">سابقه مرور شما به‌صورت خصوصی در دستگاهتان نگه داشته می‌شود و گزارش‌ها برای محافظت از هویتتان با تأخیر ارسال می‌شود</translation>
 <translation id="3301936297336370235">تأیید پیشنهاد گذرواژه</translation>
@@ -513,7 +513,7 @@
 <translation id="3351165113450806415">روشی جدید برای تند کشیدن</translation>
 <translation id="3359667936385849800">استفاده از ارائه‌دهنده خدمات کنونی</translation>
 <translation id="3373701465337594448">وقتی روشن باشد، فهرست سایت‌هایی که بازدید می‌کنید و علایقتان را حدس می‌زنند، در اینجا نشان داده می‌شود</translation>
-<translation id="3374023511497244703">‏نشانک‌ها، سابقه، گذرواژه‌ها و سایر داده‌های Chrome، دیگر با حساب Google شما همگام‌سازی نمی‌شود.</translation>
+<translation id="3374023511497244703">‏نشانک‌ها، سابقه، گذرواژه‌ها و سایر داده‌های Ultimatum، دیگر با حساب Google شما همگام‌سازی نمی‌شود.</translation>
 <translation id="3384347053049321195">اشتراک‌گذاری تصویر</translation>
 <translation id="3387650086002190359">به‌دلیل خطاهای سیستم فایل، بارگیری <ph name="FILE_NAME" /> انجام نشد.</translation>
 <translation id="3398320232533725830">باز کردن مدیر نشانک‌ها</translation>
@@ -528,19 +528,19 @@
 <translation id="3443221991560634068">بار کردن مجدد صفحه کنونی</translation>
 <translation id="3444179773590444986">مایلید بازخوردتان را درباره زمینه تاریک برای سایت‌ها هم‌رسانی کنید؟</translation>
 <translation id="3448874648066942074">خلاصه کردن صفحه با هوش مصنوعی</translation>
-<translation id="3452832259067974318">‏برای حفظ حریم‌خصوصی‌تان، Chrome گذرواژه‌تان را به‌طور خودکار در این فیلد وارد نخواهد کرد.</translation>
+<translation id="3452832259067974318">‏برای حفظ حریم‌خصوصی‌تان، Ultimatum گذرواژه‌تان را به‌طور خودکار در این فیلد وارد نخواهد کرد.</translation>
 <translation id="3467081767799433066">با سنجش آگهی، انواع محدودی از داده‌ها بین سایت‌ها هم‌رسانی می‌شود تا سایت‌ها بتوانند عملکرد آگهی‌هایشان را بسنجند؛ مثلاً آیا پس‌از بازدید از سایت خریدی انجام داده‌اید یا نه.</translation>
 <translation id="3474624961160222204">ادامه دادن به‌عنوان <ph name="NAME" /></translation>
 <translation id="3478363558367712427">می‌توانید موتور جستجویتان را انتخاب کنید</translation>
 <translation id="3479552764303398839">حالا نه</translation>
 <translation id="3482805106082349287">جستجو بااستفاده از صفحه‌کلید، گفتار، حالت ناشناس، یا دوربین</translation>
-<translation id="3487903178221457900">‏ممکن است فایل صادرشده برای دیگران، ازجمله برنامه‌ها، قابل‌دسترس باشد. وقتی صادر کنید، گذرواژه‌هایتان از Chrome حذف می‌شود.</translation>
+<translation id="3487903178221457900">‏ممکن است فایل صادرشده برای دیگران، ازجمله برنامه‌ها، قابل‌دسترس باشد. وقتی صادر کنید، گذرواژه‌هایتان از Ultimatum حذف می‌شود.</translation>
 <translation id="3488199663160411179">نام</translation>
 <translation id="3493531032208478708">درباره محتوای پیشنهادی <ph name="BEGIN_LINK" />بیشتر بدانید<ph name="END_LINK" /></translation>
 <translation id="3499246418971111862">chrome_qrcode_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="350276055892098337">ترتیب براساس قدیمی‌ترین</translation>
 <translation id="3507132249039706973">«محافظت استاندارد» روشن است</translation>
-<translation id="3509330069915219067">‏آفلاین. Chrome نمی‌تواند به‌روزرسانی‌ها را بررسی کند.</translation>
+<translation id="3509330069915219067">‏آفلاین. Ultimatum نمی‌تواند به‌روزرسانی‌ها را بررسی کند.</translation>
 <translation id="3513019849832307207">پیوستن و باز کردن</translation>
 <translation id="3513704683820682405">واقعیت افزوده</translation>
 <translation id="3516053221628030540">‏رفتن به Google Play</translation>
@@ -573,10 +573,10 @@
 <translation id="3627893290277153986">باز کردن گزینه‌ها برای ذخیره صفحه</translation>
 <translation id="3631987586758005671">درحال هم‌رسانی با <ph name="DEVICE_NAME" /></translation>
 <translation id="363484704507524488">«بررسی هویت» را می‌توانید در تنظیمات «محافظت دربرابر سرقت» مدیریت کنید. <ph name="BEGIN_LINK" />رفتن به تنظیمات<ph name="END_LINK" /></translation>
-<translation id="3635073343384702370">‏‫Chrome زمانی می‌تواند گذرواژه‌هایتان را بررسی کند که آن‌ها را ذخیره کرده باشید</translation>
+<translation id="3635073343384702370">‏‫Ultimatum زمانی می‌تواند گذرواژه‌هایتان را بررسی کند که آن‌ها را ذخیره کرده باشید</translation>
 <translation id="363596933471559332">با استفاده از اعتبارنامه‌های ذخیره شده، به‌طور خودکار به سیستم وب‌سایت‌ها وارد شوید. وقتی این قابلیت خاموش است، هر بار قبل از وارد شدن به سیستم وب‌سایت از شما خواسته می‌شود اطلاعات را تأیید کنید.</translation>
 <translation id="3636940436873918441">زبان‌های ترجیحی</translation>
-<translation id="3637744895182738742">‏اگر گذرعبارت را فراموش کردید یا می‌خواهید این تنظیم را تغییر دهید، <ph name="BEGIN_LINK" />داده‌های Chrome ذخیره‌شده در حسابتان را حذف کنید<ph name="END_LINK" />.</translation>
+<translation id="3637744895182738742">‏اگر گذرعبارت را فراموش کردید یا می‌خواهید این تنظیم را تغییر دهید، <ph name="BEGIN_LINK" />داده‌های Ultimatum ذخیره‌شده در حسابتان را حذف کنید<ph name="END_LINK" />.</translation>
 <translation id="3653111872753786013"><ph name="WEBSITE_TITLE" />: <ph name="WEBSITE_URL" /></translation>
 <translation id="3674208116086565128">‏رفتن به «صفحه اصلی برنامه Google»</translation>
 <translation id="368329460027487650">از سیستم خارج شده‌اید. گزینه‌هایی را برای ورود به سیستم باز می‌کند.</translation>
@@ -592,7 +592,7 @@
 <translation id="3710501561113687889">برای ادامه دادن، <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> <ph name="FIELDS_STRING" /> شما را با این سایت هم‌رسانی خواهد کرد.</translation>
 <translation id="3710560693796335511">مشارکت</translation>
 <translation id="3714981814255182093">باز کردن «نوار پیدا کردن»</translation>
-<translation id="3718765429352682176">‏ممکن است سابقه را از برنامه‌های دیگری که پیوندها را در Chrome باز می‌کنند مشاهده کنید.</translation>
+<translation id="3718765429352682176">‏ممکن است سابقه را از برنامه‌های دیگری که پیوندها را در Ultimatum باز می‌کنند مشاهده کنید.</translation>
 <translation id="3721119614952978349">‏شما و Google</translation>
 <translation id="3737319253362202215">تنظیمات ترجمه</translation>
 <translation id="3738139272394829648">لمس کردن برای جستجو</translation>
@@ -640,8 +640,8 @@
 <translation id="3950820424414687140">ورود به سیستم</translation>
 <translation id="395377504920307820">استفاده بدون حساب</translation>
 <translation id="3955219620682768253">رفتن به صفحه قبلی در «سابقه»</translation>
-<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{‏وقتی آماده شدید، Chrome صفحه را بار می‌کند}one{‏وقتی آماده شدید، Chrome صفحه‌ها را بار می‌کند}other{‏وقتی آماده شدید، Chrome صفحه‌ها را بار می‌کند}}</translation>
-<translation id="3969142555815019568">‏Chrome نمی‌تواند گذرواژه‌هایتان را بررسی کند</translation>
+<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{‏وقتی آماده شدید، Ultimatum صفحه را بار می‌کند}one{‏وقتی آماده شدید، Ultimatum صفحه‌ها را بار می‌کند}other{‏وقتی آماده شدید، Ultimatum صفحه‌ها را بار می‌کند}}</translation>
+<translation id="3969142555815019568">‏Ultimatum نمی‌تواند گذرواژه‌هایتان را بررسی کند</translation>
 <translation id="3969863827134279083">حرکت به بالا</translation>
 <translation id="397105322502079400">در حال محاسبه…</translation>
 <translation id="397583555483684758">همگام‌سازی متوقف شده است</translation>
@@ -678,7 +678,7 @@
 <translation id="4132137475637520539">هر کسی پیوند را داشته باشد بتواند بپیوندد</translation>
 <translation id="4135200667068010335">فهرست دستگاه‌هایی که می‌توان با آن‌ها برگه هم‌رسانی کرد، بسته است.</translation>
 <translation id="4137746084635924146">زبان کنونی دستگاه</translation>
-<translation id="4139654229316918773">Chrome Canary</translation>
+<translation id="4139654229316918773">Ultimatum Canary</translation>
 <translation id="414128724510021958">به‌طور پیش‌فرض سایت‌های ویژه رایانه درخواست می‌شود</translation>
 <translation id="4162867837470729563">فهرست گزینه‌های هم‌رسانی به‌صورت کامل باز شده است.</translation>
 <translation id="4170011742729630528">این سرویس در دسترس نیست؛ بعداً دوباره امتحان کنید.</translation>
@@ -691,14 +691,14 @@
 <translation id="4197828496439691735">{NUM_TABS,plural, =1{یک برگه در این دستگاه}one{# برگه در این دستگاه}other{# برگه در این دستگاه}}</translation>
 <translation id="4198423547019359126">مکانی برای بارگیری دردسترس نیست</translation>
 <translation id="4209029522667123437">‫<ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> • در این سایت استفاده کرده‌اید</translation>
-<translation id="4214315110991671325">‏اگر کوکی‌ها را مجاز کنید، ممکن است Chrome از آن‌ها برای پیش‌بارگذاری استفاده کند.</translation>
+<translation id="4214315110991671325">‏اگر کوکی‌ها را مجاز کنید، ممکن است Ultimatum از آن‌ها برای پیش‌بارگذاری استفاده کند.</translation>
 <translation id="4216511743389425832">خواندن این صفحه</translation>
 <translation id="4225725533026049334">دنبال می‌کنید</translation>
 <translation id="4225895483398857530">میان‌بر نوار ابزار</translation>
 <translation id="4232376164796433044">گذرواژه‌ها و تکمیل خودکار</translation>
 <translation id="4242533952199664413">باز کردن تنظیمات</translation>
 <translation id="4248098802131000011">گذرواژه خود را از نقض داده و سایر مسائل امنیتی ایمن نگه دارید</translation>
-<translation id="424864128008805179">‏از سیستم Chrome خارج می شوید؟</translation>
+<translation id="424864128008805179">‏از سیستم Ultimatum خارج می شوید؟</translation>
 <translation id="4249955472157341256">مرتب‌سازی براساس جدیدترین</translation>
 <translation id="4255841059940367080">‏محافظت هم‌زمان با بهره‌گیری از هوش مصنوعی دربرابر سایت‌ها، بارگیری‌ها، و افزونه‌های خطرناک که براساس داده‌های مرور ارسالی به Google است</translation>
 <translation id="4256782883801055595">مجوزهای متن‌باز</translation>
@@ -707,7 +707,7 @@
 <translation id="4270730597186910506">محصول را پیگیری یا لغو پیگیری کنید.</translation>
 <translation id="4277529130885813215">استفاده از دستگاهی دیگر</translation>
 <translation id="427987768447457592">گروه برگه جدید</translation>
-<translation id="4282440837784183472">‏سازمانتان (<ph name="MANAGED_DOMAIN" />) حسابی که با آن به سیستم وارد می‌شوید و نحوه استفاده از Chrome را مدیریت می‌کند. سرپرستتان می‌تواند برخی‌از ویژگی‌ها را راه‌اندازی یا محدود کند.</translation>
+<translation id="4282440837784183472">‏سازمانتان (<ph name="MANAGED_DOMAIN" />) حسابی که با آن به سیستم وارد می‌شوید و نحوه استفاده از Ultimatum را مدیریت می‌کند. سرپرستتان می‌تواند برخی‌از ویژگی‌ها را راه‌اندازی یا محدود کند.</translation>
 <translation id="4285498937028063278">برداشتن سنجاق</translation>
 <translation id="4285846616383034558">کوکی‌ها، حافظه نهان، و دیگر داده‌های سایت</translation>
 <translation id="4291407919474070700">‏<ph name="BEGIN_LINK" />روشن کردن قفل صفحه در تنظیمات Android<ph name="END_LINK" /></translation>
@@ -717,7 +717,7 @@
 <translation id="4307992518367153382">موارد اصلی</translation>
 <translation id="4311652497846705514">‏فایل PDF باز شود؟</translation>
 <translation id="4320177379694898372">اتصال اینترنتی ندارید</translation>
-<translation id="4326079409704643112">‏برای ذخیره کردن داده‌های Chrome در «حساب Google» خود و استفاده از آن‌ها، هویتتان را به‌تأیید برسانید</translation>
+<translation id="4326079409704643112">‏برای ذخیره کردن داده‌های Ultimatum در «حساب Google» خود و استفاده از آن‌ها، هویتتان را به‌تأیید برسانید</translation>
 <translation id="433213510553688132">دنبال می‌کنید…</translation>
 <translation id="4335835283689002019">«مرور ایمن» خاموش است</translation>
 <translation id="4351244548802238354">بستن کادر گفتگو</translation>
@@ -745,15 +745,15 @@
 <translation id="4452548195519783679">در <ph name="FOLDER_NAME" /> نشانک گذاشته شد</translation>
 <translation id="4460861538906892109">{ITEMS_COUNT,plural, =1{‫۱ نشانک}one{‫# نشانک}other{‫# نشانک}}</translation>
 <translation id="4478161224666880173">می‌توانید از حساب <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> در این سایت استفاده کنید. برای ادامه دادن، به <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> وارد شوید.</translation>
-<translation id="4479972344484327217">‏درحال نصب <ph name="MODULE" /> برای Chrome…</translation>
+<translation id="4479972344484327217">‏درحال نصب <ph name="MODULE" /> برای Ultimatum…</translation>
 <translation id="4484496141267039529">اتصال برقرار نیست. بعداً دوباره امتحان کنید.</translation>
-<translation id="4487967297491345095">‏همه داده‌های برنامه Chrome به‌طور دائم حذف خواهند شد. این داده‌ها شامل همه فایل‌ها، تنظیمات، حساب‌ها، پایگاه‌های داده و غیره می‌شود.</translation>
+<translation id="4487967297491345095">‏همه داده‌های برنامه Ultimatum به‌طور دائم حذف خواهند شد. این داده‌ها شامل همه فایل‌ها، تنظیمات، حساب‌ها، پایگاه‌های داده و غیره می‌شود.</translation>
 <translation id="4494806687727322324">سرپرستتان ذخیره گذرواژه را روشن کرده است</translation>
 <translation id="4508528996305412043">منوی کارت فید باز شد</translation>
 <translation id="4509741852167209430">انواع محدودی از داده‌ها بین سایت‌ها هم‌رسانی می‌شود تا سایت‌ها بتوانند عملکرد آگهی‌هایشان را بسنجند؛ مثلاً آیا پس‌از بازدید از سایت خریدی انجام داده‌اید یا نه.</translation>
 <translation id="4513387527876475750">{DAYS,plural, =1{۱ روز قبل}one{#  روز قبل}other{#  روز قبل}}</translation>
 <translation id="451872707440238414">جستجوی نشانک‌ها</translation>
-<translation id="4521489764227272523">‏داده‌های انتخاب‌‌شده از Chrome و دستگاه‌های همگام‌سازی‌شده شما حذف شدند.
+<translation id="4521489764227272523">‏داده‌های انتخاب‌‌شده از Ultimatum و دستگاه‌های همگام‌سازی‌شده شما حذف شدند.
 
 ممکن است اشکال دیگری از سابقه مرورتان در حساب Google شما وجود داشته باشد، مانند جستجو‌ها و فعالیت دیگر سرویس‌های Google در <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="4523326818319942067">ساعت پیش</translation>
@@ -772,10 +772,10 @@
 <translation id="4594952190837476234">این صفحه آفلاین مربوط به تاریخ <ph name="CREATION_TIME" /> است و ممکن است با نسخه آنلاین متفاوت باشد.</translation>
 <translation id="4595805675102978678">‏خطای «حساب Google»</translation>
 <translation id="4601095002996233687">اسکن‌های عمیق برای شناسایی بارگیری‌های مشکوک.</translation>
-<translation id="4606559747793337066">‏وقتی سایت یا برنامه‌ای درخواست می‌کند پیوندها به‌طور خصوصی در صفحه آن پیش‌بارگیری شوند، Chrome صفحات را بدون کوکی‌ها ازطریق سرورهای Google رمزگذاری و پیش‌بارگیری می‌کند. با این کار هویت شما از سایت پیش‌بارگیری‌شده پنهان می‌شود.</translation>
+<translation id="4606559747793337066">‏وقتی سایت یا برنامه‌ای درخواست می‌کند پیوندها به‌طور خصوصی در صفحه آن پیش‌بارگیری شوند، Ultimatum صفحات را بدون کوکی‌ها ازطریق سرورهای Google رمزگذاری و پیش‌بارگیری می‌کند. با این کار هویت شما از سایت پیش‌بارگیری‌شده پنهان می‌شود.</translation>
 <translation id="4616150815774728855">باز کردن <ph name="WEBAPK_NAME" /></translation>
 <translation id="4619564267100705184">تأیید کنید این شمایید</translation>
-<translation id="4624065194742029982">‏حالت ناشناس Chrome</translation>
+<translation id="4624065194742029982">‏حالت ناشناس Ultimatum</translation>
 <translation id="4634124774493850572">استفاده از گذرواژه</translation>
 <translation id="4640331037679501949">{NUM_PASSWORDS,plural, =1{۱ گذرواژه لورفته}one{# گذرواژه لورفته}other{# گذرواژه لورفته}}</translation>
 <translation id="4642472735733036929">ردیابی قیمت متوقف شد</translation>
@@ -786,7 +786,7 @@
 <translation id="4663756553811254707"><ph name="NUMBER_OF_BOOKMARKS" /> نشانک حذف شد</translation>
 <translation id="4668279686271488041">داده‌های سنجش آگهی مرتباً از دستگاهتان حذف می‌شود</translation>
 <translation id="4668347365065281350">همه داده‌هایی که سایت‌ها ذخیره کرده‌اند، ازجمله کوکی‌ها و دیگر داده‌هایی که به‌طور محلی ذخیره شده‌اند</translation>
-<translation id="4678082183394354975">‏زمینه تاریک برای سایت‌ها در Chrome روشن است</translation>
+<translation id="4678082183394354975">‏زمینه تاریک برای سایت‌ها در Ultimatum روشن است</translation>
 <translation id="4684427112815847243">همگام‌سازی همه</translation>
 <translation id="4685741273709472646">انتخاب از فهرست کرکره‌ای</translation>
 <translation id="4687718960473379118">آگهی‌های پیشنهادی سایت</translation>
@@ -807,7 +807,7 @@
 <translation id="4738836084190194332">آخرین همگام‌سازی: <ph name="WHEN" /></translation>
 <translation id="474121291218385686">فیلتر کردن براساس برنامه</translation>
 <translation id="4741753828624614066">پیشنهادهای بهبودیافته‌ای در نوار نشانی دریافت خواهید کرد</translation>
-<translation id="4742795653798179840">‏داده‌های Chrome حذف شد</translation>
+<translation id="4742795653798179840">‏داده‌های Ultimatum حذف شد</translation>
 <translation id="4742970037960872810">برداشتن برجسته‌سازی</translation>
 <translation id="4749960740855309258">باز کردن برگه جدید</translation>
 <translation id="4753600213727157212">‏با ایمیل <ph name="USER_NAME" /> به سیستم وارد شده‌اید. <ph name="USER_EMAIL" />. خطای «حساب Google». تنظیمات را باز می‌کند.</translation>
@@ -816,7 +816,7 @@
 <translation id="4763480195061959176">ویدیو</translation>
 <translation id="4766313118839197559">گذرواژه‌ها در «مدیر گذرواژه» در این دستگاه ذخیره می‌شوند</translation>
 <translation id="4766678251456904326">افزودن حساب به دستگاه</translation>
-<translation id="4767947714785277816">‏درحال راه‌اندازی ویژگی جدیدی برای حریم خصوصی آگهی هستیم به نام «سنجش آگهی». Chrome اطلاعات بسیار محدودی را بین سایت‌ها و برنامه‌ها هم‌رسانی می‌کند (برای مثال زمانی‌که یک آگهی به شما نشان داده می‌شود) تا به برنامه‌ها کمک کند عملکرد آگهی‌ها را بسنجند.</translation>
+<translation id="4767947714785277816">‏درحال راه‌اندازی ویژگی جدیدی برای حریم خصوصی آگهی هستیم به نام «سنجش آگهی». Ultimatum اطلاعات بسیار محدودی را بین سایت‌ها و برنامه‌ها هم‌رسانی می‌کند (برای مثال زمانی‌که یک آگهی به شما نشان داده می‌شود) تا به برنامه‌ها کمک کند عملکرد آگهی‌ها را بسنجند.</translation>
 <translation id="4769095993849849966">نام جدید فایل</translation>
 <translation id="4769632191812288342">محافظت استاندارد را دریافت می‌کنید</translation>
 <translation id="4773122030389014189">هم‌رسانی کردن گروه برگه «<ph name="GROUP_NAME" />»</translation>
@@ -826,13 +826,13 @@
 <translation id="4782929588435725897">موتور جستجوی پیش‌فرض شما <ph name="SEARCH_ENGINE" /> است</translation>
 <translation id="4784349455504343791">‫<ph name="WEBSITE_ORIGIN" /> می‌خواهد از اطلاعات شخصی موجود در کیف پول دیجیتال شما استفاده کند.</translation>
 <translation id="4787736314074622408">می‌خواهید <ph name="ITEM_TITLE" /> را حذف کنید؟</translation>
-<translation id="4793679854893018356">‏ببینید Chrome چگونه ایمنی شما را حفظ می‌کند</translation>
+<translation id="4793679854893018356">‏ببینید Ultimatum چگونه ایمنی شما را حفظ می‌کند</translation>
 <translation id="4794291718671962615">(<ph name="MEGABYTES" />) <ph name="URL" /></translation>
 <translation id="4807098396393229769">نام روی کارت</translation>
 <translation id="480990236307250886">باز کردن صفحه اصلی</translation>
 <translation id="4822710610088666676">گروه برگه <ph name="TAB_GROUP_TITLE" /> بسته و ذخیره شد</translation>
 <translation id="4834250788637067901">‏روش‌های پرداخت، پیشنهادها، و نشانی‌های استفاده‌شده در Google Pay</translation>
-<translation id="4835385943915508971">‏Chrome به منبع درخواستی دسترسی ندارد.</translation>
+<translation id="4835385943915508971">‏Ultimatum به منبع درخواستی دسترسی ندارد.</translation>
 <translation id="483742037940503070">{TAB_COUNT,plural, =1{بازیابی کردن گروه برگه با <ph name="TAB_COUNT_ONE" /> برگه، به‌رنگ <ph name="COLOR_NAME" />، به‌عنوان گروه برگه جدید پس‌زمینه.}one{بازیابی کردن گروه برگه با <ph name="TAB_COUNT_MANY" /> برگه، به‌رنگ <ph name="COLOR_NAME" />، به‌عنوان گروه برگه جدید پس‌زمینه.}other{بازیابی کردن گروه برگه با <ph name="TAB_COUNT_MANY" /> برگه، به‌رنگ <ph name="COLOR_NAME" />، به‌عنوان گروه برگه جدید پس‌زمینه.}}</translation>
 <translation id="4837753911714442426">باز کردن گزینه‌های چاپ صفحه</translation>
 <translation id="4844633725025837809">‏برای افزایش ایمنی، گذرواژه‌ها را قبل‌از ذخیره شدن در «مدیر گذرواژه Google» در دستگاهتان رمزگذاری می‌کند</translation>
@@ -841,7 +841,7 @@
 <translation id="4852014461738377247">‏درحال ورود به سیستم\u2026</translation>
 <translation id="4860895144060829044">تماس</translation>
 <translation id="4864369630010738180">درحال ورود به سیستم…</translation>
-<translation id="4866368707455379617">‏<ph name="MODULE" /> برای Chrome نصب نشد</translation>
+<translation id="4866368707455379617">‏<ph name="MODULE" /> برای Ultimatum نصب نشد</translation>
 <translation id="4871568871368204250">خاموش کردن همگام‌سازی</translation>
 <translation id="4875775213178255010">محتواهای پیشنهادی</translation>
 <translation id="4877678010818027629">ورود به «حالت ناشناس»</translation>
@@ -849,7 +849,7 @@
 <translation id="4880127995492972015">ترجمه…</translation>
 <translation id="4881695831933465202">باز کردن</translation>
 <translation id="488187801263602086">تغییر نام فایل</translation>
-<translation id="4885273946141277891">‏این تعداد از نسخه‌های Chrome پشتیبانی نمی‌شود.</translation>
+<translation id="4885273946141277891">‏این تعداد از نسخه‌های Ultimatum پشتیبانی نمی‌شود.</translation>
 <translation id="4890973535105146893">‏گذرواژه ذخیره‌شده‌ای در «حساب Google» شما نیست</translation>
 <translation id="4905823827770127520">افزودن پیوند صفحه</translation>
 <translation id="4908869848243824489">‏«یافته‌ها» از Google</translation>
@@ -858,15 +858,15 @@
 <translation id="4913169188695071480">توقف تازه‌سازی</translation>
 <translation id="4925120120285606924">نماگرفت <ph name="CURRENT_DATE_ISO" /></translation>
 <translation id="4926901776383726965">می‌توانید تصاویر و فایل‌ها را برای مشاهده آفلاین یا هم‌رسانی در برنامه‌های دیگر ذخیره کنید</translation>
-<translation id="4932247056774066048">‏از آنجایی‌که درحال خروج از سیستم حساب مدیریت‌شده توسط <ph name="DOMAIN_NAME" /> هستید، داده‌های Chrome شما از این دستگاه حذف می‌شود. این مورد در حساب Google شما باقی می‌ماند.</translation>
+<translation id="4932247056774066048">‏از آنجایی‌که درحال خروج از سیستم حساب مدیریت‌شده توسط <ph name="DOMAIN_NAME" /> هستید، داده‌های Ultimatum شما از این دستگاه حذف می‌شود. این مورد در حساب Google شما باقی می‌ماند.</translation>
 <translation id="4943703118917034429">واقعیت مجازی</translation>
 <translation id="4943872375798546930">نتیجه‌ای پیدا نشد</translation>
 <translation id="4957722034734105353">اطلاعات بیشتر...</translation>
 <translation id="4959115606310463263">برگ زیرین ورود به سیستم به‌صورت نیمه باز شده است</translation>
 <translation id="4961107849584082341">ترجمه این صفحه به زبان‌های دیگر</translation>
-<translation id="4964614743143953889">‏‫Chrome درباره بارگیری‌ها و سایت‌های ناامن به شما هشدار می‌دهد</translation>
+<translation id="4964614743143953889">‏‫Ultimatum درباره بارگیری‌ها و سایت‌های ناامن به شما هشدار می‌دهد</translation>
 <translation id="496607651705915226">‏برای ذخیره و استفاده از گذرواژه‌های جدید در «حساب Google»، «خدمات Google Play» را به‌روز کنید</translation>
-<translation id="4971753085054504448">‏چیز دیگری را جستجو کنید یا برای دیدن نتایج بیشتر، سابقه کامل Chrome را باز کنید.</translation>
+<translation id="4971753085054504448">‏چیز دیگری را جستجو کنید یا برای دیدن نتایج بیشتر، سابقه کامل Ultimatum را باز کنید.</translation>
 <translation id="497421865427891073">جلو رفتن</translation>
 <translation id="498624032394115435">هر کسی پیوند را داشته باشد می‌تواند همه برگه‌ها را ویرایش کند.</translation>
 <translation id="4987271110129728827">صفحه پیدا نشد. املای واژه‌های تایپ‌شده را بررسی کنید یا جستجوی وب انجام دهید.</translation>
@@ -890,7 +890,7 @@
 <translation id="506254248375231072">برگه‌ای باز نیست</translation>
 <translation id="5062960805900435602">به‌روزرسانی مربوط به ادغام گذرواژه بسته شد</translation>
 <translation id="5075939510584558547">ذخیره بدون رمزگذاری</translation>
-<translation id="5085038751173179818">‏برای دریافت نشانک‌ها و موارد دیگر در همه دستگاه‌ها، به سیستم این سایت و Chrome وارد شوید</translation>
+<translation id="5085038751173179818">‏برای دریافت نشانک‌ها و موارد دیگر در همه دستگاه‌ها، به سیستم این سایت و Ultimatum وارد شوید</translation>
 <translation id="5091199029769593641">‏به‌زودی وقتی برگه جدیدی باز می‌کنید، داستان‌هایی از <ph name="SITE_NAME" /> را خواهید دید. سایت‌هایی که دنبال می‌کنید در «حساب Google» شما ذخیره می‌شوند. می‌توانید در تنظیمات «یافته‌ها»، آن‌ها را مدیریت کنید.</translation>
 <translation id="509429900233858213">خطایی روی داد.</translation>
 <translation id="5096775069898886423">برای سایت‌هایی که از اتصال‌های ایمن پشتیبانی نمی‌کنند، قبل‌از بازدید از سایت هشدار دریافت کنید</translation>
@@ -898,7 +898,7 @@
 <translation id="510275257476243843">۱ ساعت باقی‌مانده است</translation>
 <translation id="5114895953710637392">برگ فیلتر کردن برنامه بسته شد.</translation>
 <translation id="5115811374190515607">به <ph name="PRODUCT_NAME" /></translation>
-<translation id="5116239826668864748">‏در هرزمانی با تک‌ضرب زدن روی پیوندهای موجود در پیام‌ها، اسناد، و دیگر برنامه‌ها می‌توانید از Chrome استفاده کنید</translation>
+<translation id="5116239826668864748">‏در هرزمانی با تک‌ضرب زدن روی پیوندهای موجود در پیام‌ها، اسناد، و دیگر برنامه‌ها می‌توانید از Ultimatum استفاده کنید</translation>
 <translation id="5118713593561876160">علایق</translation>
 <translation id="5122378528687922675">اگر به راهنمایی نیاز داشتید، از ولی خود کمک بگیرید (<ph name="PARENT_NAME_1" /> یا <ph name="PARENT_NAME_2" />)</translation>
 <translation id="5123685120097942451">برگه ناشناس</translation>
@@ -922,7 +922,7 @@
 <translation id="5210286577605176222">رفتن به برگه قبلی</translation>
 <translation id="5210365745912300556">بستن برگه</translation>
 <translation id="5215957675041756913">کنترل داده‌ها و حساب</translation>
-<translation id="5221437554987713282">‏<ph name="PERMISSION_1" />، <ph name="PERMISSION_2" />، و اجازه‌های دیگر <ph name="SEPARATOR" /> Chrome این اجازه‌ها را برداشت زیرا اخیراً بازدیدی نداشته‌اید</translation>
+<translation id="5221437554987713282">‏<ph name="PERMISSION_1" />، <ph name="PERMISSION_2" />، و اجازه‌های دیگر <ph name="SEPARATOR" /> Ultimatum این اجازه‌ها را برداشت زیرا اخیراً بازدیدی نداشته‌اید</translation>
 <translation id="5222676887888702881">خروج از سیستم</translation>
 <translation id="5226378907213531272">هربار که از خودرو استفاده می‌کنید، باید قفل صفحه‌نمایش را باز کنید</translation>
 <translation id="5227554086496586518">برای دیدن نتایج جستجو تک‌ضرب بزنید</translation>
@@ -940,7 +940,7 @@
 <translation id="5308380583665731573">متصل کردن</translation>
 <translation id="5316947901395241499">سرپرستتان ذخیره گذرواژه را خاموش کرده است</translation>
 <translation id="5317780077021120954">ذخیره</translation>
-<translation id="5319359161174645648">‏Google،‏ Chrome را توصیه می‌کند</translation>
+<translation id="5319359161174645648">‏Google،‏ Ultimatum را توصیه می‌کند</translation>
 <translation id="5326246328175179736">نمی‌توانید با این حساب به سیستم وارد شوید</translation>
 <translation id="5327248766486351172">نام</translation>
 <translation id="5328542107300944283">استفاده با <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
@@ -952,7 +952,7 @@
 <translation id="5375577065097716013">‏جستجوی تصویر با «لنز Google» <ph name="BEGIN_NEW" />جدید<ph name="END_NEW" /></translation>
 <translation id="5390367025924544771">‫<ph name="WEBSITE_ORIGIN" /> می‌خواهد از اطلاعات شخصی موجود در کیف پول دیجیتال شما استفاده کند. فقط درصورتی ادامه دهید که به این سایت اعتماد دارید. سایت‌های خطرناک ممکن است شما را فریب دهند تا اطلاعاتی مثل نام قانونی یا شماره مدرک شناسایی‌تان را فاش کنید.</translation>
 <translation id="5394331612381306435">خروج از حالت «ناشناس»</translation>
-<translation id="5395376160638294582">‏مطمئن شوید همیشه می‌توانید از داده‌های Chrome ذخیره‌شده در «حساب Google» خود استفاده کنید</translation>
+<translation id="5395376160638294582">‏مطمئن شوید همیشه می‌توانید از داده‌های Ultimatum ذخیره‌شده در «حساب Google» خود استفاده کنید</translation>
 <translation id="539881862970320163">گذرواژه قوی‌ای پیشنهاد شد. صفحه‌کلید پنهان است.</translation>
 <translation id="5409881200985013443"><ph name="ONE_TIME_CODE" /> در <ph name="CLIENT_NAME" /> ارسال شود؟</translation>
 <translation id="5410300144953132176">‫<ph name="OWNER_FULL_NAME" />‏ (<ph name="OWNER_EMAIL" />) از شما می‌خواهد به یک گروه برگه بپیوندید. هر کسی پیوند را داشته باشد می‌تواند همه برگه‌ها را ویرایش کند، پس بااحتیاط بپیوندید. پیوند ظرف ۴۸ ساعت منقضی می‌شود.</translation>
@@ -966,7 +966,7 @@
 <translation id="5433691172869980887">نام کاربری کپی شد</translation>
 <translation id="5436928407363358055">برای اینکه به‌راحتی کارتان را از جایی که رها کرده‌اید ادامه دهید، سابقه و برگه‌هایتان را همگام‌سازی کنید</translation>
 <translation id="5438292632479953702">بارگیری مجدد</translation>
-<translation id="5439191312780166229">‏با تجزیه‌وتحلیل داده‌های بیشتری از سایت‌ها در مقایسه با محافظت استاندارد، درباره سایت‌های خطرناک به شما هشدار می‌دهد، حتی سایت‌هایی که Google قبلاً از آن‌ها اطلاعی نداشته است. می‌توانید هشدارهای Chrome را رد کنید.</translation>
+<translation id="5439191312780166229">‏با تجزیه‌وتحلیل داده‌های بیشتری از سایت‌ها در مقایسه با محافظت استاندارد، درباره سایت‌های خطرناک به شما هشدار می‌دهد، حتی سایت‌هایی که Google قبلاً از آن‌ها اطلاعی نداشته است. می‌توانید هشدارهای Ultimatum را رد کنید.</translation>
 <translation id="5441137934526263133">سایت کار نمی‌کند؟ کوکی‌های طرف سوم مسدود شده است</translation>
 <translation id="5441466871879044658">به این زبان ترجمه شود</translation>
 <translation id="5441522332038954058">رفتن به نوار نشانی</translation>
@@ -986,7 +986,7 @@
 <translation id="5517326820028369152">برگ زیرین فعالیت اخیر</translation>
 <translation id="5526281268548144413">بستن در چند پنجره امکان‌پذیر نیست</translation>
 <translation id="5548606607480005320">بررسی ایمنی</translation>
-<translation id="5554520618550346933">‏وقتی از گذرواژه‌ای استفاده کنید، Chrome به شما هشدار می‌دهد آیا این گذرواژه در فضای آنلاین منتشر شده است یا نه. هنگام انجام این کار، نام‌های کاربری و گذرواژه‌های شما رمزگذاری می‌شود تا اشخاص دیگر، ازجمله Google نتوانند آن‌ها را بخوانند.</translation>
+<translation id="5554520618550346933">‏وقتی از گذرواژه‌ای استفاده کنید، Ultimatum به شما هشدار می‌دهد آیا این گذرواژه در فضای آنلاین منتشر شده است یا نه. هنگام انجام این کار، نام‌های کاربری و گذرواژه‌های شما رمزگذاری می‌شود تا اشخاص دیگر، ازجمله Google نتوانند آن‌ها را بخوانند.</translation>
 <translation id="5555525474779371165">انتخاب ویژگی حفاظتی «مرور ایمن»</translation>
 <translation id="5556459405103347317">بار کردن مجدد</translation>
 <translation id="555671485580955310">همگام‌سازی سابقه و برگه‌ها</translation>
@@ -998,7 +998,7 @@
 <translation id="5578795271662203820">جستجوی <ph name="SEARCH_ENGINE" /> برای این تصویر</translation>
 <translation id="5596627076506792578">گزینه‌های بیشتر</translation>
 <translation id="5599455543593328020">حالت ناشناس</translation>
-<translation id="5601180634394228718">‏برای تنظیمات بیشتری که از داده‌ها برای بهبود تجربه شما در Chrome استفاده می‌کنند، به <ph name="BEGIN_LINK" />سرویس‌های Google<ph name="END_LINK" /> بروید.</translation>
+<translation id="5601180634394228718">‏برای تنظیمات بیشتری که از داده‌ها برای بهبود تجربه شما در Ultimatum استفاده می‌کنند، به <ph name="BEGIN_LINK" />سرویس‌های Google<ph name="END_LINK" /> بروید.</translation>
 <translation id="5611398002774823980">ذخیره در حساب</translation>
 <translation id="5614625640221885312">به سیستم وارد شوید تا نشانک‌ها، گذرواژه‌ها، و موارد دیگر را در همه دستگاه‌هایتان دریافت کنید</translation>
 <translation id="5619633276517849615">سازمانتان «مرور ایمن» را روشن کرده است</translation>
@@ -1014,23 +1014,23 @@
 <translation id="5657871969392618475">اطلاعات شما با قفل نمایه ایمن می‌شود</translation>
 <translation id="5659593005791499971">ایمیل</translation>
 <translation id="5665379678064389456">ایجاد رویداد در <ph name="APP_NAME" /></translation>
-<translation id="5683547024293500885">‏Chrome نمی‌تواند به‌روزرسانی‌ها را بررسی کند</translation>
+<translation id="5683547024293500885">‏Ultimatum نمی‌تواند به‌روزرسانی‌ها را بررسی کند</translation>
 <translation id="5683916195767086779">گروه برگه</translation>
 <translation id="5686790454216892815">نام فایل خیلی طولانی است</translation>
-<translation id="5687606994963670306">‏Chrome سایت‌های قدیمی‌تر از ۳۰ روز را به‌طور خودکار حذف می‌کند. سایت‌هایی که مجدداً از آن‌ها بازدید می‌کنید ممکن است دوباره در فهرست نمایش داده شود. یا می‌توانید سایتی را مسدود کنید تا به شما آگهی پیشنهاد ندهد. درباره <ph name="BEGIN_LINK" />مدیریت حریم خصوصی آگهی در Chrome<ph name="END_LINK" /> بیشتر بدانید.</translation>
+<translation id="5687606994963670306">‏Ultimatum سایت‌های قدیمی‌تر از ۳۰ روز را به‌طور خودکار حذف می‌کند. سایت‌هایی که مجدداً از آن‌ها بازدید می‌کنید ممکن است دوباره در فهرست نمایش داده شود. یا می‌توانید سایتی را مسدود کنید تا به شما آگهی پیشنهاد ندهد. درباره <ph name="BEGIN_LINK" />مدیریت حریم خصوصی آگهی در Ultimatum<ph name="END_LINK" /> بیشتر بدانید.</translation>
 <translation id="569536719314091526">با استفاده از دکمه «گزینه‌های بیشتر»، این صفحه را به زبان‌های دیگر ترجمه کنید</translation>
-<translation id="5696597120588531049">‏Chrome می‌تواند به محافظت از شما دربرابر نقض داده، وب‌سایت‌های غیرایمن، و موارد دیگر کمک کند</translation>
+<translation id="5696597120588531049">‏Ultimatum می‌تواند به محافظت از شما دربرابر نقض داده، وب‌سایت‌های غیرایمن، و موارد دیگر کمک کند</translation>
 <translation id="5698878456427040674">بررسی کنید از حساب انتخاب‌شده پشتیبانی می‌شود.</translation>
 <translation id="570347048394355941">رفتن به برگه</translation>
 <translation id="5709213329446699338">‫<ph name="SITE" /> می‌خواهد به درگاه سریالی متصل شود</translation>
 <translation id="5715150588940290235">کدهای امنیتی ذخیره‌شده حذف شود؟</translation>
-<translation id="571930967925877633">‏نشانک‌ها، سابقه، و سایر داده‌های Chrome، دیگر با «حساب Google» شما همگام‌سازی نمی‌شود</translation>
+<translation id="571930967925877633">‏نشانک‌ها، سابقه، و سایر داده‌های Ultimatum، دیگر با «حساب Google» شما همگام‌سازی نمی‌شود</translation>
 <translation id="572328651809341494">برگه‌های اخیر</translation>
 <translation id="5726692708398506830">بزرگ‌تر کردن همه‌چیز در صفحه</translation>
 <translation id="5728072125198221967">‏سرویس‌های پیوندشده Google</translation>
 <translation id="5744751019568455640">در اینجا صداهایی که می‌توانید برای خواندن صفحه‌های وب انتخاب کنید ارائه شده است. اگر این صدا را دوست دارید و می‌خواهید در ادامه از همین صدا استفاده کنم، کافی است روی نام آن تک‌ضرب بزنید.</translation>
 <translation id="574845902699630049">هم‌رسانی با نام <ph name="OWNER_FULL_NAME" /></translation>
-<translation id="5749068826913805084">‏Chrome برای بارگیری فایل‌ها باید به حافظه دسترسی داشته باشد.</translation>
+<translation id="5749068826913805084">‏Ultimatum برای بارگیری فایل‌ها باید به حافظه دسترسی داشته باشد.</translation>
 <translation id="5749237766298580851">خاموش <ph name="SEPARATOR" /> توصیه نمی‌شود</translation>
 <translation id="5752232708629533680">‏فقط هم‌رسانی GIF</translation>
 <translation id="5754350196967618083">«یافته‌ها» بازآوری نمی‌شود</translation>
@@ -1047,11 +1047,11 @@
 <translation id="5809361687334836369">{HOURS,plural, =1{۱ ساعت قبل}one{# ساعت قبل}other{# ساعت قبل}}</translation>
 <translation id="5810288467834065221">‏حق نشر <ph name="YEAR" /> Google LLC.‎ کلیه حقوق محفوظ است.</translation>
 <translation id="5814749351757353073">از سایت‌های محبوبتان باخبر باشید</translation>
-<translation id="5828921839638612740">‏می‌توانید داده‌ها را در «تنظیمات» Chrome حذف کنید</translation>
+<translation id="5828921839638612740">‏می‌توانید داده‌ها را در «تنظیمات» Ultimatum حذف کنید</translation>
 <translation id="5829586821381540080">در <ph name="FOLDER_NAME" /> ذخیره شد</translation>
 <translation id="583281660410589416">ناشناس</translation>
 <translation id="5833984609253377421">هم‌رسانی پیوند</translation>
-<translation id="5839058148541733625">Chrome Dino</translation>
+<translation id="5839058148541733625">Ultimatum Dino</translation>
 <translation id="5848257610304005265">‏فایل PDF با <ph name="APP_NAME" /> باز شود؟</translation>
 <translation id="5849288995120328556">هم‌رسانی متوقف شود؟</translation>
 <translation id="5853623416121554550">مکث</translation>
@@ -1063,9 +1063,9 @@
 <translation id="5864419784173784555">در انتظار بارگیری موردی دیگر…</translation>
 <translation id="5865733239029070421">‏به‌طور خودکار آمار کاربرد و گزارش‌های خرابی را به Google ارسال می‌کند</translation>
 <translation id="5869522115854928033">گذرواژه‌های ذخیره‌شده</translation>
-<translation id="587735546353481577">‏برای دنبال کردن سایت، به سایت موردنظر بروید، منوی Chrome را باز کنید و روی «دنبال کردن» تک‌ضرب بزنید.</translation>
+<translation id="587735546353481577">‏برای دنبال کردن سایت، به سایت موردنظر بروید، منوی Ultimatum را باز کنید و روی «دنبال کردن» تک‌ضرب بزنید.</translation>
 <translation id="5883855034004058011">زیست‌سنجشی بارها با خطا مواجه شده است. برای امتحان کردن مجدد، دستگاهتان را قفل کنید و قفل آن را باز کنید.</translation>
-<translation id="5885378508678660271">‏اعلان‌ها <ph name="SEPARATOR" /> Chrome این اجازه‌ها را برداشت زیرا این سایت خطرناک است</translation>
+<translation id="5885378508678660271">‏اعلان‌ها <ph name="SEPARATOR" /> Ultimatum این اجازه‌ها را برداشت زیرا این سایت خطرناک است</translation>
 <translation id="5895834791314695851">‏ممکن است گذرواژه‌ها به‌زودی در این دستگاه ازکار بیفتد. برای ادامه استفاده از گذرواژه‌هایتان، «خدمات Google Play» را به‌روز کنید. <ph name="BEGIN_LINK" />بیشتر بدانید<ph name="END_LINK" /></translation>
 <translation id="5899667542927581604">برگ گذرکلیدی وجود ندارد بسته شد</translation>
 <translation id="5907542076239273525">نشانک در «<ph name="FOLDER_NAME" />» ذخیره شد</translation>
@@ -1076,7 +1076,7 @@
 <translation id="5942872142862698679">‏استفاده از Google برای جستجو</translation>
 <translation id="5945035219773565305">توصیه کنونی:  <ph name="RECOMMENDATION" /></translation>
 <translation id="5951119116059277034">درحال مشاهده صفحه فعال</translation>
-<translation id="5956665950594638604">‏باز کردن مرکز راهنمایی Chrome در برگه جدید</translation>
+<translation id="5956665950594638604">‏باز کردن مرکز راهنمایی Ultimatum در برگه جدید</translation>
 <translation id="59577092665511740">حسابی انتخاب کنید.</translation>
 <translation id="5958275228015807058">فایل‌ها و صفحه‌هایتان را در «بارگیری‌ها» پیدا کنید</translation>
 <translation id="5958994127112619898">ساده کردن صفحه</translation>
@@ -1085,13 +1085,13 @@
 <translation id="5977976211062815271">در این دستگاه</translation>
 <translation id="5978661847409534366">{ITEMS_COUNT,plural, =1{‫۱ صفحه در «فهرست خواندن»}one{‫# صفحه در «فهرست خواندن»}other{‫# صفحه در «فهرست خواندن»}}</translation>
 <translation id="5979084224081478209">بررسی گذرواژه‌ها</translation>
-<translation id="5992182727984874868">‏<ph name="PERMISSION_1" />، <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Chrome این اجازه‌ها را برداشت زیرا اخیراً بازدیدی نداشته‌اید</translation>
+<translation id="5992182727984874868">‏<ph name="PERMISSION_1" />، <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Ultimatum این اجازه‌ها را برداشت زیرا اخیراً بازدیدی نداشته‌اید</translation>
 <translation id="5995726099713306770">صفحه دوباره بارگیری شود؟</translation>
 <translation id="6000066717592683814">‏حفظ Google</translation>
 <translation id="6000203700195075278">دنبال کردن مجدد</translation>
 <translation id="6011308810877101166">بهبود پیشنهادهای جستجو</translation>
 <translation id="6013305291643746595">ترتیب براساس قدیمی‌ترین</translation>
-<translation id="6022659036123304283">‏Chrome را برای خود اختصاصی کنید</translation>
+<translation id="6022659036123304283">‏Ultimatum را برای خود اختصاصی کنید</translation>
 <translation id="6026538407078977628">گسترده کردن به‌حالت تمام‌صفحه</translation>
 <translation id="6030719887161080597">مدیریت اطلاعات مورداستفاده سایت‌ها برای سنجش عملکرد آگهی</translation>
 <translation id="6039379616847168523">رفتن به برگه بعدی</translation>
@@ -1125,17 +1125,17 @@
 <translation id="6146563240635539929">ویدیو</translation>
 <translation id="614890671148262506">اعلان‌های این سایت همواره مجاز باشد</translation>
 <translation id="6150320133806434356">نشانک ذخیره شد</translation>
-<translation id="6150706324143004339">‏برای ذخیره و استفاده کردن از داده‌های Chrome در «حساب Google» خود، Chrome را به‌روزرسانی کنید</translation>
+<translation id="6150706324143004339">‏برای ذخیره و استفاده کردن از داده‌های Ultimatum در «حساب Google» خود، Ultimatum را به‌روزرسانی کنید</translation>
 <translation id="6154478581116148741">برای صادر کردن گذرواژه‌ها از این دستگاه، قفل صفحه را در تنظیمات روشن کنید.</translation>
 <translation id="6156323911414505561">نمایش نوار نشانک‌ها</translation>
-<translation id="6162892189396105610">‏صفحاتی که Chrome فکر می‌کند ممکن است بازدید کنید پیش‌بارگیری می‌شود.</translation>
+<translation id="6162892189396105610">‏صفحاتی که Ultimatum فکر می‌کند ممکن است بازدید کنید پیش‌بارگیری می‌شود.</translation>
 <translation id="6170675927290506430">رفتن به تنظیمات اعلان</translation>
 <translation id="6186394685773237175">گذرواژه لورفته‌ای پیدا نشد</translation>
 <translation id="6192907950379606605">دریافت توضیحات تصویر</translation>
 <translation id="6193448654517602979">انتخاب برگه‌ها</translation>
 <translation id="6196315980958524839">‏گذرواژه‌ها در «مدیر گذرواژه Google» در این دستگاه ذخیره می‌شوند</translation>
 <translation id="6202812185118613467">برای شروع همگام‌سازی دوباره به سیستم وارد شوید</translation>
-<translation id="6204781143409202534">‏‫Chrome هرزنامه احتمالی از <ph name="DOMAIN" /> شناسایی کرده است.</translation>
+<translation id="6204781143409202534">‏‫Ultimatum هرزنامه احتمالی از <ph name="DOMAIN" /> شناسایی کرده است.</translation>
 <translation id="6205314730813004066">حریم خصوصی آگهی</translation>
 <translation id="6210748933810148297"><ph name="EMAIL" /> ایمیل شما نیست؟</translation>
 <translation id="6211386937064921208">درحال پیش‌نمایش این صفحه</translation>
@@ -1146,10 +1146,10 @@
 
 مثلاً ممکن است برخی از وب‌سایت‌ها با نمایش آگهی‌هایی که براساس وب‌سایت‌های نیستند که بازدید کرده‌اید به این درخواست پاسخ دهند. بسیاری از وب‌سایت‌ها همچنان داده‌های محصول مرور شما را جمع‌آوری و استفاده می‌کنند — مثلاً برای بهبود امنیت، ارائه محتوا، آگهی‌ها و توصیه‌ها و برای ایجاد آمارهای گزارش‌دهی.</translation>
 <translation id="6247557882553405851">‏مدیر گذرواژه Google</translation>
-<translation id="6251449557817521191">‏سابقه Chrome را اینجا مشاهده کنید</translation>
+<translation id="6251449557817521191">‏سابقه Ultimatum را اینجا مشاهده کنید</translation>
 <translation id="6253680439349691381">{ITEMS_COUNT,plural, =1{‏‫۱ مورد فقط در این دستگاه ذخیره شده است. برای استفاده از آن در دستگاه‌های دیگرتان، آن را در «حساب Google» خود (<ph name="ACCOUNT_EMAIL" />) ذخیره کنید.}one{‏‫# مورد فقط در این دستگاه ذخیره شده است. برای استفاده از آن در دستگاه‌های دیگرتان، آن را در «حساب Google» خود (<ph name="ACCOUNT_EMAIL" />) ذخیره کنید.}other{‏‫# مورد فقط در این دستگاه ذخیره شده است. برای استفاده از آن‌ها در دستگاه‌های دیگرتان، آن‌ها را در «حساب Google» خود (<ph name="ACCOUNT_EMAIL" />) ذخیره کنید.}}</translation>
 <translation id="6254139308321626268">‏درحال مشاهده فایل PDF هستید</translation>
-<translation id="6255809143828972562">‏با ابزارهای Chrome، می‌توانید به‌طور ایمن مرور کنید و کنترل را دردست بگیرید</translation>
+<translation id="6255809143828972562">‏با ابزارهای Ultimatum، می‌توانید به‌طور ایمن مرور کنید و کنترل را دردست بگیرید</translation>
 <translation id="6264376385120300461">به‌هرحال بارگیری شود</translation>
 <translation id="6264485186158353794">بازگشت به ایمنی</translation>
 <translation id="6277522088822131679">در چاپ صفحه مشکلی پیش آمد. لطفاً دوباره امتحان کنید.</translation>
@@ -1179,14 +1179,14 @@
 <translation id="6356893102071098867">بررسی کنید حساب درست را انتخاب کرده باشید</translation>
 <translation id="6363990818884053551">برای شروع همگام‌سازی، هویتتان را به‌تأیید برسانید</translation>
 <translation id="6364438453358674297">پیشنهاد از سابقه حذف شود؟</translation>
-<translation id="6380100320871303656">‏صفحاتی که Chrome فکر می‌کند ممکن است بازدید کنید، دفعات بیشتری پیش‌بارگیری می‌شوند. این تنظیم ممکن است منجر به استفاده از داده بیشتر شود.</translation>
+<translation id="6380100320871303656">‏صفحاتی که Ultimatum فکر می‌کند ممکن است بازدید کنید، دفعات بیشتری پیش‌بارگیری می‌شوند. این تنظیم ممکن است منجر به استفاده از داده بیشتر شود.</translation>
 <translation id="6382848304055775421">درحال صادر کردن</translation>
 <translation id="6388152137132427505">همیشه بادقت هم‌رسانی کنید. پیوندها ظرف ۴۸ ساعت منقضی می‌شود.</translation>
 <translation id="6394791151443660613">جستجو: <ph name="SEARCH_QUERY" /></translation>
 <translation id="6395288395575013217">پیوند</translation>
 <translation id="6397616442223433927">دوباره آنلاین شدید</translation>
 <translation id="6399363707848566877">اکنون می‌توانید به‌راحتی به گروه‌های اینجا برگه اضافه کنید</translation>
-<translation id="6401458660421980302">‏برای ارسال این برگه به دستگاهی دیگر، در آنجا به سیستم Chrome وارد شوید</translation>
+<translation id="6401458660421980302">‏برای ارسال این برگه به دستگاهی دیگر، در آنجا به سیستم Ultimatum وارد شوید</translation>
 <translation id="6404511346730675251">ویرایش نشانک</translation>
 <translation id="6406506848690869874">همگام‌سازی</translation>
 <translation id="6410883413783534063">برای بازدید هم‌زمان از صفحه‌های مختلف، چند برگه باز کنید</translation>
@@ -1202,22 +1202,22 @@
 <translation id="6452534462676960500">فعالیت جدید</translation>
 <translation id="6459045781120991510">نظرسنجی‌ها</translation>
 <translation id="6461962085415701688">فایل باز نمی‌شود</translation>
-<translation id="6464977750820128603">‏می‌توانید سایت‌هایی را که در Chrome بازدید می‌کنید مشاهده کنید و تایمرهایی را برای آن‌ها تنظیم کنید.\n\n‏Google اطلاعاتی درباره سایت‌هایی که برای آن‌ها تایمر تنظیم می‌کنید و مدت زمانی که از آن‌ها بازدید می‌کنید، دریافت می‌کند. از این اطلاعات برای بهبود «آسایش دیجیتالی» استفاده می‌شود.</translation>
+<translation id="6464977750820128603">‏می‌توانید سایت‌هایی را که در Ultimatum بازدید می‌کنید مشاهده کنید و تایمرهایی را برای آن‌ها تنظیم کنید.\n\n‏Google اطلاعاتی درباره سایت‌هایی که برای آن‌ها تایمر تنظیم می‌کنید و مدت زمانی که از آن‌ها بازدید می‌کنید، دریافت می‌کند. از این اطلاعات برای بهبود «آسایش دیجیتالی» استفاده می‌شود.</translation>
 <translation id="6468703991511753953">نوار نشانی درحال‌حاضر در پایین قرار دارد</translation>
-<translation id="6470181189905173055">‏صفحه‌هایی که هنگام استفاده از <ph name="APP_LABEL" /> در Chrome باز کردید در اینجا نشان داده خواهد شد.</translation>
+<translation id="6470181189905173055">‏صفحه‌هایی که هنگام استفاده از <ph name="APP_LABEL" /> در Ultimatum باز کردید در اینجا نشان داده خواهد شد.</translation>
 <translation id="6473086018775716761">فهرست گزینه‌های هم‌رسانی به‌صورت نیمه باز شده است.</translation>
 <translation id="6475951671322991020">بارگیری ویدیو</translation>
 <translation id="6477928892249167417">به‌نظر می‌رسد این سایت‌ها برای شما مهم هستند:</translation>
-<translation id="6481963882741794338">‏برای شخصی‌سازی و اهداف بیشتر، Chrome و دیگر سرویس‌های Google را به‌هم پیوند دهید</translation>
+<translation id="6481963882741794338">‏برای شخصی‌سازی و اهداف بیشتر، Ultimatum و دیگر سرویس‌های Google را به‌هم پیوند دهید</translation>
 <translation id="6482749332252372425">به‌دلیل نبودن فضای ذخیره‌سازی، بارگیری <ph name="FILE_NAME" /> انجام نشد.</translation>
 <translation id="6486420406192123355">‏این فایل PDF از سایتی دریافت شده است که از اتصال ناامن استفاده می‌کند</translation>
 <translation id="650224091954855786">{FILE_COUNT,plural, =1{فایل بارگیری شد}one{# بارگیری کامل شد}other{# بارگیری کامل شد}}</translation>
-<translation id="6508722015517270189">‏Chrome را راه‌اندازی مجدد کنید</translation>
+<translation id="6508722015517270189">‏Ultimatum را راه‌اندازی مجدد کنید</translation>
 <translation id="6513924416597632811">کپی کردن پیوند صفحه نتایج جستجو برای: <ph name="SEARCH_QUERY" />. منبع: <ph name="PAGE_URL" /></translation>
 <translation id="6518133107902771759">تأیید</translation>
 <translation id="6527303717912515753">اشتراک‌گذاری</translation>
-<translation id="652948702951888897">‏سابقه Chrome</translation>
-<translation id="6532866250404780454">‏سایت‌هایی که در Chrome بازدید می‌کنید، نشان داده نخواهد شد. همه تایمرهای سایت حذف خواهد شد.</translation>
+<translation id="652948702951888897">‏سابقه Ultimatum</translation>
+<translation id="6532866250404780454">‏سایت‌هایی که در Ultimatum بازدید می‌کنید، نشان داده نخواهد شد. همه تایمرهای سایت حذف خواهد شد.</translation>
 <translation id="6539092367496845964">مشکلی پیش آمد. بعداً دوباره امتحان کنید.</translation>
 <translation id="6541983376925655882">{NUM_HOURS,plural, =1{آخرین بررسی: ۱ ساعت قبل}one{آخرین بررسی: # ساعت قبل}other{آخرین بررسی: # ساعت قبل}}</translation>
 <translation id="6545017243486555795">پاک کردن همه داده‌ها</translation>
@@ -1226,12 +1226,12 @@
 <translation id="6556542240154580383">{TAB_COUNT,plural, =1{<ph name="TAB_TITLE" /> و <ph name="TAB_COUNT_ONE" /> برگه دیگر بسته خواهند شد}one{<ph name="TAB_TITLE" /> و <ph name="TAB_COUNT_MANY" /> برگه دیگر بسته خواهند شد}other{<ph name="TAB_TITLE" /> و <ph name="TAB_COUNT_MANY" /> برگه دیگر بسته خواهند شد}}</translation>
 <translation id="6560414384669816528">‏جستجو با Sogou</translation>
 <translation id="656065428026159829">موارد بیشتر</translation>
-<translation id="6564820424018738527">‏دستگاه Android شما ممکن است تنظیم مشابهی داشته باشد. اگر «سنجش آگهی» در Chrome و دستگاه Android شما روشن باشد، ممکن است شرکتی بتواند اثربخشی آگهی را در وب‌سایت‌هایی که بازدید می‌کنید و برنامه‌هایی که استفاده می‌کنید بسنجد.</translation>
+<translation id="6564820424018738527">‏دستگاه Android شما ممکن است تنظیم مشابهی داشته باشد. اگر «سنجش آگهی» در Ultimatum و دستگاه Android شما روشن باشد، ممکن است شرکتی بتواند اثربخشی آگهی را در وب‌سایت‌هایی که بازدید می‌کنید و برنامه‌هایی که استفاده می‌کنید بسنجد.</translation>
 <translation id="6565959834589222080">‏استفاده از Wi-Fi هنگام دردسترس بودن</translation>
 <translation id="6569373978618239158">‏اکنون وقتی برگه جدیدی باز می‌کنید، داستان‌هایی از <ph name="SITE_NAME" /> خواهید دید. سایت‌هایی که دنبال می‌کنید در «حساب Google» شما ذخیره می‌شوند. می‌توانید در تنظیمات «یافته‌ها»، آن‌ها را مدیریت کنید.</translation>
 <translation id="657177046675873214">برای اینکه نشانک‌ها را در همه دستگاه‌هایتان دریافت کنید، «نشانک‌ها» را در تنظیمات روشن کنید</translation>
 <translation id="6573096386450695060">همیشه مجاز</translation>
-<translation id="6573431926118603307">‏برگه‌هایی که در دستگاه‌های دیگر در Chrome باز کرده‌اید، در اینجا نمایان می‌شوند.</translation>
+<translation id="6573431926118603307">‏برگه‌هایی که در دستگاه‌های دیگر در Ultimatum باز کرده‌اید، در اینجا نمایان می‌شوند.</translation>
 <translation id="6583199322650523874">نشانک‌گذاری صفحه کنونی</translation>
 <translation id="6588043302623806746">استفاده از ساناد امن</translation>
 <translation id="6590471736817333463">تا ۶۰٪ در مصرف داده صرفه‌جویی کنید</translation>
@@ -1239,13 +1239,13 @@
 <translation id="6593061639179217415">سایت مخصوص رایانه</translation>
 <translation id="6594347733515723558">گزینه‌های ترتیب و مشاهده</translation>
 <translation id="6595046016124923392">‏تصاویر به Google ارسال می‌شوند تا توضیحات برایتان بهبود یابند.</translation>
-<translation id="6604931690954120417">‏وقتی به سیستم Chrome وارد شده باشید، گذرواژه‌هایی که ذخیره می‌کنید به «حساب Google» شما منتقل می‌شود. برای خاموش کردن این ویژگی، <ph name="BEGIN_LINK" />به تنظیمات بروید<ph name="END_LINK" />.</translation>
+<translation id="6604931690954120417">‏وقتی به سیستم Ultimatum وارد شده باشید، گذرواژه‌هایی که ذخیره می‌کنید به «حساب Google» شما منتقل می‌شود. برای خاموش کردن این ویژگی، <ph name="BEGIN_LINK" />به تنظیمات بروید<ph name="END_LINK" />.</translation>
 <translation id="661266467055912436">امنیت را برای شما و همه کاربران دیگر وب بهبود می‌بخشد.</translation>
-<translation id="6621391692573306628">‏برای ارسال این برگه به دستگاهی دیگر، در هردو دستگاه به سیستم Chrome وارد شوید</translation>
+<translation id="6621391692573306628">‏برای ارسال این برگه به دستگاهی دیگر، در هردو دستگاه به سیستم Ultimatum وارد شوید</translation>
 <translation id="6627583120233659107">ویرایش پوشه</translation>
 <translation id="6633067410344541938">باز کردن قفل «حالت ناشناس»</translation>
 <translation id="6636623428211296678">در بخش زیر تنظیمات بیشتری را کاوش کنید یا همین‌حالا کارتان را به‌پایان برسانید</translation>
-<translation id="6637100877383020115">‏برای کمک به بهبود برنامه، Chrome داده‌های استفاده و ازکارافتادگی را به Google ارسال می‌کند. <ph name="BEGIN_UMA_LINK" />مدیریت<ph name="END_UMA_LINK" /></translation>
+<translation id="6637100877383020115">‏برای کمک به بهبود برنامه، Ultimatum داده‌های استفاده و ازکارافتادگی را به Google ارسال می‌کند. <ph name="BEGIN_UMA_LINK" />مدیریت<ph name="END_UMA_LINK" /></translation>
 <translation id="6640207029842583248">همیشه مسدود شود</translation>
 <translation id="6641780377503683465">برداشتن <ph name="INTEREST" /></translation>
 <translation id="6647441008198474441">‏نشانی‌های وبی که بازدید می‌کنید به Google ارسال می‌شود تا پیش‌بینی شود ممکن است بعداً از چه سایت‌هایی بازدید کنید</translation>
@@ -1257,8 +1257,8 @@
 <translation id="6672697278890207089">گذرعبارت را وارد کنید</translation>
 <translation id="6672917148207387131">افزودن <ph name="DOMAIN" /></translation>
 <translation id="6674571176963658787">برای شروع همگام‌سازی، گذرعبارت را وارد کنید</translation>
-<translation id="6676927815633975364">‏به سیستم این سایت و Chrome وارد شوید</translation>
-<translation id="6684809838922667136">‏بهتر کردن Chrome</translation>
+<translation id="6676927815633975364">‏به سیستم این سایت و Ultimatum وارد شوید</translation>
+<translation id="6684809838922667136">‏بهتر کردن Ultimatum</translation>
 <translation id="6700279777779583398">انتخاب‌ها ذخیره شد</translation>
 <translation id="6704048624334633734">صادر و حذف کردن گذرواژه‌ها</translation>
 <translation id="670498945988402717">آخرین بررسی: دیروز</translation>
@@ -1269,7 +1269,7 @@
 <translation id="6723740634201835758">‏در حساب Google</translation>
 <translation id="6734310707649923383">می‌توانید صفحه‌هایی را که از آن‌ها بازدید کرده‌اید ببینید یا آن‌ها را از سابقه حذف کنید</translation>
 <translation id="6738867403308150051">در حال بارگیری…</translation>
-<translation id="674388916582496364">‏طبیعی است اگر سایت‌هایی که بازدید می‌کنید برای شخصی‌سازی تجربه‌تان، علایق شما را به‌خاطر آورند. به‌علاوه، سایت‌ها می‌توانند بااستفاده از Chrome اطلاعاتی درباره علایقتان ذخیره کنند.</translation>
+<translation id="674388916582496364">‏طبیعی است اگر سایت‌هایی که بازدید می‌کنید برای شخصی‌سازی تجربه‌تان، علایق شما را به‌خاطر آورند. به‌علاوه، سایت‌ها می‌توانند بااستفاده از Ultimatum اطلاعاتی درباره علایقتان ذخیره کنند.</translation>
 <translation id="6746338529702829275">مرور کردن داده‌های حساب</translation>
 <translation id="6751521182688001123">به‌سرعت برگه جدیدی باز کنید. برای ویرایش این میان‌بر، لمس کنید و نگه دارید.</translation>
 <translation id="6756507620369789050">هم‌رسانی بازخورد</translation>
@@ -1277,15 +1277,15 @@
 <translation id="676305334223455055">برای دریافت محتوا براساس علایقتان، به سیستم وارد شوید</translation>
 <translation id="6764137532716892442">گروه برگه <ph name="GROUP_TITLE" /> هم‌رسانی‌شده با فعالیت جدید</translation>
 <translation id="6767294960381293877">فهرست نیمه‌باز دستگاه‌هایی که می‌توان با آن‌ها برگه هم‌رسانی کرد.</translation>
-<translation id="6785476624617658922">‏شرایط خدمات تکمیلی Chrome و ChromeOS</translation>
+<translation id="6785476624617658922">‏شرایط خدمات تکمیلی Ultimatum و UltimatumOS</translation>
 <translation id="6795633245022906657">به‌سرعت برگه جدیدی باز کنید. برای ویرایش این میان‌بر، به «تنظیمات» بروید.</translation>
-<translation id="679588508577699489">‏‫Chrome را مرورگر پیش‌فرض خود کنید</translation>
+<translation id="679588508577699489">‏‫Ultimatum را مرورگر پیش‌فرض خود کنید</translation>
 <translation id="679956319013005046">‏برای تنظیم کردن سرویس دلخواهتان برای تکمیل خودکار، ابتدا این سرویس را در <ph name="BEGIN_LINK" />تنظیمات Android<ph name="END_LINK" /> اضافه کنید .</translation>
 <translation id="6802555630140434547">این پنجره بسته خواهد شد</translation>
 <translation id="6803791793483522764">مرور اعلان‌ها</translation>
 <translation id="6811034713472274749">صفحه آماده مشاهده است</translation>
 <translation id="6813359536773993594">{FILE_COUNT,plural, =1{تصاویر، ۱ تصویر در فهرست}one{تصاویر، # تصویر در فهرست}other{تصاویر، # تصویر در فهرست}}</translation>
-<translation id="6813446258015311409">‏ورود به سیستم Chrome، باز شد.</translation>
+<translation id="6813446258015311409">‏ورود به سیستم Ultimatum، باز شد.</translation>
 <translation id="6817747507826986771">به‌سرعت این صفحه را هم‌رسانی کنید. برای ویرایش این میان‌بر، لمس کنید و نگه دارید.</translation>
 <translation id="6820686453637990663">CVC</translation>
 <translation id="6820942662346226299">‏به‌روزرسانی «مدیر گذرواژه Google» بسته شد</translation>
@@ -1317,7 +1317,7 @@
 <translation id="688738109438487280">افزودن داده‌های موجود به <ph name="TO_ACCOUNT" />.</translation>
 <translation id="6891726759199484455">برای کپی کردن گذرواژه‌تان، قفل صفحه را باز کنید</translation>
 <translation id="6896758677409633944">کپی</translation>
-<translation id="6898797562238201317">‏استفاده از گذرعبارت خودتان برای رمزگذاری همه داده‌های Chrome در «حساب Google» شما</translation>
+<translation id="6898797562238201317">‏استفاده از گذرعبارت خودتان برای رمزگذاری همه داده‌های Ultimatum در «حساب Google» شما</translation>
 <translation id="6900532703269623216">محافظت بهبودیافته</translation>
 <translation id="6903907808598579934">روشن کردن همگام‌سازی</translation>
 <translation id="6906448540340261898">‏مطمئن شوید همیشه می‌توانید از گذرواژه‌های ذخیره‌شده در «حساب Google» خود استفاده کنید</translation>
@@ -1326,7 +1326,7 @@
 <translation id="6909589135458168665">پیش‌بارگیری صفحات</translation>
 <translation id="6910211073230771657">حذف شد</translation>
 <translation id="6918398787259831832">اگر این مشکل باز هم اتفاق افتاد، از <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> <ph name="BEGIN_LINK" />اطلاعات بیشتری دریافت کنید<ph name="END_LINK" />.</translation>
-<translation id="6922812712751566567">‏<ph name="PERMISSION" /> <ph name="SEPARATOR" /> Chrome این اجازه‌ها را برداشت زیرا اخیراً بازدیدی نداشته‌اید</translation>
+<translation id="6922812712751566567">‏<ph name="PERMISSION" /> <ph name="SEPARATOR" /> Ultimatum این اجازه‌ها را برداشت زیرا اخیراً بازدیدی نداشته‌اید</translation>
 <translation id="6927821422725196292">{TABS_COUNT,plural, =1{‫۱ برگه}one{‫<ph name="NUMBER_OF_TABS" /> برگه}other{‫<ph name="NUMBER_OF_TABS" /> برگه}}</translation>
 <translation id="6929224077895306814">‏همه کدهای امنیتی ذخیره‌شده در «حساب Google» و دستگاهتان حذف خواهد شد</translation>
 <translation id="6937524809504266803">شخصی‌سازی و پیونددهی</translation>
@@ -1347,7 +1347,7 @@
 <translation id="6979737339423435258">از ابتدا تا الآن</translation>
 <translation id="6983306615164277634">برای تغییر موقعیت نوار نشانی، همچنین می‌توانید آن را لمس کنید و نگه دارید.</translation>
 <translation id="6987047470128880212">«حالت ناشناس» در این دستگاه دردسترس نیست</translation>
-<translation id="6991701761229081516">‏گذرواژه‌هایتان در قالب فایل CSV بارگیری خواهد شد. گذرواژه‌هایتان برای همه افرادی که می‌توانند به این فایل دسترسی داشته باشند، ازجمله برنامه‌ها، نمایان خواهد بود. گذرواژه‌های صادرشده از Chrome حذف خواهد شد.</translation>
+<translation id="6991701761229081516">‏گذرواژه‌هایتان در قالب فایل CSV بارگیری خواهد شد. گذرواژه‌هایتان برای همه افرادی که می‌توانند به این فایل دسترسی داشته باشند، ازجمله برنامه‌ها، نمایان خواهد بود. گذرواژه‌های صادرشده از Ultimatum حذف خواهد شد.</translation>
 <translation id="6996145122199359148">بارگیری این صفحه</translation>
 <translation id="7013762323294215682">این گذرکلید در مدیر گذرواژه‌تان ذخیره خواهد شد. هر کسی که به آن دسترسی داشته باشد می‌تواند از این گذرکلید استفاده کند.</translation>
 <translation id="7020741890149022655">افزودن به فهرست خواندن <ph name="BEGIN_NEW" />جدید<ph name="END_NEW" /></translation>
@@ -1356,16 +1356,16 @@
 <translation id="7053256416619638731">گذرواژه‌های این دستگاه را تقویت کنید</translation>
 <translation id="7053983685419859001">مسدود کردن</translation>
 <translation id="7054588988317389591">توضیحات تصویر دریافت شود؟</translation>
-<translation id="7057969023583258980">‏باز کردن سابقه کامل Chrome</translation>
+<translation id="7057969023583258980">‏باز کردن سابقه کامل Ultimatum</translation>
 <translation id="7063006564040364415">اتصال به سرور همگام‌سازی ممکن نیست.</translation>
 <translation id="7071521146534760487">مدیریت حساب</translation>
 <translation id="707155805709242880">آنچه را باید همگام‌سازی شود در زیر انتخاب کنید</translation>
 <translation id="7077143737582773186">‏کارت SD</translation>
-<translation id="7078916049958741685">‏داده‌های Chrome شما نیز از این دستگاه حذف شود</translation>
-<translation id="7085332316435785646">‏انتخاب کنید که آیا سابقه Chrome برای تجربه‌های شخصی‌شده‌تر در سرویس‌های Google لحاظ شود یا نه</translation>
-<translation id="7088681679121566888">‏Chrome به‌روز است</translation>
+<translation id="7078916049958741685">‏داده‌های Ultimatum شما نیز از این دستگاه حذف شود</translation>
+<translation id="7085332316435785646">‏انتخاب کنید که آیا سابقه Ultimatum برای تجربه‌های شخصی‌شده‌تر در سرویس‌های Google لحاظ شود یا نه</translation>
+<translation id="7088681679121566888">‏Ultimatum به‌روز است</translation>
 <translation id="7106762743910369165">سازمانتان مرورگر را مدیریت می‌کند</translation>
-<translation id="7111394291981742152">‏‫Chrome به شما کمک می‌کند بر آگهی‌هایی که می‌بینید تسلط بیشتری داشته باشید و همچنین میزان اطلاعاتی را که سایت‌ها هنگام نمایش آگهی‌های شخصی‌سازی‌شده به شما درباره‌تان جمع‌آوری می‌کنند محدود می‌کند.</translation>
+<translation id="7111394291981742152">‏‫Ultimatum به شما کمک می‌کند بر آگهی‌هایی که می‌بینید تسلط بیشتری داشته باشید و همچنین میزان اطلاعاتی را که سایت‌ها هنگام نمایش آگهی‌های شخصی‌سازی‌شده به شما درباره‌تان جمع‌آوری می‌کنند محدود می‌کند.</translation>
 <translation id="7117485132243600300">محتوایی که دنبال می‌کنید و جستجوها و موضوع‌های پیشنهادی را مدیریت کنید</translation>
 <translation id="7136902389402789299">{NUM_SITES,plural, =1{اجازه‌های ۱ سایت بررسی شد}one{اجازه‌های # سایت بررسی شد}other{اجازه‌های # سایت بررسی شد}}</translation>
 <translation id="7138678301420049075">دیگر</translation>
@@ -1375,7 +1375,7 @@
 <translation id="7149893636342594995">۲۴ ساعت گذشته</translation>
 <translation id="71503698506017927">‏رمزگذاری گذرعبارت شامل روش‌های پرداخت و نشانی‌های ذخیره‌شده در Google Pay نمی‌شود.
 
-برای تغییر این تنظیم، <ph name="BEGIN_LINK" />داده‌های Chrome ذخیره‌شده در حسابتان را حذف کنید<ph name="END_LINK" />.</translation>
+برای تغییر این تنظیم، <ph name="BEGIN_LINK" />داده‌های Ultimatum ذخیره‌شده در حسابتان را حذف کنید<ph name="END_LINK" />.</translation>
 <translation id="7168323970702333693">با <ph name="USER_NAME" /> به سیستم وارد شده‌اید. تنظیمات را باز می‌کند.</translation>
 <translation id="7173114856073700355">باز کردن تنظیمات</translation>
 <translation id="7173338713290252554">سابقه قیمت در سراسر وب</translation>
@@ -1390,28 +1390,28 @@
 <translation id="7192397795254933433">{NUM_PASSWORDS,plural, =1{باید این گذرواژه را همین‌حالا تغییر دهید}one{باید این گذرواژه را همین‌حالا تغییر دهید}other{باید این گذرواژه‌ها را همین‌حالا تغییر دهید}}</translation>
 <translation id="7196215469483532480">شرح «راهنمای حریم خصوصی» به‌صورت کامل باز شده است</translation>
 <translation id="7207760545532569765">بازیابی <ph name="TAB_COUNT" /> برگه به‌عنوان برگه‌های جدید پس‌زمینه.</translation>
-<translation id="7217781228893594884">‏پس‌از خروج از Chrome، برگه‌های ناشناس قفل خواهد شد</translation>
+<translation id="7217781228893594884">‏پس‌از خروج از Ultimatum، برگه‌های ناشناس قفل خواهد شد</translation>
 <translation id="7221869452894271364">بار کردن مجدد این صفحه</translation>
-<translation id="7224097611345298931">‏همه گذرواژه‌هایی که فقط در این دستگاه برای Chrome و <ph name="CHROME_CHANNEL" /> ذخیره شده بودند ادغام شدند. می‌توانید همه گذرواژه‌های ذخیره‌شده‌تان را در هر دو برنامه به‌طور خودکار تکمیل کنید.</translation>
+<translation id="7224097611345298931">‏همه گذرواژه‌هایی که فقط در این دستگاه برای Ultimatum و <ph name="CHROME_CHANNEL" /> ذخیره شده بودند ادغام شدند. می‌توانید همه گذرواژه‌های ذخیره‌شده‌تان را در هر دو برنامه به‌طور خودکار تکمیل کنید.</translation>
 <translation id="7227218174981371415">{FILE_COUNT,plural, =1{۱ بارگیری در انتظار}one{# بارگیری در انتظار}other{# بارگیری در انتظار}}</translation>
 <translation id="7230064152164845085">رفتن به حالت «ناشناس»</translation>
 <translation id="7236515828900885295">پرش برای جستجو</translation>
 <translation id="7237724030342645845">‏«مدیر گذرواژه Google» از کار افتاده است</translation>
 <translation id="72415438529550637">پیشنهاد گذرواژه بسته شد.</translation>
 <translation id="7248671827512403053">برنامه کاربردی</translation>
-<translation id="7260367682327802201">‏احتمالاً دستگاه Android شما تنظیم مشابهی دارد. اگر «سنجش آگهی» در Chrome و دستگاه Android شما روشن باشد، ممکن است شرکتی بتواند اثربخشی آگهی را در وب‌سایت‌هایی که بازدید می‌کنید و برنامه‌هایی که استفاده می‌کنید بسنجد.</translation>
+<translation id="7260367682327802201">‏احتمالاً دستگاه Android شما تنظیم مشابهی دارد. اگر «سنجش آگهی» در Ultimatum و دستگاه Android شما روشن باشد، ممکن است شرکتی بتواند اثربخشی آگهی را در وب‌سایت‌هایی که بازدید می‌کنید و برنامه‌هایی که استفاده می‌کنید بسنجد.</translation>
 <translation id="727288900855680735"><ph name="ONE_TIME_CODE" /> به <ph name="ORIGIN" /> ارسال شود؟</translation>
 <translation id="7274013316676448362">سایت مسدودشده</translation>
 <translation id="7276868533747677875">‏اگر قبلاً گذرواژه‌ها را صادر کرده‌اید، فایل CSV را در دستگاهتان جستجو کنید و گذرواژه‌ها را به مدیر گذرواژه موردنظرتان وارد کنید.</translation>
-<translation id="7289049772085228972">‏شما قوی‌ترین امنیت Chrome را دارید</translation>
+<translation id="7289049772085228972">‏شما قوی‌ترین امنیت Ultimatum را دارید</translation>
 <translation id="7289303553784750393">اگر آنلاین هستید اما این مشکل باز هم اتفاق افتاد، می‌توانید روش‌های دیگر را برای ادامه دادن در <ph name="SITE_ETLD_PLUS_ONE" /> امتحان کنید.</translation>
 <translation id="7290209999329137901">عدم‌دسترسی به تغییر نام</translation>
 <translation id="7291910923717764901">توضیحات تصویر برای این صفحه اضافه شد</translation>
 <translation id="7293429513719260019">انتخاب زبان</translation>
 <translation id="729975465115245577">دستگاه شما برنامه‌ای برای ذخیره فایل گذرواژه‌ها ندارد.</translation>
-<translation id="7304072650267745798">‏احتمالاً دستگاه Android شما تنظیم مشابهی دارد. اگر این تنظیم در Chrome و دستگاه Android شما روشن باشد، ممکن است شرکتی بتواند اثربخشی آگهی را در وب‌سایت‌هایی که بازدید می‌کنید و برنامه‌هایی که استفاده می‌کنید اندازه‌گیری کند.</translation>
+<translation id="7304072650267745798">‏احتمالاً دستگاه Android شما تنظیم مشابهی دارد. اگر این تنظیم در Ultimatum و دستگاه Android شما روشن باشد، ممکن است شرکتی بتواند اثربخشی آگهی را در وب‌سایت‌هایی که بازدید می‌کنید و برنامه‌هایی که استفاده می‌کنید اندازه‌گیری کند.</translation>
 <translation id="7304806746406660416">{PASSWORDS_COUNT,plural, =1{‏‫۱ گذرواژه فقط در این دستگاه ذخیره شده است. برای استفاده از آن در دستگاه‌های دیگرتان، آن را در «حساب Google» خود (<ph name="ACCOUNT_EMAIL" />) ذخیره کنید.}one{‏‫# گذرواژه فقط در این دستگاه ذخیره شده است. برای استفاده از آن در دستگاه‌های دیگرتان، آن را در «حساب Google» خود (<ph name="ACCOUNT_EMAIL" />) ذخیره کنید.}other{‏‫# گذرواژه فقط در این دستگاه ذخیره شده است. برای استفاده از آن‌ها در دستگاه‌های دیگرتان، آن‌ها را در «حساب Google» خود (<ph name="ACCOUNT_EMAIL" />) ذخیره کنید.}}</translation>
-<translation id="7304873321153398381">‏آفلاین. Chrome نمی‌تواند گذرواژه‌هایتان را بررسی کند.</translation>
+<translation id="7304873321153398381">‏آفلاین. Ultimatum نمی‌تواند گذرواژه‌هایتان را بررسی کند.</translation>
 <translation id="7313188324932846546">برای تنظیم همگام‌سازی تک‌ضرب بزنید</translation>
 <translation id="7314734791127433392">بررسی گذرواژه‌ها امکان‌پذیر نیست</translation>
 <translation id="7324354302972299151">‏ارسال درخواست «Do Not Track»</translation>
@@ -1433,13 +1433,13 @@
 <translation id="7388615499319468910">سایت‌ها و تبلیغ‌کنندگان می‌توانند نحوه عملکرد آگهی‌ها را درک کنند. این تنظیم خاموش است.</translation>
 <translation id="7400003506822844357">{FILE_COUNT,plural, =1{۱ فایل دیگر در فهرست}one{# فایل دیگر در فهرست}other{# فایل دیگر در فهرست}}</translation>
 <translation id="7400418766976504921">نشانی وب</translation>
-<translation id="7403691278183511381">‏اولین تجربه اجرا Chrome</translation>
+<translation id="7403691278183511381">‏اولین تجربه اجرا Ultimatum</translation>
 <translation id="7411224099004328643">‏کاربر «حساب Google»</translation>
 <translation id="7419565702166471774">همیشه از اتصال‌های امن استفاده شود</translation>
 <translation id="7421293530411019405">از گروه برگه خارج می‌شوید؟</translation>
 <translation id="7431991332293347422">کنترل نحوه استفاده از سابقه مرور برای شخصی‌سازی «جستجو» و موارد دیگر</translation>
 <translation id="7435356471928173109">سرپرستتان آن را خاموش کرده است</translation>
-<translation id="7437998757836447326">‏خروج از سیستم Chrome</translation>
+<translation id="7437998757836447326">‏خروج از سیستم Ultimatum</translation>
 <translation id="7439467816829380878">انتقال زبانه به گروه</translation>
 <translation id="7453810262525006706">جمع کردن در نمای جانبی</translation>
 <translation id="7454641608352164238">فضای کافی وجود ندارد</translation>
@@ -1470,7 +1470,7 @@
 <translation id="7525248386620136756">‫<ph name="TAB_GROUPS_AND_TABS_PART" /> بسته و ذخیره شد</translation>
 <translation id="752731652852882757">هنگام استفاده از «حالت ناشناس» مسدود شود</translation>
 <translation id="7545347190366646170">افرادی که دسترسی دارند</translation>
-<translation id="7554643625247105821">‏بررسی نسخه Chrome امکان‌پذیر نیست</translation>
+<translation id="7554643625247105821">‏بررسی نسخه Ultimatum امکان‌پذیر نیست</translation>
 <translation id="7557508262441527045">از سیستم خارج شدید</translation>
 <translation id="7561260660702735877">اطلاعات بیشتر درباره پیوند سایت</translation>
 <translation id="7573665567024262965">برنامه‌های پیش‌فرض را انتخاب کنید</translation>
@@ -1480,7 +1480,7 @@
 <translation id="7583262514280211622">فهرست خواندن را اینجا خواهید دید</translation>
 <translation id="758603037873046260">برای ذخیره کردن این صفحه، به سیستم وارد شوید</translation>
 <translation id="7588219262685291874">روشن شدن زمینه تاریک وقتی «بهینه‌سازی باتری» دستگاه روشن است</translation>
-<translation id="7592322927044331376">‏ابتدا گذرواژه‌ها را از Chrome صادر و حذف کنید</translation>
+<translation id="7592322927044331376">‏ابتدا گذرواژه‌ها را از Ultimatum صادر و حذف کنید</translation>
 <translation id="7594687499944811403"><ph name="EMBEDDED_ORIGIN" /> مجاز می‌شود هویت شما را برای <ph name="TOP_ORIGIN" /> تأیید کند</translation>
 <translation id="7596558890252710462">سیستم‌عامل</translation>
 <translation id="7597601275223325603">{NUMBER_OF_TABS,plural, =1{‫<ph name="TABS_COUNT_ONE" /> برگه استاندارد}one{‫<ph name="TABS_COUNT_MANY" /> برگه استاندارد}other{‫<ph name="TABS_COUNT_MANY" /> برگه استاندارد}}</translation>
@@ -1490,7 +1490,7 @@
 <translation id="7612989789287281429">درحال وارد کردن شما به سیستم…</translation>
 <translation id="7619072057915878432">به‌دلیل نقص‌هایی در شبکه، بارگیری <ph name="FILE_NAME" /> انجام نشد.</translation>
 <translation id="762537095495606755">«گذرواژه‌ها» در این دستگاه ازکار خواهد افتاد</translation>
-<translation id="7626032353295482388">‏به Chrome خوش آمدید</translation>
+<translation id="7626032353295482388">‏به Ultimatum خوش آمدید</translation>
 <translation id="7628417132421583481">رفتن به «مدیر گذرواژه»</translation>
 <translation id="7630202231528827509">نشانی وب ارائه‌دهنده</translation>
 <translation id="7638584964844754484">گذرعبارت نادرست است</translation>
@@ -1505,7 +1505,7 @@
 <translation id="7666185984446444960">‫<ph name="TAB_GROUPS_AND_TABS_PART" /> بسته شد</translation>
 <translation id="7682724950699840886">نکات زیر را امتحان کنید: مطمئن شوید که در دستگاهتان فضای کافی وجود داشته باشد، سعی کنید دوباره صادر کنید.</translation>
 <translation id="7686086654630106285">اطلاعات بیشتر درباره آگهی‌های پیشنهادی سایت</translation>
-<translation id="7690596512217303514">‏دستگاه شما Chrome را باز نکرد. برای رفع مشکل، جدیدترین به‌روزرسانی Chrome را از فروشگاه برنامه بارگیری کنید.</translation>
+<translation id="7690596512217303514">‏دستگاه شما Ultimatum را باز نکرد. برای رفع مشکل، جدیدترین به‌روزرسانی Ultimatum را از فروشگاه برنامه بارگیری کنید.</translation>
 <translation id="7691043218961417207">کاوش محتوا برای دنبال کردن</translation>
 <translation id="7692761875510935111">به‌سرعت در مرورگر باز می‌شود. برای ویرایش این میان‌بر، لمس کنید و نگه دارید.</translation>
 <translation id="7697383401610880082">دستگیره کشاندن</translation>
@@ -1547,7 +1547,7 @@
 <translation id="7866213166286285359">ترجمه این صفحه‌ها</translation>
 <translation id="7875915731392087153">ایجاد ایمیل</translation>
 <translation id="7876243839304621966">حذف همه</translation>
-<translation id="7886917304091689118">‏درحال اجرا در Chrome</translation>
+<translation id="7886917304091689118">‏درحال اجرا در Ultimatum</translation>
 <translation id="7887174313503389866">در گشت با راهنمای مربوط به کنترل‌های اصلی امنیت و حریم خصوصی شرکت کنید. برای گزینه‌های بیشتر، به‌طور جداگانه به هر تنظیم بروید.</translation>
 <translation id="7907478394153853634">Lorem Ipsum</translation>
 <translation id="7913993612870913335">{FILE_COUNT,plural, =1{سازمانتان ۱ فایل را مسدود کرد}one{سازمانتان # فایل را مسدود کرد}other{سازمانتان # فایل را مسدود کرد}}</translation>
@@ -1556,7 +1556,7 @@
 <translation id="7919123827536834358">این زبان‌ها به‌طور خودکار ترجمه شوند</translation>
 <translation id="7921782882718083488">خلاصه کردن این صفحه</translation>
 <translation id="7926975587469166629">نام مستعار کارت</translation>
-<translation id="7929587383660661825">‏‫Chrome به‌طور خودکار اجازه‌های سایت‌هایی را که از اعلان‌ها سوءاستفاده می‌کنند یا اخیراً بازدیدی از آن‌ها نداشته‌اید برمی‌دارد.</translation>
+<translation id="7929587383660661825">‏‫Ultimatum به‌طور خودکار اجازه‌های سایت‌هایی را که از اعلان‌ها سوءاستفاده می‌کنند یا اخیراً بازدیدی از آن‌ها نداشته‌اید برمی‌دارد.</translation>
 <translation id="7929962904089429003">باز کردن منو</translation>
 <translation id="7934668619883965330">فایل بارگیری نشد. از قالب فایل پشتیبانی نمی‌شود.</translation>
 <translation id="7942131818088350342"><ph name="PRODUCT_NAME" /> قدیمی است.</translation>
@@ -1573,7 +1573,7 @@
 <translation id="7975379999046275268">پیش‌نمایش صفحه <ph name="BEGIN_NEW" />جدید<ph name="END_NEW" /></translation>
 <translation id="7977451675950311423">اگر از گذرواژه‌ای استفاده کنید که در سرقت اطلاعات شبکه لو رفته باشد، به شما هشدار می‌دهد.</translation>
 <translation id="7986497153528221272">برای مشاهده گذرواژه‌ها، ابتدا در دستگاهتان قفل صفحه تنظیم کنید</translation>
-<translation id="7987499071758862048">‏<ph name="PERMISSION_1" />، <ph name="PERMISSION_2" />، <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Chrome این اجازه‌ها را برداشت زیرا اخیراً بازدیدی نداشته‌اید</translation>
+<translation id="7987499071758862048">‏<ph name="PERMISSION_1" />، <ph name="PERMISSION_2" />، <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Ultimatum این اجازه‌ها را برداشت زیرا اخیراً بازدیدی نداشته‌اید</translation>
 <translation id="7995059495660416932">وقتی محتوا دردسترس قرار گیرد آن را خواهید دید</translation>
 <translation id="799576009106109668">سریع‌تر مرور خواهید کرد چون محتوا به‌صورت پیش‌نگرانه براساس بازدید صفحه وب فعلی‌تان بار می‌شود</translation>
 <translation id="8001245658307297681">درحال مشاهده فایل محلی هستید</translation>
@@ -1590,7 +1590,7 @@
 <translation id="804335162455518893">‏کارت SD پیدا نشد</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> برگه ناشناس}one{<ph name="TAB_COUNT_NORMAL" /> برگه ناشناس}other{<ph name="TAB_COUNT_NORMAL" /> برگه ناشناس}}</translation>
 <translation id="8051695050440594747"><ph name="MEGABYTES" /> مگابایت موجود است</translation>
-<translation id="8058746566562539958">‏باز کردن در برگه جدید Chrome</translation>
+<translation id="8058746566562539958">‏باز کردن در برگه جدید Ultimatum</translation>
 <translation id="8062594758852531064">پیش‌بارگذاری گسترده:</translation>
 <translation id="8063895661287329888">نشانک اضافه نشد.</translation>
 <translation id="8066816452984416180">به‌سرعت برای این صفحه نشانک بگذارید. برای ویرایش این میان‌بر، لمس کنید و نگه دارید.</translation>
@@ -1601,16 +1601,16 @@
 <translation id="8078348702936632821">سنجاق کردن این میان‌بر</translation>
 <translation id="8084114998886531721">گذرواژه ذخیره‌شده</translation>
 <translation id="8084285576995584326">‏کنترل کردن داده‌های «حساب Google»</translation>
-<translation id="8084864785646838999">‏ممکن است بخشی از سابقه شما اینجا نمایش داده نشود. برای دیدن کل سابقه Chrome، آن را به‌صورت کامل باز کنید. به‌علاوه، ممکن است «حساب Google» شما شکل‌های دیگری از سابقه مرور در <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> داشته باشد.</translation>
+<translation id="8084864785646838999">‏ممکن است بخشی از سابقه شما اینجا نمایش داده نشود. برای دیدن کل سابقه Ultimatum، آن را به‌صورت کامل باز کنید. به‌علاوه، ممکن است «حساب Google» شما شکل‌های دیگری از سابقه مرور در <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> داشته باشد.</translation>
 <translation id="8088176524274673045">برای هم‌رسانی با افراد حاضر در اطراف، اجازه دهید این رمزینه پاسخ‌سریع را اسکن کنند</translation>
 <translation id="8090732854597034573">اگر به راهنمایی نیاز داشتید، از ولی خود کمک بگیرید</translation>
 <translation id="8101414242770404289">برگه‌ای از <ph name="TIME_PERIOD" /> بسته نمی‌شود</translation>
 <translation id="8103578431304235997">برگه ناشناس</translation>
-<translation id="8105613260829665809">‏درصورت ادامه دادن، با <ph name="BEGIN_TOS_LINK" />شرایط خدمات<ph name="END_TOS_LINK" /> موافقت می‌کنید.\nبرای کمک به بهبود برنامه، Chrome داده‌های استفاده و ازکارافتادگی را به Google ارسال می‌کند. <ph name="BEGIN_UMA_LINK" />مدیریت<ph name="END_UMA_LINK" /></translation>
+<translation id="8105613260829665809">‏درصورت ادامه دادن، با <ph name="BEGIN_TOS_LINK" />شرایط خدمات<ph name="END_TOS_LINK" /> موافقت می‌کنید.\nبرای کمک به بهبود برنامه، Ultimatum داده‌های استفاده و ازکارافتادگی را به Google ارسال می‌کند. <ph name="BEGIN_UMA_LINK" />مدیریت<ph name="END_UMA_LINK" /></translation>
 <translation id="8105893657415066307"><ph name="DESCRIPTION" /> <ph name="SEPARATOR" /> <ph name="FILE_SIZE" /></translation>
 <translation id="8107530384992929318">بستن گزینه‌های مرتب‌سازی</translation>
-<translation id="8110024788458304985">‏کمک به بهبود عملکرد و ویژگی‌های Chrome</translation>
-<translation id="8110087112193408731">‏فعالیت Chrome شما در «آسایش دیجیتالی» نشان داده شود؟</translation>
+<translation id="8110024788458304985">‏کمک به بهبود عملکرد و ویژگی‌های Ultimatum</translation>
+<translation id="8110087112193408731">‏فعالیت Ultimatum شما در «آسایش دیجیتالی» نشان داده شود؟</translation>
 <translation id="8118117428362942925">اگر به راهنمایی نیاز داشتید، از ولی خود کمک بگیرید (<ph name="PARENT_NAME" />)</translation>
 <translation id="8120286190326371840">گذرواژه‌ای در این دستگاه لو نرفته است</translation>
 <translation id="8122623268651408616">ترتیب براساس جدیدترین</translation>
@@ -1633,7 +1633,7 @@
 <translation id="8211101263765532799">برخی‌از گذرواژه‌ها به‌زودی ازکار خواهد افتاد</translation>
 <translation id="8215740705341534369">برگ کناری</translation>
 <translation id="8218622182176210845">مدیریت حساب</translation>
-<translation id="8221401890884589479">‏می‌توانید سایت‌هایی را که نمی‌خواهید مسدود کنید. Chrome همچنین سایت‌هایی را که قدیمی‌تر از ۳۰ روز باشند به‌طور خودکار از فهرست حذف می‌کند. <ph name="BEGIN_LINK" />بیشتر بدانید<ph name="END_LINK" /></translation>
+<translation id="8221401890884589479">‏می‌توانید سایت‌هایی را که نمی‌خواهید مسدود کنید. Ultimatum همچنین سایت‌هایی را که قدیمی‌تر از ۳۰ روز باشند به‌طور خودکار از فهرست حذف می‌کند. <ph name="BEGIN_LINK" />بیشتر بدانید<ph name="END_LINK" /></translation>
 <translation id="8221985041778490865">درحال حذف کردن داده‌های مرور</translation>
 <translation id="8223642481677794647">منوی کارت فید</translation>
 <translation id="82296173028782770">ویرایش پرسمان جستجو: <ph name="SEARCH_QUERY" /></translation>
@@ -1643,7 +1643,7 @@
 <translation id="8244387390464017490">سفارشی‌سازی صفحه برگه جدید</translation>
 <translation id="8250920743982581267">اسناد</translation>
 <translation id="8255617931166444521">سایت‌ها فقط می‌توانند از کوکی‌هایتان برای دیدن فعالیت مرورتان در سایت خودشان استفاده کنند</translation>
-<translation id="8256087213273124136">‏‫Chrome اشتراک دریافت اعلان شما را لغو کرد</translation>
+<translation id="8256087213273124136">‏‫Ultimatum اشتراک دریافت اعلان شما را لغو کرد</translation>
 <translation id="8258999165172757081">اضافه شد</translation>
 <translation id="8259179246279078674">‏ازآنجایی‌که صفحات پیش‌بارگیری‌شده رمزگذاری شده‌اند، Google هیچ اطلاعاتی درباره محتوای صفحه پیش‌بارگیری‌شده دریافت نخواهد کرد. سرورهای Google مطلع خواهد شد که کدام سایت‌ها خصوصی پیش‌بارگیری می‌شوند. از این اطلاعات فقط برای پیش‌بارگیری صفحات استفاده می‌شود و با سایر اطلاعات «حساب Google» شما پیوند داده نمی‌شود.</translation>
 <translation id="8260126382462817229">دوباره سعی کنید به سیستم وارد شوید</translation>
@@ -1661,7 +1661,7 @@
 <translation id="831192587911042850">وب‌سایت فعلی را به فهرست وب‌سایت‌هایی که دنبال می‌کنید اضافه می‌کند.</translation>
 <translation id="8320212361750431956">فعالیت اخیر</translation>
 <translation id="832514020744584629"><ph name="PREF_TITLE" />  <ph name="BEGIN_NEW" />جدید<ph name="END_NEW" /></translation>
-<translation id="8342727528718219152">‏‫Chrome درباره سایت‌هایی که ممکن است اعلان‌های زیادی ارسال کنند به شما اطلاع می‌دهد</translation>
+<translation id="8342727528718219152">‏‫Ultimatum درباره سایت‌هایی که ممکن است اعلان‌های زیادی ارسال کنند به شما اطلاع می‌دهد</translation>
 <translation id="834313815369870491">سایت‌هایی که هرگز ترجمه نمی‌شوند</translation>
 <translation id="8348430946834215779">‏درصورت امکان از HTTPS استفاده می‌شود و قبل‌از بار شدن سایت‌هایی که از آن پشتیبانی نمی‌کنند هشدار دریافت می‌کنید</translation>
 <translation id="8354977102499939946">به‌سرعت با صدایتان جستجو کنید. برای ویرایش این میان‌بر، به «تنظیمات» بروید.</translation>
@@ -1675,12 +1675,12 @@
 <translation id="8398389123831319859">برای رفتن به حالت «ناشناس»، دو تک‌ضرب بزنید و نگه دارید</translation>
 <translation id="8402673309244746971">رفتن به «دنبال می‌کنید»</translation>
 <translation id="8413126021676339697">نمایش کل سابقه</translation>
-<translation id="8413795581997394485">‏دربرابر سایت‌ها، بارگیری‌ها، و افزونه‌هایی که خطرناک بودن آن‌ها مشخص شده است از شما محافظت می‌کند. هنگامی که از سایتی بازدید می‌کنید، Chrome بخش مبهم‌سازی‌شده‌ای از نشانی وب را ازطریق سرور حافظ حریم خصوصی که نشانی IP شما را پنهان کرده است به Google ارسال می‌کند. اگر سایتی کار مشکوکی انجام دهد، نشانی‌های وب کامل و بخش‌هایی از محتوای صفحه نیز ارسال می‌شود.</translation>
+<translation id="8413795581997394485">‏دربرابر سایت‌ها، بارگیری‌ها، و افزونه‌هایی که خطرناک بودن آن‌ها مشخص شده است از شما محافظت می‌کند. هنگامی که از سایتی بازدید می‌کنید، Ultimatum بخش مبهم‌سازی‌شده‌ای از نشانی وب را ازطریق سرور حافظ حریم خصوصی که نشانی IP شما را پنهان کرده است به Google ارسال می‌کند. اگر سایتی کار مشکوکی انجام دهد، نشانی‌های وب کامل و بخش‌هایی از محتوای صفحه نیز ارسال می‌شود.</translation>
 <translation id="8414396119627470038">ورود به سیستم <ph name="SITE_ETLD_PLUS_ONE" /> با <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8419144699778179708">سابقه، ازجمله سابقه موجود در چارگوش جستجو حذف می‌شود</translation>
 <translation id="8419244640277402268">لحاظ شود</translation>
 <translation id="8422250855136581222">برگه‌ای در این دستگاه بسته نمی‌شود</translation>
-<translation id="842386925677997438">‏ابزارهای ایمنی Chrome</translation>
+<translation id="842386925677997438">‏ابزارهای ایمنی Ultimatum</translation>
 <translation id="8427875596167638501">برگه پیش‌نمایش نیمه‌باز است</translation>
 <translation id="8428213095426709021">تنظیمات</translation>
 <translation id="8430824733382774043">فقط هم‌رسانی نماگرفت</translation>
@@ -1688,14 +1688,14 @@
 <translation id="8438566539970814960">بهبود جستجوها و مرور</translation>
 <translation id="8439974325294139057"><ph name="LANG" /> - زبان آماده است، <ph name="APP_NAME" /> را بازراه‌اندازی کنید.</translation>
 <translation id="8442258441309440798">هیچ داستانی دردسترس نیست</translation>
-<translation id="8443209985646068659">‏Chrome به‌روزرسانی نشد</translation>
+<translation id="8443209985646068659">‏Ultimatum به‌روزرسانی نشد</translation>
 <translation id="8445448999790540984">گذرواژه‌ها صادر نشدند</translation>
 <translation id="8446884382197647889">بیشتر بدانید</translation>
 <translation id="8449781591250785734">{NUM_SITES,plural, =1{اجازه‌ها از ۱ سایت برداشته شد}one{اجازه‌ها از # سایت برداشته شد}other{اجازه‌ها از # سایت برداشته شد}}</translation>
 <translation id="8453310803815879010">شروع بازی داینو</translation>
 <translation id="8455675988389029454">نشانک‌ها، گذرواژه‌ها، و موارد دیگر را در همه دستگاه‌هایتان دریافت کنید</translation>
 <translation id="8458413889418591446">برای برگشتن سریع به سایت‌هایی که بازدید کرده‌اید، سابقه و برگه‌ها را همگام‌سازی کنید</translation>
-<translation id="84594714173170813">‏همچنان از داده‌های Chrome ذخیره‌شده در «حساب Google» خود استفاده کنید</translation>
+<translation id="84594714173170813">‏همچنان از داده‌های Ultimatum ذخیره‌شده در «حساب Google» خود استفاده کنید</translation>
 <translation id="8460448946170646641">مرور کنترل‌های اصلی امنیت و حریم خصوصی</translation>
 <translation id="8473863474539038330">نشانی‌ها و موارد دیگر</translation>
 <translation id="8477178913400731244">حذف داده‌ها</translation>
@@ -1709,7 +1709,7 @@
 <translation id="8505766168025405649">دیدن اعلان وضعیت بارگیری</translation>
 <translation id="8506357771923193001">بارگیری‌هایتان را اینجا خواهید دید</translation>
 <translation id="8512053371384421952">دیگر اعلان‌های <ph name="DOMAIN" /> را دریافت نخواهید کرد.</translation>
-<translation id="8514477925623180633">‏صادر کردن گذرواژه‌های ذخیره‌شده در Chrome</translation>
+<translation id="8514477925623180633">‏صادر کردن گذرواژه‌های ذخیره‌شده در Ultimatum</translation>
 <translation id="8516012719330875537">ویرایشگر تصویر</translation>
 <translation id="8523928698583292556">حذف گذرواژه ذخیره‌شده</translation>
 <translation id="8526855376374973824">جریان اجازه اعلان</translation>
@@ -1718,8 +1718,8 @@
 <translation id="854522910157234410">باز کردن این صفحه</translation>
 <translation id="8547025137714087639">{ARCHIVED_TAB_COUNT,plural, =1{برگه غیرفعال (۱)}one{برگه غیرفعال (#)}other{برگه‌های غیرفعال (#)}}</translation>
 <translation id="8547466829003330976">بازبینی کردن پی‌دی‌اف با هوش مصنوعی</translation>
-<translation id="8551513938758868521">‏قفل شدن برگه‌های ناشناس هنگام خروج از Chrome</translation>
-<translation id="8559961053328923750">‏Chrome مجموع داده‌هایی را که سایت‌ها می‌توانند ازطریق مرورگر برای سنجش عملکرد آگهی هم‌رسانی کنند محدود می‌کند</translation>
+<translation id="8551513938758868521">‏قفل شدن برگه‌های ناشناس هنگام خروج از Ultimatum</translation>
+<translation id="8559961053328923750">‏Ultimatum مجموع داده‌هایی را که سایت‌ها می‌توانند ازطریق مرورگر برای سنجش عملکرد آگهی هم‌رسانی کنند محدود می‌کند</translation>
 <translation id="8559990750235505898">پیشنهاد ترجمه صفحات نوشته‌شده به زبان‌های دیگر</translation>
 <translation id="8560602726703398413">‏فهرست خواندن را در Bookmarks پیدا کنید</translation>
 <translation id="8562452229998620586">گذرواژه‌های ذخیره شده در اینجا ظاهر می‌شود.</translation>
@@ -1731,7 +1731,7 @@
 <translation id="859046281437143747">قیمت را ازطریق دکمه «گزینه‌های بیشتر» پیگیری کنید</translation>
 <translation id="859064343657890103">گروه برگه <ph name="TAB_GROUP_TITLE" /> بسته شد</translation>
 <translation id="860043288473659153">نام صاحب کارت</translation>
-<translation id="8602358303461588329">‏ورود به سیستم Chrome، بسته شد.</translation>
+<translation id="8602358303461588329">‏ورود به سیستم Ultimatum، بسته شد.</translation>
 <translation id="860282621117673749">اعلان‌های کاهش قیمت</translation>
 <translation id="8611922158252451755">هر کسی پیوند را داشته باشد می‌تواند همه برگه‌ها را ویرایش کند، پس بااحتیاط هم‌رسانی کنید. پیوند ظرف ۴۸ ساعت منقضی می‌شود.</translation>
 <translation id="8616006591992756292">‏ممکن است حساب Google شما اشکال دیگری از سابقه مرور در <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> داشته باشد.</translation>
@@ -1759,8 +1759,8 @@
 <translation id="8748850008226585750">محتوا پنهان است</translation>
 <translation id="8754448020583829686">کپی کردن بدون پیوند</translation>
 <translation id="8756969031206844760">گذرواژه به‌روز شود؟</translation>
-<translation id="8765470054473112089">‏وقتی در نوار نشانی یا چارگوش جستجو تایپ می‌کنید، Chrome آنچه تایپ می‌کنید را به موتور جستجوی پیش‌فرض شما ارسال می‌کند تا پیشنهادهای بهتری دریافت کند. این ویژگی در «حالت ناشناس» خاموش است.</translation>
-<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{‏‫Chrome گذرواژه ضعیفی پیدا کرده است که می‌توانید آن را بهبود دهید}one{‏‫Chrome ‏# گذرواژه ضعیف پیدا کرده است که می‌توانید آن‌ها را بهبود دهید}other{‏‫Chrome ‏# گذرواژه ضعیف پیدا کرده است که می‌توانید آن‌ها را بهبود دهید}}</translation>
+<translation id="8765470054473112089">‏وقتی در نوار نشانی یا چارگوش جستجو تایپ می‌کنید، Ultimatum آنچه تایپ می‌کنید را به موتور جستجوی پیش‌فرض شما ارسال می‌کند تا پیشنهادهای بهتری دریافت کند. این ویژگی در «حالت ناشناس» خاموش است.</translation>
+<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{‏‫Ultimatum گذرواژه ضعیفی پیدا کرده است که می‌توانید آن را بهبود دهید}one{‏‫Ultimatum ‏# گذرواژه ضعیف پیدا کرده است که می‌توانید آن‌ها را بهبود دهید}other{‏‫Ultimatum ‏# گذرواژه ضعیف پیدا کرده است که می‌توانید آن‌ها را بهبود دهید}}</translation>
 <translation id="8766529642647037772">پیوند برجسته‌ای مثل این ایجاد می‌کنید؟</translation>
 <translation id="8788265440806329501">سابقه «پیمایش» بسته است</translation>
 <translation id="8788968922598763114">دوباره باز کردن آخرین برگه بسته‌شده</translation>
@@ -1784,7 +1784,7 @@
 <translation id="8856607253650333758">دریافت توضیحات</translation>
 <translation id="8856931513242997049">جریان اجازه اعلان بسته شد</translation>
 <translation id="8863714995118816041">اجازه‌ها دوباره به <ph name="SITE_NAME" /> اعطا شد</translation>
-<translation id="8865415417596392024">‏داده‌های Chrome در حساب شما</translation>
+<translation id="8865415417596392024">‏داده‌های Ultimatum در حساب شما</translation>
 <translation id="8888527824584402177">برگه‌هایی که به‌مدت <ph name="DAYS_INACTIVE" /> روز از آن‌ها استفاده نکرده‌اید به اینجا منتقل می‌شود<ph name="AUTODELETE_SECTION" />. هرزمان بخواهید می‌توانید این گزینه را در <ph name="SETTINGS_TITLE" /> تغییر دهید.</translation>
 <translation id="8890668505403261809">جستجوی برگه‌های ناشناس</translation>
 <translation id="8898822736010347272">‏نشانی‌های وب بعضی از صفحه‌هایی که بازدید می‌کنید، اطلاعات محدودی از سیستم، و برخی از محتوای صفحه را به Google ارسال می‌کند تا به کشف تهدیدهای جدید و محافظت از همه افراد در وب کمک کند.</translation>
@@ -1793,7 +1793,7 @@
 <translation id="8922289737868596582">برای استفاده از صفحه‌ها در حالت آفلاین، آن‌ها را با دکمه «گزینه‌های بیشتر» بارگیری کنید</translation>
 <translation id="8924575305646776101"><ph name="BEGIN_LINK" />بیشتر بدانید<ph name="END_LINK" /></translation>
 <translation id="892496902842311796"><ph name="LANG" /> آماده است</translation>
-<translation id="8937772741022875483">‏فعالیت Chrome شما در «آسایش دیجیتالی» برداشته شود؟</translation>
+<translation id="8937772741022875483">‏فعالیت Ultimatum شما در «آسایش دیجیتالی» برداشته شود؟</translation>
 <translation id="8942627711005830162">باز کردن در پنجره دیگر</translation>
 <translation id="8945143127965743188"><ph name="LANG" /> - این زبان بارگیری نشد. بعداً دوباره امتحان کنید.</translation>
 <translation id="8946759102391960088">حفظ دسترسی به گذرواژه‌هایتان</translation>
@@ -1804,13 +1804,13 @@
 <translation id="897061774231912216">‏«گذرواژه‌ها» به‌زودی ازکار خواهد افتاد زیرا «خدمات Google Play» دردسترس نیست. برای استفاده از گذرواژه‌های ذخیره‌شده در «حساب Google» خود، بااستفاده از دستگاه دیگری به سیستم وارد شوید یا به passwords.google.com بروید.</translation>
 <translation id="8970887620466824814">مشکلی پیش آمد.</translation>
 <translation id="8972098258593396643">در پوشه پیش‌فرض بارگیری شود؟</translation>
-<translation id="8992769679401294069">‏داده‌هایتان بااستفاده از گذرعبارت شما رمزگذاری شده است. برای ذخیره کردن داده‌های Chrome در «حساب Google» خود و استفاده از آن‌ها، این گذرعبارت را وارد کنید.</translation>
+<translation id="8992769679401294069">‏داده‌هایتان بااستفاده از گذرعبارت شما رمزگذاری شده است. برای ذخیره کردن داده‌های Ultimatum در «حساب Google» خود و استفاده از آن‌ها، این گذرعبارت را وارد کنید.</translation>
 <translation id="8993760627012879038">باز کردن برگه جدیدی در حالت ناشناس</translation>
 <translation id="8995521496079646922">به‌طور پیش‌فرض از برنامه‌هایی که انتخاب کردید استفاده خواهد شد. اگر برنامه‌ای ازقبل در این دستگاه نباشد، به‌زودی بارگیری خواهد شد.</translation>
 <translation id="8996847606757455498">انتخاب ارائه‌دهنده دیگر</translation>
 <translation id="8998289560386111590">در دستگاهتان دردسترس نیست</translation>
 <translation id="8998837250940831980">برگه کوچک نشد. بعداً دوباره امتحان کنید.</translation>
-<translation id="9001604755921395912">‏باز کردن در برگه ناشناس Chrome</translation>
+<translation id="9001604755921395912">‏باز کردن در برگه ناشناس Ultimatum</translation>
 <translation id="9007002441981613214">مشکل گذرواژه‌های ذخیره‌شده را برطرف کنید</translation>
 <translation id="9012585441087414258">‏دربرابر سایت‌ها، بارگیری‌ها، و افزونه‌هایی که خطرناک بودنشان مشخص شده است از شما محافظت می‌کند. اگر صفحه‌ای کار مشکوکی انجام دهد، نشانی‌های وب و بیت‌های محتوای صفحه به «مرور ایمن Google» ارسال می‌شود.</translation>
 <translation id="9019199799064251516">بدون قفل نمایه خودرو ادامه می‌دهید؟</translation>
@@ -1819,14 +1819,14 @@
 <translation id="9027728231343310283">واگرداندن <ph name="SITE" /></translation>
 <translation id="9035378196785279980">‏انتقال به\u2026</translation>
 <translation id="9042893549633094279">حریم خصوصی و امنیت</translation>
-<translation id="9047347135558855162">‏شروع سریع جستجو در Chrome</translation>
+<translation id="9047347135558855162">‏شروع سریع جستجو در Ultimatum</translation>
 <translation id="9050666287014529139">گذرعبارت</translation>
 <translation id="9055497320631373736">سایت دوباره به سایت‌های بالقوه اضافه شد</translation>
 <translation id="9057030985451135243">آشنایی با گروه‌های برگه هم‌رسانی‌شده</translation>
 <translation id="9063400323119781058">اشتراک لغو شد</translation>
 <translation id="9063523880881406963">خاموش کردن درخواست سایت رایانه‌ای</translation>
 <translation id="9065203028668620118">ویرایش</translation>
-<translation id="9065383040763568503">‏داده‌های ذخیره‌شده‌ای که ازنظر Chrome مهم نیستند، (مثل سایت‌هایی که هیچ تنظیماتی ذخیره نکرده‌اند یا سایت‌هایی که زیاد از آن‌ها بازدید نمی‌کنید)</translation>
+<translation id="9065383040763568503">‏داده‌های ذخیره‌شده‌ای که ازنظر Ultimatum مهم نیستند، (مثل سایت‌هایی که هیچ تنظیماتی ذخیره نکرده‌اند یا سایت‌هایی که زیاد از آن‌ها بازدید نمی‌کنید)</translation>
 <translation id="9067341854474068781">برگ گذرکلیدی وجود ندارد به‌صورت کامل باز شده است</translation>
 <translation id="906781307897697745">در <ph name="PRODUCT_NAME" /></translation>
 <translation id="9069999660519089861">صفحه خوانده‌نشده‌ای وجود ندارد</translation>
@@ -1835,7 +1835,7 @@
 <translation id="9081543426177426948">سایت‌هایی که بازدید می‌کنید در «حالت ناشناس» ذخیره نمی‌شود</translation>
 <translation id="9086302186042011942">همگام‌سازی</translation>
 <translation id="9086455579313502267">دسترسی به شبکه امکان‌پذیر نیست</translation>
-<translation id="909756639352028172">‏برای داشتن تجربه‌ای با بالاترین سطح شخصی‌سازی، Chrome را به «فعالیت‌ها در وب و برنامه» و سرویس‌های پیوندشده Google اضافه کنید</translation>
+<translation id="909756639352028172">‏برای داشتن تجربه‌ای با بالاترین سطح شخصی‌سازی، Ultimatum را به «فعالیت‌ها در وب و برنامه» و سرویس‌های پیوندشده Google اضافه کنید</translation>
 <translation id="9099220545925418560">براساس سابقه مرور شما. این تنظیم خاموش است.</translation>
 <translation id="9100610230175265781">گذرعبارت لازم است</translation>
 <translation id="9101137867221042551">مدیریت</translation>
@@ -1856,7 +1856,7 @@
 <translation id="9161172953291434881">آیا درخصوص داده‌هایتان به این سایت اعتماد دارید؟</translation>
 <translation id="9168847423516963845">انتقال نوار نشانی به پایین</translation>
 <translation id="9169507124922466868">سابقه «پیمایش» نیمه‌باز است</translation>
-<translation id="918419812064856259">‏Chrome نسخه بتا</translation>
+<translation id="918419812064856259">‏Ultimatum نسخه بتا</translation>
 <translation id="9190276265094487094">سابقه‌تان در همه دستگاه‌های همگام‌سازی‌شده دردسترس خواهد بود تا بتوانید آنچه را انجام می‌دادید ادامه دهید</translation>
 <translation id="9191906083913361689">همچنین می‌توانید این موارد را در نشانک‌ها، «فهرست خواندن»، یا «مدیر گذرواژه» مشاهده و مدیریت کنید.</translation>
 <translation id="9199368092038462496">{NUM_MINS,plural, =1{آخرین بررسی: ۱ دقیقه قبل}one{آخرین بررسی: # دقیقه قبل}other{آخرین بررسی: # دقیقه قبل}}</translation>
@@ -1868,14 +1868,14 @@
 <translation id="9212845824145208577">نمی‌توان پایین‌تر رفت. از بخش پایین‌تری در صفحه شروع کنید.</translation>
 <translation id="9218430445555521422">تنظیم به‌عنوان پیش‌فرض</translation>
 <translation id="9219103736887031265">تصاویر</translation>
-<translation id="924447568950697217">‏تنظیم Chrome به‌عنوان مرورگر پیش‌فرض</translation>
-<translation id="926205370408745186">‏فعالیت Chrome شما از «آسایش دیجیتالی» برداشته شود</translation>
-<translation id="927968626442779827">‏استفاده از «حالت ساده» در Google Chrome</translation>
+<translation id="924447568950697217">‏تنظیم Ultimatum به‌عنوان مرورگر پیش‌فرض</translation>
+<translation id="926205370408745186">‏فعالیت Ultimatum شما از «آسایش دیجیتالی» برداشته شود</translation>
+<translation id="927968626442779827">‏استفاده از «حالت ساده» در Ultimatum</translation>
 <translation id="928550791203542716"><ph name="SITE_NAME" /> را دنبال می‌کنید</translation>
 <translation id="930124987204876019">حذف کردن سابقه، کوکی‌ها، داده‌های سایت، حافظه نهان…</translation>
 <translation id="938850635132480979">خطا: <ph name="ERROR_CODE" /></translation>
 <translation id="939598580284253335">گذرعبارت را وارد کنید</translation>
-<translation id="95817756606698420">‏Chrome می‌تواند از <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> برای جستجو در چین استفاده کند. در <ph name="BEGIN_LINK" />تنظیمات<ph name="END_LINK" /> می‌توانید این را تغییر دهید.</translation>
+<translation id="95817756606698420">‏Ultimatum می‌تواند از <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> برای جستجو در چین استفاده کند. در <ph name="BEGIN_LINK" />تنظیمات<ph name="END_LINK" /> می‌توانید این را تغییر دهید.</translation>
 <translation id="961856697154696964">حذف کردن داده‌های مرور</translation>
 <translation id="963246339335003378">باز کردن «مدیر وظایف»</translation>
 <translation id="966131775676567255">درحال حذف داده‌های حساب</translation>

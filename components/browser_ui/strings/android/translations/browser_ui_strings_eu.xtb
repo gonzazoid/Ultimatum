@@ -3,21 +3,21 @@
 <translationbundle lang="eu">
 <translation id="1004806631856047384">Kudeatu <ph name="BEGIN_LINK1" />Android-en ezarpenetan<ph name="END_LINK1" />
 
-Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
+Babes aurreratua programak Ultimatum-ren ezarpen hauek kontrolatzen ditu:
 • "Erabili beti konexio seguruak" aktibatuta dago.
 • JavaScript-en optimizatzailea desaktibatuta dago. <ph name="BEGIN_LINK2" />Kudeatu webgunearen salbuespenak<ph name="END_LINK2" />.</translation>
 <translation id="1006017844123154345">Ireki sarean</translation>
 <translation id="1036348656032585052">Desaktibatu</translation>
 <translation id="1044891598689252897">Webguneek ohiko moduan funtzionatuko dute</translation>
 <translation id="1070329623210597193">Webgune honek ikusi edo edita ditzakeen fitxategiak</translation>
-<translation id="1073417869336441572">Lagun iezaguzu Chrome hobetzen: esan iezaguzu zergatik eman duzun hirugarrenen cookieak erabiltzeko baimena. <ph name="BEGIN_LINK" />Bidali oharrak<ph name="END_LINK" /></translation>
+<translation id="1073417869336441572">Lagun iezaguzu Ultimatum hobetzen: esan iezaguzu zergatik eman duzun hirugarrenen cookieak erabiltzeko baimena. <ph name="BEGIN_LINK" />Bidali oharrak<ph name="END_LINK" /></translation>
 <translation id="1074758928858737435">Webguneen ordenagailuetarako bertsioa ikusteko eska dezakezu</translation>
-<translation id="1085696779717592361">Erabili Chrome modu lehenetsian</translation>
+<translation id="1085696779717592361">Erabili Ultimatum modu lehenetsian</translation>
 <translation id="1178581264944972037">Pausatu</translation>
 <translation id="1181037720776840403">Kendu</translation>
 <translation id="1192844206376121885"><ph name="ORIGIN" /> webguneak gordetako datu eta cookie guztiak ezabatuko dira.</translation>
 <translation id="1201402288615127009">Hurrengoa</translation>
-<translation id="1240190568154816272">Chrome-ri buruzko aholkuak</translation>
+<translation id="1240190568154816272">Ultimatum-ri buruzko aholkuak</translation>
 <translation id="1242008676835033345"><ph name="WEBSITE_URL" /> helbidean kapsulatua</translation>
 <translation id="1263609676484797429">Sakatu Aplikazioak &gt; Aplikazio lehenetsiak.</translation>
 <translation id="1272079795634619415">Gelditu</translation>
@@ -34,7 +34,7 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="1396327438254055134">Eman V8 optimizatzailea erabiltzeko baimena webguneari.</translation>
 <translation id="1409338233051621926">Sakatu Aplikazioak eta, gero, sakatu Aplikazio lehenetsiak</translation>
 <translation id="1415402041810619267">URLa moztuta dago</translation>
-<translation id="1415855080660575082">Eman zure azkenaldiko fitxak gailuarekin partekatzeko aukera Chrome-ri, gailuko aplikazioen zerrendan eta bilaketa-emaitzetan ikusi ahal izan ditzazun. Aukera hori aktibatu edo desaktibatzeko, joan Chrome-ren ezarpenetara.</translation>
+<translation id="1415855080660575082">Eman zure azkenaldiko fitxak gailuarekin partekatzeko aukera Ultimatum-ri, gailuko aplikazioen zerrendan eta bilaketa-emaitzetan ikusi ahal izan ditzazun. Aukera hori aktibatu edo desaktibatzeko, joan Ultimatum-ren ezarpenetara.</translation>
 <translation id="1448064542941920355">Gutxitu zooma</translation>
 <translation id="1464044141348608623">Ez eman gailua noiz erabiltzen ari zaren jakiteko baimena webguneei</translation>
 <translation id="146867109637325312">{COUNT,plural, =1{<ph name="SITE_COUNT" /> webgune}other{<ph name="SITE_COUNT" /> webgune}}</translation>
@@ -43,7 +43,7 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="1510341833810331442">Webguneek ez dute zure gailuan datuak gordetzeko baimenik</translation>
 <translation id="1538031354170655462">Webguneek Near Field Communication (NFC) erabili ohi dute inguruko jarraipen-gailuekin edo etiketekin funtzionatzeko (adibidez, bereizgarriak eskaneatzeko edo kontakturik gabe ordaintzeko)</translation>
 <translation id="1547123415014299762">Hirugarrenen cookieak onartzen dira</translation>
-<translation id="1569054338208717605">Webguneak Chrome-ren V8 motorrarekin bizkortzen dira, baina erasoen aurrean zertxobait kalteberagoa da Chrome</translation>
+<translation id="1569054338208717605">Webguneak Ultimatum-ren V8 motorrarekin bizkortzen dira, baina erasoen aurrean zertxobait kalteberagoa da Ultimatum</translation>
 <translation id="1593426485665524382">Ekintza berriak erabilgarri daude pantailaren goialdean</translation>
 <translation id="1615755956145364867">Webguneek eduki babestua erreproduzitzea eska dezakete</translation>
 <translation id="1620510694547887537">Kamera</translation>
@@ -64,8 +64,8 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="1779089405699405702">Irudi-deskodetzailea</translation>
 <translation id="1785415724048343560">Zerbitzurik onena jasotzeko gomendatua</translation>
 <translation id="1796588414813960292">Soinua behar duten eginbideek ez dute funtzionatuko</translation>
-<translation id="1799920918471566157">Chrome-ri buruzko aholkuak</translation>
-<translation id="1816835383954230954">Aktibatuta dagoenean, Chrome-k bizkorrago funtzionatzen du eta JavaScript darabilten eginbideek behar bezala funtzionatu beharko lukete. Desaktibatuta dagoenean, errendimendua gutxitzen du, baina V8 erasoen aurrean indartzen du.</translation>
+<translation id="1799920918471566157">Ultimatum-ri buruzko aholkuak</translation>
+<translation id="1816835383954230954">Aktibatuta dagoenean, Ultimatum-k bizkorrago funtzionatzen du eta JavaScript darabilten eginbideek behar bezala funtzionatu beharko lukete. Desaktibatuta dagoenean, errendimendua gutxitzen du, baina V8 erasoen aurrean indartzen du.</translation>
 <translation id="1818308510395330587"><ph name="APP_NAME" /> aplikazioari errealitate areagotua erabiltzeko baimena emateko, kamera erabiltzeko baimena aktibatu behar duzu <ph name="BEGIN_LINK" />Android-en ezarpenetan<ph name="END_LINK" />.</translation>
 <translation id="1887786770086287077">Kokapenerako sarbidea desaktibatuta dago gailuan. Aktiba ezazu <ph name="BEGIN_LINK" />Android-en ezarpenetan<ph name="END_LINK" />.</translation>
 <translation id="1906181697255754968">Webguneek gailuko fitxategi eta karpetak atzitu ohi dituzte lana automatikoki gordetzeko eta antzeko funtzioak gauzatzeko</translation>
@@ -109,7 +109,7 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="2289270750774289114">Eskatu nire baimena webgune batek inguruko Bluetooth bidezko gailuak bilatu nahi dituenean (gomendatua)</translation>
 <translation id="2315043854645842844">Sistema eragileak ez du onartzen bezeroarentzako ziurtagiria hautatzea.</translation>
 <translation id="2359808026110333948">Egin aurrera</translation>
-<translation id="2379925928934107488">Chrome-n gai iluna erabiltzeko aukera ezarrita badago, aplikatu gai iluna webguneetan, ahal denean</translation>
+<translation id="2379925928934107488">Ultimatum-n gai iluna erabiltzeko aukera ezarrita badago, aplikatu gai iluna webguneetan, ahal denean</translation>
 <translation id="2390272837142897736">Handitu zooma</translation>
 <translation id="2402980924095424747"><ph name="MEGABYTES" /> MB</translation>
 <translation id="2404630663942400771">{PERMISSIONS_SUMMARY_ALLOWED,plural, =1{Baimena eman zaie hauei: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> eta beste <ph name="NUM_MORE" />}other{Baimena eman zaie hauei: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> eta beste <ph name="NUM_MORE" />}}</translation>
@@ -118,7 +118,7 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="2438120137003069591">Hirugarrenen cookieak aldi baterako erabiltzeko baimena eman diozu webgune honi. Babes txikiagoa izango duzu, baina webgunearen eginbideek espero bezala funtzionatzeko probabilitate handiagoa izango dute. <ph name="BEGIN_LINK" />Bidali oharrak<ph name="END_LINK" /></translation>
 <translation id="244264527810019436">Baliteke ezkutuko modua aktibatuta dagoenean webgune batzuetako eginbideek ez funtzionatzea</translation>
 <translation id="2442870161001914531">Eskatu beti ordenagailuetarako webgunea</translation>
-<translation id="2445311670906052406">Orain, azkenaldiko fitxak gailuarekin partekatzen ditu Chrome-k. Gailuko aplikazioen zerrendan eta bilaketa-emaitzetan ikusiko dituzu. Aukera hori desaktibatzeko, joan Chrome-ren ezarpenetara.</translation>
+<translation id="2445311670906052406">Orain, azkenaldiko fitxak gailuarekin partekatzen ditu Ultimatum-k. Gailuko aplikazioen zerrendan eta bilaketa-emaitzetan ikusiko dituzu. Aukera hori desaktibatzeko, joan Ultimatum-ren ezarpenetara.</translation>
 <translation id="245322989586167203">Webguneak serieko ataketara konektatu ohi dira datuak transferitzeko eginbideak eskaintzeko, hala nola sare-konfigurazioa</translation>
 <translation id="2469312991797799607"><ph name="ORIGIN" /> webgunearen eta haren mendeko webgune guztien datu eta cookie guztiak ezabatuko dira</translation>
 <translation id="2482878487686419369">Jakinarazpenak</translation>
@@ -143,14 +143,14 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="2685514716378236873">Ez daukate baimenik</translation>
 <translation id="2713106313042589954">Desaktibatu kamera</translation>
 <translation id="2717722538473713889">Helbide elektronikoak</translation>
-<translation id="2726059656860238749">Chrome exekutatzean, eduki arakatzaileko barra fokuratuta, gama baxuko gailuetan abiarazte-denbora txikiagotzeko.</translation>
+<translation id="2726059656860238749">Ultimatum exekutatzean, eduki arakatzaileko barra fokuratuta, gama baxuko gailuetan abiarazte-denbora txikiagotzeko.</translation>
 <translation id="2750481671343847896">Identitate-zerbitzuek saioa hasteko bidalitako onarpen-mezuak blokea ditzakete webguneek.</translation>
 <translation id="2787357173144933081">Abiarazi bizkor arakatzaileko barra</translation>
 <translation id="2789132527330338807">Webguneek zure ingurunearen 3D-ko mapa bat sortzeko edo kameraren posizioaren jarraipena egiteko baimena eska dezakete</translation>
 <translation id="2790501146643349491">Aktibatuta dagoenean, berriki itxitako webguneek datuak bidaltzen eta jasotzen amai dezakete. Desaktibatuta dagoenean, berriki itxitako webguneek ezin dute amaitu datuak bidaltzen eta jasotzen.</translation>
 <translation id="2795716239552913152">Webguneek kokapena erabili ohi dute eginbide edo informazio egokia eskaintzeko, hala nola tokiko albisteak edo inguruan dauden dendak</translation>
 <translation id="2802908157808345702">Ez eman leiho gainerakorrak bidaltzeko eta birbideratzeak erabiltzeko baimena webguneei</translation>
-<translation id="2814830417943086299">Orain, azkenaldiko fitxak gailuko aplikazioen zerrendan eta bilaketa-emaitzetan erakusten ditu Chrome-k. Aukera hori desaktibatzeko, joan Chrome-ren ezarpenetara.</translation>
+<translation id="2814830417943086299">Orain, azkenaldiko fitxak gailuko aplikazioen zerrendan eta bilaketa-emaitzetan erakusten ditu Ultimatum-k. Aukera hori desaktibatzeko, joan Ultimatum-ren ezarpenetara.</translation>
 <translation id="2822354292072154809">Ziur <ph name="CHOSEN_OBJECT_NAME" /> objektuaren webgune-baimen guztiak berrezarri nahi dituzula?</translation>
 <translation id="2850913818900871965">Eskatu mugikorretarako ikuspegia</translation>
 <translation id="2870560284913253234">Webgunea</translation>
@@ -187,7 +187,7 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="3242646949159196181">Aktibatuta dagoenean, webguneek soinua erreproduzi dezakete. Desaktibatuta dagoenean, webguneek ezin dute erreproduzitu soinurik.</translation>
 <translation id="3273479183583863618">Fitxetako prezio-jaitsierak</translation>
 <translation id="3277252321222022663">Eman sentsoreak erabiltzeko baimena webguneei (gomendatua)</translation>
-<translation id="327891165872793509">Arakatzen duzun bitartean hirugarrenen cookieen bidez zure jarraipena egitea galarazten die Chrome-k webgune gehienei. Joan ezarpenetara <ph name="BEGIN_LINK" />hirugarrenen cookieak erabiltzeko baimena kudeatzeko<ph name="END_LINK" />.</translation>
+<translation id="327891165872793509">Arakatzen duzun bitartean hirugarrenen cookieen bidez zure jarraipena egitea galarazten die Ultimatum-k webgune gehienei. Joan ezarpenetara <ph name="BEGIN_LINK" />hirugarrenen cookieak erabiltzeko baimena kudeatzeko<ph name="END_LINK" />.</translation>
 <translation id="3285500645985761267">Eman taldean egiten dituzun jarduerak ikusteko baimena erlazionatutako webguneei</translation>
 <translation id="3295019059349372795">11. kapitulua: Esmeraldazko Oz hiri harrigarria</translation>
 <translation id="3295602654194328831">Ezkutatu informazioa</translation>
@@ -222,7 +222,7 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="3678318839615834650">Pantailaren behealdean ainguratutako orria, fitxa berriaren orriaren txartelak dituena, altuera osoan irekita dago</translation>
 <translation id="3697164069658504920">Aktibatuta dagoenean, webguneek USB bidezko gailuak erabiltzeko baimena eska dezakete. Desaktibatuta dagoenean, webguneek ezin dute erabili USB bidezko gailurik.</translation>
 <translation id="3703430731944883733">Kudeatu zure jarioa</translation>
-<translation id="3707034683772193706">Bisitatzen dituzun webguneek informazio pixka bat gorde dezakete Chrome-rekin, batez ere robot bat ez zarela egiaztatzeko.</translation>
+<translation id="3707034683772193706">Bisitatzen dituzun webguneek informazio pixka bat gorde dezakete Ultimatum-rekin, batez ere robot bat ez zarela egiaztatzeko.</translation>
 <translation id="3708684582558000260">Ez eman datuak bidaltzen edo jasotzen amaitzeko baimena itxitako webguneei</translation>
 <translation id="3709818294139939629">Kendu zaio fitxategirako sarbidea webguneari</translation>
 <translation id="3721953990244350188">Baztertu eta erakutsi erabilgarri dagoen hurrengo ekintza</translation>
@@ -236,7 +236,7 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="381841723434055211">Telefono-zenbakiak</translation>
 <translation id="3826050100957962900">Hirugarrenen bidez saioa hastea</translation>
 <translation id="3835233591525155343">Gailuaren erabilera</translation>
-<translation id="3843916486309149084">Gaur blokeatuko ditu cookieak berriro Chrome-k</translation>
+<translation id="3843916486309149084">Gaur blokeatuko ditu cookieak berriro Ultimatum-k</translation>
 <translation id="385051799172605136">Atzera</translation>
 <translation id="3859306556332390985">Aurreratu</translation>
 <translation id="389521680295183045">Webguneek gailua noiz erabiltzen ari zaren jakitea eska dezakete</translation>
@@ -276,12 +276,12 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="429312253194641664">Webgune bat multimedia-edukia erreproduzitzen ari da</translation>
 <translation id="42981349822642051">Zabaldu</translation>
 <translation id="4336219115486912529">{COUNT,plural, =1{Bihar iraungiko da}other{# egun barru iraungiko da}}</translation>
-<translation id="4336566011000459927">Gaur mugatuko ditu cookieak berriro Chrome-k</translation>
+<translation id="4336566011000459927">Gaur mugatuko ditu cookieak berriro Ultimatum-k</translation>
 <translation id="4338831206024587507"><ph name="DOMAIN" /> domeinuko webgune guztiak</translation>
 <translation id="4340799661701629185">Ez eman jakinarazpenak bidaltzeko baimena webguneei</translation>
 <translation id="4402755511846832236">Ez utzi jakiten webguneei gailua noiz erabiltzen ari zaren</translation>
 <translation id="4412992751769744546">Onartu hirugarrenen cookieak</translation>
-<translation id="4419929467120297501">Arakatzen duzun bitartean hirugarrenen cookieen bidez zure jarraipena egitea galarazten die Chrome-k webguneei. Joan ezarpenetara <ph name="BEGIN_LINK" />hirugarrenen cookieak erabiltzeko baimena kudeatzeko<ph name="END_LINK" />.</translation>
+<translation id="4419929467120297501">Arakatzen duzun bitartean hirugarrenen cookieen bidez zure jarraipena egitea galarazten die Ultimatum-k webguneei. Joan ezarpenetara <ph name="BEGIN_LINK" />hirugarrenen cookieak erabiltzeko baimena kudeatzeko<ph name="END_LINK" />.</translation>
 <translation id="443121186588148776">Serieko ataka</translation>
 <translation id="4434045419905280838">Leiho gainerak. / Birbideratzeak</translation>
 <translation id="443552056913301231">Gailuko datu guztiak ezabatuko dira, cookieak barne, eta <ph name="ORIGIN" /> iturburuko baimen guztiak berrezarriko</translation>
@@ -300,7 +300,7 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="4644713492825682049">Ezabatu eta berrezarri</translation>
 <translation id="4645575059429386691">Gurasoek kudeatuta</translation>
 <translation id="4670064810192446073">Errealitate birtuala</translation>
-<translation id="4672315773691449562">Sakatu Arakatzailea eta, gero, sakatu Chrome</translation>
+<translation id="4672315773691449562">Sakatu Arakatzailea eta, gero, sakatu Ultimatum</translation>
 <translation id="4676059169848868271"><ph name="APP_NAME" /> aplikazioari Eskuen jarraipena erabiltzeko baimena emateko, aktibatu Eskuen jarraipena <ph name="BEGIN_LINK" />sistemaren ezarpenetan<ph name="END_LINK" /> ere.</translation>
 <translation id="4751476147751820511">Mugimenduaren eta argiaren sentsoreak</translation>
 <translation id="4755971844837804407">Aktibatuta dagoenean, webguneek edozein iragarki erakusteko aukera dute. Desaktibatuta dagoenean, webguneek ezin dituzte erakutsi iragarki oztopatzaileak edo engainagarriak.</translation>
@@ -335,7 +335,7 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="5091663350197390230">Aktibatuta dagoenean, webguneek JavaScript erabil dezakete. Desaktibatuta dagoenean, webguneek ezin dute erabili JavaScript.</translation>
 <translation id="5099358668261120049"><ph name="ORIGIN" /> webguneak edo hari dagokion orri nagusiko aplikazioak gorde dituen datu eta cookie guztiak ezabatuko dira.</translation>
 <translation id="5100237604440890931">Tolestuta; egin klik zabaltzeko.</translation>
-<translation id="5116239826668864748">Chrome erabili ahalko duzu mezuetan, dokumentuetan eta aplikazioetan estekak sakatzen dituzunean</translation>
+<translation id="5116239826668864748">Ultimatum erabili ahalko duzu mezuetan, dokumentuetan eta aplikazioetan estekak sakatzen dituzunean</translation>
 <translation id="5123685120097942451">Ezkutuko moduko fitxa</translation>
 <translation id="5139253256813381453">{PRICE_DROP_COUNT,plural, =1{Prezio-jaitsiera irekitako fitxetan}other{Prezio-jaitsierak irekitako fitxetan}}</translation>
 <translation id="5186036860380548585">Aukera pantailaren goialdean dago</translation>
@@ -368,7 +368,7 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="5527111080432883924">Eskatu berrespena webguneei arbeleko testua eta irudiak ikustea baimendu baino lehen (gomendatua)</translation>
 <translation id="5545693483061321551">Webguneek ezin dituzte erabili cookieak beste webguneetan egiten dituzun arakatze-jarduerak ikusteko, hala nola iragarkiak pertsonalizatzeko. Baliteke webgune batzuetako eginbideek ez funtzionatzea.</translation>
 <translation id="5553374991681107062">Azkenak</translation>
-<translation id="5555115555607204100">Webguneak ez dira bizkortzen Chrome-ren V8 motorrarekin, baina erasoen aurrean zertxobait seguruagoa da Chrome</translation>
+<translation id="5555115555607204100">Webguneak ez dira bizkortzen Ultimatum-ren V8 motorrarekin, baina erasoen aurrean zertxobait seguruagoa da Ultimatum</translation>
 <translation id="5556459405103347317">Kargatu berriro</translation>
 <translation id="5591840828808741583"><ph name="SITE_NAME" /> blokeatuta dago</translation>
 <translation id="560980142378233747">Horrek esan nahi du webgunearen eginbideek funtzionatu beharko luketela, baina arakatzean agian babes txikiagoa daukazula. <ph name="BEGIN_LINK" />Bidali oharrak<ph name="END_LINK" /></translation>
@@ -424,13 +424,13 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="6177128806592000436">Webgune honetarako konexioa ez da guztiz segurua</translation>
 <translation id="6181444274883918285">Gehitu webgune bat salbuespen gisa</translation>
 <translation id="6192792657125177640">Salbuespenak</translation>
-<translation id="6194967801833346599">{DAYS,plural, =1{Bihar blokeatuko ditu cookieak berriro Chrome-k}other{# egun barru blokeatuko dira berriro cookieak}}</translation>
+<translation id="6194967801833346599">{DAYS,plural, =1{Bihar blokeatuko ditu cookieak berriro Ultimatum-k}other{# egun barru blokeatuko dira berriro cookieak}}</translation>
 <translation id="6195163219142236913">Hirugarrenen cookieak mugatuta</translation>
 <translation id="6196640612572343990">Blokeatu hirugarrenen cookieak</translation>
 <translation id="6205314730813004066">Iragarkien pribatutasuna</translation>
 <translation id="6207207788774442484">Ezabatu datuak eta berrezarri baimenak</translation>
 <translation id="6231752747840485235">"<ph name="APP_NAME" />" desinstalatu nahi duzu?</translation>
-<translation id="6234351944623978659">Sakatu Arakatzailea &gt; Chrome.</translation>
+<translation id="6234351944623978659">Sakatu Arakatzailea &gt; Ultimatum.</translation>
 <translation id="6262191102408817757">Azken fitxaren arabera</translation>
 <translation id="6262279340360821358"><ph name="PERMISSION_1" /> eta <ph name="PERMISSION_2" /> blokeatu egin dira</translation>
 <translation id="6270391203985052864">Webguneek jakinarazpenak bidaltzea eska dezakete</translation>
@@ -470,7 +470,7 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="6787751205395685251">Hautatu aukera bat <ph name="SITE_NAME" /> webgunerako</translation>
 <translation id="6790428901817661496">Erreproduzitu</translation>
 <translation id="6818926723028410516">Hautatu elementuak</translation>
-<translation id="6838525730752203626">Erabili Chrome modu lehenetsian</translation>
+<translation id="6838525730752203626">Erabili Ultimatum modu lehenetsian</translation>
 <translation id="6840760312327750441">Fitxak taldekatzeko, eduki fitxa bat sakatuta eta, ondoren, arrasta ezazu beste batera.</translation>
 <translation id="6842868554183332230">Webguneek gailua noiz erabiltzen ari zaren hauteman ohi dute, txat-aplikazioetan zer eskuragarritasun duzun zehazteko</translation>
 <translation id="6864395892908308021">Gailu honek ezin du irakurri NFC</translation>
@@ -484,7 +484,7 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="6981982820502123353">Erabilerraztasuna</translation>
 <translation id="6992289844737586249">Webguneei mikrofonoa erabiltzeko baimena eman aurretik, eskatu onespena (gomendatua)</translation>
 <translation id="7000754031042624318">Desaktibatuta dago Android-en ezarpenetan</translation>
-<translation id="702275896380648118">Webguneak gustatzen zaizkizun gauzak zehazten ditu eta, gero, beste webguneei iragarkiak iradokitzen dizkie. Halaber, Chrome-n oinarritzen da zure iragarkien gaien berri izateko, iragarki egokiagoak erakuts diezazkizun.</translation>
+<translation id="702275896380648118">Webguneak gustatzen zaizkizun gauzak zehazten ditu eta, gero, beste webguneei iragarkiak iradokitzen dizkie. Halaber, Ultimatum-n oinarritzen da zure iragarkien gaien berri izateko, iragarki egokiagoak erakuts diezazkizun.</translation>
 <translation id="7053983685419859001">Blokeatu</translation>
 <translation id="7055552182600664515">Copyrightaren bidez babestutako edukia erreproduzitzeko, litekeena da webguneek edukia babesteko zerbitzu bat erabili behar izatea. <ph name="BEGIN_LINK" />Lortu informazio gehiago<ph name="END_LINK" /></translation>
 <translation id="7066151586745993502">{NUM_SELECTED,plural, =1{1 hautatuta}other{# hautatuta}}</translation>
@@ -528,7 +528,7 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="7658239707568436148">Utzi</translation>
 <translation id="7667547420449112975">Ozeko azti miragarria</translation>
 <translation id="7681597159868843240">Webguneek gailuko mugimendu-sentsoreak erabili ohi dituzte eginbide batzuk eskaintzeko; adibidez, errealitate birtuala edo fitnessaren jarraipena egiteko aukera</translation>
-<translation id="7688240020069572972">Ezkutatu Chrome-ri buruzko aholkuen txartela</translation>
+<translation id="7688240020069572972">Ezkutatu Ultimatum-ri buruzko aholkuen txartela</translation>
 <translation id="7719367874908701697">Orriaren zooma</translation>
 <translation id="7759147511335618829">MIDI gailuak kontrolatzea eta berriro programatzea</translation>
 <translation id="7781829728241885113">Atzo</translation>
@@ -540,7 +540,7 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="7835852323729233924">Multimedia-edukia erreproduzitzen</translation>
 <translation id="783819812427904514">Aktibatu bideoaren audioa</translation>
 <translation id="7846076177841592234">Utzi hautapena bertan behera</translation>
-<translation id="7881140103901777395">Hirugarrenen cookieak erabiltzea galarazten die Chrome-k webgune gehienei. Webgune honetan, ordea, hirugarrenen cookieak erabiltzeko baimena eman da, beharrezkoak baitira oinarrizko zerbitzuak emateko.\n\nJoan ezarpenetara <ph name="BEGIN_LINK" />hirugarrenen cookieak erabiltzeko baimena kudeatzeko<ph name="END_LINK" />.</translation>
+<translation id="7881140103901777395">Hirugarrenen cookieak erabiltzea galarazten die Ultimatum-k webgune gehienei. Webgune honetan, ordea, hirugarrenen cookieak erabiltzeko baimena eman da, beharrezkoak baitira oinarrizko zerbitzuak emateko.\n\nJoan ezarpenetara <ph name="BEGIN_LINK" />hirugarrenen cookieak erabiltzeko baimena kudeatzeko<ph name="END_LINK" />.</translation>
 <translation id="7882806643839505685">Baimendu webgune jakin baten audioa.</translation>
 <translation id="789180354981963912">Blokeatu hirugarrenen cookieak ezkutuko moduan:</translation>
 <translation id="789722939441020330">Ez eman hainbat fitxategi automatikoki deskargatzeko baimena webguneei</translation>
@@ -560,7 +560,7 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="8087000398470557479">Eduki hau <ph name="DOMAIN_NAME" /> domeinukoa da eta Google-k eskaintzen du.</translation>
 <translation id="8088603949666785339"><ph name="BANNER_TITLE" /> banda-mezuko aukera gehiago</translation>
 <translation id="8112925981674547014">Ikusi fitxak aplikazioen zerrendan</translation>
-<translation id="8113501330600751161">{DAYS,plural, =1{Bihar mugatuko ditu cookieak berriro Chrome-k}other{# egun barru mugatuko ditu cookieak berriro Chrome-k}}</translation>
+<translation id="8113501330600751161">{DAYS,plural, =1{Bihar mugatuko ditu cookieak berriro Ultimatum-k}other{# egun barru mugatuko ditu cookieak berriro Ultimatum-k}}</translation>
 <translation id="8116925261070264013">Audioa desaktibatuta</translation>
 <translation id="8117244575099414087">Aktibatuta dagoenean, webguneek gailuaren sentsoreak erabil ditzakete. Desaktibatuta dagoenean, webguneek ezin dute erabili sentsorerik.</translation>
 <translation id="813082847718468539">Ikusi webgunearen informazioa</translation>
@@ -600,10 +600,10 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="8514955299594277296">Ez eman gailuan datuak gordetzeko baimena webguneei (ez da gomendatzen)</translation>
 <translation id="851751545965956758">Ez utzi webguneei gailuekin konektatzen</translation>
 <translation id="8525306231823319788">Pantaila osoa</translation>
-<translation id="8541410041357371550">Webgunea Chrome-n oinarritzen da zure iragarkien gaien berri izateko, iragarki egokiagoak erakuts diezazkizun</translation>
+<translation id="8541410041357371550">Webgunea Ultimatum-n oinarritzen da zure iragarkien gaien berri izateko, iragarki egokiagoak erakuts diezazkizun</translation>
 <translation id="854876774113449365">Bisitatzen dituzun webguneek beste webgune batzuetako edukia kapsula dezakete; adibidez, irudiak, iragarkiak eta testua. Halaber, webgune horiek arakatzen dituzun bitartean zuri buruz gorde duten informazioa erabiltzeko baimena eska dezakete. <ph name="BEGIN_LINK" />Lortu eduki kapsulatuari buruzko informazio gehiago<ph name="END_LINK" /></translation>
 <translation id="8549127125482561383">Eskaerak erakusteko modua</translation>
-<translation id="8558480467877843976">Orain, Chrome erabili ahalko duzu arakatzen duzunean, edo mezuetako, dokumentuetako eta aplikazioetako estekak sakatzen dituzunean.</translation>
+<translation id="8558480467877843976">Orain, Ultimatum erabili ahalko duzu arakatzen duzunean, edo mezuetako, dokumentuetako eta aplikazioetako estekak sakatzen dituzunean.</translation>
 <translation id="857943718398505171">Baimenduta (gomendatua)</translation>
 <translation id="8593422116412089302">Aktibatuta dagoenean, webguneek zuri buruz gorde duten informazioa erabiltzeko baimena eska dezakete. Desaktibatuta dagoenean, webguneek ezin dizute eskatu zuri buruz gorde duten informazioa erabiltzeko baimenik.</translation>
 <translation id="8609465669617005112">Eraman gora</translation>
@@ -624,13 +624,13 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="8751914237388039244">Hautatu irudi bat</translation>
 <translation id="8800034312320686233">Ez al du funtzionatzen webguneak?</translation>
 <translation id="8801436777607969138">Blokeatu JavaScript webgune zehatz batean.</translation>
-<translation id="8801657293260363985">V8 Chrome-ren JavaScript eta WebAssembly motorra da, eta webguneen errendimendua hobetzeko balio du</translation>
+<translation id="8801657293260363985">V8 Ultimatum-ren JavaScript eta WebAssembly motorra da, eta webguneen errendimendua hobetzeko balio du</translation>
 <translation id="8803526663383843427">Aktibatuta dagoenean</translation>
 <translation id="8805385115381080995">Bizkorrago arakatuko duzu, probabilitate gutxiago egongo baita webguneek benetako pertsona bat zarela egiaztatzea eskatzeko</translation>
 <translation id="8816026460808729765">Ez utzi webguneei sentsoreak erabiltzen</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">Eman hirugarrenen cookieak erabiltzeko baimena aldi baterako. Babes txikiagoa izango duzu arakatzean, baina webgunearen eginbideek espero bezala funtzionatzeko probabilitate handiagoa izango dute.</translation>
-<translation id="8889294078294184559">Arakatzen jarraitu ahala, beste webgune batzuek Chrome-ren informazioa ikus dezakete, eta aurrez bisitatu duzun webgune batek benetako pertsonatzat hartu zaituela egiaztatu.</translation>
+<translation id="8889294078294184559">Arakatzen jarraitu ahala, beste webgune batzuek Ultimatum-ren informazioa ikus dezakete, eta aurrez bisitatu duzun webgune batek benetako pertsonatzat hartu zaituela egiaztatu.</translation>
 <translation id="8899807382908246773">Iragarki oztopatzaileak</translation>
 <translation id="8903921497873541725">Handitu</translation>
 <translation id="8921772741368021346"><ph name="POSITION" />/<ph name="DURATION" /></translation>
@@ -653,7 +653,7 @@ Babes aurreratua programak Chrome-ren ezarpen hauek kontrolatzen ditu:
 <translation id="9109747640384633967">{PERMISSIONS_SUMMARY_MIXED,plural, =1{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> eta beste <ph name="NUM_MORE" />}other{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> eta beste <ph name="NUM_MORE" />}}</translation>
 <translation id="913657688200966289">Aktibatu <ph name="APP_NAME" /> aplikaziorako baimenak <ph name="BEGIN_LINK" />Android-en ezarpenetan<ph name="END_LINK" />.</translation>
 <translation id="9138217887606523162">Oraingo zooma: %% <ph name="ZOOM_LEVEL" /></translation>
-<translation id="9156722768168878035">Eman azkenaldiko fitxak gailuko aplikazioen zerrendan eta bilaketa-emaitzetan erakusteko baimena Chrome-ri. Aukera hori desaktibatzeko, joan Chrome-ren ezarpenetara.</translation>
+<translation id="9156722768168878035">Eman azkenaldiko fitxak gailuko aplikazioen zerrendan eta bilaketa-emaitzetan erakusteko baimena Ultimatum-ri. Aukera hori desaktibatzeko, joan Ultimatum-ren ezarpenetara.</translation>
 <translation id="9162462602695099906">Orri hau arriskutsua da</translation>
 <translation id="9182556968660520230">Ez eman eduki babestua erreproduzitzeko baimena webguneei</translation>
 <translation id="947156494302904893">Bisitatzen dituzun webguneek benetako pertsona bat zarela eta robot bat ez zarela egiazta dezakete</translation>

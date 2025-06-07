@@ -3,21 +3,21 @@
 <translationbundle lang="lv">
 <translation id="1004806631856047384">Pārvaldība <ph name="BEGIN_LINK1" />Android iestatījumos<ph name="END_LINK1" />
 
-Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
+Papildu aizsardzība pārvalda tālāk norādītos Ultimatum iestatījumus
 • Tiek ieslēgts iestatījums “Vienmēr izmantot drošus savienojumus”.
 • Tiek izslēgts iestatījums “JavaScript optimizētājs”. <ph name="BEGIN_LINK2" />Pārvaldīt vietņu izņēmumus<ph name="END_LINK2" /></translation>
 <translation id="1006017844123154345">Atvērt tiešsaistē</translation>
 <translation id="1036348656032585052">Izslēgt</translation>
 <translation id="1044891598689252897">Vietnes darbosies normāli</translation>
 <translation id="1070329623210597193">Faili, ko šī vietne drīkst skatīt vai rediģēt</translation>
-<translation id="1073417869336441572">Palīdziet mums uzlabot pārlūku Chrome, pastāstot, kāpēc atļāvāt trešo pušu sīkfailus. <ph name="BEGIN_LINK" />Sūtīt atsauksmes<ph name="END_LINK" /></translation>
+<translation id="1073417869336441572">Palīdziet mums uzlabot pārlūku Ultimatum, pastāstot, kāpēc atļāvāt trešo pušu sīkfailus. <ph name="BEGIN_LINK" />Sūtīt atsauksmes<ph name="END_LINK" /></translation>
 <translation id="1074758928858737435">Varat pieprasīt skatīt vietņu datora versiju.</translation>
-<translation id="1085696779717592361">Chrome izmantošana pēc noklusējuma</translation>
+<translation id="1085696779717592361">Ultimatum izmantošana pēc noklusējuma</translation>
 <translation id="1178581264944972037">Pauzēt</translation>
 <translation id="1181037720776840403">Noņemt</translation>
 <translation id="1192844206376121885">Tiks izdzēsti visi dati un sīkfaili, ko glabā <ph name="ORIGIN" />.</translation>
 <translation id="1201402288615127009">Tālāk</translation>
-<translation id="1240190568154816272">Chrome padomi</translation>
+<translation id="1240190568154816272">Ultimatum padomi</translation>
 <translation id="1242008676835033345">Iegults vietnē <ph name="WEBSITE_URL" /></translation>
 <translation id="1263609676484797429">Pieskarieties vienumam Lietotnes &gt; Noklusējuma lietotnes.</translation>
 <translation id="1272079795634619415">Apturēt</translation>
@@ -34,7 +34,7 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="1396327438254055134">Atļaujiet vietnei izmantot V8 optimizētāju.</translation>
 <translation id="1409338233051621926">Pieskarieties vienumam “Lietotnes” un pēc tam — vienumam “Noklusējuma lietotnes”.</translation>
 <translation id="1415402041810619267">URL ir saīsināts</translation>
-<translation id="1415855080660575082">Ļaujiet pārlūkam Chrome kopīgot jūsu nesen atvērtās cilnes ar ierīci, lai tās tiktu rādītas ierīces lietotņu sarakstā un meklēšanas rezultātos. Chrome iestatījumos varat ieslēgt vai izslēgt šo funkciju.</translation>
+<translation id="1415855080660575082">Ļaujiet pārlūkam Ultimatum kopīgot jūsu nesen atvērtās cilnes ar ierīci, lai tās tiktu rādītas ierīces lietotņu sarakstā un meklēšanas rezultātos. Ultimatum iestatījumos varat ieslēgt vai izslēgt šo funkciju.</translation>
 <translation id="1448064542941920355">Tuvināt</translation>
 <translation id="1464044141348608623">Nerādīt vietnēm, kad jūs aktīvi lietojat savu ierīci</translation>
 <translation id="146867109637325312">{COUNT,plural, =1{<ph name="SITE_COUNT" /> vietne}zero{<ph name="SITE_COUNT" /> vietņu}one{<ph name="SITE_COUNT" /> vietne}other{<ph name="SITE_COUNT" /> vietnes}}</translation>
@@ -43,7 +43,7 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="1510341833810331442">Vietnēm nav atļauts saglabāt datus jūsu ierīcē</translation>
 <translation id="1538031354170655462">Vietnēs parasti tiek izmantoti tuva darbības lauka sakari (NFC), lai darbotos ar tuvumā esošiem izsekotājiem vai ierīcēm, piemēram, skenētu emblēmas vai veiktu bezkontakta maksājumus.</translation>
 <translation id="1547123415014299762">Trešo pušu sīkfaili ir atļauti</translation>
-<translation id="1569054338208717605">Paātrināt vietņu darbību, izmantojot Chrome programmu V8, bet nedaudz samazināt Chrome izturību pret uzbrukumiem</translation>
+<translation id="1569054338208717605">Paātrināt vietņu darbību, izmantojot Ultimatum programmu V8, bet nedaudz samazināt Ultimatum izturību pret uzbrukumiem</translation>
 <translation id="1593426485665524382">Ekrāna augšdaļā ir pieejamas jaunas darbības</translation>
 <translation id="1615755956145364867">Atļaut vietnēm pieprasīt atļauju atskaņot aizsargātu saturu</translation>
 <translation id="1620510694547887537">Kamera</translation>
@@ -64,8 +64,8 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="1779089405699405702">Attēlu dekodētājs</translation>
 <translation id="1785415724048343560">Ieteicams labākai pieredzei</translation>
 <translation id="1796588414813960292">Funkcijas, kurām nepieciešama skaņa, nedarbosies</translation>
-<translation id="1799920918471566157">Chrome padomi</translation>
-<translation id="1816835383954230954">Kad tas ir ieslēgts, pārlūks Chrome darbojas ātrāk, un funkcijām, kas izmanto JavaScript, ir jādarbojas paredzētajā veidā. Ja izslēgts, tiek samazināta veiktspēja, bet uzlabojas V8 noturība pret uzbrukumiem.</translation>
+<translation id="1799920918471566157">Ultimatum padomi</translation>
+<translation id="1816835383954230954">Kad tas ir ieslēgts, pārlūks Ultimatum darbojas ātrāk, un funkcijām, kas izmanto JavaScript, ir jādarbojas paredzētajā veidā. Ja izslēgts, tiek samazināta veiktspēja, bet uzlabojas V8 noturība pret uzbrukumiem.</translation>
 <translation id="1818308510395330587">Lai atļautu lietotnei <ph name="APP_NAME" /> izmantot papildināto realitāti, ieslēdziet arī kameru <ph name="BEGIN_LINK" />Android iestatījumos<ph name="END_LINK" />.</translation>
 <translation id="1887786770086287077">Piekļuve šīs ierīces atrašanās vietai ir izslēgta. Ieslēdziet to <ph name="BEGIN_LINK" />Android iestatījumos<ph name="END_LINK" />.</translation>
 <translation id="1906181697255754968">Parasti piekļuve failiem un mapēm ierīcē vietnēm ir nepieciešama, lai nodrošinātu noteiktas funkcijas, piemēram, automātisku darba saglabāšanu.</translation>
@@ -109,7 +109,7 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="2289270750774289114">Vaicāt, ja vietne vēlas redzēt tuvumā esošās Bluetooth ierīces (ieteicams)</translation>
 <translation id="2315043854645842844">Operētājsistēma neatbalsta klienta puses sertifikāta atlasi.</translation>
 <translation id="2359808026110333948">Turpināt</translation>
-<translation id="2379925928934107488">Lietojiet tumšo motīvu vietnēs, kad tumšais motīvs tiek izmantots pārlūkā Chrome (ja iespējams)</translation>
+<translation id="2379925928934107488">Lietojiet tumšo motīvu vietnēs, kad tumšais motīvs tiek izmantots pārlūkā Ultimatum (ja iespējams)</translation>
 <translation id="2390272837142897736">Tālināt</translation>
 <translation id="2402980924095424747"><ph name="MEGABYTES" /> MB</translation>
 <translation id="2404630663942400771">{PERMISSIONS_SUMMARY_ALLOWED,plural, =1{Atļautas: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> un vēl <ph name="NUM_MORE" />}zero{Atļautas: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> un vēl <ph name="NUM_MORE" />}one{Atļautas: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> un vēl <ph name="NUM_MORE" />}other{Atļautas: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> un vēl <ph name="NUM_MORE" />}}</translation>
@@ -118,7 +118,7 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="2438120137003069591">Jūs īslaicīgi atļāvāt šai vietnei izmantot trešo pušu sīkfailus. Tas nozīmē, ka pārlūkošanas aizsardzības līmenis būs zemāks, taču pastāv lielāka iespēja, ka vietnes funkcijas darbosies, kā paredzēts. <ph name="BEGIN_LINK" />Sūtīt atsauksmes<ph name="END_LINK" /></translation>
 <translation id="244264527810019436">Noteiktās vietnēs funkcijas var nedarboties, ja tiek izmantots inkognito režīms</translation>
 <translation id="2442870161001914531">Vienmēr pieprasīt datora vietni</translation>
-<translation id="2445311670906052406">Tagad Chrome kopīgo jūsu nesen atvērtās cilnes ar ierīci. Tās tiks rādītas ierīces lietotņu sarakstā un meklēšanas rezultātos. Chrome iestatījumos varat jebkurā laikā izslēgt šo funkciju.</translation>
+<translation id="2445311670906052406">Tagad Ultimatum kopīgo jūsu nesen atvērtās cilnes ar ierīci. Tās tiks rādītas ierīces lietotņu sarakstā un meklēšanas rezultātos. Ultimatum iestatījumos varat jebkurā laikā izslēgt šo funkciju.</translation>
 <translation id="245322989586167203">Parasti vietnēs savienojums ar seriālajiem portiem tiek veidots, lai nodrošinātu noteiktas datu pārsūtīšanas funkcijas, piemēram, tīkla iestatīšanu.</translation>
 <translation id="2469312991797799607">Veicot šo darbību, tiks izdzēsti visi dati un sīkfaili, ko glabā <ph name="ORIGIN" /> un visas šīs grupas vietnes.</translation>
 <translation id="2482878487686419369">Paziņojumi</translation>
@@ -143,14 +143,14 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="2685514716378236873">Atļauja nav piešķirta</translation>
 <translation id="2713106313042589954">Izslēgt kameru</translation>
 <translation id="2717722538473713889">E-pasta adreses</translation>
-<translation id="2726059656860238749">Varat palaist Chrome ar fokusētu universālo lodziņu, samazinot palaišanas laiku zemākas veiktspējas ierīcēs.</translation>
+<translation id="2726059656860238749">Varat palaist Ultimatum ar fokusētu universālo lodziņu, samazinot palaišanas laiku zemākas veiktspējas ierīcēs.</translation>
 <translation id="2750481671343847896">Vietnēs drīkst rādīt pierakstīšanās uzvednes, ko nodrošina identitātes pakalpojumi.</translation>
 <translation id="2787357173144933081">Ātrāk palaist universālo lodziņu</translation>
 <translation id="2789132527330338807">Atļaut vietnēm izveidot jūsu apkārtnes 3D karti vai izsekot kameras pozīciju</translation>
 <translation id="2790501146643349491">Kad šis slēdzis ir ieslēgts, nesen aizvērtās vietnes var pabeigt datu sūtīšanu un saņemšanu. Kad šis slēdzis ir izslēgts, nesen aizvērtās vietnes nevar pabeigt datu sūtīšanu vai saņemšanu.</translation>
 <translation id="2795716239552913152">Parasti vietnēs atrašanās vietas dati tiek izmantoti, lai nodrošinātu atbilstošas funkcijas vai informāciju, piemēram, vietējās ziņas vai informāciju par tuvumā esošajiem veikaliem.</translation>
 <translation id="2802908157808345702">Neļaut vietnēm sūtīt uznirstošos elementus un izmantot novirzīšanu</translation>
-<translation id="2814830417943086299">Tagad Chrome rāda jūsu nesen atvērtās cilnes ierīces lietotņu sarakstā un meklēšanas rezultātos. Chrome iestatījumos varat jebkurā laikā izslēgt šo funkciju.</translation>
+<translation id="2814830417943086299">Tagad Ultimatum rāda jūsu nesen atvērtās cilnes ierīces lietotņu sarakstā un meklēšanas rezultātos. Ultimatum iestatījumos varat jebkurā laikā izslēgt šo funkciju.</translation>
 <translation id="2822354292072154809">Vai tiešām vēlaties atiestatīt visas vietņu atļaujas, kas piešķirtas šim objektam: <ph name="CHOSEN_OBJECT_NAME" />?</translation>
 <translation id="2850913818900871965">Pieprasiet skatu mobilajā ierīcē</translation>
 <translation id="2870560284913253234">Vietne</translation>
@@ -187,7 +187,7 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="3242646949159196181">Kad šis slēdzis ir ieslēgts, vietnēs var atskaņot skaņu. Kad šis slēdzis ir izslēgts, vietnēs nevar atskaņot skaņu.</translation>
 <translation id="3273479183583863618">Cenu kritums cilnēs</translation>
 <translation id="3277252321222022663">Atļaut vietnēm piekļūt sensoriem (ieteicams)</translation>
-<translation id="327891165872793509">Pārlūkā Chrome lielākajai daļai vietņu tiek liegts pārlūkošanas laikā izmantot trešo pušu sīkfailus, lai izsekotu jūsu darbībām. Lai <ph name="BEGIN_LINK" />pārvaldītu piekļuvi trešo pušu sīkfailiem<ph name="END_LINK" />, pārejiet uz iestatījumiem.</translation>
+<translation id="327891165872793509">Pārlūkā Ultimatum lielākajai daļai vietņu tiek liegts pārlūkošanas laikā izmantot trešo pušu sīkfailus, lai izsekotu jūsu darbībām. Lai <ph name="BEGIN_LINK" />pārvaldītu piekļuvi trešo pušu sīkfailiem<ph name="END_LINK" />, pārejiet uz iestatījumiem.</translation>
 <translation id="3285500645985761267">Atļaut saistīto vietņu īpašniekiem skatīt jūsu darbības grupā</translation>
 <translation id="3295019059349372795">11. nodaļa: Oza zemes brīnumainā Smaragda pilsēta</translation>
 <translation id="3295602654194328831">Slēpt informāciju</translation>
@@ -222,7 +222,7 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="3678318839615834650">Jaunas cilnes lapas kartīšu ekrāna apakšdaļas lapa ir atvērta pilnā augstumā</translation>
 <translation id="3697164069658504920">Kad šis slēdzis ir ieslēgts, vietnes var pieprasīt atļauju izmantot USB ierīces. Kad šis slēdzis ir izslēgts, vietnes nevar izmantot USB ierīces.</translation>
 <translation id="3703430731944883733">Plūsmas pārvaldība</translation>
-<translation id="3707034683772193706">Vietne, ko apmeklējat, pārlūkā Chrome var saglabāt nelielu informācijas daudzumu, galvenokārt, lai apstiprinātu, ka neesat robots</translation>
+<translation id="3707034683772193706">Vietne, ko apmeklējat, pārlūkā Ultimatum var saglabāt nelielu informācijas daudzumu, galvenokārt, lai apstiprinātu, ka neesat robots</translation>
 <translation id="3708684582558000260">Neļaut aizvērtajām vietnēm pabeigt datu sūtīšanu vai saņemšanu</translation>
 <translation id="3709818294139939629">Noņemta vietnes piekļuve failam</translation>
 <translation id="3721953990244350188">Noraidīt un rādīt nākamo pieejamo darbību</translation>
@@ -236,7 +236,7 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="381841723434055211">Tālruņa numuri</translation>
 <translation id="3826050100957962900">Trešās puses pierakstīšanās</translation>
 <translation id="3835233591525155343">Jūsu ierīces lietojums</translation>
-<translation id="3843916486309149084">Šodien pārlūkā Chrome sīkfaili atkal tiks bloķēti</translation>
+<translation id="3843916486309149084">Šodien pārlūkā Ultimatum sīkfaili atkal tiks bloķēti</translation>
 <translation id="385051799172605136">Atpakaļ</translation>
 <translation id="3859306556332390985">Pārtīt uz priekšu</translation>
 <translation id="389521680295183045">Vietnēs var tikt pieprasīta informācija par to, kad jūs aktīvi lietojat savu ierīci.</translation>
@@ -276,12 +276,12 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="429312253194641664">Vietne atskaņo multivides saturu</translation>
 <translation id="42981349822642051">Izvērst</translation>
 <translation id="4336219115486912529">{COUNT,plural, =1{Derīguma termiņš beigsies rīt}zero{Derīguma termiņš beigsies pēc # dienām}one{Derīguma termiņš beigsies pēc # dienas}other{Derīguma termiņš beigsies pēc # dienām}}</translation>
-<translation id="4336566011000459927">Šodien pārlūkā Chrome atkal tiks ierobežoti sīkfaili</translation>
+<translation id="4336566011000459927">Šodien pārlūkā Ultimatum atkal tiks ierobežoti sīkfaili</translation>
 <translation id="4338831206024587507">Visas vietnes domēnā <ph name="DOMAIN" /></translation>
 <translation id="4340799661701629185">Neļaut vietnēm sūtīt paziņojumus</translation>
 <translation id="4402755511846832236">Nerādīt vietnēm, kad jūs aktīvi lietojat šo ierīci</translation>
 <translation id="4412992751769744546">Atļaut trešo pušu sīkfailus</translation>
-<translation id="4419929467120297501">Pārlūkā Chrome vietnēm tiek liegts pārlūkošanas laikā izmantot trešo pušu sīkfailus, lai izsekotu jūsu darbībām. Lai <ph name="BEGIN_LINK" />pārvaldītu piekļuvi trešo pušu sīkfailiem<ph name="END_LINK" />, pārejiet uz iestatījumiem.</translation>
+<translation id="4419929467120297501">Pārlūkā Ultimatum vietnēm tiek liegts pārlūkošanas laikā izmantot trešo pušu sīkfailus, lai izsekotu jūsu darbībām. Lai <ph name="BEGIN_LINK" />pārvaldītu piekļuvi trešo pušu sīkfailiem<ph name="END_LINK" />, pārejiet uz iestatījumiem.</translation>
 <translation id="443121186588148776">Seriālais ports</translation>
 <translation id="4434045419905280838">Uznirstošie elem. un novirzīšana</translation>
 <translation id="443552056913301231">Veicot šo darbību, tiks dzēsti visi lokālie dati, tostarp sīkfaili, kā arī tiks atiestatītas visas pakalpojuma <ph name="ORIGIN" /> atļaujas.</translation>
@@ -300,7 +300,7 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="4644713492825682049">Dzēst un atiestatīt</translation>
 <translation id="4645575059429386691">Pārvalda viens no jūsu vecākiem</translation>
 <translation id="4670064810192446073">Virtuālā realitāte</translation>
-<translation id="4672315773691449562">Pieskarieties vienumam “Pārlūka lietotne” un pēc tam — vienumam “Chrome”.</translation>
+<translation id="4672315773691449562">Pieskarieties vienumam “Pārlūka lietotne” un pēc tam — vienumam “Ultimatum”.</translation>
 <translation id="4676059169848868271">Lai ļautu lietotnei <ph name="APP_NAME" /> izmantot roku kustību izsekošanu, ieslēdziet roku kustību izsekošanu arī <ph name="BEGIN_LINK" />sistēmas iestatījumos<ph name="END_LINK" />.</translation>
 <translation id="4751476147751820511">Kustību vai gaismas sensori</translation>
 <translation id="4755971844837804407">Kad šis slēdzis ir ieslēgts, vietnēs var tikt rādītas jebkādas reklāmas. Kad šis slēdzis ir izslēgts, vietnēs nevar rādīt traucējošas vai maldinošas reklāmas.</translation>
@@ -335,7 +335,7 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="5091663350197390230">Kad šis slēdzis ir ieslēgts, vietnes var izmantot JavaScript. Kad šis slēdzis ir izslēgts, vietnes nevar izmantot JavaScript.</translation>
 <translation id="5099358668261120049">Tiks izdzēsti visi dati un sīkfaili, ko jūsu sākuma ekrānā glabā vietne <ph name="ORIGIN" /> vai tās lietotne.</translation>
 <translation id="5100237604440890931">Sakļauts — noklikšķiniet, lai izvērstu.</translation>
-<translation id="5116239826668864748">Varat izmantot Chrome ikreiz, kad pieskaraties saitēm ziņojumos, dokumentos un citās lietotnēs.</translation>
+<translation id="5116239826668864748">Varat izmantot Ultimatum ikreiz, kad pieskaraties saitēm ziņojumos, dokumentos un citās lietotnēs.</translation>
 <translation id="5123685120097942451">Inkognito cilne</translation>
 <translation id="5139253256813381453">{PRICE_DROP_COUNT,plural, =1{Cenas kritums atvērtajās cilnēs}zero{Cenu kritumi atvērtajās cilnēs}one{Cenu kritumi atvērtajās cilnēs}other{Cenu kritumi atvērtajās cilnēs}}</translation>
 <translation id="5186036860380548585">Opcija pieejama ekrāna augšdaļā</translation>
@@ -368,7 +368,7 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="5527111080432883924">Vaicāt, pirms atļaut vietnēm lasīt tekstu un attēlus no starpliktuves (ieteicams)</translation>
 <translation id="5545693483061321551">Vietnes nedrīkst izmantot sīkfailus, lai skatītu jūsu pārlūkošanas darbības dažādās vietnēs, piemēram, lai personalizētu reklāmas. Noteiktās vietnēs funkcijas var nedarboties.</translation>
 <translation id="5553374991681107062">jaunākās</translation>
-<translation id="5555115555607204100">Neizmantot Chrome programmu V8 vietņu darbības paātrināšanai, bet nedaudz palielināt Chrome izturību pret uzbrukumiem</translation>
+<translation id="5555115555607204100">Neizmantot Ultimatum programmu V8 vietņu darbības paātrināšanai, bet nedaudz palielināt Ultimatum izturību pret uzbrukumiem</translation>
 <translation id="5556459405103347317">Pārlādēt</translation>
 <translation id="5591840828808741583">Bloķēta vietnē <ph name="SITE_NAME" /></translation>
 <translation id="560980142378233747">Tas nozīmē, ka vietnes funkcijas, visticamāk, darbosies paredzētajā veidā, taču, iespējams, pārlūkošanas aizsardzības līmenis būs zemāks. <ph name="BEGIN_LINK" />Sūtīt atsauksmes<ph name="END_LINK" /></translation>
@@ -424,13 +424,13 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="6177128806592000436">Savienojums ar šo vietni nav drošs.</translation>
 <translation id="6181444274883918285">Pievienot vietnes izņēmumu</translation>
 <translation id="6192792657125177640">Izņēmumi</translation>
-<translation id="6194967801833346599">{DAYS,plural, =1{Rīt pārlūkā Chrome atkal tiks bloķēti sīkfaili}zero{Pēc # dienām atkal tiks bloķēti sīkfaili}one{Pēc # dienas atkal tiks bloķēti sīkfaili}other{Pēc # dienām atkal tiks bloķēti sīkfaili}}</translation>
+<translation id="6194967801833346599">{DAYS,plural, =1{Rīt pārlūkā Ultimatum atkal tiks bloķēti sīkfaili}zero{Pēc # dienām atkal tiks bloķēti sīkfaili}one{Pēc # dienas atkal tiks bloķēti sīkfaili}other{Pēc # dienām atkal tiks bloķēti sīkfaili}}</translation>
 <translation id="6195163219142236913">Trešo pušu sīkfaili ir ierobežoti</translation>
 <translation id="6196640612572343990">Bloķēt trešo pušu sīkfailus</translation>
 <translation id="6205314730813004066">Reklāmu konfidencialitāte</translation>
 <translation id="6207207788774442484">Dzēst datus un atiestatīt atļaujas</translation>
 <translation id="6231752747840485235">Vai atinstalēt lietotni <ph name="APP_NAME" />?</translation>
-<translation id="6234351944623978659">Pieskarieties vienumam Pārlūka lietotne &gt; Chrome.</translation>
+<translation id="6234351944623978659">Pieskarieties vienumam Pārlūka lietotne &gt; Ultimatum.</translation>
 <translation id="6262191102408817757">Pamatojoties uz pēdējās cilnes saturu</translation>
 <translation id="6262279340360821358">Bloķētas: <ph name="PERMISSION_1" /> un <ph name="PERMISSION_2" /></translation>
 <translation id="6270391203985052864">Vietnēs var lūgt atļauju sūtīt paziņojumus</translation>
@@ -470,7 +470,7 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="6787751205395685251">Atlasiet opciju vietnei <ph name="SITE_NAME" />.</translation>
 <translation id="6790428901817661496">Atskaņot</translation>
 <translation id="6818926723028410516">Vienumu atlase</translation>
-<translation id="6838525730752203626">Chrome izmantošana pēc noklusējuma</translation>
+<translation id="6838525730752203626">Ultimatum izmantošana pēc noklusējuma</translation>
 <translation id="6840760312327750441">Lai sagrupētu cilnes, pieskarieties cilnei un turiet to. Pēc tam velciet to uz citas cilnes.</translation>
 <translation id="6842868554183332230">Vietnēs parasti tiek noteikts, kad jūs aktīvi lietojat savu ierīci, lai iestatītu jūsu pieejamību tērzēšanas lietotnēs.</translation>
 <translation id="6864395892908308021">Šī ierīce nevar lasīt NFC</translation>
@@ -484,7 +484,7 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="6981982820502123353">Pieejamība</translation>
 <translation id="6992289844737586249">Jautāt, pirms atļaut vietnēm izmantot jūsu mikrofonu (ieteicams)</translation>
 <translation id="7000754031042624318">Izslēgta Android iestatījumos</translation>
-<translation id="702275896380648118">Šī vietne nosaka jūsu intereses un pēc tam iesaka reklāmas citām vietnēm. Turklāt šī vietne iegūst informāciju par jūsu reklāmu tēmām no pārlūka Chrome, lai rādītu jums atbilstošākas reklāmas.</translation>
+<translation id="702275896380648118">Šī vietne nosaka jūsu intereses un pēc tam iesaka reklāmas citām vietnēm. Turklāt šī vietne iegūst informāciju par jūsu reklāmu tēmām no pārlūka Ultimatum, lai rādītu jums atbilstošākas reklāmas.</translation>
 <translation id="7053983685419859001">Bloķēt</translation>
 <translation id="7055552182600664515">Lai atskaņotu ar autortiesībām aizsargātu saturu, vietnēm var būt nepieciešams satura aizsardzības pakalpojums. <ph name="BEGIN_LINK" />Uzziniet vairāk<ph name="END_LINK" />.</translation>
 <translation id="7066151586745993502">{NUM_SELECTED,plural, =1{Atlasīts 1 vienums}zero{Atlasīti # vienumi}one{Atlasīts # vienums}other{Atlasīti # vienumi}}</translation>
@@ -528,7 +528,7 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="7658239707568436148">Atcelt</translation>
 <translation id="7667547420449112975">Brīnumainais burvis no Oza zemes</translation>
 <translation id="7681597159868843240">Parasti vietnēs ierīces kustību sensori tiek izmantoti, lai nodrošinātu noteiktas funkcijas, piemēram, virtuālo realitāti vai fizisko aktivitāšu uzskaiti.</translation>
-<translation id="7688240020069572972">Paslēpt Chrome padomu kartīti</translation>
+<translation id="7688240020069572972">Paslēpt Ultimatum padomu kartīti</translation>
 <translation id="7719367874908701697">Lapas tālummaiņa</translation>
 <translation id="7759147511335618829">MIDI ierīču vadība un pārprogrammēšana</translation>
 <translation id="7781829728241885113">Vakar</translation>
@@ -540,7 +540,7 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="7835852323729233924">Multivides atskaņošana</translation>
 <translation id="783819812427904514">Ieslēgt video skaņu</translation>
 <translation id="7846076177841592234">Atcelt atlasi</translation>
-<translation id="7881140103901777395">Pārlūkā Chrome lielākajai daļai vietņu tiek liegts izmantot trešo pušu sīkfailus. Tomēr šajā vietnē trešo pušu sīkfaili ir atļauti, jo vietnei tie ir nepieciešami, lai nodrošinātu pamatpakalpojumus.\n\nLai <ph name="BEGIN_LINK" />pārvaldītu piekļuvi trešo pušu sīkfailiem<ph name="END_LINK" />, pārejiet uz iestatījumiem.</translation>
+<translation id="7881140103901777395">Pārlūkā Ultimatum lielākajai daļai vietņu tiek liegts izmantot trešo pušu sīkfailus. Tomēr šajā vietnē trešo pušu sīkfaili ir atļauti, jo vietnei tie ir nepieciešami, lai nodrošinātu pamatpakalpojumus.\n\nLai <ph name="BEGIN_LINK" />pārvaldītu piekļuvi trešo pušu sīkfailiem<ph name="END_LINK" />, pārejiet uz iestatījumiem.</translation>
 <translation id="7882806643839505685">Atļaut skaņu konkrētai vietnei</translation>
 <translation id="789180354981963912">Bloķēt trešo pušu sīkfailus inkognito režīmā:</translation>
 <translation id="789722939441020330">Neļaut vietnēm automātiski lejupielādēt vairākus failus</translation>
@@ -560,7 +560,7 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="8087000398470557479">Šis saturs ir no vietnes <ph name="DOMAIN_NAME" />, ko nodrošina Google.</translation>
 <translation id="8088603949666785339">Vairāk opciju šeit: <ph name="BANNER_TITLE" /></translation>
 <translation id="8112925981674547014">Ciļņu skatīšana lietotņu sarakstā</translation>
-<translation id="8113501330600751161">{DAYS,plural, =1{Rīt pārlūkā Chrome atkal tiks ierobežoti sīkfaili}zero{Pēc # dienām pārlūkā Chrome atkal tiks ierobežoti sīkfaili}one{Pēc # dienas pārlūkā Chrome atkal tiks ierobežoti sīkfaili}other{Pēc # dienām pārlūkā Chrome atkal tiks ierobežoti sīkfaili}}</translation>
+<translation id="8113501330600751161">{DAYS,plural, =1{Rīt pārlūkā Ultimatum atkal tiks ierobežoti sīkfaili}zero{Pēc # dienām pārlūkā Ultimatum atkal tiks ierobežoti sīkfaili}one{Pēc # dienas pārlūkā Ultimatum atkal tiks ierobežoti sīkfaili}other{Pēc # dienām pārlūkā Ultimatum atkal tiks ierobežoti sīkfaili}}</translation>
 <translation id="8116925261070264013">Izslēgta skaņa</translation>
 <translation id="8117244575099414087">Kad šis slēdzis ir ieslēgts, vietnes var izmantot ierīces sensorus. Kad šis slēdzis ir izslēgts, vietnes nevar izmantot sensorus.</translation>
 <translation id="813082847718468539">Skatīt informāciju par vietni</translation>
@@ -600,10 +600,10 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="8514955299594277296">Neatļaut vietnēm saglabāt datus jūsu ierīcē (nav ieteicams)</translation>
 <translation id="851751545965956758">Neļaut vietnēm izveidot savienojumu ar ierīci</translation>
 <translation id="8525306231823319788">Pilnekrāna režīms</translation>
-<translation id="8541410041357371550">Šī vietne iegūst informāciju par jūsu reklāmu tēmām no pārlūka Chrome, lai rādītu jums atbilstošākas reklāmas</translation>
+<translation id="8541410041357371550">Šī vietne iegūst informāciju par jūsu reklāmu tēmām no pārlūka Ultimatum, lai rādītu jums atbilstošākas reklāmas</translation>
 <translation id="854876774113449365">Jūsu apmeklētajās vietnēs var būt iegults citu vietņu saturs, piemēram, attēli, reklāmas un teksts. Šīs citas vietnes drīkst pieprasīt atļauju izmantot par jums saglabāto informāciju, kad pārlūkojat vietni. <ph name="BEGIN_LINK" />Uzziniet vairāk par iegultu saturu<ph name="END_LINK" />.</translation>
 <translation id="8549127125482561383">Kā rādīt pieprasījumus</translation>
-<translation id="8558480467877843976">Tagad varat izmantot Chrome ikreiz, kad pārlūkojat saturu vai pieskaraties saitēm ziņojumos, dokumentos un citās lietotnēs.</translation>
+<translation id="8558480467877843976">Tagad varat izmantot Ultimatum ikreiz, kad pārlūkojat saturu vai pieskaraties saitēm ziņojumos, dokumentos un citās lietotnēs.</translation>
 <translation id="857943718398505171">Atļauta (ieteicams)</translation>
 <translation id="8593422116412089302">Kad šis slēdzis ir ieslēgts, vietnes drīkst pieprasīt atļauju izmantot par jums saglabāto informāciju. Kad šis slēdzis ir izslēgts, vietnes nedrīkst pieprasīt atļauju izmantot par jums saglabāto informāciju.</translation>
 <translation id="8609465669617005112">Virziet uz augšu</translation>
@@ -624,13 +624,13 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="8751914237388039244">Attēla atlase</translation>
 <translation id="8800034312320686233">Vai vietne nedarbojas?</translation>
 <translation id="8801436777607969138">Bloķēt JavaScript konkrētai vietnei.</translation>
-<translation id="8801657293260363985">V8 ir Chrome JavaScript un WebAssembly programma, kas tiek izmantota vietnes veiktspējas uzlabošanai</translation>
+<translation id="8801657293260363985">V8 ir Ultimatum JavaScript un WebAssembly programma, kas tiek izmantota vietnes veiktspējas uzlabošanai</translation>
 <translation id="8803526663383843427">Ja ieslēgta</translation>
 <translation id="8805385115381080995">Pārlūkošana ir ātrāka, jo vietnē, visticamāk, netiks lūgts apstiprināt, ka esat īsts cilvēks</translation>
 <translation id="8816026460808729765">Bloķēt vietņu piekļuvi sensoriem</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">Īslaicīgi atļaujiet izmantot trešo pušu sīkfailus. Tas nozīmē, ka pārlūkošanas aizsardzības līmenis būs zemāks, taču pastāv lielāka iespēja, ka vietnes funkcijas darbosies, kā paredzēts.</translation>
-<translation id="8889294078294184559">Kad turpināsiet pārlūkošanu, vietnes var pieprasīt šo informāciju pārlūkam Chrome un saņemt apstiprinājumu no iepriekš apmeklētās vietnes, ka, visticamāk, esat īsts cilvēks.</translation>
+<translation id="8889294078294184559">Kad turpināsiet pārlūkošanu, vietnes var pieprasīt šo informāciju pārlūkam Ultimatum un saņemt apstiprinājumu no iepriekš apmeklētās vietnes, ka, visticamāk, esat īsts cilvēks.</translation>
 <translation id="8899807382908246773">Traucējošas reklāmas</translation>
 <translation id="8903921497873541725">Tuvināt</translation>
 <translation id="8921772741368021346"><ph name="POSITION" /> / <ph name="DURATION" /></translation>
@@ -653,7 +653,7 @@ Papildu aizsardzība pārvalda tālāk norādītos Chrome iestatījumus
 <translation id="9109747640384633967">{PERMISSIONS_SUMMARY_MIXED,plural, =1{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> un vēl <ph name="NUM_MORE" />}zero{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> un vēl <ph name="NUM_MORE" />}one{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> un vēl <ph name="NUM_MORE" />}other{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> un vēl <ph name="NUM_MORE" />}}</translation>
 <translation id="913657688200966289"><ph name="BEGIN_LINK" />Android iestatījumos<ph name="END_LINK" /> ieslēdziet atļaujas lietotnei <ph name="APP_NAME" />.</translation>
 <translation id="9138217887606523162">Pašreizējais tālummaiņas iestatījums: <ph name="ZOOM_LEVEL" />%%</translation>
-<translation id="9156722768168878035">Ļaujiet pārlūkam Chrome rādīt jūsu nesen atvērtās cilnes ierīces lietotņu sarakstā un meklēšanas rezultātos. Chrome iestatījumos varat jebkurā laikā izslēgt šo funkciju.</translation>
+<translation id="9156722768168878035">Ļaujiet pārlūkam Ultimatum rādīt jūsu nesen atvērtās cilnes ierīces lietotņu sarakstā un meklēšanas rezultātos. Ultimatum iestatījumos varat jebkurā laikā izslēgt šo funkciju.</translation>
 <translation id="9162462602695099906">Šī lapa ir bīstama.</translation>
 <translation id="9182556968660520230">Neļaut vietnēs atskaņot aizsargātu saturu</translation>
 <translation id="947156494302904893">Jūsu apmeklētās vietnes var apstiprināt, ka esat īsts cilvēks, nevis robots</translation>

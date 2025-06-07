@@ -6,7 +6,7 @@
 <translation id="1011749477052068769">Premik sem</translation>
 <translation id="1014147525163127655">V tej napravi ni ključev za dostop za aplikacijo <ph name="ORIGIN" />.</translation>
 <translation id="1016498331642356377">Hitro iščite z glasom. Če želite urediti to bližnjico, pridržite.</translation>
-<translation id="1024113959924243553">Chrome za razvijalce</translation>
+<translation id="1024113959924243553">Ultimatum za razvijalce</translation>
 <translation id="1028699632127661925">Pošiljanje v napravo <ph name="DEVICE_NAME" /> ...</translation>
 <translation id="103269572468856066">Želite izbrisati tudi podatke s teh mest in iz aplikacij?</translation>
 <translation id="1034259925032978114">Okno je odprto.</translation>
@@ -25,7 +25,7 @@
 <translation id="1094555143448724771">Če si želite ogledati zavihke iz drugih naprav, sinhronizirajte zavihke in zgodovino</translation>
 <translation id="1095761715416917775">Poskrbite, da boste ves čas lahko dostopali do podatkov sinhronizacije</translation>
 <translation id="1100066534610197918">Odpri nov zavihek v skupini</translation>
-<translation id="1103142993930332957">Želite pomagati izboljšati Chrome?</translation>
+<translation id="1103142993930332957">Želite pomagati izboljšati Ultimatum?</translation>
 <translation id="1105960400813249514">Zajemanje slike</translation>
 <translation id="1108214977745280468">Podrobni podatki o strani</translation>
 <translation id="1108938384783527433">Sinhronizacija zgodovine</translation>
@@ -37,11 +37,11 @@
 <translation id="1140317858355046628">Če jo izbrišete, bodo vsi takoj izgubili dostop do skupine zavihkov »<ph name="GROUP_NAME" />« in izbrisana bo iz vseh naprav.</translation>
 <translation id="1142732900304639782">Ne ponudi prevajanja teh spletnih mest</translation>
 <translation id="1145536944570833626">Izbris obstoječih podatkov.</translation>
-<translation id="1150263420752757504">Aplikacija <ph name="APP_NAME" /> se bo odprla v Chromu. Če nadaljujete, se strinjate z <ph name="BEGIN_LINK1" />Googlovimi pogoji storitve<ph name="END_LINK1" /> in <ph name="BEGIN_LINK2" />dodatnimi pogoji storitve za Google Chrome in Chrome OS<ph name="END_LINK2" />.</translation>
+<translation id="1150263420752757504">Aplikacija <ph name="APP_NAME" /> se bo odprla v Chromu. Če nadaljujete, se strinjate z <ph name="BEGIN_LINK1" />Googlovimi pogoji storitve<ph name="END_LINK1" /> in <ph name="BEGIN_LINK2" />dodatnimi pogoji storitve za Ultimatum in Ultimatum OS<ph name="END_LINK2" />.</translation>
 <translation id="1154555449933432029">V Googlovem upravitelju gesel nimate shranjenih gesel.</translation>
 <translation id="115483310321669804">Uporaba gesla <ph name="PASSWORD" /></translation>
 <translation id="1173894706177603556">Preimenuj</translation>
-<translation id="1174479719160874822">Chrome bo zahteval spletno mesto za mobilne naprave, ko je zaslon ozek</translation>
+<translation id="1174479719160874822">Ultimatum bo zahteval spletno mesto za mobilne naprave, ko je zaslon ozek</translation>
 <translation id="1175241315203286684">Skrbnik lahko na daljavo spreminja vaš profil in brskalnik, analizira podatke o brskalniku prek poročanja in izvaja druga potrebna opravila. Dejavnost v tej napravi morda tudi upravljajo zunaj Chroma.</translation>
 <translation id="1177863135347784049">Po meri</translation>
 <translation id="1181037720776840403">Odstrani</translation>
@@ -107,7 +107,7 @@
 <translation id="1409879593029778104">Prenos datoteke <ph name="FILE_NAME" /> je bil preprečen, ker datoteka že obstaja.</translation>
 <translation id="1413446866325418126">Shranjevanje podatkov v račun Google</translation>
 <translation id="1416550906796893042">Različica aplikacije</translation>
-<translation id="1419753403124156396">Želite znova zagnati Chrome?</translation>
+<translation id="1419753403124156396">Želite znova zagnati Ultimatum?</translation>
 <translation id="1428770807407000502">Želite izklopiti sinhronizacijo?</translation>
 <translation id="1430915738399379752">Natisni</translation>
 <translation id="1435593198351412143">Samodejno odpiranje datotek PDF</translation>
@@ -135,8 +135,8 @@
 Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni poslano Googlu in ga Google ne hrani. Če pozabite geslo ali želite to nastavitev spremeniti, <ph name="BEGIN_LINK" />izbrišite podatke iz Chroma v računu<ph name="END_LINK" />.</translation>
 <translation id="1544826120773021464">Če želite upravljati račun Google, se dotaknite gumba »Upravljanje računa«</translation>
 <translation id="1549000191223877751">Premik v drugo okno</translation>
-<translation id="1553358976309200471">Posodobi Chrome</translation>
-<translation id="1554532453982918912">Pomagajte izboljšati Chrome za ljudi, ki ga uporabljajo tako kot vi.</translation>
+<translation id="1553358976309200471">Posodobi Ultimatum</translation>
+<translation id="1554532453982918912">Pomagajte izboljšati Ultimatum za ljudi, ki ga uporabljajo tako kot vi.</translation>
 <translation id="1568636008098739136">Poslušanje te strani. Če želite urediti to bližnjico, pridržite.</translation>
 <translation id="1571041387761170095">Ni šibkih ali znova uporabljenih gesel</translation>
 <translation id="1571304935088121812">Kopiranje uporabniškega imena</translation>
@@ -161,7 +161,7 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="1702907158640575240">Upravljan brskalnik</translation>
 <translation id="1718835860248848330">Zadnja ura</translation>
 <translation id="1724977129262658800">Odklenite, če želite urediti geslo.</translation>
-<translation id="1726477445370128854">Brskanje in iskanje sta hitrejša, ko Chrome vnaprej naloži strani, za katere meni, da jih boste morda obiskali.</translation>
+<translation id="1726477445370128854">Brskanje in iskanje sta hitrejša, ko Ultimatum vnaprej naloži strani, za katere meni, da jih boste morda obiskali.</translation>
 <translation id="1728803206919861584">Želite ključ za dostop shraniti zunaj anonimnega načina?</translation>
 <translation id="1732514748744806741">Če bodo vaša gesla ogrožena, vas bomo o tem obvestili</translation>
 <translation id="1747593111377567311">{NUM_SITES,plural, =1{1 spletno mesto je nedavno poslalo veliko obvestil}one{# spletno mesto je nedavno poslalo veliko obvestil}two{# spletni mesti sta nedavno poslali veliko obvestil}few{# spletna mesta so nedavno poslala veliko obvestil}other{# spletnih mest je nedavno poslalo veliko obvestil}}</translation>
@@ -171,7 +171,7 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="1755203724116202818">Zaradi merjenja uspešnosti oglasa se s spletnimi mesti delijo omejene vrste podatkov, na primer ali ste opravili nakup po obisku spletnega mesta.</translation>
 <translation id="1757620656501361327">Obvestilo Googlovega upravitelja gesel</translation>
 <translation id="1760873718737761808">{FILE_COUNT,plural, =1{Strani, 1 stran na seznamu}one{Strani, # stran na seznamu}two{Strani, # strani na seznamu}few{Strani, # strani na seznamu}other{Strani, # strani na seznamu}}</translation>
-<translation id="1771929606532798550">Podatki o vaši uporabi Chroma se pošljejo Googlu, vendar niso povezani z vami.\n\nČe se Chrome zruši, podrobnosti o zrušitvi morda vključujejo nekatere osebne podatke.\n\nČe zgodovino sinhronizirate z računom Google, meritve morda vključujejo tudi podatke o URL-jih, ki jih obiščete.</translation>
+<translation id="1771929606532798550">Podatki o vaši uporabi Chroma se pošljejo Googlu, vendar niso povezani z vami.\n\nČe se Ultimatum zruši, podrobnosti o zrušitvi morda vključujejo nekatere osebne podatke.\n\nČe zgodovino sinhronizirate z računom Google, meritve morda vključujejo tudi podatke o URL-jih, ki jih obiščete.</translation>
 <translation id="1778457539567749232">Označitev kot neprebrano</translation>
 <translation id="1779766957982586368">Zapre okno</translation>
 <translation id="1780023393214832643">Gesla so shranjena v računu <ph name="USERNAME" /></translation>
@@ -188,8 +188,8 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="1829244130665387512">Poiščite na strani</translation>
 <translation id="1832459821645506983">Da, sem za</translation>
 <translation id="1845958458910716240">Zaradi zaščite podatkov dovolite Chromu, da odstrani dovoljenja za spletna mesta, ki jih nedavno niste obiskali</translation>
-<translation id="1871098866036088250">Odpri v brskalniku Chrome</translation>
-<translation id="1877026089748256423">Chrome je zastarel</translation>
+<translation id="1871098866036088250">Odpri v brskalniku Ultimatum</translation>
+<translation id="1877026089748256423">Ultimatum je zastarel</translation>
 <translation id="1877073879466606884">Profil, v katerega ste prijavljeni, je upravljani profil. Skrbnik lahko na daljavo spreminja nastavitve profila, analizira podatke o brskalniku prek poročanja in izvaja druga potrebna opravila.</translation>
 <translation id="1879904908408734349">Razdelek na dnu zaslona za prijavo je zaprt</translation>
 <translation id="1883903952484604915">Moje datoteke</translation>
@@ -200,7 +200,7 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="1910950723001426294">Seznam možnosti deljenja z drugimi je zaprt.</translation>
 <translation id="191726024256261717">Pregled dovoljenj</translation>
 <translation id="1917766536967060661">Takoj boste izgubili dostop do skupine zavihkov »<ph name="GROUP_NAME" />« in član <ph name="BLOCKED_MEMBER_FULL_NAME" /> (<ph name="BLOCKED_MEMBER_EMAIL" />) ne bo več mogel komunicirati z vami v Googlovih storitvah.</translation>
-<translation id="1919130412786645364">Omogočanje prijave v Chrome</translation>
+<translation id="1919130412786645364">Omogočanje prijave v Ultimatum</translation>
 <translation id="1922362554271624559">Predlagani jeziki</translation>
 <translation id="1924255092154549435">Zavihek je razširjen</translation>
 <translation id="1925021887439448749">Vnesite spletni naslov po meri</translation>
@@ -212,7 +212,7 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="1944535645109964458">Ključi za dostop niso na voljo</translation>
 <translation id="1957557050935255529">Nalaganje PDF-ja …</translation>
 <translation id="1959679933317802873">Čakanje na vsebino</translation>
-<translation id="1960290143419248813">Posodobitve za Chrome v tej različici Androida niso več podprte.</translation>
+<translation id="1960290143419248813">Posodobitve za Ultimatum v tej različici Androida niso več podprte.</translation>
 <translation id="1963056249988316027">Preverjanje identitete je vklopljeno in ne more preveriti, ali ste to vi</translation>
 <translation id="1963976881984600709">Standardna zaščita</translation>
 <translation id="1966710179511230534">Posodobite podrobnosti prijave.</translation>
@@ -236,7 +236,7 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="2067805253194386918">besedilo</translation>
 <translation id="2079545284768500474">Razveljavi</translation>
 <translation id="2082238445998314030"><ph name="RESULT_NUMBER" />. rezultat od <ph name="TOTAL_RESULTS" /></translation>
-<translation id="2088833076121753253">Če želite dokončati nastavitev samodejnega izpolnjevanja, znova zaženite Chrome. Zavihki se bodo samodejno znova odprli.</translation>
+<translation id="2088833076121753253">Če želite dokončati nastavitev samodejnega izpolnjevanja, znova zaženite Ultimatum. Zavihki se bodo samodejno znova odprli.</translation>
 <translation id="2091863218454846791">Prikazan je strnjen pogled</translation>
 <translation id="2093731487903423814">zadnjih 15 minut</translation>
 <translation id="2100273922101894616">Samodejna prijava</translation>
@@ -246,9 +246,9 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="2122601567107267586">Aplikacije ni bilo mogoče odpreti</translation>
 <translation id="213279576345780926">Zaprt zavihek: <ph name="TAB_TITLE" /></translation>
 <translation id="2141396931810938595">Na podlagi uporabe</translation>
-<translation id="2145315049852051678">Chrome redno preverja, ali so v brskalniku na voljo najvarnejše nastavitve. Če boste morali kaj pregledati, vam bomo sporočili.</translation>
+<translation id="2145315049852051678">Ultimatum redno preverja, ali so v brskalniku na voljo najvarnejše nastavitve. Če boste morali kaj pregledati, vam bomo sporočili.</translation>
 <translation id="2149973817440762519">Uredi zaznamek</translation>
-<translation id="2158408438301413340">Chrome ni mogel preveriti vseh gesel</translation>
+<translation id="2158408438301413340">Ultimatum ni mogel preveriti vseh gesel</translation>
 <translation id="2163089732491971196">Če želite v računu Google uporabljati in shranjevati podatke iz Chroma, vnesite geslo</translation>
 <translation id="2166228530126694506">Različica <ph name="VERSION_NUMBER" /></translation>
 <translation id="2172688499998841696">Opisi slik so izklopljeni</translation>
@@ -261,7 +261,7 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="219283042927675668">Zavihki v skupini</translation>
 <translation id="2194856509914051091">Kaj morate upoštevati</translation>
 <translation id="22091350895006575">Dodajanje uporabniškega imena</translation>
-<translation id="221494669172414749">Če odprete Chrome brez zaklepanja profila, bodo shranjena gesla in plačilna sredstva odstranjena iz avtomobila. Z zaklepanjem profila poskrbite za varnost teh podatkov.</translation>
+<translation id="221494669172414749">Če odprete Ultimatum brez zaklepanja profila, bodo shranjena gesla in plačilna sredstva odstranjena iz avtomobila. Z zaklepanjem profila poskrbite za varnost teh podatkov.</translation>
 <translation id="2227444325776770048">Nadaljujte kot <ph name="USER_FULL_NAME" /></translation>
 <translation id="2230777942707397948">Prazno okno</translation>
 <translation id="223356358902285214">Dejavnost v spletu in aplikacijah</translation>
@@ -287,7 +287,7 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="2332515770639153015">Izboljšano varno brskanje je vklopljeno</translation>
 <translation id="233375395665273385">Izbriši in se odjavi</translation>
 <translation id="2341410551640223969">Aplikacije <ph name="WEBAPK_NAME" /> ni bilo mogoče namestiti.</translation>
-<translation id="2349710944427398404">Skupna količina podatkov, ki jih uporablja Chrome, vključno z računi, zaznamki in shranjenimi nastavitvami.</translation>
+<translation id="2349710944427398404">Skupna količina podatkov, ki jih uporablja Ultimatum, vključno z računi, zaznamki in shranjenimi nastavitvami.</translation>
 <translation id="2349954856814571872">Ikona gumba vrstice z zaznamki</translation>
 <translation id="235789365079050412">Googlov pravilnik o zasebnosti</translation>
 <translation id="2359808026110333948">Naprej</translation>
@@ -307,7 +307,7 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="2433507940547922241">Videz</translation>
 <translation id="2435457462613246316">Pokaži geslo</translation>
 <translation id="2439153523196674349">Predogled spletnega mesta <ph name="SITE_NAME" /></translation>
-<translation id="2449931042095204989">Ko Googlovo spletno mesto ali aplikacija zahteva zasebno vnaprejšnje nalaganje povezav na svoji strani, Chrome šifrira in vnaprej naloži strani prek Googlovih strežnikov brez piškotkov. S tem je skrita vaša identiteta na vnaprej naloženem mestu.</translation>
+<translation id="2449931042095204989">Ko Googlovo spletno mesto ali aplikacija zahteva zasebno vnaprejšnje nalaganje povezav na svoji strani, Ultimatum šifrira in vnaprej naloži strani prek Googlovih strežnikov brez piškotkov. S tem je skrita vaša identiteta na vnaprej naloženem mestu.</translation>
 <translation id="2450083983707403292">Ali želite znova začeti prenos datoteke <ph name="FILE_NAME" />?</translation>
 <translation id="2451607499823206582">Spremljanje</translation>
 <translation id="2453860139492968684">Dokončaj</translation>
@@ -315,7 +315,7 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="2461822463642141190">Trenutno</translation>
 <translation id="2463770278804271243">STRAN</translation>
 <translation id="2468444275314013497">Vaš brskalnik je videti v redu</translation>
-<translation id="2472163211318554013">Prijavite se, če želite čim bolje izkoristiti Chrome</translation>
+<translation id="2472163211318554013">Prijavite se, če želite čim bolje izkoristiti Ultimatum</translation>
 <translation id="247737702124049222">Opisi slik so vklopljeni</translation>
 <translation id="2479148705183875116">V nastavitve</translation>
 <translation id="2482878487686419369">Obvestila</translation>
@@ -343,7 +343,7 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="2569733278091928697">Preprosto boste lahko upravljali kontrolnike predstavnosti, anonimne seje, prenose in drugo.</translation>
 <translation id="2571711316400087311">Ponudi pošiljanje strani v drugih jezikih v Google Prevajalnik</translation>
 <translation id="2571834852878229351">Ustvari lastno geslo</translation>
-<translation id="2574249610672786438">Če si želite ogledati zavihke iz naprav, v katerih uporabljate Chrome, se prijavite v vseh napravah</translation>
+<translation id="2574249610672786438">Če si želite ogledati zavihke iz naprav, v katerih uporabljate Ultimatum, se prijavite v vseh napravah</translation>
 <translation id="2577981599306533385">Uporabnik <ph name="MEMBER_FULL_NAME" /> (<ph name="EMAIL" />) bo takoj izgubil dostop do skupine zavihkov »<ph name="GROUP_NAME" />« in ne bo več mogel komunicirati z vami v Googlovih storitvah.</translation>
 <translation id="2579297619530305344">Gesla v vseh vaših napravah – odprto pri polni višini</translation>
 <translation id="2581165646603367611">S tem bodo izbrisani piškotki, predpomnilnik in drugi podatki spletnih mest, ki se Chromu ne zdijo pomembni.</translation>
@@ -386,7 +386,7 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="2779651927720337254">ni uspelo</translation>
 <translation id="2781151931089541271">Še 1 s</translation>
 <translation id="2789486458103222910">V redu</translation>
-<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Chrome je našel znova uporabljeno geslo, ki ga lahko izboljšate}one{Chrome je našel # znova uporabljeno geslo, ki ga lahko izboljšate}two{Chrome je našel # znova uporabljeni gesli, ki ju lahko izboljšate}few{Chrome je našel # znova uporabljena gesla, ki jih lahko izboljšate}other{Chrome je našel # znova uporabljenih gesel, ki jih lahko izboljšate}}</translation>
+<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Ultimatum je našel znova uporabljeno geslo, ki ga lahko izboljšate}one{Ultimatum je našel # znova uporabljeno geslo, ki ga lahko izboljšate}two{Ultimatum je našel # znova uporabljeni gesli, ki ju lahko izboljšate}few{Ultimatum je našel # znova uporabljena gesla, ki jih lahko izboljšate}other{Ultimatum je našel # znova uporabljenih gesel, ki jih lahko izboljšate}}</translation>
 <translation id="2800066122460699237">Zavihek <ph name="TAB_TITLE" /> bo zaprt.</translation>
 <translation id="2805756323405976993">Aplikacije</translation>
 <translation id="281504910091592009">Shranjena gesla si lahko ogledate in jih upravljate v <ph name="BEGIN_LINK" />Google Računu<ph name="END_LINK" /></translation>
@@ -407,9 +407,9 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="2870560284913253234">Spletno mesto</translation>
 <translation id="2871733351037274014">Vnaprejšnje nalaganje strani</translation>
 <translation id="2876136027428473467"><ph name="CHILD_NAME" /> želi, da odobrite to spletno mesto:</translation>
-<translation id="2876628302275096482">Preberite več o tem, <ph name="BEGIN_LINK" />kako Chrome zagotavlja zasebnost vaših podatkov<ph name="END_LINK" /></translation>
+<translation id="2876628302275096482">Preberite več o tem, <ph name="BEGIN_LINK" />kako Ultimatum zagotavlja zasebnost vaših podatkov<ph name="END_LINK" /></translation>
 <translation id="2883644600102358131">Gesla bodo kmalu nehala delovati v tej napravi. Če želite še naprej uporabljati gesla, posodobite Storitve Google Play.</translation>
-<translation id="2888126860611144412">O brskalniku Chrome</translation>
+<translation id="2888126860611144412">O brskalniku Ultimatum</translation>
 <translation id="2891154217021530873">Ustavi nalaganje strani</translation>
 <translation id="2894821468041866720">Ne upočasni delovanja brskalnika ali naprave.</translation>
 <translation id="2895521649038438824">Poslušate lahko to stran</translation>
@@ -451,14 +451,14 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="3029704984691124060">Gesli se ne ujemata</translation>
 <translation id="3036750288708366620"><ph name="BEGIN_LINK" />Poiščite pomoč<ph name="END_LINK" /></translation>
 <translation id="3037177537145227281">Spremljanje cene</translation>
-<translation id="3037517125981011456">Pokaže pozive za prijavo v Chrome.</translation>
+<translation id="3037517125981011456">Pokaže pozive za prijavo v Ultimatum.</translation>
 <translation id="3038272154009688107">Ogled vseh spletnih mest</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> zaznamek}one{<ph name="BOOKMARKS_COUNT_MANY" /> zaznamek}two{<ph name="BOOKMARKS_COUNT_MANY" /> zaznamka}few{<ph name="BOOKMARKS_COUNT_MANY" /> zaznamki}other{<ph name="BOOKMARKS_COUNT_MANY" /> zaznamkov}}</translation>
 <translation id="3062802207422175757">Članki na temo vaših zanimanj v Chromu</translation>
 <translation id="3066573403916685335">Premik dol</translation>
 <translation id="3067505415088964188">Cena je nizka</translation>
 <translation id="3070005020161560471">Samodejno prevedi</translation>
-<translation id="3072980200212375806">Aplikacija <ph name="APP_NAME" /> se bo odprla v Chromu. Če nadaljujete, se strinjate z <ph name="BEGIN_LINK1" />Googlovimi pogoji storitve<ph name="END_LINK1" /> in <ph name="BEGIN_LINK2" />dodatnimi pogoji storitve za Google Chrome in Chrome OS<ph name="END_LINK2" />. Uporablja se tudi <ph name="BEGIN_LINK3" />pravilnik o zasebnosti<ph name="END_LINK3" />.</translation>
+<translation id="3072980200212375806">Aplikacija <ph name="APP_NAME" /> se bo odprla v Chromu. Če nadaljujete, se strinjate z <ph name="BEGIN_LINK1" />Googlovimi pogoji storitve<ph name="END_LINK1" /> in <ph name="BEGIN_LINK2" />dodatnimi pogoji storitve za Ultimatum in Ultimatum OS<ph name="END_LINK2" />. Uporablja se tudi <ph name="BEGIN_LINK3" />pravilnik o zasebnosti<ph name="END_LINK3" />.</translation>
 <translation id="3080525922482950719">Strani lahko shranite, če želite brati pozneje ali brez povezave</translation>
 <translation id="3087734570205094154">Na dno</translation>
 <translation id="3091010850649238832">Prikaz vsebine odložišča</translation>
@@ -472,7 +472,7 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="3159335509547415276">Preberite več o blokiranih računih</translation>
 <translation id="3161699713309727585"><ph name="BUTTON_TEXT" />, odpre se na novem zavihku</translation>
 <translation id="3166827708714933426">Bližnjice za zavihke in okna</translation>
-<translation id="316694332262407393">Chrome se že izvaja tu.</translation>
+<translation id="316694332262407393">Ultimatum se že izvaja tu.</translation>
 <translation id="3167258285411721858">Za <ph name="HOST_NAME" /> lahko zahtevate spletno mesto za mobilne naprave.</translation>
 <translation id="3169472444629675720">Discover</translation>
 <translation id="3172472771272043251">{PASSWORDS_COUNT,plural, =1{1 geslo in drugi elementi so shranjeni samo v tej napravi. Če jih želite uporabljati v drugih napravah, jih shranite v računu Google, <ph name="ACCOUNT_EMAIL" />.}one{# geslo in drugi elementi so shranjeni samo v tej napravi. Če jih želite uporabljati v drugih napravah, jih shranite v računu Google, <ph name="ACCOUNT_EMAIL" />.}two{# gesli in drugi elementi so shranjeni samo v tej napravi. Če jih želite uporabljati v drugih napravah, jih shranite v računu Google, <ph name="ACCOUNT_EMAIL" />.}few{# gesla in drugi elementi so shranjeni samo v tej napravi. Če jih želite uporabljati v drugih napravah, jih shranite v računu Google, <ph name="ACCOUNT_EMAIL" />.}other{# gesel in drugi elementi so shranjeni samo v tej napravi. Če jih želite uporabljati v drugih napravah, jih shranite v računu Google, <ph name="ACCOUNT_EMAIL" />.}}</translation>
@@ -496,7 +496,7 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="3269093882174072735">Naloži sliko</translation>
 <translation id="327204079441056603">Spremenili smo način shranjevanja gesel v tej napravi</translation>
 <translation id="3280562213547448728">Glasovno iskanje</translation>
-<translation id="3282568296779691940">Prijava v Chrome</translation>
+<translation id="3282568296779691940">Prijava v Ultimatum</translation>
 <translation id="3285065882678541460">{TAB_COUNT,plural, =1{<ph name="TAB_GROUPS_PART" />, <ph name="TAB_COUNT_ONE" /> zavihek}one{<ph name="TAB_GROUPS_PART" />, <ph name="TAB_COUNT_MANY" /> zavihek}two{<ph name="TAB_GROUPS_PART" />, <ph name="TAB_COUNT_MANY" /> zavihka}few{<ph name="TAB_GROUPS_PART" />, <ph name="TAB_COUNT_MANY" /> zavihki}other{<ph name="TAB_GROUPS_PART" />, <ph name="TAB_COUNT_MANY" /> zavihkov}}</translation>
 <translation id="3293181007446299124">Vaša zgodovina brskanja je zasebna v napravi, poročila pa so zaradi zaščite vaše identitete poslana z zakasnitvijo.</translation>
 <translation id="3301936297336370235">Potrditev predloga gesla</translation>
@@ -528,7 +528,7 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="3443221991560634068">Vnovično nalaganje trenutne strani</translation>
 <translation id="3444179773590444986">Želite poslati povratne informacije o temni temi za spletna mesta?</translation>
 <translation id="3448874648066942074">Ustvari povzetek strani z umetno inteligenco</translation>
-<translation id="3452832259067974318">Chrome zaradi varstva vaše zasebnosti ne bo samodejno izpolnil polja za vnos gesla.</translation>
+<translation id="3452832259067974318">Ultimatum zaradi varstva vaše zasebnosti ne bo samodejno izpolnil polja za vnos gesla.</translation>
 <translation id="3467081767799433066">Pri merjenju oglasov se s spletnimi mesti zaradi merjenja uspešnosti oglasov delijo omejene vrste podatkov, na primer ura v dnevu, na primer ali ste opravili nakup po obisku spletnega mesta.</translation>
 <translation id="3474624961160222204">Nadaljuj kot <ph name="NAME" /></translation>
 <translation id="3478363558367712427">Izberete lahko iskalnik</translation>
@@ -540,7 +540,7 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="3499246418971111862">chrome_qrcode_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="350276055892098337">Najprej najstarejši</translation>
 <translation id="3507132249039706973">Standardna zaščita je vklopljena</translation>
-<translation id="3509330069915219067">Brez povezave. Chrome ne more preveriti, ali so na voljo posodobitve.</translation>
+<translation id="3509330069915219067">Brez povezave. Ultimatum ne more preveriti, ali so na voljo posodobitve.</translation>
 <translation id="3513019849832307207">Pridruži se in odpri</translation>
 <translation id="3513704683820682405">Razširjena resničnost</translation>
 <translation id="3516053221628030540">Odpri Google Play</translation>
@@ -573,7 +573,7 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="3627893290277153986">Odpiranje možnosti za shranjevanje strani</translation>
 <translation id="3631987586758005671">Deljenje z napravo <ph name="DEVICE_NAME" /></translation>
 <translation id="363484704507524488">Preverjanje identitete lahko upravljate v nastavitvah zaščite ob tatvini. <ph name="BEGIN_LINK" />Odprite nastavitve<ph name="END_LINK" /></translation>
-<translation id="3635073343384702370">Chrome lahko preveri gesla, če jih shranite</translation>
+<translation id="3635073343384702370">Ultimatum lahko preveri gesla, če jih shranite</translation>
 <translation id="363596933471559332">Samodejna prijava v spletna mesta s shranjenimi poverilnicami. Ko je ta funkcija izklopljena, bo pri vsaki prijavi v spletno mesto potrebno preverjanje.</translation>
 <translation id="3636940436873918441">Želeni jeziki</translation>
 <translation id="3637744895182738742">Če ste pozabili geslo ali želite to nastavitev spremeniti, <ph name="BEGIN_LINK" />izbrišite podatke iz Chroma v računu<ph name="END_LINK" />.</translation>
@@ -640,8 +640,8 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="3950820424414687140">Prijava</translation>
 <translation id="395377504920307820">Uporabi brez računa</translation>
 <translation id="3955219620682768253">Odpiranje prejšnje strani v zgodovini</translation>
-<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Chrome bo naložil stran, ko bo pripravljen}one{Chrome bo naložil strani, ko bo pripravljen}two{Chrome bo naložil strani, ko bo pripravljen}few{Chrome bo naložil strani, ko bo pripravljen}other{Chrome bo naložil strani, ko bo pripravljen}}</translation>
-<translation id="3969142555815019568">Chrome ne more preveriti vaših gesel</translation>
+<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Ultimatum bo naložil stran, ko bo pripravljen}one{Ultimatum bo naložil strani, ko bo pripravljen}two{Ultimatum bo naložil strani, ko bo pripravljen}few{Ultimatum bo naložil strani, ko bo pripravljen}other{Ultimatum bo naložil strani, ko bo pripravljen}}</translation>
+<translation id="3969142555815019568">Ultimatum ne more preveriti vaših gesel</translation>
 <translation id="3969863827134279083">Premik gor</translation>
 <translation id="397105322502079400">Izračunavanje …</translation>
 <translation id="397583555483684758">Sinhronizacija je prenehala delovati</translation>
@@ -678,7 +678,7 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="4132137475637520539">Pridruži se lahko kdor koli s povezavo</translation>
 <translation id="4135200667068010335">Seznam naprav, s katerimi želite deliti zavihek, je zaprt.</translation>
 <translation id="4137746084635924146">Trenutni jezik naprave</translation>
-<translation id="4139654229316918773">Chrome Canary</translation>
+<translation id="4139654229316918773">Ultimatum Canary</translation>
 <translation id="414128724510021958">Namizna spletna mesta so privzeto zahtevana</translation>
 <translation id="4162867837470729563">Seznam možnosti deljenja z drugimi je odprt pri polni višini.</translation>
 <translation id="4170011742729630528">Storitev ni na voljo; poskusite znova pozneje.</translation>
@@ -691,7 +691,7 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="4197828496439691735">{NUM_TABS,plural, =1{1 zavihek v tej napravi}one{# zavihek v tej napravi}two{# zavihka v tej napravi}few{# zavihki v tej napravi}other{# zavihkov v tej napravi}}</translation>
 <translation id="4198423547019359126">Ni razpoložljivih mest za prenos</translation>
 <translation id="4209029522667123437"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> • Uporabljeno na tem spletnem mestu</translation>
-<translation id="4214315110991671325">Če omogočite piškotke, jih bo Chrome morda uporabil za vnaprejšnje nalaganje.</translation>
+<translation id="4214315110991671325">Če omogočite piškotke, jih bo Ultimatum morda uporabil za vnaprejšnje nalaganje.</translation>
 <translation id="4216511743389425832">Poslušanje te strani</translation>
 <translation id="4225725533026049334">Spremljano</translation>
 <translation id="4225895483398857530">Bližnjica do orodne vrstice</translation>
@@ -745,9 +745,9 @@ Vaše šifrirane podatke lahko bere samo oseba, ki ima vaše geslo. Geslo ni pos
 <translation id="4452548195519783679">Zaznamek ustvarjen v mapi <ph name="FOLDER_NAME" /></translation>
 <translation id="4460861538906892109">{ITEMS_COUNT,plural, =1{1 zaznamek}one{# zaznamek}two{# zaznamka}few{# zaznamki}other{# zaznamkov}}</translation>
 <translation id="4478161224666880173">Na tem spletnem mestu lahko uporabite račun za <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />. Če želite nadaljevati, se prijavite v račun za <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="4479972344484327217">Nameščanje modula <ph name="MODULE" /> za Chrome …</translation>
+<translation id="4479972344484327217">Nameščanje modula <ph name="MODULE" /> za Ultimatum …</translation>
 <translation id="4484496141267039529">Ni povezave. Poskusite pozneje.</translation>
-<translation id="4487967297491345095">Vsi podatki aplikacije Chrome bodo trajno izbrisani, vključno z vsemi datotekami, nastavitvami, računi, zbirkami podatkov ipd.</translation>
+<translation id="4487967297491345095">Vsi podatki aplikacije Ultimatum bodo trajno izbrisani, vključno z vsemi datotekami, nastavitvami, računi, zbirkami podatkov ipd.</translation>
 <translation id="4494806687727322324">Skrbnik je vklopil shranjevanje gesel</translation>
 <translation id="4508528996305412043">Meni kartice vira je odprt</translation>
 <translation id="4509741852167209430">S spletnimi mesti se zaradi merjenja uspešnosti oglasov delijo omejene vrste podatkov, na primer ali ste opravili nakup po obisku spletnega mesta</translation>
@@ -772,7 +772,7 @@ V Google Računu so morda druge vrste zgodovine brskanja, kot so iskanja in deja
 <translation id="4594952190837476234">Ta stran brez povezave je bila ustvarjena <ph name="CREATION_TIME" /> in se morda razlikuje od spletne različice.</translation>
 <translation id="4595805675102978678">Napaka računa Google</translation>
 <translation id="4601095002996233687">Poglobljeni pregledi za sumljive prenose.</translation>
-<translation id="4606559747793337066">Ko spletno mesto ali aplikacija zahteva zasebno vnaprejšnje nalaganje povezav na strani, Chrome šifrira in vnaprej naloži strani prek Googlovih strežnikov brez piškotkov. S tem je skrita vaša identiteta na vnaprej naloženem mestu.</translation>
+<translation id="4606559747793337066">Ko spletno mesto ali aplikacija zahteva zasebno vnaprejšnje nalaganje povezav na strani, Ultimatum šifrira in vnaprej naloži strani prek Googlovih strežnikov brez piškotkov. S tem je skrita vaša identiteta na vnaprej naloženem mestu.</translation>
 <translation id="4616150815774728855">Odpri <ph name="WEBAPK_NAME" /></translation>
 <translation id="4619564267100705184">Potrditev identitete</translation>
 <translation id="4624065194742029982">Anonimni način v Chromu</translation>
@@ -816,7 +816,7 @@ V Google Računu so morda druge vrste zgodovine brskanja, kot so iskanja in deja
 <translation id="4763480195061959176">video</translation>
 <translation id="4766313118839197559">Gesla so shranjena v Upravitelju gesel v tej napravi.</translation>
 <translation id="4766678251456904326">Dodajte račun v napravo</translation>
-<translation id="4767947714785277816">Uvajamo novo funkcijo za zasebnost pri oglaševanju, ki se imenuje merjenje oglasov. Chrome deli samo zelo omejene podatke s spletnimi mesti in aplikacijami, na primer kdaj vam je bil oglas prikazan, da bi pomagal meriti uspešnost oglasov.</translation>
+<translation id="4767947714785277816">Uvajamo novo funkcijo za zasebnost pri oglaševanju, ki se imenuje merjenje oglasov. Ultimatum deli samo zelo omejene podatke s spletnimi mesti in aplikacijami, na primer kdaj vam je bil oglas prikazan, da bi pomagal meriti uspešnost oglasov.</translation>
 <translation id="4769095993849849966">Novo ime datoteke</translation>
 <translation id="4769632191812288342">Imate standardno zaščito</translation>
 <translation id="4773122030389014189">Deljenje skupine zavihkov »<ph name="GROUP_NAME" />«</translation>
@@ -826,13 +826,13 @@ V Google Računu so morda druge vrste zgodovine brskanja, kot so iskanja in deja
 <translation id="4782929588435725897"><ph name="SEARCH_ENGINE" /> je vaš privzeti iskalnik</translation>
 <translation id="4784349455504343791"><ph name="WEBSITE_ORIGIN" /> želi uporabiti osebne podatke iz vaše digitalne denarnice.</translation>
 <translation id="4787736314074622408">Ali želite izbrisati »<ph name="ITEM_TITLE" />«?</translation>
-<translation id="4793679854893018356">Preberite, kako vas Chrome varuje</translation>
+<translation id="4793679854893018356">Preberite, kako vas Ultimatum varuje</translation>
 <translation id="4794291718671962615">(<ph name="MEGABYTES" />) <ph name="URL" /></translation>
 <translation id="4807098396393229769">Ime na kartici</translation>
 <translation id="480990236307250886">Odpri domačo stran</translation>
 <translation id="4822710610088666676">Skupina zavihkov »<ph name="TAB_GROUP_TITLE" />« je zaprta in shranjena</translation>
 <translation id="4834250788637067901">Plačilna sredstva, ponudbe in naslovi z Googlom Pay</translation>
-<translation id="4835385943915508971">Chrome nima dostopa do zahtevanega vira</translation>
+<translation id="4835385943915508971">Ultimatum nima dostopa do zahtevanega vira</translation>
 <translation id="483742037940503070">{TAB_COUNT,plural, =1{Obnovitev skupine zavihkov z <ph name="TAB_COUNT_ONE" /> zavihkom in barvo <ph name="COLOR_NAME" /> kot nove skupine zavihkov v ozadju.}one{Obnovitev skupine zavihkov s <ph name="TAB_COUNT_MANY" /> zavihkom in barvo <ph name="COLOR_NAME" /> kot nove skupine zavihkov v ozadju.}two{Obnovitev skupine zavihkov z <ph name="TAB_COUNT_MANY" /> zavihkoma in barvo <ph name="COLOR_NAME" /> kot nove skupine zavihkov v ozadju.}few{Obnovitev skupine zavihkov s <ph name="TAB_COUNT_MANY" /> zavihki in barvo <ph name="COLOR_NAME" /> kot nove skupine zavihkov v ozadju.}other{Obnovitev skupine zavihkov s <ph name="TAB_COUNT_MANY" /> zavihki in barvo <ph name="COLOR_NAME" /> kot nove skupine zavihkov v ozadju.}}</translation>
 <translation id="4837753911714442426">Odpiranje možnosti za tiskanje strani</translation>
 <translation id="4844633725025837809">Zaradi dodatne varnosti šifrirajte gesla v napravi, preden se shranijo v Google Upravitelju gesel.</translation>
@@ -841,7 +841,7 @@ V Google Računu so morda druge vrste zgodovine brskanja, kot so iskanja in deja
 <translation id="4852014461738377247">Prijava …</translation>
 <translation id="4860895144060829044">Pokličite</translation>
 <translation id="4864369630010738180">Prijavljanje ...</translation>
-<translation id="4866368707455379617">Modula <ph name="MODULE" /> za Chrome ni mogoče namestiti</translation>
+<translation id="4866368707455379617">Modula <ph name="MODULE" /> za Ultimatum ni mogoče namestiti</translation>
 <translation id="4871568871368204250">Izklop sinhronizacije</translation>
 <translation id="4875775213178255010">Predlogi za vsebino</translation>
 <translation id="4877678010818027629">Vklop anonimnega načina</translation>
@@ -864,7 +864,7 @@ V Google Računu so morda druge vrste zgodovine brskanja, kot so iskanja in deja
 <translation id="4957722034734105353">Več o tem ...</translation>
 <translation id="4959115606310463263">Razdelek na dnu zaslona za prijavo je odprt pri polovični višini</translation>
 <translation id="4961107849584082341">Prevedite to stran v kateri koli jezik</translation>
-<translation id="4964614743143953889">Chrome vas opozori na spletna mesta in prenose, ki niso varni</translation>
+<translation id="4964614743143953889">Ultimatum vas opozori na spletna mesta in prenose, ki niso varni</translation>
 <translation id="496607651705915226">Če želite v računu Google shraniti in uporabljati nova gesla, posodobite storitve Google Play</translation>
 <translation id="4971753085054504448">Poskusite poiskati nekaj drugega ali odprite celotno zgodovino uporabe Chroma, da si ogledate več rezultatov.</translation>
 <translation id="497421865427891073">Pojdi naprej</translation>
@@ -898,7 +898,7 @@ V Google Računu so morda druge vrste zgodovine brskanja, kot so iskanja in deja
 <translation id="510275257476243843">Še 1 h</translation>
 <translation id="5114895953710637392">List filtra za aplikacije je zaprt.</translation>
 <translation id="5115811374190515607">za <ph name="PRODUCT_NAME" /></translation>
-<translation id="5116239826668864748">Chrome lahko uporabljate, kadar koli se dotaknete povezav v sporočilih, dokumentih in drugih aplikacijah</translation>
+<translation id="5116239826668864748">Ultimatum lahko uporabljate, kadar koli se dotaknete povezav v sporočilih, dokumentih in drugih aplikacijah</translation>
 <translation id="5118713593561876160">Zanimanja</translation>
 <translation id="5122378528687922675">Če potrebuješ pomoč, se obrni na starša (<ph name="PARENT_NAME_1" /> ali <ph name="PARENT_NAME_2" />).</translation>
 <translation id="5123685120097942451">Anonimni zavihek</translation>
@@ -922,7 +922,7 @@ V Google Računu so morda druge vrste zgodovine brskanja, kot so iskanja in deja
 <translation id="5210286577605176222">Premik na prejšnji zavihek</translation>
 <translation id="5210365745912300556">Zapri zavihek</translation>
 <translation id="5215957675041756913">Nadziranje podatkov in računa</translation>
-<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> in drugo <ph name="SEPARATOR" /> Chrome je odstranil ta dovoljenja, ker nedavno niste obiskali</translation>
+<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> in drugo <ph name="SEPARATOR" /> Ultimatum je odstranil ta dovoljenja, ker nedavno niste obiskali</translation>
 <translation id="5222676887888702881">Odjava</translation>
 <translation id="5226378907213531272">Pri vsaki uporabi avtomobila boste odklenili zaslon</translation>
 <translation id="5227554086496586518">Dotaknite se, če želite prikazati rezultate iskanja</translation>
@@ -940,7 +940,7 @@ V Google Računu so morda druge vrste zgodovine brskanja, kot so iskanja in deja
 <translation id="5308380583665731573">Povezovanje</translation>
 <translation id="5316947901395241499">Skrbnik je izklopil shranjevanje gesel</translation>
 <translation id="5317780077021120954">Shrani</translation>
-<translation id="5319359161174645648">Google priporoča Chrome</translation>
+<translation id="5319359161174645648">Google priporoča Ultimatum</translation>
 <translation id="5326246328175179736">S tem računom se ni mogoče prijaviti</translation>
 <translation id="5327248766486351172">Ime</translation>
 <translation id="5328542107300944283">Uporabi z računom <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
@@ -966,7 +966,7 @@ V Google Računu so morda druge vrste zgodovine brskanja, kot so iskanja in deja
 <translation id="5433691172869980887">Uporabniško ime kopirano</translation>
 <translation id="5436928407363358055">Če želite preprosto nadaljevati, kjer ste končali, sinhronizirajte zgodovino in zavihke</translation>
 <translation id="5438292632479953702">Znova prenesi</translation>
-<translation id="5439191312780166229">Opozori vas o nevarnih spletnih mestih, celo tistih, za katere Google prej ni vedel, in sicer tako, da analizira več podatkov s spletnih mest kot standardna zaščita. Izberete lahko, da preskočite opozorila za Chrome.</translation>
+<translation id="5439191312780166229">Opozori vas o nevarnih spletnih mestih, celo tistih, za katere Google prej ni vedel, in sicer tako, da analizira več podatkov s spletnih mest kot standardna zaščita. Izberete lahko, da preskočite opozorila za Ultimatum.</translation>
 <translation id="5441137934526263133">Ali spletno mesto ne deluje? Piškotki tretjih oseb so blokirani.</translation>
 <translation id="5441466871879044658">Prevedi v ta jezik</translation>
 <translation id="5441522332038954058">Premik na naslovno vrstico</translation>
@@ -986,7 +986,7 @@ V Google Računu so morda druge vrste zgodovine brskanja, kot so iskanja in deja
 <translation id="5517326820028369152">Razdelek na dnu zaslona za nedavno dejavnost</translation>
 <translation id="5526281268548144413">Ni mogoče zapreti v več oknih</translation>
 <translation id="5548606607480005320">Varnostno preverjanje</translation>
-<translation id="5554520618550346933">Ko uporabite geslo, vas Chrome opozori, če je bilo objavljeno v spletu. Pri tem so vaša gesla in uporabniška imena šifrirana, da jih ne more prebrati nihče, vključno z Googlom.</translation>
+<translation id="5554520618550346933">Ko uporabite geslo, vas Ultimatum opozori, če je bilo objavljeno v spletu. Pri tem so vaša gesla in uporabniška imena šifrirana, da jih ne more prebrati nihče, vključno z Googlom.</translation>
 <translation id="5555525474779371165">Izbira zaščite Varnega brskanja</translation>
 <translation id="5556459405103347317">Znova naloži</translation>
 <translation id="555671485580955310">Sinhronizacija zgodovine in zavihkov</translation>
@@ -1014,12 +1014,12 @@ V Google Računu so morda druge vrste zgodovine brskanja, kot so iskanja in deja
 <translation id="5657871969392618475">Vaši podatki so zavarovani z zaklepanjem profila</translation>
 <translation id="5659593005791499971">E-pošta</translation>
 <translation id="5665379678064389456">Ustvarite dogodek v aplikaciji <ph name="APP_NAME" /></translation>
-<translation id="5683547024293500885">Chrome ne more preveriti, ali so na voljo posodobitve</translation>
+<translation id="5683547024293500885">Ultimatum ne more preveriti, ali so na voljo posodobitve</translation>
 <translation id="5683916195767086779">Skupina zavihkov</translation>
 <translation id="5686790454216892815">Ime datoteke je predolgo</translation>
-<translation id="5687606994963670306">Chrome samodejno izbriše spletna mesta, starejša od 30 dni. Spletno mesto, ki ga znova obiščete, se morda znova prikaže na seznamu. Če ne želite, da vam spletno mesto predlaga oglase, ga lahko tudi blokirate. Preberite več o <ph name="BEGIN_LINK" />upravljanju zasebnosti pri oglaševanju v Chromu.<ph name="END_LINK" /></translation>
+<translation id="5687606994963670306">Ultimatum samodejno izbriše spletna mesta, starejša od 30 dni. Spletno mesto, ki ga znova obiščete, se morda znova prikaže na seznamu. Če ne želite, da vam spletno mesto predlaga oglase, ga lahko tudi blokirate. Preberite več o <ph name="BEGIN_LINK" />upravljanju zasebnosti pri oglaševanju v Chromu.<ph name="END_LINK" /></translation>
 <translation id="569536719314091526">Prevedite to stran v kateri koli jezik z gumbom »Več možnosti«</translation>
-<translation id="5696597120588531049">Chrome vas lahko varuje pred podatkovnimi kršitvami, spletnimi mesti, ki niso varna, in drugim.</translation>
+<translation id="5696597120588531049">Ultimatum vas lahko varuje pred podatkovnimi kršitvami, spletnimi mesti, ki niso varna, in drugim.</translation>
 <translation id="5698878456427040674">Preverite, ali je izbrani račun podprt.</translation>
 <translation id="570347048394355941">Preklop na zavihek</translation>
 <translation id="5709213329446699338"><ph name="SITE" /> se želi povezati z zaporednimi vrati</translation>
@@ -1030,7 +1030,7 @@ V Google Računu so morda druge vrste zgodovine brskanja, kot so iskanja in deja
 <translation id="5728072125198221967">Povezane Googlove storitve</translation>
 <translation id="5744751019568455640">Tu so glasovi, ki jih lahko izberete za branje spletnih strani. Če vam je všeč ta glas in želite, da ga še naprej uporabljam, se preprosto dotaknite imena glasu.</translation>
 <translation id="574845902699630049">Delite kot <ph name="OWNER_FULL_NAME" /></translation>
-<translation id="5749068826913805084">Chrome za prenos datotek potrebuje dostop do shrambe.</translation>
+<translation id="5749068826913805084">Ultimatum za prenos datotek potrebuje dostop do shrambe.</translation>
 <translation id="5749237766298580851">Izklopljeno <ph name="SEPARATOR" /> Ni priporočljivo</translation>
 <translation id="5752232708629533680">Deli samo sliko GIF</translation>
 <translation id="5754350196967618083">Odkrivanja ni mogoče osvežiti</translation>
@@ -1051,7 +1051,7 @@ V Google Računu so morda druge vrste zgodovine brskanja, kot so iskanja in deja
 <translation id="5829586821381540080">Shranjeno v mapo <ph name="FOLDER_NAME" /></translation>
 <translation id="583281660410589416">Neznano</translation>
 <translation id="5833984609253377421">Deli povezavo z drugimi</translation>
-<translation id="5839058148541733625">Dino za Chrome</translation>
+<translation id="5839058148541733625">Dino za Ultimatum</translation>
 <translation id="5848257610304005265">Želite odpreti PDF z aplikacijo <ph name="APP_NAME" />?</translation>
 <translation id="5849288995120328556">Želite ustaviti deljenje?</translation>
 <translation id="5853623416121554550">začasno ustavljeno</translation>
@@ -1065,7 +1065,7 @@ V Google Računu so morda druge vrste zgodovine brskanja, kot so iskanja in deja
 <translation id="5869522115854928033">Shranjena gesla</translation>
 <translation id="587735546353481577">Če želite spremljati spletno mesto, odprite spletno mesto, nato odprite Chromov meni in se dotaknite možnosti za spremljanje.</translation>
 <translation id="5883855034004058011">Preveč neuspešnih poskusov preverjanja z biometričnimi podatki. Če želite poskusiti znova, zaklenite in odklenite napravo.</translation>
-<translation id="5885378508678660271">Obvestila <ph name="SEPARATOR" /> Chrome je odstranil ta dovoljenja, ker je to spletno mesto nevarno</translation>
+<translation id="5885378508678660271">Obvestila <ph name="SEPARATOR" /> Ultimatum je odstranil ta dovoljenja, ker je to spletno mesto nevarno</translation>
 <translation id="5895834791314695851">Gesla bodo kmalu morda nehala delovati v tej napravi. Če želite še naprej uporabljati gesla, posodobite Storitve Google Play. <ph name="BEGIN_LINK" />Več o tem<ph name="END_LINK" /></translation>
 <translation id="5899667542927581604">List brez ključev za dostop je bil zaprt</translation>
 <translation id="5907542076239273525">Zaznamek je shranjen v mapi <ph name="FOLDER_NAME" /></translation>
@@ -1076,7 +1076,7 @@ V Google Računu so morda druge vrste zgodovine brskanja, kot so iskanja in deja
 <translation id="5942872142862698679">Uporaba iskalnika Google za iskanje</translation>
 <translation id="5945035219773565305">Trenutno priporočilo:  <ph name="RECOMMENDATION" /></translation>
 <translation id="5951119116059277034">Ogledovanje strani v živo</translation>
-<translation id="5956665950594638604">Odpiranje centra za pomoč za Chrome na nov. zavih.</translation>
+<translation id="5956665950594638604">Odpiranje centra za pomoč za Ultimatum na nov. zavih.</translation>
 <translation id="59577092665511740">Izberite račun.</translation>
 <translation id="5958275228015807058">Poiščite datoteke in strani v Prenosih</translation>
 <translation id="5958994127112619898">Poenostavi stran</translation>
@@ -1085,13 +1085,13 @@ V Google Računu so morda druge vrste zgodovine brskanja, kot so iskanja in deja
 <translation id="5977976211062815271">V tej napravi</translation>
 <translation id="5978661847409534366">{ITEMS_COUNT,plural, =1{1 stran na bralnem seznamu}one{# stran na bralnem seznamu}two{# strani na bralnem seznamu}few{# strani na bralnem seznamu}other{# strani na bralnem seznamu}}</translation>
 <translation id="5979084224081478209">Preveri gesla</translation>
-<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Chrome je odstranil ta dovoljenja, ker nedavno niste obiskali</translation>
+<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Ultimatum je odstranil ta dovoljenja, ker nedavno niste obiskali</translation>
 <translation id="5995726099713306770">Ali želite znova prenesti stran?</translation>
 <translation id="6000066717592683814">Ohrani Google</translation>
 <translation id="6000203700195075278">Znova spremljaj</translation>
 <translation id="6011308810877101166">Izboljšanje predlogov za iskanje</translation>
 <translation id="6013305291643746595">Razvrščanje po najstarejših</translation>
-<translation id="6022659036123304283">Prilagodite si Chrome</translation>
+<translation id="6022659036123304283">Prilagodite si Ultimatum</translation>
 <translation id="6026538407078977628">Razširitev na celozaslonski prikaz</translation>
 <translation id="6030719887161080597">Upravljanje podatkov, ki jih spletna mesta uporabljajo za merjenje uspešnosti oglasov</translation>
 <translation id="6039379616847168523">Premik na naslednji zavihek</translation>
@@ -1125,17 +1125,17 @@ V Google Računu so morda druge vrste zgodovine brskanja, kot so iskanja in deja
 <translation id="6146563240635539929">Videoposnetki</translation>
 <translation id="614890671148262506">Vedno dovoli obvestila s tega spletnega mesta</translation>
 <translation id="6150320133806434356">Zaznamek je shranjen</translation>
-<translation id="6150706324143004339">Če želite v računu Google uporabljati in shranjevati podatke iz Chroma, posodobite Chrome</translation>
+<translation id="6150706324143004339">Če želite v računu Google uporabljati in shranjevati podatke iz Chroma, posodobite Ultimatum</translation>
 <translation id="6154478581116148741">Vklopite zaklepanje zaslona v nastavitvah, če želite izvoziti gesla iz te naprave.</translation>
 <translation id="6156323911414505561">Pokaži vrstico z zaznamki</translation>
-<translation id="6162892189396105610">Vnaprej naloži strani, za katere Chrome meni, da jih boste najverjetneje obiskali.</translation>
+<translation id="6162892189396105610">Vnaprej naloži strani, za katere Ultimatum meni, da jih boste najverjetneje obiskali.</translation>
 <translation id="6170675927290506430">Na nastavitve obvestil</translation>
 <translation id="6186394685773237175">Najdeno ni bilo nobeno ogroženo geslo</translation>
 <translation id="6192907950379606605">Prenesi opise slik</translation>
 <translation id="6193448654517602979">Izberite zavihke</translation>
 <translation id="6196315980958524839">Gesla so shranjena v Google Upravitelju gesel v tej napravi.</translation>
 <translation id="6202812185118613467">Če želite začeti sinhronizacijo, se znova prijavite</translation>
-<translation id="6204781143409202534">Chrome je zaznal morebitno neželeno vsebino od pošiljatelja <ph name="DOMAIN" />.</translation>
+<translation id="6204781143409202534">Ultimatum je zaznal morebitno neželeno vsebino od pošiljatelja <ph name="DOMAIN" />.</translation>
 <translation id="6205314730813004066">Zasebnost pri oglaševanju</translation>
 <translation id="6210748933810148297">Niste <ph name="EMAIL" />?</translation>
 <translation id="6211386937064921208">Predogled te strani</translation>
@@ -1179,14 +1179,14 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="6356893102071098867">Preverite, ali ste izbrali pravi račun</translation>
 <translation id="6363990818884053551">Če želite začeti sinhronizacijo, potrdite, da ste to vi.</translation>
 <translation id="6364438453358674297">Ali želite odstraniti predlog iz zgodovine?</translation>
-<translation id="6380100320871303656">Pogosteje vnaprej naloži strani, za katere Chrome meni, da jih boste najverjetneje obiskali Ta nastavitev bo morda povzročila povečano uporabo podatkov.</translation>
+<translation id="6380100320871303656">Pogosteje vnaprej naloži strani, za katere Ultimatum meni, da jih boste najverjetneje obiskali Ta nastavitev bo morda povzročila povečano uporabo podatkov.</translation>
 <translation id="6382848304055775421">Izvažanje</translation>
 <translation id="6388152137132427505">Vsebino vedno delite premišljeno. Povezave potečejo v 48 urah.</translation>
 <translation id="6394791151443660613">Iskanje: <ph name="SEARCH_QUERY" /></translation>
 <translation id="6395288395575013217">POVEZAVA</translation>
 <translation id="6397616442223433927">Povezava je znova vzpostavljena</translation>
 <translation id="6399363707848566877">Tukaj lahko zdaj preprosto dodajate zavihke v skupine</translation>
-<translation id="6401458660421980302">Če želite ta zavihek poslati v drugo napravo, se v njej prijavite v Chrome.</translation>
+<translation id="6401458660421980302">Če želite ta zavihek poslati v drugo napravo, se v njej prijavite v Ultimatum.</translation>
 <translation id="6404511346730675251">Uredi zaznamek</translation>
 <translation id="6406506848690869874">Sinhronizacija</translation>
 <translation id="6410883413783534063">Odprite zavihke, če želite obiskati različne strani hkrati</translation>
@@ -1208,11 +1208,11 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="6473086018775716761">Seznam možnosti deljenja z drugimi je odprt pri polovični višini.</translation>
 <translation id="6475951671322991020">Prenos videoposnetka</translation>
 <translation id="6477928892249167417">Videti je, da so vam ta spletna mesta pomembna:</translation>
-<translation id="6481963882741794338">Povežite Chrome in druge Googlove storitve za osebno prilagajanje in druge namene</translation>
+<translation id="6481963882741794338">Povežite Ultimatum in druge Googlove storitve za osebno prilagajanje in druge namene</translation>
 <translation id="6482749332252372425">Prenos datoteke <ph name="FILE_NAME" /> ni uspel zaradi pomanjkanja prostora za shranjevanje.</translation>
 <translation id="6486420406192123355">Ta datoteka PDF je s spletnega mesta, ki uporablja povezavo, ki ni varna</translation>
 <translation id="650224091954855786">{FILE_COUNT,plural, =1{Datoteka je prenesena}one{# prenos je končan.}two{# prenosa sta končana.}few{# prenosi so končani.}other{# prenosov je končanih.}}</translation>
-<translation id="6508722015517270189">Znova zaženite Chrome</translation>
+<translation id="6508722015517270189">Znova zaženite Ultimatum</translation>
 <translation id="6513924416597632811">Kopiranje povezave do strani z rezultati iskanja za: <ph name="SEARCH_QUERY" />. Vir: <ph name="PAGE_URL" /></translation>
 <translation id="6518133107902771759">Preveri</translation>
 <translation id="6527303717912515753">Skupna raba</translation>
@@ -1239,13 +1239,13 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="6593061639179217415">Mesto za namizne račun.</translation>
 <translation id="6594347733515723558">Možnosti razvrščanja in ogleda</translation>
 <translation id="6595046016124923392">Slike so poslane Googlu zaradi izboljšanja opisov.</translation>
-<translation id="6604931690954120417">Ko ste prijavljeni v Chrome, so shranjena gesla shranjena v računu Google. Če želite to izklopiti, <ph name="BEGIN_LINK" />odprite nastavitve<ph name="END_LINK" />.</translation>
+<translation id="6604931690954120417">Ko ste prijavljeni v Ultimatum, so shranjena gesla shranjena v računu Google. Če želite to izklopiti, <ph name="BEGIN_LINK" />odprite nastavitve<ph name="END_LINK" />.</translation>
 <translation id="661266467055912436">Izboljšuje varnost za vas in vse druge v spletu.</translation>
-<translation id="6621391692573306628">Če želite ta zavihek poslati v drugo napravo, se v obeh napravah prijavite v Chrome.</translation>
+<translation id="6621391692573306628">Če želite ta zavihek poslati v drugo napravo, se v obeh napravah prijavite v Ultimatum.</translation>
 <translation id="6627583120233659107">Uredi mapo</translation>
 <translation id="6633067410344541938">Odkleni anonimni način</translation>
 <translation id="6636623428211296678">Spodaj lahko raziščete več nastavitev ali zaključite zdaj.</translation>
-<translation id="6637100877383020115">Zaradi izboljšanja aplikacije Chrome Googlu pošlje podatke o uporabi in zrušitvah. <ph name="BEGIN_UMA_LINK" />Upravljanje<ph name="END_UMA_LINK" /></translation>
+<translation id="6637100877383020115">Zaradi izboljšanja aplikacije Ultimatum Googlu pošlje podatke o uporabi in zrušitvah. <ph name="BEGIN_UMA_LINK" />Upravljanje<ph name="END_UMA_LINK" /></translation>
 <translation id="6640207029842583248">Blokiraj ves čas</translation>
 <translation id="6641780377503683465">Odstranitev: <ph name="INTEREST" /></translation>
 <translation id="6647441008198474441">URL-ji, ki jih obiščete, se pošljejo Googlu zaradi predvidevanja, katera spletna mesta boste morda obiskali.</translation>
@@ -1257,8 +1257,8 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="6672697278890207089">Vnesite geslo</translation>
 <translation id="6672917148207387131">Dodajanje spletnega mesta <ph name="DOMAIN" /></translation>
 <translation id="6674571176963658787">Če želite začeti sinhronizacijo, vnesite geslo.</translation>
-<translation id="6676927815633975364">Prijavite se na tem spletnem mestu in v Chrome.</translation>
-<translation id="6684809838922667136">Izboljšajte Chrome</translation>
+<translation id="6676927815633975364">Prijavite se na tem spletnem mestu in v Ultimatum.</translation>
+<translation id="6684809838922667136">Izboljšajte Ultimatum</translation>
 <translation id="6700279777779583398">Izbrane možnosti so shranjene</translation>
 <translation id="6704048624334633734">Izvoz in brisanje gesel</translation>
 <translation id="670498945988402717">Preverjeno včeraj</translation>
@@ -1277,15 +1277,15 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="676305334223455055">Če želite prejemati vsebino na podlagi svojih zanimanj, se prijavite</translation>
 <translation id="6764137532716892442">Deljena skupina zavihkov <ph name="GROUP_TITLE" /> z novo dejavnostjo</translation>
 <translation id="6767294960381293877">Seznam naprav, s katerimi želite deliti zavihek, odprt pri polovični višini.</translation>
-<translation id="6785476624617658922">Dodatni pogoji za Google Chrome in Chrome OS</translation>
+<translation id="6785476624617658922">Dodatni pogoji za Ultimatum in Ultimatum OS</translation>
 <translation id="6795633245022906657">Hitro odprite nov zavihek. To bližnjico lahko uredite v nastavitvah.</translation>
-<translation id="679588508577699489">Nastavite Chrome kot privzeti brskalnik</translation>
+<translation id="679588508577699489">Nastavite Ultimatum kot privzeti brskalnik</translation>
 <translation id="679956319013005046">Če želite nastaviti želeno storitev za samodejno izpolnjevanje, najprej dodajte storitev v <ph name="BEGIN_LINK" />nastavitvah Androida<ph name="END_LINK" />.</translation>
 <translation id="6802555630140434547">Okno bo zaprto.</translation>
 <translation id="6803791793483522764">Pregled obvestil</translation>
 <translation id="6811034713472274749">Stran je pripravljena za ogled</translation>
 <translation id="6813359536773993594">{FILE_COUNT,plural, =1{Slike, 1 slika na seznamu}one{Slike, # slika na seznamu}two{Slike, # sliki na seznamu}few{Slike, # slike na seznamu}other{Slike, # slik na seznamu}}</translation>
-<translation id="6813446258015311409">Prijava v Chrome, odprto.</translation>
+<translation id="6813446258015311409">Prijava v Ultimatum, odprto.</translation>
 <translation id="6817747507826986771">Hitro delite to stran. Če želite urediti to bližnjico, pridržite.</translation>
 <translation id="6820686453637990663">CVC</translation>
 <translation id="6820942662346226299">Zaprto okno za posodobitev Googlovega upravitelja gesel</translation>
@@ -1326,7 +1326,7 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="6909589135458168665">Vnaprejšnje nalaganje strani</translation>
 <translation id="6910211073230771657">Izbrisano</translation>
 <translation id="6918398787259831832">Če se težava ponavlja, <ph name="BEGIN_LINK" />poiščite več informacij<ph name="END_LINK" /> pri ponudniku identitete <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Chrome je odstranil ta dovoljenja, ker nedavno niste obiskali</translation>
+<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Ultimatum je odstranil ta dovoljenja, ker nedavno niste obiskali</translation>
 <translation id="6927821422725196292">{TABS_COUNT,plural, =1{1 zavihek}one{<ph name="NUMBER_OF_TABS" /> zavihek}two{<ph name="NUMBER_OF_TABS" /> zavihka}few{<ph name="NUMBER_OF_TABS" /> zavihki}other{<ph name="NUMBER_OF_TABS" /> zavihkov}}</translation>
 <translation id="6929224077895306814">Izbrisane bodo vse varnostne kode, shranjene v napravi in računu Google</translation>
 <translation id="6937524809504266803">Prilagajanje in povezovanje</translation>
@@ -1363,9 +1363,9 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="7077143737582773186">SD kartica</translation>
 <translation id="7078916049958741685">Prav tako izbriši podatke v Chromu iz te naprave</translation>
 <translation id="7085332316435785646">Izberite, ali želite, da je zaradi osebno bolj prilagojenih izkušenj v Googlovih storitvah vključena zgodovina v Chromu.</translation>
-<translation id="7088681679121566888">Chrome je posodobljen</translation>
+<translation id="7088681679121566888">Ultimatum je posodobljen</translation>
 <translation id="7106762743910369165">Vaš brskalnik upravlja organizacija</translation>
-<translation id="7111394291981742152">Chrome omogoča večji nadzor nad prikazanimi oglasi in omejuje, kaj lahko spletna mesta izvedo o vas, ko vam prikazujejo osebno prilagojene oglase.</translation>
+<translation id="7111394291981742152">Ultimatum omogoča večji nadzor nad prikazanimi oglasi in omejuje, kaj lahko spletna mesta izvedo o vas, ko vam prikazujejo osebno prilagojene oglase.</translation>
 <translation id="7117485132243600300">Upravljajte vsebino, ki jo spremljate, ter predlagane teme in iskanja</translation>
 <translation id="7136902389402789299">{NUM_SITES,plural, =1{Dovoljenja so bila pregledana za 1 spletno mesto}one{Dovoljenja so bila pregledana za # spletno mesto}two{Dovoljenja so bila pregledana za # spletni mesti}few{Dovoljenja so bila pregledana za # spletna mesta}other{Dovoljenja so bila pregledana za # spletnih mest}}</translation>
 <translation id="7138678301420049075">Drugo</translation>
@@ -1390,9 +1390,9 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="7192397795254933433">{NUM_PASSWORDS,plural, =1{Takoj ga spremenite}one{Takoj jih spremenite}two{Takoj jih spremenite}few{Takoj jih spremenite}other{Takoj jih spremenite}}</translation>
 <translation id="7196215469483532480">Pojasnilo glede vodnika po zasebnosti se je odprlo pri polni višini</translation>
 <translation id="7207760545532569765">Obnovitev zavihkov (<ph name="TAB_COUNT" />) kot novih zavihkov v ozadju.</translation>
-<translation id="7217781228893594884">Ko zaprete Chrome, se anonimni zavihki zaklenejo.</translation>
+<translation id="7217781228893594884">Ko zaprete Ultimatum, se anonimni zavihki zaklenejo.</translation>
 <translation id="7221869452894271364">Ponovno naložite to stran</translation>
-<translation id="7224097611345298931">Vsa gesla, shranjena samo v tej napravi za Chrome in <ph name="CHROME_CHANNEL" />, so bila združena. Samodejno lahko izpolnite vsa shranjena gesla v obeh aplikacijah.</translation>
+<translation id="7224097611345298931">Vsa gesla, shranjena samo v tej napravi za Ultimatum in <ph name="CHROME_CHANNEL" />, so bila združena. Samodejno lahko izpolnite vsa shranjena gesla v obeh aplikacijah.</translation>
 <translation id="7227218174981371415">{FILE_COUNT,plural, =1{1 prenos na čakanju}one{# prenos na čakanju}two{# prenosa na čakanju}few{# prenosi na čakanju}other{# prenosov na čakanju}}</translation>
 <translation id="7230064152164845085">Preklopi na anonimni način</translation>
 <translation id="7236515828900885295">Skok na iskanje</translation>
@@ -1411,7 +1411,7 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="729975465115245577">V napravi ni aplikacije za shranjevanje datoteke z gesli.</translation>
 <translation id="7304072650267745798">Naprava Android morda vsebuje podobno nastavitev. Če je ta nastavitev vklopljena v Chromu in napravi Android, lahko podjetje meri uspešnost oglasa na spletnih mestih, ki jih obiščete, in v aplikacijah, ki jih uporabljate.</translation>
 <translation id="7304806746406660416">{PASSWORDS_COUNT,plural, =1{1 geslo je shranjeno samo v tej napravi. Če ga želite uporabiti v drugih napravah, ga shranite v računu Google, <ph name="ACCOUNT_EMAIL" />.}one{# geslo je shranjeno samo v tej napravi. Če jih želite uporabljati v drugih napravah, jih shranite v računu Google, <ph name="ACCOUNT_EMAIL" />.}two{# gesli sta shranjeni samo v tej napravi. Če jih želite uporabljati v drugih napravah, jih shranite v računu Google, <ph name="ACCOUNT_EMAIL" />.}few{# gesla so shranjena samo v tej napravi. Če jih želite uporabljati v drugih napravah, jih shranite v računu Google, <ph name="ACCOUNT_EMAIL" />.}other{# gesel je shranjenih samo v tej napravi. Če jih želite uporabljati v drugih napravah, jih shranite v računu Google, <ph name="ACCOUNT_EMAIL" />.}}</translation>
-<translation id="7304873321153398381">Brez povezave. Chrome ne more preveriti vaših gesel.</translation>
+<translation id="7304873321153398381">Brez povezave. Ultimatum ne more preveriti vaših gesel.</translation>
 <translation id="7313188324932846546">Dotaknite se, če želite nastaviti sinhronizacijo.</translation>
 <translation id="7314734791127433392">Gesel ni mogoče preveriti</translation>
 <translation id="7324354302972299151">Pošlji zahtevo »Do Not Track«</translation>
@@ -1505,7 +1505,7 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="7666185984446444960">Zaprto: <ph name="TAB_GROUPS_AND_TABS_PART" /></translation>
 <translation id="7682724950699840886">Poskusite ta nasveta: poskrbite, da je v napravi dovolj prostora, ali poskusite znova izvoziti.</translation>
 <translation id="7686086654630106285">Več o oglasih, ki jih predlaga spletno mesto</translation>
-<translation id="7690596512217303514">Naprava ni mogla odpreti Chroma. Če želite odpraviti težavo, prenesite najnovejšo posodobitev za Chrome iz trgovine z aplikacijami.</translation>
+<translation id="7690596512217303514">Naprava ni mogla odpreti Chroma. Če želite odpraviti težavo, prenesite najnovejšo posodobitev za Ultimatum iz trgovine z aplikacijami.</translation>
 <translation id="7691043218961417207">Raziščite vsebino, ki jo želite spremljati</translation>
 <translation id="7692761875510935111">Hitro odprite v brskalniku. Če želite urediti to bližnjico, pridržite.</translation>
 <translation id="7697383401610880082">Ročica za vlečenje</translation>
@@ -1556,7 +1556,7 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="7919123827536834358">Samodejno prevajanje teh jezikov</translation>
 <translation id="7921782882718083488">Ustvari povzetek te strani</translation>
 <translation id="7926975587469166629">Vzdevek za kartico</translation>
-<translation id="7929587383660661825">Chrome samodejno odstrani dovoljenja za spletna mesta, ki zlorabljajo obvestila, ali spletna mesta, ki jih nedavno niste obiskali</translation>
+<translation id="7929587383660661825">Ultimatum samodejno odstrani dovoljenja za spletna mesta, ki zlorabljajo obvestila, ali spletna mesta, ki jih nedavno niste obiskali</translation>
 <translation id="7929962904089429003">Odpiranje menija</translation>
 <translation id="7934668619883965330">Datoteke ni mogoče prenesti. Oblika datoteke ni podprta.</translation>
 <translation id="7942131818088350342">Izdelek <ph name="PRODUCT_NAME" /> je zastarel.</translation>
@@ -1573,7 +1573,7 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="7975379999046275268">Predogled strani <ph name="BEGIN_NEW" />Novo<ph name="END_NEW" /></translation>
 <translation id="7977451675950311423">Opozori vas, če uporabite geslo, ki je ogroženo zaradi podatkovne kršitve.</translation>
 <translation id="7986497153528221272">Če si želite ogledati gesla, najprej v napravi nastavite zaklepanje zaslona</translation>
-<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Chrome je odstranil ta dovoljenja, ker nedavno niste obiskali</translation>
+<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Ultimatum je odstranil ta dovoljenja, ker nedavno niste obiskali</translation>
 <translation id="7995059495660416932">Vsebina bo prikazana, ko bo na voljo.</translation>
 <translation id="799576009106109668">Brskali boste hitreje, ker se vsebina proaktivno naloži glede na trenutni obisk spletne strani.</translation>
 <translation id="8001245658307297681">Ogledujete si lokalno datoteko</translation>
@@ -1606,7 +1606,7 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="8090732854597034573">Če potrebuješ pomoč, se obrni na starša.</translation>
 <translation id="8101414242770404289">Ni zavihkov za to obdobje: <ph name="TIME_PERIOD" /></translation>
 <translation id="8103578431304235997">Anonimni zavihek</translation>
-<translation id="8105613260829665809">Če nadaljujete, se strinjate s <ph name="BEGIN_TOS_LINK" />pogoji storitve<ph name="END_TOS_LINK" />.\nZaradi izboljšanja aplikacije Chrome Googlu pošlje podatke o uporabi in zrušitvah. <ph name="BEGIN_UMA_LINK" />Upravljanje<ph name="END_UMA_LINK" /></translation>
+<translation id="8105613260829665809">Če nadaljujete, se strinjate s <ph name="BEGIN_TOS_LINK" />pogoji storitve<ph name="END_TOS_LINK" />.\nZaradi izboljšanja aplikacije Ultimatum Googlu pošlje podatke o uporabi in zrušitvah. <ph name="BEGIN_UMA_LINK" />Upravljanje<ph name="END_UMA_LINK" /></translation>
 <translation id="8105893657415066307"><ph name="DESCRIPTION" /><ph name="SEPARATOR" /> <ph name="FILE_SIZE" /></translation>
 <translation id="8107530384992929318">Zapiranje možnosti razvrščanja</translation>
 <translation id="8110024788458304985">Pomagajte izboljšati Chromove funkcije in njegovo delovanje</translation>
@@ -1633,7 +1633,7 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="8211101263765532799">Nekatera gesla bodo kmalu nehala delovati</translation>
 <translation id="8215740705341534369">Stranski list</translation>
 <translation id="8218622182176210845">Upravljanje računa</translation>
-<translation id="8221401890884589479">Spletna mesta, ki jih ne želite, lahko blokirate. Chrome prav tako s seznama samodejno izbriše spletna mesta, starejša od 30 dni. <ph name="BEGIN_LINK" />Več o tem<ph name="END_LINK" /></translation>
+<translation id="8221401890884589479">Spletna mesta, ki jih ne želite, lahko blokirate. Ultimatum prav tako s seznama samodejno izbriše spletna mesta, starejša od 30 dni. <ph name="BEGIN_LINK" />Več o tem<ph name="END_LINK" /></translation>
 <translation id="8221985041778490865">Brisanje podatkov brskanja</translation>
 <translation id="8223642481677794647">Meni kartice vira</translation>
 <translation id="82296173028782770">Urejanje iskalne poizvedbe: <ph name="SEARCH_QUERY" /></translation>
@@ -1643,7 +1643,7 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="8244387390464017490">Prilagoditev novega zavihka</translation>
 <translation id="8250920743982581267">Dokumenti</translation>
 <translation id="8255617931166444521">Spletna mesta smejo uporabljati piškotke samo za ogled dejavnosti brskanja samo na danem spletnem mestu.</translation>
-<translation id="8256087213273124136">Chrome vas je odjavil od prejemanja obvestil</translation>
+<translation id="8256087213273124136">Ultimatum vas je odjavil od prejemanja obvestil</translation>
 <translation id="8258999165172757081">Dodano</translation>
 <translation id="8259179246279078674">Ker so vnaprej naložene strani šifrirane, Google ne bo izvedel ničesar o vsebini vnaprej naložene strani. Googlovi strežniki bodo izvedeli, katera spletna mesta so zasebno vnaprej naložena. Ti podatki so uporabljeni samo za vnaprejšnje nalaganje strani in niso povezani z nobenimi podatki v vašem računu Google.</translation>
 <translation id="8260126382462817229">Poskusite se znova prijaviti.</translation>
@@ -1661,7 +1661,7 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="831192587911042850">Doda trenutno spletno mesto na seznam spletnih mest, ki jih spremljate.</translation>
 <translation id="8320212361750431956">Nedavna dejavnost</translation>
 <translation id="832514020744584629"><ph name="PREF_TITLE" />  <ph name="BEGIN_NEW" />Novo<ph name="END_NEW" /></translation>
-<translation id="8342727528718219152">Chrome vas bo obvestil o spletnih mestih, ki morda pošiljajo preveč obvestil</translation>
+<translation id="8342727528718219152">Ultimatum vas bo obvestil o spletnih mestih, ki morda pošiljajo preveč obvestil</translation>
 <translation id="834313815369870491">Nikoli ne prevedi spletnih mest</translation>
 <translation id="8348430946834215779">Kadar je le mogoče, uporabite HTTPS, pred nalaganjem spletnih mest, ki ga ne podpirajo, pa prejmete opozorilo.</translation>
 <translation id="8354977102499939946">Hitro iščite z glasom. To bližnjico lahko uredite v nastavitvah.</translation>
@@ -1675,7 +1675,7 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="8398389123831319859">Dvakrat se dotaknite in pridržite, če želite preklopiti na anonimni način</translation>
 <translation id="8402673309244746971">Na vir za spremljanje</translation>
 <translation id="8413126021676339697">Prikaži celotno zgodovino</translation>
-<translation id="8413795581997394485">Ščiti pred spletnimi mesti, prenosi in razširitvami, za katere vemo, da so nevarni. Ko obiščete spletno mesto, Chrome Googlu pošlje zakriti del URL-ja prek strežnika za zasebnost, ki skrije vaš naslov IP. Če spletno mesto naredi kaj sumljivega, se pošljejo tudi celotni URL-ji in delčki vsebine strani.</translation>
+<translation id="8413795581997394485">Ščiti pred spletnimi mesti, prenosi in razširitvami, za katere vemo, da so nevarni. Ko obiščete spletno mesto, Ultimatum Googlu pošlje zakriti del URL-ja prek strežnika za zasebnost, ki skrije vaš naslov IP. Če spletno mesto naredi kaj sumljivega, se pošljejo tudi celotni URL-ji in delčki vsebine strani.</translation>
 <translation id="8414396119627470038">Prijavite se v storitev <ph name="SITE_ETLD_PLUS_ONE" /> s podatki za <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8419144699778179708">Izbriše zgodovino, vključno s tisto v iskalnem polju</translation>
 <translation id="8419244640277402268">Vključi</translation>
@@ -1719,7 +1719,7 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="8547025137714087639">{ARCHIVED_TAB_COUNT,plural, =1{Neaktiven zavihek (1)}one{Neaktivni zavihki (#)}two{Neaktivni zavihki (#)}few{Neaktivni zavihki (#)}other{Neaktivni zavihki (#)}}</translation>
 <translation id="8547466829003330976">Pregled PDF-ja z umetno inteligenco</translation>
 <translation id="8551513938758868521">Zaklepanje anonimnih zavihkov po zaprtju Chroma</translation>
-<translation id="8559961053328923750">Zaradi merjenja uspešnosti oglasov Chrome omejuje skupno količino podatkov, ki jih spletna mesta lahko delijo v brskalniku.</translation>
+<translation id="8559961053328923750">Zaradi merjenja uspešnosti oglasov Ultimatum omejuje skupno količino podatkov, ki jih spletna mesta lahko delijo v brskalniku.</translation>
 <translation id="8559990750235505898">Ponudi prevajanje strani v drugih jezikih</translation>
 <translation id="8560602726703398413">Poiščite svoj bralni seznam v zaznamkih</translation>
 <translation id="8562452229998620586">Shranjena gesla bodo prikazana tukaj.</translation>
@@ -1731,7 +1731,7 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="859046281437143747">Spremljanje cene prek gumba za več možnosti</translation>
 <translation id="859064343657890103">Skupina zavihkov »<ph name="TAB_GROUP_TITLE" />« je izbrisana</translation>
 <translation id="860043288473659153">Ime imetnika kartice</translation>
-<translation id="8602358303461588329">Prijava v Chrome, zaprto.</translation>
+<translation id="8602358303461588329">Prijava v Ultimatum, zaprto.</translation>
 <translation id="860282621117673749">Opozorila glede znižanja cen</translation>
 <translation id="8611922158252451755">Vsi s povezavo lahko urejajo vse zavihke, zato premišljeno delite vsebino. Povezava poteče čez 48 ur.</translation>
 <translation id="8616006591992756292">V Google Računu so morda druge vrste zgodovine brskanja na <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
@@ -1759,8 +1759,8 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="8748850008226585750">Vsebina je skrita</translation>
 <translation id="8754448020583829686">Kopiranje brez povezave</translation>
 <translation id="8756969031206844760">Želite posodobiti geslo?</translation>
-<translation id="8765470054473112089">Ko tipkate v naslovno vrstico ali iskalno polje, Chrome vaše vnose pošlje v privzeti iskalnik zaradi boljših predlogov. V anonimnem načinu je to izklopljeno.</translation>
-<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Chrome je našel šibko geslo, ki ga lahko izboljšate}one{Chrome je našel # šibko geslo, ki ga lahko izboljšate}two{Chrome je našel # šibki gesli, ki ju lahko izboljšate}few{Chrome je našel # šibka gesla, ki jih lahko izboljšate}other{Chrome je našel # šibkih gesel, ki jih lahko izboljšate}}</translation>
+<translation id="8765470054473112089">Ko tipkate v naslovno vrstico ali iskalno polje, Ultimatum vaše vnose pošlje v privzeti iskalnik zaradi boljših predlogov. V anonimnem načinu je to izklopljeno.</translation>
+<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Ultimatum je našel šibko geslo, ki ga lahko izboljšate}one{Ultimatum je našel # šibko geslo, ki ga lahko izboljšate}two{Ultimatum je našel # šibki gesli, ki ju lahko izboljšate}few{Ultimatum je našel # šibka gesla, ki jih lahko izboljšate}other{Ultimatum je našel # šibkih gesel, ki jih lahko izboljšate}}</translation>
 <translation id="8766529642647037772">Želite ustvariti označeno povezavo, kot je tale?</translation>
 <translation id="8788265440806329501">Zgodovina krmarjenja je zaprta</translation>
 <translation id="8788968922598763114">Vnovično odpiranje nazadnje zaprtega zavihka</translation>
@@ -1835,7 +1835,7 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="9081543426177426948">Spletna mesta, ki jih obiščete v anonimnem načinu, se ne shranijo.</translation>
 <translation id="9086302186042011942">Sinhroniziranje</translation>
 <translation id="9086455579313502267">Dostop do omrežja ni mogoč</translation>
-<translation id="909756639352028172">Če si želite zagotoviti najbolj osebno prilagojeno izkušnjo, vključite Chrome v dejavnost v spletu in aplikacijah ter povezane Googlove storitve</translation>
+<translation id="909756639352028172">Če si želite zagotoviti najbolj osebno prilagojeno izkušnjo, vključite Ultimatum v dejavnost v spletu in aplikacijah ter povezane Googlove storitve</translation>
 <translation id="9099220545925418560">Na podlagi zgodovine brskanja. Ta nastavitev je izklopljena.</translation>
 <translation id="9100610230175265781">Zahtevano je geslo</translation>
 <translation id="9101137867221042551">Upravljanje</translation>
@@ -1856,7 +1856,7 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="9161172953291434881">Ali želite temu spletnemu mestu zaupati svoje podatke?</translation>
 <translation id="9168847423516963845">Premakni naslovno vrstico na dno</translation>
 <translation id="9169507124922466868">Zgodovina krmarjenja je napol odprta</translation>
-<translation id="918419812064856259">Chrome beta</translation>
+<translation id="918419812064856259">Ultimatum beta</translation>
 <translation id="9190276265094487094">Zgodovino si boste lahko ogledali v vseh sinhroniziranih napravah, da boste lahko nadaljevali, kar ste počeli.</translation>
 <translation id="9191906083913361689">Te elemente si lahko ogledate in jih upravljate tudi v zaznamkih, na bralnem seznamu ali v upravitelju gesel</translation>
 <translation id="9199368092038462496">{NUM_MINS,plural, =1{Preverjeno pred 1 minuto}one{Preverjeno pred # minuto}two{Preverjeno pred # minutama}few{Preverjeno pred # minutami}other{Preverjeno pred # minutami}}</translation>
@@ -1875,7 +1875,7 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="930124987204876019">Brisanje zgodovine, piškotkov, podatkov spletnih mest, predpomnilnika …</translation>
 <translation id="938850635132480979">Napaka: <ph name="ERROR_CODE" /></translation>
 <translation id="939598580284253335">Vnesite geslo</translation>
-<translation id="95817756606698420">Chrome lahko za iskanje na Kitajskem uporablja <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" />. To je mogoče spremeniti v <ph name="BEGIN_LINK" />nastavitvah<ph name="END_LINK" />.</translation>
+<translation id="95817756606698420">Ultimatum lahko za iskanje na Kitajskem uporablja <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" />. To je mogoče spremeniti v <ph name="BEGIN_LINK" />nastavitvah<ph name="END_LINK" />.</translation>
 <translation id="961856697154696964">Brisanje podatkov brskanja</translation>
 <translation id="963246339335003378">Odpri upravitelja opravil</translation>
 <translation id="966131775676567255">Brisanje podatkov v računu</translation>

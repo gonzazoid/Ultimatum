@@ -3,21 +3,21 @@
 <translationbundle lang="am">
 <translation id="1004806631856047384"><ph name="BEGIN_LINK1" />Android ቅንብሮች<ph name="END_LINK1" /> ውስጥ ያስተዳድሩ
 
-የላቀ ጥበቃ እነዚህን የChrome ቅንብሮች ይቆጣጠራል፦
+የላቀ ጥበቃ እነዚህን የUltimatum ቅንብሮች ይቆጣጠራል፦
 • «ሁልጊዜ የተመሰጠሩ ግንኙነቶች ተጠቀም» በርቷል።
 • «ጃቫስክሪፕት አመቻቺ» ጠፍቷል። <ph name="BEGIN_LINK2" />የጣቢያ ለየት ያሉ ነገሮችን ያስተዳድሩ<ph name="END_LINK2" /></translation>
 <translation id="1006017844123154345">መስመር ላይ ክፈት</translation>
 <translation id="1036348656032585052">አጥፋ</translation>
 <translation id="1044891598689252897">ጣቢያዎች እንደተለመደው ሆነው ይሠራሉ</translation>
 <translation id="1070329623210597193">ይህ ጣቢያ ማየት ወይም አርትዖት ማድረግ የሚችላቸው ፋይሎች</translation>
-<translation id="1073417869336441572">የሦስተኛ ወገን ኩኪዎችን ለምን እንደፈቀዱ ለእኛ በመንገር Chrome እንድናሻሽል ያግዙን። <ph name="BEGIN_LINK" />ግብረመልስ ይላኩ<ph name="END_LINK" /></translation>
+<translation id="1073417869336441572">የሦስተኛ ወገን ኩኪዎችን ለምን እንደፈቀዱ ለእኛ በመንገር Ultimatum እንድናሻሽል ያግዙን። <ph name="BEGIN_LINK" />ግብረመልስ ይላኩ<ph name="END_LINK" /></translation>
 <translation id="1074758928858737435">የጣቢያዎችን የዴስክቶፕ ስሪት ለማየት መጠየቅ ይችላሉ</translation>
-<translation id="1085696779717592361">በነባሪነት Chromeን ይጠቀሙ</translation>
+<translation id="1085696779717592361">በነባሪነት Ultimatumን ይጠቀሙ</translation>
 <translation id="1178581264944972037">ለአፍታ አቁም</translation>
 <translation id="1181037720776840403">አስወግድ</translation>
 <translation id="1192844206376121885">ይህ በ<ph name="ORIGIN" /> የተከማቹ ሁሉንም ውሂብ እና ኩኪዎች ይሰርዛል።</translation>
 <translation id="1201402288615127009">ቀጣይ</translation>
-<translation id="1240190568154816272">ጠቃሚ የChrome ምክሮች</translation>
+<translation id="1240190568154816272">ጠቃሚ የUltimatum ምክሮች</translation>
 <translation id="1242008676835033345"><ph name="WEBSITE_URL" /> ላይ ተካትቷል</translation>
 <translation id="1263609676484797429">መተግበሪያዎች &gt; ነባሪ መተግበሪያዎች ላይ መታ ያድርጉ</translation>
 <translation id="1272079795634619415">አቁም</translation>
@@ -34,7 +34,7 @@
 <translation id="1396327438254055134">ጣቢያ V8 አትቢን እንዲጠቀም ይፍቀዱ።</translation>
 <translation id="1409338233051621926">መተግበሪያዎችን መታ ያድርጉ ከዚያም ነባሪ መተግበሪያዎችን መታ ያድርጉ</translation>
 <translation id="1415402041810619267">ዩአርኤል እንዲያጥር ተደርጓል</translation>
-<translation id="1415855080660575082">በመሣሪያዎ የመተግበሪያ ዝርዝር እና የፍለጋ ውጤቶች ውስጥ እንዲመለከቷቸው Chrome የእርስዎን የቅርብ ጊዜ ትሮች ከመሣሪያዎ ጋር እንዲያጋራ ይፍቀዱ። በChrome ቅንብሮች ውስጥ ይህን ማብራት ወይም ማጥፋት ይችላሉ።</translation>
+<translation id="1415855080660575082">በመሣሪያዎ የመተግበሪያ ዝርዝር እና የፍለጋ ውጤቶች ውስጥ እንዲመለከቷቸው Ultimatum የእርስዎን የቅርብ ጊዜ ትሮች ከመሣሪያዎ ጋር እንዲያጋራ ይፍቀዱ። በUltimatum ቅንብሮች ውስጥ ይህን ማብራት ወይም ማጥፋት ይችላሉ።</translation>
 <translation id="1448064542941920355">ማጉላትን ቀንስ</translation>
 <translation id="1464044141348608623">የእርስዎን መሣሪያ በንቃት በሚጠቀሙበት ጊዜ ጣቢያዎች እንዲያውቁ አይፍቀዱ</translation>
 <translation id="146867109637325312">{COUNT,plural, =1{<ph name="SITE_COUNT" /> ጣቢያ}one{<ph name="SITE_COUNT" /> ጣቢያዎች}other{<ph name="SITE_COUNT" /> ጣቢያዎች}}</translation>
@@ -43,7 +43,7 @@
 <translation id="1510341833810331442">ጣቢያዎች በመሣሪያዎ ላይ ውሂብ እንዲያስቀምጡ አይፈቀድላቸውም</translation>
 <translation id="1538031354170655462">ጣቢያዎች በተለምዶ ባጆችን በመቃኘት ወይም ንክኪ-አልባ መክፈያ ባሉ ነገሮች በአቅራቢያ ካሉ መለያዎች ወይም መሣሪያዎች ጋር ለመሥራት በቅርብ ርቀት ግንኙነት (NFC) ይጠቀማሉ</translation>
 <translation id="1547123415014299762">የሶስተኛ ወገን ኩኪዎች ይፈቀዳሉ</translation>
-<translation id="1569054338208717605">በChrome V8 ፕሮግራም ጣቢያዎችን አፋጥን ነገር ግን Chrome ለጥቃቶች ያለውን የመቋቋም ኃይል በትንሹ ቀንስ</translation>
+<translation id="1569054338208717605">በUltimatum V8 ፕሮግራም ጣቢያዎችን አፋጥን ነገር ግን Ultimatum ለጥቃቶች ያለውን የመቋቋም ኃይል በትንሹ ቀንስ</translation>
 <translation id="1593426485665524382">ከማያ ገጹ አቅራቢያ አዲስ እርምጃዎች ይገኛሉ</translation>
 <translation id="1615755956145364867">ጣቢያዎች የተጠበቀ ይዘትን ለማጫወት መጠየቅ ይችላሉ</translation>
 <translation id="1620510694547887537">ካሜራ</translation>
@@ -64,8 +64,8 @@
 <translation id="1779089405699405702">ስውር ምስል መፍቻ</translation>
 <translation id="1785415724048343560">ለምርጥ ተሞክሮ የሚመከር</translation>
 <translation id="1796588414813960292">ድምፅ የሚያስፈልጋቸው ባህሪዎች አይሰሩም</translation>
-<translation id="1799920918471566157">የChrome ጠቃሚ ምክሮች</translation>
-<translation id="1816835383954230954">በሚበራበት ጊዜ Chrome በበለጠ ፍጥነት ይሄዳል እና ጃቫስክሪፕት የሚጠቀሙ ባህሪያት እንደተነደፉት ሊሠሩ ይገባል። በሚጠፋበት ጊዜ ይህ አፈጻጸምን ይቀንሳል ነገር ግን V8 ጥቃቶችን ይበልጥ እንዲቋቋም ያደርጋል።</translation>
+<translation id="1799920918471566157">የUltimatum ጠቃሚ ምክሮች</translation>
+<translation id="1816835383954230954">በሚበራበት ጊዜ Ultimatum በበለጠ ፍጥነት ይሄዳል እና ጃቫስክሪፕት የሚጠቀሙ ባህሪያት እንደተነደፉት ሊሠሩ ይገባል። በሚጠፋበት ጊዜ ይህ አፈጻጸምን ይቀንሳል ነገር ግን V8 ጥቃቶችን ይበልጥ እንዲቋቋም ያደርጋል።</translation>
 <translation id="1818308510395330587"><ph name="APP_NAME" /> ኤአር እንዲጠቀም ለማስቻል፣ በ <ph name="BEGIN_LINK" />Android ቅንብሮች<ph name="END_LINK" /> ውስጥ ካሜራን በተጨማሪ ያብሩ።</translation>
 <translation id="1887786770086287077">የአካባቢ መዳረሻ ለዚህ መሣሪያ ጠፍቷል። በ<ph name="BEGIN_LINK" />Android ቅንብሮች<ph name="END_LINK" /> ውስጥ ያብሩት።</translation>
 <translation id="1906181697255754968">ጣቢያዎች እንደ ስራዎን በራስ-ሰር ማስቀመጥ ያሉ ባህሪያትን ለማግኘት አብዛኛውን ጊዜ በመሣሪያዎ ላይ ያሉትን ፋይሎች እና አቃፊዎች ይደርሳሉ።</translation>
@@ -109,7 +109,7 @@
 <translation id="2289270750774289114">አንድ ጣቢያ በአቅራቢያ ያሉ ብሉቱዝ መሣሪያዎችን ፈልጎ ለማግኘት ሲፈልግ ጠይቅ (የሚመከር)</translation>
 <translation id="2315043854645842844">የደንበኛ ወገን ዕውቅና ማረጋገጫ ምርጫ በስርዓተ-ክወናው አይደገፍም።</translation>
 <translation id="2359808026110333948">ቀጥል</translation>
-<translation id="2379925928934107488">በሚቻልበት ጊዜ Chrome ጠቆር ያለ ገጽታ ሲጠቀም ጠቆር ያለ ገጽታን ጣቢያዎች ላይ ተግብር</translation>
+<translation id="2379925928934107488">በሚቻልበት ጊዜ Ultimatum ጠቆር ያለ ገጽታ ሲጠቀም ጠቆር ያለ ገጽታን ጣቢያዎች ላይ ተግብር</translation>
 <translation id="2390272837142897736">ማጉላትን ጨምር</translation>
 <translation id="2402980924095424747"><ph name="MEGABYTES" /> ሜባ</translation>
 <translation id="2404630663942400771">{PERMISSIONS_SUMMARY_ALLOWED,plural, =1{<ph name="PERMISSION_1" />፣ <ph name="PERMISSION_2" />፣ እና <ph name="NUM_MORE" /> ተጨማሪ ተፈቅደዋል}one{<ph name="PERMISSION_1" />፣ <ph name="PERMISSION_2" /> እና <ph name="NUM_MORE" /> ተጨማሪ ተፈቅደዋል}other{<ph name="PERMISSION_1" />፣ <ph name="PERMISSION_2" /> እና <ph name="NUM_MORE" /> ተጨማሪ ተፈቅደዋል}}</translation>
@@ -118,7 +118,7 @@
 <translation id="2438120137003069591">ይህ ጣቢያ የሦስተኛ ወገን ኩኪዎች እንዲጠቀም በጊዜያዊነት ፈቅደዋል፣ ይህም ያነሰ የአሰሳ ጥበቃ ማለት ነው ነገር ግን የጣቢያ ባህሪያት እንደሚጠበቀው የመሥራት ዕድላቸው ከፍተኛ ነው። <ph name="BEGIN_LINK" />ግብረመልስ ይላኩ<ph name="END_LINK" /></translation>
 <translation id="244264527810019436">በአንዳንድ ጣቢያዎች ላይ ያሉ ባህሪያት ማንነትን በማያሳውቅ ሁነታ ውስጥ ላይሰሩ ይችላሉ</translation>
 <translation id="2442870161001914531">ሁልጊዜ የዴስክቶፕ ጣቢያን ጠይቅ</translation>
-<translation id="2445311670906052406">Chrome አሁን የቅርብ ጊዜ ትሮችዎን ከመሣሪያዎ ጋር ያጋራል። በመሣሪያዎ መተግበሪያ ዝርዝር እና የፍለጋ ውጤቶች ውስጥ ይመለከቷቸዋል። ይህን በማንኛውም ጊዜ በChrome ቅንብሮች ውስጥ ማጥፋት ይችላሉ።</translation>
+<translation id="2445311670906052406">Ultimatum አሁን የቅርብ ጊዜ ትሮችዎን ከመሣሪያዎ ጋር ያጋራል። በመሣሪያዎ መተግበሪያ ዝርዝር እና የፍለጋ ውጤቶች ውስጥ ይመለከቷቸዋል። ይህን በማንኛውም ጊዜ በUltimatum ቅንብሮች ውስጥ ማጥፋት ይችላሉ።</translation>
 <translation id="245322989586167203">ጣቢያዎች አውታረ መረብዎን እንደማቀናበር ላሉ የውሂብ ማስተላለፊያ ባህሪዎች አብዛኛው ጊዜ ከተከታታይ ወደቦች ጋር ይገናኛሉ</translation>
 <translation id="2469312991797799607">ይህ እርምጃ ለ<ph name="ORIGIN" /> እና በሥሩ ለሚገኙ ሁሉም ጣቢያዎች ሁሉንም ውሂብ እና ኩኪዎች ይሰርዛል</translation>
 <translation id="2482878487686419369">ማስታወቂያዎች</translation>
@@ -143,14 +143,14 @@
 <translation id="2685514716378236873">አይፈቀድም</translation>
 <translation id="2713106313042589954">ካሜራ አጥፋ</translation>
 <translation id="2717722538473713889">ኢሜይል አድራሻዎች</translation>
-<translation id="2726059656860238749">ኦምኒቦክስ ትኩረት ላይ ሆኖ Chrome ያስጀምሩ፣ ይህም ዝቅተኛ ጥራት ባላቸው መሣሪያዎች ላይ ማስነሻ ጊዜውን ይቀንሳል።</translation>
+<translation id="2726059656860238749">ኦምኒቦክስ ትኩረት ላይ ሆኖ Ultimatum ያስጀምሩ፣ ይህም ዝቅተኛ ጥራት ባላቸው መሣሪያዎች ላይ ማስነሻ ጊዜውን ይቀንሳል።</translation>
 <translation id="2750481671343847896">ጣቢያዎች ከማንነት አገልግሎቶች የመግቢያ ጥያቄዎችን ማሳየት ይችላሉ።</translation>
 <translation id="2787357173144933081">በፍጥነት ማስጀመሪያ ኦምኒቦክስ</translation>
 <translation id="2789132527330338807">ጣቢያዎች በዙሪያዎ ያሉትን ነገሮች 3ል ካርታ ለመፍጠር ወይም የካሜራ ቦታ ለመከታተል መጠየቅ ይችላሉ</translation>
 <translation id="2790501146643349491">ሲበራ፣ በቅርቡ የተዘጉ ጣቢያዎች ውሂብ መላክ እና መቀበልን ማጠናቀቅ ይችላሉ። ሲጠፋ፣ በቅርቡ የተዘጉ ጣቢያዎች ውሂብ መላክን ወይም መቀበልን ማጠናቀቅ አይችሉም።</translation>
 <translation id="2795716239552913152">ጣቢያዎች አብዛኛውን ጊዜ አካባቢዎን እንደ አካባቢያዊ ዜናዎች ወይም በአቅራቢያ ያሉ ሱቆች ላሉት ጠቃሚ ባህሪዎች ወይም መረጃዎች ይጠቀማሉ</translation>
 <translation id="2802908157808345702">ጣቢያዎች ብቅ-ባዮችን እንዲልኩ እና አቅጣጫ ማዞሮችን እንዲጠቀሙ አትፍቀድ</translation>
-<translation id="2814830417943086299">Chrome አሁን የቅርብ ጊዜ ትሮችዎን በመሣሪያዎ መተግበሪያ ዝርዝር እና የፍለጋ ውጤቶች ውስጥ ያሳያል። ይህን በማንኛውም ጊዜ በChrome ቅንብሮች ውስጥ ማጥፋት ይችላሉ።</translation>
+<translation id="2814830417943086299">Ultimatum አሁን የቅርብ ጊዜ ትሮችዎን በመሣሪያዎ መተግበሪያ ዝርዝር እና የፍለጋ ውጤቶች ውስጥ ያሳያል። ይህን በማንኛውም ጊዜ በUltimatum ቅንብሮች ውስጥ ማጥፋት ይችላሉ።</translation>
 <translation id="2822354292072154809">እርግጠኛ ነዎት ሁሉንም የ<ph name="CHOSEN_OBJECT_NAME" /> ጣቢያ ፈቃዶችን ዳግም ማስጀመር ይፈልጋሉ?</translation>
 <translation id="2850913818900871965">የሞባይል ዕይታ ይጠይቁ</translation>
 <translation id="2870560284913253234">ጣቢያ</translation>
@@ -187,7 +187,7 @@
 <translation id="3242646949159196181">ሲበራ ጣቢያዎች ድምጽ ማጫወት ይችላሉ። ሲጠፋ፣ ጣቢያዎች ድምጽ ማጫወት አይችሉም።</translation>
 <translation id="3273479183583863618">ትሮች ላይ ያሉ የዋጋ ቅነሳዎች</translation>
 <translation id="3277252321222022663">ጣቢያዎች ዳሳሾችን እንዲደርሱ ይፍቀዱላቸው (የሚመከር)</translation>
-<translation id="327891165872793509">Chrome በማሰስ ላይ እንዳሉ እርስዎን ለመከታተል የሦስተኛ ወገን ኩኪዎችን እንዳይጠቀሙ አብዛኛዎቹን ጣቢያዎች ይገድባል። <ph name="BEGIN_LINK" />ለሦስተኛ ወገን ኩኪዎች መዳረሻ ለማስተዳደር<ph name="END_LINK" /> ቅንብሮችን ይጎብኙ።</translation>
+<translation id="327891165872793509">Ultimatum በማሰስ ላይ እንዳሉ እርስዎን ለመከታተል የሦስተኛ ወገን ኩኪዎችን እንዳይጠቀሙ አብዛኛዎቹን ጣቢያዎች ይገድባል። <ph name="BEGIN_LINK" />ለሦስተኛ ወገን ኩኪዎች መዳረሻ ለማስተዳደር<ph name="END_LINK" /> ቅንብሮችን ይጎብኙ።</translation>
 <translation id="3285500645985761267">ተዛማጅ ጣቢያዎች በቡድኑ ውስጥ ያለዎትን እንቅስቃሴ እንዲመለከቱ ይፍቀዱ</translation>
 <translation id="3295019059349372795">ምዕራፍ 11፦ የኦዝ፣ አስደናቂዋ የኤመራልድ ከተማ</translation>
 <translation id="3295602654194328831">መረጃ ደብቅ</translation>
@@ -222,7 +222,7 @@
 <translation id="3678318839615834650">በሙሉ ቁመት የተከፈተ አዲስ የትር ገፅ ካርዶች የግርጌ ሉህ</translation>
 <translation id="3697164069658504920">ሲበራ፣ ጣቢያዎች የUSB መሳሪያዎችን ለመጠቀም ሊጠይቁ ይችላሉ። ሲጠፋ፣ ጣቢያዎች የUSB መሳሪያዎችን መጠቀም አይችሉም።</translation>
 <translation id="3703430731944883733">ምግብዎን ያስተዳድሩ</translation>
-<translation id="3707034683772193706">እርስዎ የሚጎበኙት ጣቢያ በዋነኛነት እርስዎ ቦት አለመሆንዎን ለማረጋገጥ በChrome ትንሽ መጠን ያለው መረጃ ሊያስቀምጥ ይችላል</translation>
+<translation id="3707034683772193706">እርስዎ የሚጎበኙት ጣቢያ በዋነኛነት እርስዎ ቦት አለመሆንዎን ለማረጋገጥ በUltimatum ትንሽ መጠን ያለው መረጃ ሊያስቀምጥ ይችላል</translation>
 <translation id="3708684582558000260">ዝግ ጣቢያዎች መላክን ወይም መቀበልን እንዲጨርሱ አይፍቀዱ</translation>
 <translation id="3709818294139939629">የተወገደ የጣቢያው የፋይል መዳረሻ</translation>
 <translation id="3721953990244350188">ያሰናብቱ እና የሚገኘውን ቀጣይ ያሳዩ</translation>
@@ -236,7 +236,7 @@
 <translation id="381841723434055211">ስልክ ቁጥሮች</translation>
 <translation id="3826050100957962900">የሶስተኛ ወገን መግቢያ</translation>
 <translation id="3835233591525155343">የእርስዎ መሣሪያ አጠቃቀም</translation>
-<translation id="3843916486309149084">Chrome ዛሬ እንደገና ኩኪዎችን ያግዳል</translation>
+<translation id="3843916486309149084">Ultimatum ዛሬ እንደገና ኩኪዎችን ያግዳል</translation>
 <translation id="385051799172605136">ተመለስ</translation>
 <translation id="3859306556332390985">ወደፊት ፈልግ</translation>
 <translation id="389521680295183045">የእርስዎን መሣሪያ በንቃት በሚጠቀሙበት ጊዜ ጣቢያዎች ለማወቅ ጥያቄ ማቅረብ ይችላሉ</translation>
@@ -276,12 +276,12 @@
 <translation id="429312253194641664">አንድ ጣቢያ ሚዲያን በማጫወት ላይ ነው</translation>
 <translation id="42981349822642051">ዘርጋ</translation>
 <translation id="4336219115486912529">{COUNT,plural, =1{ነገ ጊዜው ያበቃል}one{በ# ቀን ውስጥ ጊዜው ያበቃል}other{በ# ቀናት ውስጥ ጊዜው ያበቃል}}</translation>
-<translation id="4336566011000459927">Chrome ዛሬ እንደገና ኩኪዎችን ያግዳል</translation>
+<translation id="4336566011000459927">Ultimatum ዛሬ እንደገና ኩኪዎችን ያግዳል</translation>
 <translation id="4338831206024587507">በ<ph name="DOMAIN" /> ስር ያሉ ሁሉም ጣቢያዎች</translation>
 <translation id="4340799661701629185">ጣቢያዎች ማሳወቂያዎችን እንዲልኩ አይፍቀዱ</translation>
 <translation id="4402755511846832236">እርስዎ ይህን መሣሪያ በንቃት ሲጠቀሙ ጣቢያዎች እንዳያውቁ ያግዱ</translation>
 <translation id="4412992751769744546">የሶስተኛ ወገን ኩኪዎችን ፍቀድ</translation>
-<translation id="4419929467120297501">ጣቢያዎች እርስዎ በማሰስ ላይ እንዳሉ እርስዎን ለመከታተል የሦስተኛ ወገን ኩኪዎችን እንዳይጠቀሙ Chrome ያግዳቸዋል። <ph name="BEGIN_LINK" />ለሦስተኛ ወገን ኩኪዎች መዳረሻ ለማስተዳደር<ph name="END_LINK" /> ቅንብሮችን ይጎብኙ።</translation>
+<translation id="4419929467120297501">ጣቢያዎች እርስዎ በማሰስ ላይ እንዳሉ እርስዎን ለመከታተል የሦስተኛ ወገን ኩኪዎችን እንዳይጠቀሙ Ultimatum ያግዳቸዋል። <ph name="BEGIN_LINK" />ለሦስተኛ ወገን ኩኪዎች መዳረሻ ለማስተዳደር<ph name="END_LINK" /> ቅንብሮችን ይጎብኙ።</translation>
 <translation id="443121186588148776">የመለያ ወደብ</translation>
 <translation id="4434045419905280838">ብቅ-ባዮች እና አቅጣጫ ማዞሮች</translation>
 <translation id="443552056913301231">ይህ እርምጃ ኩኪዎችን ጨምሮ ሁሉንም የአካባቢ ውሂብ ይሰርዛል እና ሁሉንም ፈቃዶች ለ<ph name="ORIGIN" /> ዳግም ያስጀምራል</translation>
@@ -300,7 +300,7 @@
 <translation id="4644713492825682049">ሰርዝ እና ዳግም አስጀምር</translation>
 <translation id="4645575059429386691">በእርስዎ ወላጅ የሚቀናበር</translation>
 <translation id="4670064810192446073">ምናባዊ እውነታ</translation>
-<translation id="4672315773691449562">የአሳሽ መተግበሪያን መታ ያድርጉ ከዚያም Chrome ላይ መታ ያድርጉ</translation>
+<translation id="4672315773691449562">የአሳሽ መተግበሪያን መታ ያድርጉ ከዚያም Ultimatum ላይ መታ ያድርጉ</translation>
 <translation id="4676059169848868271"><ph name="APP_NAME" /> የእጅ ክትትል እንዲጠቀም ለመፍቀድ <ph name="BEGIN_LINK" />የሥርዓት ቅንብሮች<ph name="END_LINK" /> ውስጥ ጭምር የእጅ ክትትልን ያብሩ።</translation>
 <translation id="4751476147751820511">የእንቅስቃሴ ወይም የብርሃን ዳሳሾች</translation>
 <translation id="4755971844837804407">ሲበራ፣ ጣቢያዎች ማንኛውንም ማስታወቂያ ሊያሳዩዎት ይችላሉ። ሲጠፉ፣ ጣቢያዎች ረባሽ ወይም አሳሳች ማስታወቂያዎችን ማሳየት አይችሉም።</translation>
@@ -335,7 +335,7 @@
 <translation id="5091663350197390230">ሲበራ፣ ጣቢያዎች ጃቫስክሪፕትን መጠቀም ይችላሉ። ሲጠፋ፣ ጣቢያዎች ጃቫስክሪፕትን መጠቀም አይችሉም።</translation>
 <translation id="5099358668261120049">ይህ በ<ph name="ORIGIN" /> ወይም በመነሻ ገፅዎ ላይ ባለው መተግበሪያው የተከማቹ ሁሉንም ውሂብ እና ኩኪዎች ይሰርዛል።</translation>
 <translation id="5100237604440890931">ተሰብስቧል - ለመዘርጋት ጠቅ ያድርጉ</translation>
-<translation id="5116239826668864748">አገናኞችን በመልዕክቶች፣ በሰነዶች እና በሌሎች መተግበሪያዎች ውስጥ መታ በሚያደርጉበት በማንኛውም ጊዜ Chrome መጠቀም ይችላሉ</translation>
+<translation id="5116239826668864748">አገናኞችን በመልዕክቶች፣ በሰነዶች እና በሌሎች መተግበሪያዎች ውስጥ መታ በሚያደርጉበት በማንኛውም ጊዜ Ultimatum መጠቀም ይችላሉ</translation>
 <translation id="5123685120097942451">ማንነት የማያሳውቅ ትር</translation>
 <translation id="5139253256813381453">{PRICE_DROP_COUNT,plural, =1{ክፍት በሆኑ ትሮችዎ ላይ የዋጋ ቅናሽ}one{ክፍት በሆኑ ትሮችዎ ላይ የዋጋ ቅናሽ}other{ክፍት በሆኑ ትሮችዎ ላይ የዋጋዎች ቅናሽ}}</translation>
 <translation id="5186036860380548585">አማራጮች ከማያ ገጹ አናት አጠገብ ይገኛሉ</translation>
@@ -368,7 +368,7 @@
 <translation id="5527111080432883924">ጣቢያዎች ከቅንጥብ ሰሌዳ ጽሁፍ እና ምስሎችን እንዲያነብቡ ከመፍቀድ በፊት ጠይቅ (የሚመከር)</translation>
 <translation id="5545693483061321551">ጣቢያዎች ለምሳሌ ማስታወቂያዎችን ግላዊነት ለማላበስ ብለው እርስዎ በተለያዩ ጣቢያዎች ላይ ያለዎትን የአሰሳ እንቅስቃሴ ለመመልከት ኩኪዎችን መጠቀም አይችሉም። በአንዳንድ ጣቢያዎች ላይ ያሉ ባህሪያት ላይሰሩ ይችላሉ።</translation>
 <translation id="5553374991681107062">የቅርብ ጊዜው</translation>
-<translation id="5555115555607204100">በChrome V8 ፕሮግራም ጣቢያዎችን አታፋጥን ነገር ግን Chrome ለጥቃቶች ያለውን የመቋቋም ኃይል በትንሹ ጨምር</translation>
+<translation id="5555115555607204100">በUltimatum V8 ፕሮግራም ጣቢያዎችን አታፋጥን ነገር ግን Ultimatum ለጥቃቶች ያለውን የመቋቋም ኃይል በትንሹ ጨምር</translation>
 <translation id="5556459405103347317">ዳግም ጫን</translation>
 <translation id="5591840828808741583"><ph name="SITE_NAME" /> ታግዷል</translation>
 <translation id="560980142378233747">ይህ ማለት የጣቢያ ባህሪያት እንደተጠበቀው መሥራት አለበት፣ ነገር ግን አነስተኛ የአሰሳ ጥበቃ ሊኖርዎት ይችላል። <ph name="BEGIN_LINK" />ግብረመልስ ይላኩ<ph name="END_LINK" /></translation>
@@ -424,13 +424,13 @@
 <translation id="6177128806592000436">ወደዚህ ጣቢያ ያልዎት ግንኙነት ደህንነቱ አስተማማኝ አይደለም</translation>
 <translation id="6181444274883918285">ለየት ያለ ጣቢያን አክል</translation>
 <translation id="6192792657125177640">የተለዩ</translation>
-<translation id="6194967801833346599">{DAYS,plural, =1{Chrome ነገ እንደገና ኩኪዎችን ያግዳል}one{ኩኪዎች እንደገና እስከሚታገዱ ድረስ # ቀናት}other{ኩኪዎች እንደገና እስከሚታገዱ ድረስ # ቀናት}}</translation>
+<translation id="6194967801833346599">{DAYS,plural, =1{Ultimatum ነገ እንደገና ኩኪዎችን ያግዳል}one{ኩኪዎች እንደገና እስከሚታገዱ ድረስ # ቀናት}other{ኩኪዎች እንደገና እስከሚታገዱ ድረስ # ቀናት}}</translation>
 <translation id="6195163219142236913">የሦስተኛ ወገን ኩኪ ተገድቧል</translation>
 <translation id="6196640612572343990">የሦስተኛ ወገን ኩኪዎችን አግድ</translation>
 <translation id="6205314730813004066">የማስታወቂያ ግላዊነት</translation>
 <translation id="6207207788774442484">ውሂብ ሰርዝ እና ፈቃዶችን ዳግም አስጀምር</translation>
 <translation id="6231752747840485235">«<ph name="APP_NAME" />» ይራገፍ?</translation>
-<translation id="6234351944623978659">የአሳሽ መተግበሪያ &gt; Chrome ላይ መታ ያድርጉ</translation>
+<translation id="6234351944623978659">የአሳሽ መተግበሪያ &gt; Ultimatum ላይ መታ ያድርጉ</translation>
 <translation id="6262191102408817757">በእርስዎ የመጨረሻ ትር ላይ በመመስረት</translation>
 <translation id="6262279340360821358"><ph name="PERMISSION_1" /> እና <ph name="PERMISSION_2" /> ታግደዋል</translation>
 <translation id="6270391203985052864">ጣቢያዎች ማሳወቂያዎችን ለመላክ መጠየቅ ይችላሉ</translation>
@@ -470,7 +470,7 @@
 <translation id="6787751205395685251">ለ<ph name="SITE_NAME" /> አንድ አማራጭ ይምረጡ</translation>
 <translation id="6790428901817661496">አጫውት</translation>
 <translation id="6818926723028410516">ንጥሎችን ይምረጡ</translation>
-<translation id="6838525730752203626">በነባሪነት Chrome ይጠቀሙ</translation>
+<translation id="6838525730752203626">በነባሪነት Ultimatum ይጠቀሙ</translation>
 <translation id="6840760312327750441">ትሮችን ለመቦደን፣ ትርን ነካ አድርገው ይያዙ። በመቀጠል፣ ወደ ሌላ ትር ይጎትቱት።</translation>
 <translation id="6842868554183332230">ጣቢያዎች በውይይት መተግበሪያዎች ላይ የእርስዎን ተገኝነት ለማቀናበር እርስዎ መሣሪያዎን በንቃት ሲጠቀሙ ጣቢያዎች አብዛኛው ጊዜ ማወቅ ይችላሉ</translation>
 <translation id="6864395892908308021">ይህ መሣሪያ NFCን ማንበብ አይችልም</translation>
@@ -484,7 +484,7 @@
 <translation id="6981982820502123353">ተደራሽነት</translation>
 <translation id="6992289844737586249">ጣቢያዎች ማይክሮፎንዎን እንዲጠቀሙ ከመፍቀድዎ በፊት ይጠይቅ (የሚመከር)</translation>
 <translation id="7000754031042624318">በAndroid ቅንብሮች ውስጥ ጠፍቷል</translation>
-<translation id="702275896380648118">ይህ ጣቢያ እርስዎ የሚወዷቸውን ነገሮች ይወስናል እና ከዚያም ማስታወቂያዎችን ለሌሎች ጣቢያዎች ይጠቁማል። እንዲሁም ይህ ጣቢያ ይበልጥ አግባብነት ያላቸው ማስታወቂያዎችን ለእርስዎ ለማሳየት የእርስዎን የማስታወቂያ ርዕሶች ከChrome ያገኛል።</translation>
+<translation id="702275896380648118">ይህ ጣቢያ እርስዎ የሚወዷቸውን ነገሮች ይወስናል እና ከዚያም ማስታወቂያዎችን ለሌሎች ጣቢያዎች ይጠቁማል። እንዲሁም ይህ ጣቢያ ይበልጥ አግባብነት ያላቸው ማስታወቂያዎችን ለእርስዎ ለማሳየት የእርስዎን የማስታወቂያ ርዕሶች ከUltimatum ያገኛል።</translation>
 <translation id="7053983685419859001">አግድ</translation>
 <translation id="7055552182600664515">በቅጂ መብት የተጠበቀ ይዘትን ለማጫወት ጣቢያዎች የይዘት መከላከያ አገልግሎትን መጠቀም ሊያስፈልጋቸው ይችላል። <ph name="BEGIN_LINK" />የበለጠ ለመረዳት<ph name="END_LINK" /></translation>
 <translation id="7066151586745993502">{NUM_SELECTED,plural, =1{1 ተመርጧል}one{# ተመርጠዋል}other{# ተመርጠዋል}}</translation>
@@ -528,7 +528,7 @@
 <translation id="7658239707568436148">ይቅር</translation>
 <translation id="7667547420449112975">አስደናቂው የኦዝ ምትሃተኛ</translation>
 <translation id="7681597159868843240">ጣቢያዎች አብዛኛውን ጊዜ እንደ ምናባዊ እውነታ ወይም የአካል ብቃት እንቅስቃሴ መከታተያ ላሉት ባህሪዎች የመሣሪያዎን እንቅስቃሴ ዳሳሾች ይጠቀማሉ</translation>
-<translation id="7688240020069572972">የChrome ጠቃሚ ምክሮች ካርድ</translation>
+<translation id="7688240020069572972">የUltimatum ጠቃሚ ምክሮች ካርድ</translation>
 <translation id="7719367874908701697">ገፅ አጉላ</translation>
 <translation id="7759147511335618829">የMIDI መሣሪያ ቁጥጥር እና ዳግም ፕሮግራም</translation>
 <translation id="7781829728241885113">ትናንት</translation>
@@ -540,7 +540,7 @@
 <translation id="7835852323729233924">ሚዲያን በማጫወት ላይ</translation>
 <translation id="783819812427904514">የቪዲዮን ድምጸ-ከል አንሳ</translation>
 <translation id="7846076177841592234">ምርጫ ሰርዝ</translation>
-<translation id="7881140103901777395">Chrome አብዛኛዎቹን ጣቢያዎች የሦስተኛ ወገን ኩኪዎችን እንዳይጠቀሙ ይገድባል። ነገር ግን የሦስተኛ ወገን ኩኪዎች መሠረታዊ አገልግሎቶችን ለማቅረብ በእነሱ ላይ ስለሚተማመን በዚህ ጣቢያ ላይ ተፈቅዶላቸዋል።\n\n<ph name="BEGIN_LINK" />ለሦስተኛ ወገን ኩኪዎች መዳረሻ ለማስተዳደር<ph name="END_LINK" /> ቅንብሮችን ይጎብኙ።</translation>
+<translation id="7881140103901777395">Ultimatum አብዛኛዎቹን ጣቢያዎች የሦስተኛ ወገን ኩኪዎችን እንዳይጠቀሙ ይገድባል። ነገር ግን የሦስተኛ ወገን ኩኪዎች መሠረታዊ አገልግሎቶችን ለማቅረብ በእነሱ ላይ ስለሚተማመን በዚህ ጣቢያ ላይ ተፈቅዶላቸዋል።\n\n<ph name="BEGIN_LINK" />ለሦስተኛ ወገን ኩኪዎች መዳረሻ ለማስተዳደር<ph name="END_LINK" /> ቅንብሮችን ይጎብኙ።</translation>
 <translation id="7882806643839505685">ለተወሰነ ጣቢያ ድምፅ ፍቀድ።</translation>
 <translation id="789180354981963912">ማንነትን በማያሳውቅ ላይ የሶስተኛ ወገን ኩኪዎችን ያግዱ፦</translation>
 <translation id="789722939441020330">ጣቢያዎች ብዙ ፋይሎችን በራስ-ሰር እንዲያወርዱ አይፍቀዱ</translation>
@@ -560,7 +560,7 @@
 <translation id="8087000398470557479">ይህ ይዘት ከ<ph name="DOMAIN_NAME" /> የመጣ ነው፣ የተላከው በGoogle ነው።</translation>
 <translation id="8088603949666785339"><ph name="BANNER_TITLE" /> ውስጥ ተጨማሪ አማራጮች</translation>
 <translation id="8112925981674547014">በመተግበሪያ ዝርዝር ውስጥ ያሉ ትሮችን አሳይ</translation>
-<translation id="8113501330600751161">{DAYS,plural, =1{Chrome ነገ እንደገና ኩኪዎችን ያግዳል}one{Chrome ኩኪዎችን እንደገና እስኪገድብ ድረስ # ቀናት}other{Chrome ኩኪዎችን እንደገና እስኪገድብ ድረስ # ቀናት}}</translation>
+<translation id="8113501330600751161">{DAYS,plural, =1{Ultimatum ነገ እንደገና ኩኪዎችን ያግዳል}one{Ultimatum ኩኪዎችን እንደገና እስኪገድብ ድረስ # ቀናት}other{Ultimatum ኩኪዎችን እንደገና እስኪገድብ ድረስ # ቀናት}}</translation>
 <translation id="8116925261070264013">ድምፀ ከል ተደርጓል</translation>
 <translation id="8117244575099414087">ሲበራ፣ ጣቢያዎች የመሣሪያዎን ዳሳሾች መጠቀም ይችላሉ። ሲጠፋ፣ ጣቢያዎች ዳሳሾችን መጠቀም አይችሉም።</translation>
 <translation id="813082847718468539">የጣቢያ መረጃን ይመልከቱ</translation>
@@ -600,10 +600,10 @@
 <translation id="8514955299594277296">ጣቢያዎች በመሣሪያዎ ላይ ውሂብ እንዲያስቀምጡ አይፍቀዱ (አይመከርም)</translation>
 <translation id="851751545965956758">ጣቢያዎች ከመሣሪያዎች ጋር እንዳይገናኙ አግድ</translation>
 <translation id="8525306231823319788">ሙሉ ማያ ገፅ</translation>
-<translation id="8541410041357371550">ይህ ጣቢያ ይበልጥ አግባብነት ያላቸው ማስታወቂያዎችን ለእርስዎ ለማሳየት የእርስዎን የማስታወቂያ ርዕሶች ከChrome ያገኛል</translation>
+<translation id="8541410041357371550">ይህ ጣቢያ ይበልጥ አግባብነት ያላቸው ማስታወቂያዎችን ለእርስዎ ለማሳየት የእርስዎን የማስታወቂያ ርዕሶች ከUltimatum ያገኛል</translation>
 <translation id="854876774113449365">የሚጎበኟቸው ጣቢያዎች ከሌሎች ጣቢያዎች ይዘት መክተት ይችላሉ፣ ለምሳሌ ምስሎች፣ ማስታወቂያዎች እና ጽሑፍ። እነዚህ ሌሎች ጣቢያዎች እርስዎ ጣቢያውን በሚያስሱበት ጊዜ ስለ እርስዎ ያስቀመጡትን መረጃ ለመጠቀም ፈቃድ መጠየቅ ይችላሉ። <ph name="BEGIN_LINK" />ስለተከተተ ይዘት የበለጠ ለመረዳት<ph name="END_LINK" /></translation>
 <translation id="8549127125482561383">ጥያቄዎችን እንዴት ማሳየት እንደሚቻል</translation>
-<translation id="8558480467877843976">አሁን በሚያስሱበት ወይም በመልዕክቶች ውስጥ አገናኞችን መታ በሚያደርጉበት በማንኛውም ጊዜ Chromeን እና ሌሎች መተግበሪያዎችን መጠቀም ይችላሉ።</translation>
+<translation id="8558480467877843976">አሁን በሚያስሱበት ወይም በመልዕክቶች ውስጥ አገናኞችን መታ በሚያደርጉበት በማንኛውም ጊዜ Ultimatumን እና ሌሎች መተግበሪያዎችን መጠቀም ይችላሉ።</translation>
 <translation id="857943718398505171">ተፈቅዷል (የሚመከር)</translation>
 <translation id="8593422116412089302">በሚበራበት ጊዜ፣ ጣቢያዎች ስለ እርስዎ ያስቀመጡትን መረጃ ለመጠቀም ሊጠይቁ ይችላሉ። በሚጠፋበት ጊዜ፣ ጣቢያዎች ስለ እርስዎ ያስቀመጡትን መረጃ እንዲጠቀሙ ሊጠይቁዎት አይችሉም።</translation>
 <translation id="8609465669617005112">ወደላይ አውጣ</translation>
@@ -624,13 +624,13 @@
 <translation id="8751914237388039244">ምስል ይምረጡ</translation>
 <translation id="8800034312320686233">ጣቢያው እየሰራ አይደለም?</translation>
 <translation id="8801436777607969138">ጃቫስክሪፕትን ለአንድ የተወሰነ ጣቢያ አግድ።</translation>
-<translation id="8801657293260363985">V8 የChrome ጃቫስክሪፕት እና የWebAssembly ሞተር የጣቢያን አፈጻጸም ለማሻሻል ጥቅም ላይ ይውላል</translation>
+<translation id="8801657293260363985">V8 የUltimatum ጃቫስክሪፕት እና የWebAssembly ሞተር የጣቢያን አፈጻጸም ለማሻሻል ጥቅም ላይ ይውላል</translation>
 <translation id="8803526663383843427">ሲበራ</translation>
 <translation id="8805385115381080995">አንድ ጣቢያ እርስዎ እውነተኛ ሰው መሆንዎን እንዲያረጋግጡ ሊጠይቅዎ የሚችልበት ዕድል አነስተኛ ስለሆነ ማሰስ ፈጣን ነው</translation>
 <translation id="8816026460808729765">ጣቢያዎች ዳሳሾችን እንዳይደርሱ ያግዱ</translation>
 <translation id="8847988622838149491">ዩ ኤስ ቢ</translation>
 <translation id="8874790741333031443">በጊዜያዊነት የሦስተኛ ወገን ኩኪዎችን ለመፍቀድ ይሞክሩ፣ ይህ ማለት ያነሰ የአሰሳ ጥበቃ ነው ነገር ግን የጣቢያ ባህሪያት እንደተጠበቀው የመሥራት ዕድላቸው ከፍተኛ ነው።</translation>
-<translation id="8889294078294184559">ማሰስዎን ሲቀጥሉ እውነተኛ ሰው ሊሆኑ እንደሚችሉ ጣቢያዎች በChrome መፈተሽ እና እርስዎ ከዚህ ቀደም በጎበኙት ጣቢያ ላይ ማረጋገጥ ይችላሉ</translation>
+<translation id="8889294078294184559">ማሰስዎን ሲቀጥሉ እውነተኛ ሰው ሊሆኑ እንደሚችሉ ጣቢያዎች በUltimatum መፈተሽ እና እርስዎ ከዚህ ቀደም በጎበኙት ጣቢያ ላይ ማረጋገጥ ይችላሉ</translation>
 <translation id="8899807382908246773">ጣልቃ ገቢ ማስታወቂያዎች</translation>
 <translation id="8903921497873541725">አጉላ</translation>
 <translation id="8921772741368021346"><ph name="POSITION" /> / <ph name="DURATION" /></translation>
@@ -653,7 +653,7 @@
 <translation id="9109747640384633967">{PERMISSIONS_SUMMARY_MIXED,plural, =1{<ph name="PERMISSION_1" />፣ <ph name="PERMISSION_2" />፣ እና <ph name="NUM_MORE" /> ተጨማሪ}one{<ph name="PERMISSION_1" />፣ <ph name="PERMISSION_2" />፣ እና <ph name="NUM_MORE" /> ተጨማሪ}other{<ph name="PERMISSION_1" />፣ <ph name="PERMISSION_2" />፣ እና <ph name="NUM_MORE" /> ተጨማሪ}}</translation>
 <translation id="913657688200966289">ለ <ph name="APP_NAME" /> በ <ph name="BEGIN_LINK" />Android ቅንብሮች<ph name="END_LINK" /> ውስጥ ፈቃዶችን ያብሩ።</translation>
 <translation id="9138217887606523162">የአሁን ማጉላት <ph name="ZOOM_LEVEL" /> %% ነው</translation>
-<translation id="9156722768168878035">Chrome የቅርብ ጊዜ ትሮችን በመሣሪያዎ መተግበሪያ ዝርዝር እና የፍለጋ ውጤቶች ውስጥ እንዲያሳይ ይፍቀዱለት። ይህን በማንኛውም ጊዜ በChrome ቅንብሮች ውስጥ ማጥፋት ይችላሉ።</translation>
+<translation id="9156722768168878035">Ultimatum የቅርብ ጊዜ ትሮችን በመሣሪያዎ መተግበሪያ ዝርዝር እና የፍለጋ ውጤቶች ውስጥ እንዲያሳይ ይፍቀዱለት። ይህን በማንኛውም ጊዜ በUltimatum ቅንብሮች ውስጥ ማጥፋት ይችላሉ።</translation>
 <translation id="9162462602695099906">ይህ ገፅ አደገኛ ነው</translation>
 <translation id="9182556968660520230">ጣቢያዎች የተጠበቀ ይዘትን እንዲጫወቱ አይፍቀዱ</translation>
 <translation id="947156494302904893">የሚጎበኟቸው ጣቢያዎች እርስዎ ቦት ሳይሆኑ እውነተኛ ሰው እንደሆኑ ማረጋገጥ ይችላሉ</translation>

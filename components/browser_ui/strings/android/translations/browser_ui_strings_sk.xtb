@@ -10,14 +10,14 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="1036348656032585052">Vypnúť</translation>
 <translation id="1044891598689252897">Weby budú fungovať normálne</translation>
 <translation id="1070329623210597193">Súbory, ktoré môže tento web čítať alebo upravovať</translation>
-<translation id="1073417869336441572">Pomôžte nám zlepšiť Chrome tým, že nám poviete, prečo ste povolili súbory cookie tretích strán. <ph name="BEGIN_LINK" />Odoslať spätnú väzbu<ph name="END_LINK" /></translation>
+<translation id="1073417869336441572">Pomôžte nám zlepšiť Ultimatum tým, že nám poviete, prečo ste povolili súbory cookie tretích strán. <ph name="BEGIN_LINK" />Odoslať spätnú väzbu<ph name="END_LINK" /></translation>
 <translation id="1074758928858737435">Môžete požiadať o zobrazenie verzie webov pre počítače</translation>
 <translation id="1085696779717592361">Predvolené používanie Chromu</translation>
 <translation id="1178581264944972037">Pozastaviť</translation>
 <translation id="1181037720776840403">Odstrániť</translation>
 <translation id="1192844206376121885">Týmto odstránite všetky dáta a súbory cookie uložené webom <ph name="ORIGIN" />.</translation>
 <translation id="1201402288615127009">Ďalej</translation>
-<translation id="1240190568154816272">Tipy pre Chrome</translation>
+<translation id="1240190568154816272">Tipy pre Ultimatum</translation>
 <translation id="1242008676835033345">Vložené na webe <ph name="WEBSITE_URL" /></translation>
 <translation id="1263609676484797429">Klepnite na Aplikácie &gt; Predvolené aplikácie</translation>
 <translation id="1272079795634619415">Zastaviť</translation>
@@ -43,7 +43,7 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="1510341833810331442">Weby nemôžu ukladať údaje vo vašom zariadení</translation>
 <translation id="1538031354170655462">Weby zvyčajne používajú technológiu NFC (Near Field Communication), aby mohli fungovať so značkami alebo zariadeniami v okolí. Umožňuje im to napríklad skenovať odznaky alebo realizovať bezkontaktné platby</translation>
 <translation id="1547123415014299762">Súbory cookie tretích strán sú povolené</translation>
-<translation id="1569054338208717605">Zrýchľovať weby pomocou nástroja V8 Chromu (Chrome bude o niečo menej odolný voči útokom)</translation>
+<translation id="1569054338208717605">Zrýchľovať weby pomocou nástroja V8 Chromu (Ultimatum bude o niečo menej odolný voči útokom)</translation>
 <translation id="1593426485665524382">Nové akcie sú k dispozícii hore na obrazovke</translation>
 <translation id="1615755956145364867">Weby môžu žiadať o prehranie chráneného obsahu</translation>
 <translation id="1620510694547887537">Kamera</translation>
@@ -64,8 +64,8 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="1779089405699405702">Dekodér obrázkov</translation>
 <translation id="1785415724048343560">Odporúčané pre najlepší dojem</translation>
 <translation id="1796588414813960292">Funkcie vyžadujúce zvuk nebudú podporované</translation>
-<translation id="1799920918471566157">Tipy pre Chrome</translation>
-<translation id="1816835383954230954">Keď je prepínač zapnutý, Chrome je rýchlejší a funkcie používajúce JavaScript by mali fungovať podľa očakávaní. Keď je vypnutý, zníži sa výkonnosť, ale optimalizátor V8 bude odolnejší voči útokom.</translation>
+<translation id="1799920918471566157">Tipy pre Ultimatum</translation>
+<translation id="1816835383954230954">Keď je prepínač zapnutý, Ultimatum je rýchlejší a funkcie používajúce JavaScript by mali fungovať podľa očakávaní. Keď je vypnutý, zníži sa výkonnosť, ale optimalizátor V8 bude odolnejší voči útokom.</translation>
 <translation id="1818308510395330587">Fotoaparát zapnite aj v <ph name="BEGIN_LINK" />nastaveniach Androidu<ph name="END_LINK" />, aby mohla aplikácia <ph name="APP_NAME" /> používať RR.</translation>
 <translation id="1887786770086287077">Prístup k polohe je v tomto zariadení vypnutý. Zapnite ho v <ph name="BEGIN_LINK" />Nastaveniach Androidu<ph name="END_LINK" />.</translation>
 <translation id="1906181697255754968">Weby zvyčajne získavajú prístup k súborom a priečinkom vo vašom zariadení, aby mohli poskytovať funkcie, ako je automatické ukladanie vašej práce</translation>
@@ -109,7 +109,7 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="2289270750774289114">Opýtať sa, keď chce web objavovať zariadenia Bluetooth v okolí (odporúčané)</translation>
 <translation id="2315043854645842844">Operačný systém nepodporuje výber certifikátu na strane klienta.</translation>
 <translation id="2359808026110333948">Pokračovať</translation>
-<translation id="2379925928934107488">Ak je to možné, používajte tmavý režim na weboch, keď ho používa Chrome</translation>
+<translation id="2379925928934107488">Ak je to možné, používajte tmavý režim na weboch, keď ho používa Ultimatum</translation>
 <translation id="2390272837142897736">Zvýšiť úroveň lupy</translation>
 <translation id="2402980924095424747"><ph name="MEGABYTES" /> MB</translation>
 <translation id="2404630663942400771">{PERMISSIONS_SUMMARY_ALLOWED,plural, =1{Sú udelené povolenia <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> a <ph name="NUM_MORE" /> ďalšie}few{Sú udelené povolenia <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> a <ph name="NUM_MORE" /> ďalšie}many{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, and <ph name="NUM_MORE" /> more allowed}other{Sú udelené povolenia <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> a <ph name="NUM_MORE" /> ďalších}}</translation>
@@ -118,7 +118,7 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="2438120137003069591">Tomuto webu ste dočasne povolili používať súbory cookie tretích strán, čo znamená nižšiu ochranu, ale funkcie webu budú s väčšou pravdepodobnosťou fungovať podľa očakávaní. <ph name="BEGIN_LINK" />Odoslať spätnú väzbu<ph name="END_LINK" /></translation>
 <translation id="244264527810019436">Funkcie na niektorých weboch nemusia byť v režime inkognito k dispozícii</translation>
 <translation id="2442870161001914531">Vždy požadovať web pre počítače</translation>
-<translation id="2445311670906052406">Chrome teraz zdieľa vaše nedávne karty s vaším zariadením. Nájdete ich v zariadení v zozname aplikácií a vo výsledkoch vyhľadávania. Túto možnosť môžete kedykoľvek vypnúť v nastaveniach Chromu.</translation>
+<translation id="2445311670906052406">Ultimatum teraz zdieľa vaše nedávne karty s vaším zariadením. Nájdete ich v zariadení v zozname aplikácií a vo výsledkoch vyhľadávania. Túto možnosť môžete kedykoľvek vypnúť v nastaveniach Chromu.</translation>
 <translation id="245322989586167203">Weby sa zvyčajne pripájajú k sériovým portom, aby mohli poskytovať funkcie na prenos údajov, ako je nastavenie siete</translation>
 <translation id="2469312991797799607">Touto akciou odstránite všetky údaje a súbory cookie domény <ph name="ORIGIN" /> a všetkých jej webov</translation>
 <translation id="2482878487686419369">Upozornenia</translation>
@@ -143,14 +143,14 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="2685514716378236873">Nepovolené</translation>
 <translation id="2713106313042589954">Vypnúť kameru</translation>
 <translation id="2717722538473713889">E‑mailové adresy</translation>
-<translation id="2726059656860238749">Spúšťajte Chrome s aktívnym omniboxom, čím sa skráti čas spustenia v zariadeniach s nízkym výkonom.</translation>
+<translation id="2726059656860238749">Spúšťajte Ultimatum s aktívnym omniboxom, čím sa skráti čas spustenia v zariadeniach s nízkym výkonom.</translation>
 <translation id="2750481671343847896">Weby môžu zobrazovať výzvy na prihlásenie od služieb identity.</translation>
 <translation id="2787357173144933081">Rýchly štart omniboxu</translation>
 <translation id="2789132527330338807">Weby môžu žiadať o vytvorenie 3D mapy vášho okolia alebo sledovanie polohy vašej kamery</translation>
 <translation id="2790501146643349491">Keď je táto možnosť zapnutá, nedávno zavreté weby môžu dokončiť odosielanie a prijímanie údajov. Keď je táto možnosť vypnutá, nedávno zavreté weby nemôžu dokončiť odosielanie ani prijímanie údajov.</translation>
 <translation id="2795716239552913152">Weby zvyčajne používajú vašu polohu, aby mohli poskytovať relevantné funkcie či informácie, napríklad miestne správy alebo predajne v okolí</translation>
 <translation id="2802908157808345702">Nepovoliť webom odosielať vyskakovacie okná a používať presmerovania</translation>
-<translation id="2814830417943086299">Chrome teraz zobrazuje vaše nedávne karty v zozname aplikácií a výsledkoch vyhľadávania v zariadení. Túto možnosť môžete kedykoľvek vypnúť v nastaveniach Chromu.</translation>
+<translation id="2814830417943086299">Ultimatum teraz zobrazuje vaše nedávne karty v zozname aplikácií a výsledkoch vyhľadávania v zariadení. Túto možnosť môžete kedykoľvek vypnúť v nastaveniach Chromu.</translation>
 <translation id="2822354292072154809">Naozaj chcete resetovať všetky povolenia webu pre <ph name="CHOSEN_OBJECT_NAME" />?</translation>
 <translation id="2850913818900871965">Požadovať zobrazenie v mobile</translation>
 <translation id="2870560284913253234">Web</translation>
@@ -187,7 +187,7 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="3242646949159196181">Keď je táto možnosť zapnutá, weby môžu prehrávať zvuk. Keď je táto možnosť vypnutá, weby nemôžu prehrávať zvuk.</translation>
 <translation id="3273479183583863618">Poklesy cien na kartách</translation>
 <translation id="3277252321222022663">Povoliť webom prístup k senzorom (odporúčané)</translation>
-<translation id="327891165872793509">Chrome obmedzuje väčšine webom možnosť sledovať vás pri prehliadaní pomocou súborov cookie tretích strán. Prejdite do nastavení a <ph name="BEGIN_LINK" />spravujte prístup k súborom cookie tretej strany<ph name="END_LINK" />.</translation>
+<translation id="327891165872793509">Ultimatum obmedzuje väčšine webom možnosť sledovať vás pri prehliadaní pomocou súborov cookie tretích strán. Prejdite do nastavení a <ph name="BEGIN_LINK" />spravujte prístup k súborom cookie tretej strany<ph name="END_LINK" />.</translation>
 <translation id="3285500645985761267">Povoliť súvisiacim webom zobrazovať si vašu aktivitu v skupine</translation>
 <translation id="3295019059349372795">11. kapitola: Nádherné smaragdové mesto</translation>
 <translation id="3295602654194328831">Skryť informácie</translation>
@@ -222,7 +222,7 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="3678318839615834650">Dolný hárok kariet na stránke na novej karte je otvorený na celú výšku</translation>
 <translation id="3697164069658504920">Keď je táto možnosť zapnutá, weby môžu žiadať o povolenie používať zariadenia s rozhraním USB. Keď je táto možnosť vypnutá, weby nemôžu používať zariadenia s rozhraním USB.</translation>
 <translation id="3703430731944883733">Spravujte svoj feed</translation>
-<translation id="3707034683772193706">Web, ktorý navštívite, môže v Chrome uložiť malé množstvo informácií, najmä na overenie, že nie ste robot</translation>
+<translation id="3707034683772193706">Web, ktorý navštívite, môže v Ultimatum uložiť malé množstvo informácií, najmä na overenie, že nie ste robot</translation>
 <translation id="3708684582558000260">Nepovoliť zavretým webom dokončovať odosielanie alebo prijímanie údajov</translation>
 <translation id="3709818294139939629">Odstránený prístup webu k súboru</translation>
 <translation id="3721953990244350188">Zavrieť a zobraziť ďalšiu dostupnú akciu</translation>
@@ -236,7 +236,7 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="381841723434055211">Telefónne čísla</translation>
 <translation id="3826050100957962900">Prihlasovanie tretími stranami</translation>
 <translation id="3835233591525155343">Používanie vášho zariadenia</translation>
-<translation id="3843916486309149084">Chrome bude dnes súbory cookie znova blokovať</translation>
+<translation id="3843916486309149084">Ultimatum bude dnes súbory cookie znova blokovať</translation>
 <translation id="385051799172605136">Späť</translation>
 <translation id="3859306556332390985">Pretočiť dopredu</translation>
 <translation id="389521680295183045">Weby sa môžu pýtať, keď chcú zistiť, kedy aktívne používate zariadenie</translation>
@@ -276,12 +276,12 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="429312253194641664">Web prehráva médiá</translation>
 <translation id="42981349822642051">Rozbaliť</translation>
 <translation id="4336219115486912529">{COUNT,plural, =1{Vyprší zajtra}few{Vyprší o # dni}many{Vyprší o # dňa}other{Vyprší o # dní}}</translation>
-<translation id="4336566011000459927">Chrome dnes znova obmedzí súbory cookie</translation>
+<translation id="4336566011000459927">Ultimatum dnes znova obmedzí súbory cookie</translation>
 <translation id="4338831206024587507">Všetky weby v doméne <ph name="DOMAIN" /></translation>
 <translation id="4340799661701629185">Nepovoliť webom odosielať upozornenia</translation>
 <translation id="4402755511846832236">Neumožniť webom zistiť, či aktívne používate toto zariadenie</translation>
 <translation id="4412992751769744546">Povoliť súbory cookie tretích strán</translation>
-<translation id="4419929467120297501">Chrome blokuje webom možnosť sledovať vás pri prehliadaní pomocou súborov cookie tretích strán. Prejdite do nastavení a <ph name="BEGIN_LINK" />spravujte prístup k súborom cookie tretej strany<ph name="END_LINK" />.</translation>
+<translation id="4419929467120297501">Ultimatum blokuje webom možnosť sledovať vás pri prehliadaní pomocou súborov cookie tretích strán. Prejdite do nastavení a <ph name="BEGIN_LINK" />spravujte prístup k súborom cookie tretej strany<ph name="END_LINK" />.</translation>
 <translation id="443121186588148776">Sériový port</translation>
 <translation id="4434045419905280838">Vyskakovacie okná a presmerovania</translation>
 <translation id="443552056913301231">Touto akciou odstránite všetky miestne údaje vrátane súborov cookie a resetujete všetky povolenia pre <ph name="ORIGIN" /></translation>
@@ -300,7 +300,7 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="4644713492825682049">Odstrániť a resetovať</translation>
 <translation id="4645575059429386691">Spravované vaším rodičom</translation>
 <translation id="4670064810192446073">Virtuálna realita</translation>
-<translation id="4672315773691449562">Klepnite na Prehliadač a potom na Chrome</translation>
+<translation id="4672315773691449562">Klepnite na Prehliadač a potom na Ultimatum</translation>
 <translation id="4676059169848868271">Ak chcete povoliť aplikácii <ph name="APP_NAME" /> sledovať ruky, zapnite sledovanie rúk aj v <ph name="BEGIN_LINK" />nastaveniach systému<ph name="END_LINK" />.</translation>
 <translation id="4751476147751820511">Senzory pohybu alebo svetla</translation>
 <translation id="4755971844837804407">Keď je táto možnosť zapnutá, weby vám môžu zobrazovať ľubovoľné reklamy. Keď je táto možnosť vypnutá, weby nemôžu zobrazovať obťažujúce ani zavádzajúce reklamy.</translation>
@@ -335,7 +335,7 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="5091663350197390230">Keď je táto možnosť zapnutá, weby môžu používať JavaScript. Keď je táto možnosť vypnutá, weby nemôžu používať JavaScript.</translation>
 <translation id="5099358668261120049">Týmto odstránite všetky dáta a súbory cookie uložené webom <ph name="ORIGIN" /> alebo jeho aplikáciou na ploche.</translation>
 <translation id="5100237604440890931">Zbalená (rozbalíte ju kliknutím)</translation>
-<translation id="5116239826668864748">Chrome môžete teraz kedykoľvek použiť klepnutím na odkazy v správach, dokumentoch a ďalších aplikáciách</translation>
+<translation id="5116239826668864748">Ultimatum môžete teraz kedykoľvek použiť klepnutím na odkazy v správach, dokumentoch a ďalších aplikáciách</translation>
 <translation id="5123685120097942451">Karta inkognito</translation>
 <translation id="5139253256813381453">{PRICE_DROP_COUNT,plural, =1{Pokles ceny na otvorených kartách}few{Poklesy cien na otvorených kartách}many{Poklesy cien na otvorených kartách}other{Poklesy cien na otvorených kartách}}</translation>
 <translation id="5186036860380548585">Možnosť je k dispozícii v hornej časti obrazovky</translation>
@@ -368,7 +368,7 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="5527111080432883924">Pýtať sa, či chcete povoliť webu prístup k textom a obrázkom v schránke (odporúčané)</translation>
 <translation id="5545693483061321551">Weby si nemôžu na základe súborov cookie zobraziť vašu históriu prehliadania v rámci rôznych webov (napríklad na prispôsobenie reklám). Funkcie na niektorých weboch nemusia fungovať.</translation>
 <translation id="5553374991681107062">Najnovšie</translation>
-<translation id="5555115555607204100">Nezrýchľovať weby pomocou nástroja V8 Chromu (Chrome bude o niečo odolnejší voči útokom)</translation>
+<translation id="5555115555607204100">Nezrýchľovať weby pomocou nástroja V8 Chromu (Ultimatum bude o niečo odolnejší voči útokom)</translation>
 <translation id="5556459405103347317">Znova načítať</translation>
 <translation id="5591840828808741583">Blokované: <ph name="SITE_NAME" /></translation>
 <translation id="560980142378233747">Znamená to, že funkcie webu by mali pracovať podľa očakávaní, ale môžete mať menšiu ochranu pri prehliadaní. <ph name="BEGIN_LINK" />Odoslať spätnú väzbu<ph name="END_LINK" /></translation>
@@ -424,13 +424,13 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="6177128806592000436">Spojenie s týmto webom nie je zabezpečené</translation>
 <translation id="6181444274883918285">Pridať výnimku pre web</translation>
 <translation id="6192792657125177640">Výnimky</translation>
-<translation id="6194967801833346599">{DAYS,plural, =1{Chrome bude zajtra súbory cookie znova blokovať}few{Do opätovného blokovania súborov cookie zostávajú # dni}many{Do opätovného blokovania súborov cookie zostáva # dňa}other{Do opätovného blokovania súborov cookie zostáva # dní}}</translation>
+<translation id="6194967801833346599">{DAYS,plural, =1{Ultimatum bude zajtra súbory cookie znova blokovať}few{Do opätovného blokovania súborov cookie zostávajú # dni}many{Do opätovného blokovania súborov cookie zostáva # dňa}other{Do opätovného blokovania súborov cookie zostáva # dní}}</translation>
 <translation id="6195163219142236913">Súbory cookie tretích strán sú obmedzené</translation>
 <translation id="6196640612572343990">Blokovať súbory cookie tretích strán</translation>
 <translation id="6205314730813004066">Ochrana súkromia pri reklamách</translation>
 <translation id="6207207788774442484">Odstrániť údaje a resetovať povolenia</translation>
 <translation id="6231752747840485235">Chcete odinštalovať aplikáciu <ph name="APP_NAME" />?</translation>
-<translation id="6234351944623978659">Klepnite na Prehliadač &gt; Chrome</translation>
+<translation id="6234351944623978659">Klepnite na Prehliadač &gt; Ultimatum</translation>
 <translation id="6262191102408817757">Na základe vašej poslednej karty</translation>
 <translation id="6262279340360821358">Blokované: <ph name="PERMISSION_1" /> a <ph name="PERMISSION_2" /></translation>
 <translation id="6270391203985052864">Weby môžu žiadať o odosielanie upozornení</translation>
@@ -470,7 +470,7 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="6787751205395685251">Vybrať možnosť pre web <ph name="SITE_NAME" /></translation>
 <translation id="6790428901817661496">Prehrať</translation>
 <translation id="6818926723028410516">Vyberte položky</translation>
-<translation id="6838525730752203626">Používajte Chrome predvolene</translation>
+<translation id="6838525730752203626">Používajte Ultimatum predvolene</translation>
 <translation id="6840760312327750441">Ak chcete zoskupiť karty, pridržte niektorú z nich. Potom ju presuňte na inú.</translation>
 <translation id="6842868554183332230">Weby zvyčajne zisťujú, či aktívne používate zariadenie, aby mohli určiť vašu dostupnosť v četových aplikáciách</translation>
 <translation id="6864395892908308021">Toto zariadenie nedokáže čítať NFC</translation>
@@ -528,7 +528,7 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="7658239707568436148">Zrušiť</translation>
 <translation id="7667547420449112975">Čarodejník z krajiny Oz</translation>
 <translation id="7681597159868843240">Weby zvyčajne používajú senzory pohybu zariadenia, aby mohli poskytovať funkcie, ako je virtuálna realita alebo sledovanie kondície</translation>
-<translation id="7688240020069572972">Skryť kartu s tipmi pre Chrome</translation>
+<translation id="7688240020069572972">Skryť kartu s tipmi pre Ultimatum</translation>
 <translation id="7719367874908701697">Priblíženie stránky</translation>
 <translation id="7759147511335618829">Ovlád. a preprogramov. zar. MIDI</translation>
 <translation id="7781829728241885113">Včera</translation>
@@ -540,7 +540,7 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="7835852323729233924">Prehrávanie médií</translation>
 <translation id="783819812427904514">Zapnúť zvuk videa</translation>
 <translation id="7846076177841592234">Zrušiť výber</translation>
-<translation id="7881140103901777395">Chrome obmedzuje väčšine webom používanie súborov cookie tretích strán. Súbory cookie tretích strán sú však na tomto webe povolené, pretože sú preň nevyhnutné na poskytovanie základných služieb.\n\nPrejdite do nastavení a <ph name="BEGIN_LINK" />spravujte prístup k súborom cookie tretej strany<ph name="END_LINK" />.</translation>
+<translation id="7881140103901777395">Ultimatum obmedzuje väčšine webom používanie súborov cookie tretích strán. Súbory cookie tretích strán sú však na tomto webe povolené, pretože sú preň nevyhnutné na poskytovanie základných služieb.\n\nPrejdite do nastavení a <ph name="BEGIN_LINK" />spravujte prístup k súborom cookie tretej strany<ph name="END_LINK" />.</translation>
 <translation id="7882806643839505685">Povoliť zvuk na konkrétnom webe.</translation>
 <translation id="789180354981963912">Blokovať súbory cookie tretích strán v režime inkognito:</translation>
 <translation id="789722939441020330">Nepovoliť webom automaticky sťahovať viacero súborov</translation>
@@ -560,7 +560,7 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="8087000398470557479">Tento obsah pochádza z domény <ph name="DOMAIN_NAME" /> a bol doručený Googlom.</translation>
 <translation id="8088603949666785339">Ďalšie možnosti nájdete v banneri <ph name="BANNER_TITLE" /></translation>
 <translation id="8112925981674547014">Zobrazovať karty v zozname aplikácií</translation>
-<translation id="8113501330600751161">{DAYS,plural, =1{Chrome zajtra znova obmedzí súbory cookie}few{Do opätovného blokovania súborov cookie Chromom zostávajú # dni}many{Do opätovného blokovania súborov cookie Chromom zostáva # dňa}other{Do opätovného blokovania súborov cookie Chromom zostáva # dní}}</translation>
+<translation id="8113501330600751161">{DAYS,plural, =1{Ultimatum zajtra znova obmedzí súbory cookie}few{Do opätovného blokovania súborov cookie Chromom zostávajú # dni}many{Do opätovného blokovania súborov cookie Chromom zostáva # dňa}other{Do opätovného blokovania súborov cookie Chromom zostáva # dní}}</translation>
 <translation id="8116925261070264013">Vypnuté</translation>
 <translation id="8117244575099414087">Keď je táto možnosť zapnutá, weby môžu používať senzory vášho zariadenia. Keď je táto možnosť vypnutá, weby nemôžu používať senzory.</translation>
 <translation id="813082847718468539">Zobraziť informácie o webe</translation>
@@ -603,7 +603,7 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="8541410041357371550">Tento web dostáva aj témy reklám od Chromu, aby vám zobrazoval relevantnejšie reklamy</translation>
 <translation id="854876774113449365">Na weboch, ktoré navštívite, môže byť vložený obsah z iných webov, napríklad obrázky, reklamy a text. Tieto iné weby môžu žiadať o povolenia používať informácie, ktoré o vás uložili, keď ste ich prehliadali. <ph name="BEGIN_LINK" />Ďalšie informácie o vloženom obsahu<ph name="END_LINK" /></translation>
 <translation id="8549127125482561383">Ako zobrazovať žiadosti</translation>
-<translation id="8558480467877843976">Chrome môžete teraz kedykoľvek použiť pri prehliadaní alebo klepnutí na odkazy v správach, dokumentoch a ďalších aplikáciách.</translation>
+<translation id="8558480467877843976">Ultimatum môžete teraz kedykoľvek použiť pri prehliadaní alebo klepnutí na odkazy v správach, dokumentoch a ďalších aplikáciách.</translation>
 <translation id="857943718398505171">Povolené (odporúčané)</translation>
 <translation id="8593422116412089302">Keď je táto možnosť zapnutá, weby môžu žiadať o povolenie používať informácie, ktoré o vás uložili. Keď je táto možnosť vypnutá, weby vás nemôžu žiadať o povolenie používať informácie, ktoré o vás uložili.</translation>
 <translation id="8609465669617005112">Presunúť nahor</translation>
@@ -624,7 +624,7 @@ Rozšírená ochrana ovláda tieto nastavenia Chromu:
 <translation id="8751914237388039244">Vyberte obrázok</translation>
 <translation id="8800034312320686233">Web nefunguje?</translation>
 <translation id="8801436777607969138">Blokovať JavaScript na konkrétnom webe.</translation>
-<translation id="8801657293260363985">V8 je nástroj skriptov JavaScript a WebAssembly v Chrome, ktorý zlepšuje výkon webov</translation>
+<translation id="8801657293260363985">V8 je nástroj skriptov JavaScript a WebAssembly v Ultimatum, ktorý zlepšuje výkon webov</translation>
 <translation id="8803526663383843427">Keď je funkcia zapnutá</translation>
 <translation id="8805385115381080995">Prehliadanie je rýchlejšie, pretože daný web vás pravdepodobne nepožiada o overenie, že ste skutočná osoba</translation>
 <translation id="8816026460808729765">Brániť webom v prístupe k senzorom</translation>

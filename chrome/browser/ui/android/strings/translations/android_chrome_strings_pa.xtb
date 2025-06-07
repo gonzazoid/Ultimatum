@@ -6,7 +6,7 @@
 <translation id="1011749477052068769">ਇੱਥੇ ਲਿਜਾਓ</translation>
 <translation id="1014147525163127655">ਇਸ ਡੀਵਾਈਸ 'ਤੇ <ph name="ORIGIN" /> ਲਈ ਕੋਈ ਪਾਸਕੀ ਮੌਜੂਦ ਨਹੀਂ ਹੈ</translation>
 <translation id="1016498331642356377">ਤੁਰੰਤ ਆਪਣੀ ਅਵਾਜ਼ ਨਾਲ ਖੋਜੋ। ਇਸ ਸ਼ਾਰਟਕੱਟ ਦਾ ਸੰਪਾਦਨ ਕਰਨ ਲਈ, ਸਪਰਸ਼ ਕਰਕੇ ਰੱਖੋ।</translation>
-<translation id="1024113959924243553">Chrome Dev</translation>
+<translation id="1024113959924243553">Ultimatum Dev</translation>
 <translation id="1028699632127661925"><ph name="DEVICE_NAME" /> ਨੂੰ ਭੇਜਿਆ ਜਾ ਰਿਹਾ ਹੈ...</translation>
 <translation id="103269572468856066">ਇਹਨਾਂ ਸਾਈਟਾਂ ਅਤੇ ਐਪਾਂ ਤੋਂ ਵੀ ਡਾਟਾ ਕਲੀਅਰ ਕਰਨਾ ਹੈ?</translation>
 <translation id="1034259925032978114">ਵਿੰਡੋ ਖੁੱਲ੍ਹੀ ਹੈ</translation>
@@ -25,7 +25,7 @@
 <translation id="1094555143448724771">ਤੁਹਾਡੇ ਹੋਰ ਡੀਵਾਈਸਾਂ ਤੋਂ ਟੈਬਾਂ ਨੂੰ ਦੇਖਣ ਲਈ, ਆਪਣੀਆਂ ਟੈਬਾਂ ਅਤੇ ਇਤਿਹਾਸ ਨੂੰ ਸਿੰਕ ਕਰੋ</translation>
 <translation id="1095761715416917775">ਪੱਕਾ ਕਰੋ ਤੁਸੀਂ ਆਪਣੇ ਸਿੰਕ ਕੀਤੇ ਡਾਟੇ ਤੱਕ ਹਮੇਸ਼ਾਂ ਪਹੁੰਚ ਕਰ ਸਕੋ</translation>
 <translation id="1100066534610197918">ਗਰੁੱਪ 'ਚ ਨਵੀਂ ਟੈਬ ਵਿੱਚ ਖੋਲ੍ਹੋ</translation>
-<translation id="1103142993930332957">ਕੀ Chrome ਨੂੰ ਬਿਹਤਰ ਬਣਾਉਣ ਵਿੱਚ ਮਦਦ ਕਰਨਾ ਚਾਹੁੰਦੇ ਹੋ?</translation>
+<translation id="1103142993930332957">ਕੀ Ultimatum ਨੂੰ ਬਿਹਤਰ ਬਣਾਉਣ ਵਿੱਚ ਮਦਦ ਕਰਨਾ ਚਾਹੁੰਦੇ ਹੋ?</translation>
 <translation id="1105960400813249514">ਸਕ੍ਰੀਨ ਕੈਪਚਰ</translation>
 <translation id="1108214977745280468">ਪੰਨੇ ਦੀਆਂ ਅੰਦਰੂਨੀ-ਝਾਤਾਂ ਦੇਖੋ</translation>
 <translation id="1108938384783527433">ਇਤਿਹਾਸ ਸਿੰਕ</translation>
@@ -37,12 +37,12 @@
 <translation id="1140317858355046628">ਜੇ ਤੁਸੀਂ ਇਸ ਨੂੰ ਮਿਟਾਉਂਦੇ ਹੋ, ਤਾਂ ਹਰ ਕੋਈ "<ph name="GROUP_NAME" />" ਟੈਬ ਗਰੁੱਪ ਤੱਕ ਤੁਰੰਤ ਪਹੁੰਚ ਗੁਆ ਦੇਵੇਗਾ ਅਤੇ ਇਸ ਨੂੰ ਸਾਰੇ ਡੀਵਾਈਸਾਂ ਤੋਂ ਮਿਟਾ ਦਿੱਤਾ ਜਾਵੇਗਾ।</translation>
 <translation id="1142732900304639782">ਇਹਨਾਂ ਸਾਈਟਾਂ ਦਾ ਅਨੁਵਾਦ ਕਰਨ ਦੀ ਪੇਸ਼ਕਸ਼ ਨਾ ਕਰੋ</translation>
 <translation id="1145536944570833626">ਮੌਜੂਦਾ ਡਾਟਾ ਮਿਟਾਓ।</translation>
-<translation id="1150263420752757504"><ph name="APP_NAME" /> ਨੂੰ Chrome ਵਿੱਚ ਖੋਲ੍ਹਿਆ ਜਾਵੇਗਾ। ਜਾਰੀ ਰੱਖ ਕੇ, ਤੁਸੀਂ <ph name="BEGIN_LINK1" />Google ਦੇ ਸੇਵਾ ਦੇ ਨਿਯਮਾਂ<ph name="END_LINK1" /> ਅਤੇ <ph name="BEGIN_LINK2" />Google Chrome ਅਤੇ ChromeOS ਦੇ ਵਧੀਕ ਸੇਵਾ ਦੇ ਨਿਯਮਾਂ<ph name="END_LINK2" /> ਨਾਲ ਸਹਿਮਤ ਹੁੰਦੇ ਹੋ।</translation>
+<translation id="1150263420752757504"><ph name="APP_NAME" /> ਨੂੰ Ultimatum ਵਿੱਚ ਖੋਲ੍ਹਿਆ ਜਾਵੇਗਾ। ਜਾਰੀ ਰੱਖ ਕੇ, ਤੁਸੀਂ <ph name="BEGIN_LINK1" />Google ਦੇ ਸੇਵਾ ਦੇ ਨਿਯਮਾਂ<ph name="END_LINK1" /> ਅਤੇ <ph name="BEGIN_LINK2" />Ultimatum ਅਤੇ UltimatumOS ਦੇ ਵਧੀਕ ਸੇਵਾ ਦੇ ਨਿਯਮਾਂ<ph name="END_LINK2" /> ਨਾਲ ਸਹਿਮਤ ਹੁੰਦੇ ਹੋ।</translation>
 <translation id="1154555449933432029">ਤੁਹਾਡੇ Google Password Manager ਵਿੱਚ ਕੋਈ ਪਾਸਵਰਡ ਰੱਖਿਅਤ ਨਹੀਂ ਹੈ।</translation>
 <translation id="115483310321669804"><ph name="PASSWORD" /> ਪਾਸਵਰਡ ਵਰਤੋ</translation>
 <translation id="1173894706177603556">ਮੁੜ-ਨਾਮਕਰਨ ਕਰੋ</translation>
-<translation id="1174479719160874822">ਸਕ੍ਰੀਨ ਛੋਟੀ ਹੋਣ 'ਤੇ Chrome ਮੋਬਾਈਲ ਸਾਈਟ ਲਈ ਬੇਨਤੀ ਕਰੇਗਾ</translation>
-<translation id="1175241315203286684">ਤੁਹਾਡਾ ਪ੍ਰਸ਼ਾਸਕ ਦੂਰ-ਦੁਰਾਡੇ ਤੋਂ ਤੁਹਾਡੇ ਪ੍ਰੋਫਾਈਲ ਅਤੇ ਬ੍ਰਾਊਜ਼ਰ ਵਿੱਚ ਤਬਦੀਲੀਆਂ ਕਰ ਸਕਦਾ ਹੈ, ਰਿਪੋਰਟਿੰਗ ਰਾਹੀਂ ਬ੍ਰਾਊਜ਼ਰ ਬਾਰੇ ਜਾਣਕਾਰੀ ਦਾ ਵਿਸ਼ਲੇਸ਼ਣ ਕਰ ਸਕਦਾ ਹੈ ਅਤੇ ਹੋਰ ਜ਼ਰੂਰੀ ਕਾਰਜ ਕਰ ਸਕਦਾ ਹੈ। ਇਸ ਡੀਵਾਈਸ ਦੀ ਸਰਗਰਮੀ ਦਾ ਪ੍ਰਬੰਧਨ Chrome ਤੋਂ ਬਾਹਰ ਵੀ ਕੀਤਾ ਜਾ ਸਕਦਾ ਹੈ।</translation>
+<translation id="1174479719160874822">ਸਕ੍ਰੀਨ ਛੋਟੀ ਹੋਣ 'ਤੇ Ultimatum ਮੋਬਾਈਲ ਸਾਈਟ ਲਈ ਬੇਨਤੀ ਕਰੇਗਾ</translation>
+<translation id="1175241315203286684">ਤੁਹਾਡਾ ਪ੍ਰਸ਼ਾਸਕ ਦੂਰ-ਦੁਰਾਡੇ ਤੋਂ ਤੁਹਾਡੇ ਪ੍ਰੋਫਾਈਲ ਅਤੇ ਬ੍ਰਾਊਜ਼ਰ ਵਿੱਚ ਤਬਦੀਲੀਆਂ ਕਰ ਸਕਦਾ ਹੈ, ਰਿਪੋਰਟਿੰਗ ਰਾਹੀਂ ਬ੍ਰਾਊਜ਼ਰ ਬਾਰੇ ਜਾਣਕਾਰੀ ਦਾ ਵਿਸ਼ਲੇਸ਼ਣ ਕਰ ਸਕਦਾ ਹੈ ਅਤੇ ਹੋਰ ਜ਼ਰੂਰੀ ਕਾਰਜ ਕਰ ਸਕਦਾ ਹੈ। ਇਸ ਡੀਵਾਈਸ ਦੀ ਸਰਗਰਮੀ ਦਾ ਪ੍ਰਬੰਧਨ Ultimatum ਤੋਂ ਬਾਹਰ ਵੀ ਕੀਤਾ ਜਾ ਸਕਦਾ ਹੈ।</translation>
 <translation id="1177863135347784049">ਵਿਉਂਂਤੀ</translation>
 <translation id="1181037720776840403">ਹਟਾਓ</translation>
 <translation id="1183189057400844278">ਇਹ ਪੱਕਾ ਕਰਨ ਲਈ ਕਿ ਤੁਸੀਂ ਆਪਣੇ Google ਖਾਤੇ ਵਿੱਚ ਪਾਸਵਰਡਾਂ ਨੂੰ ਕਦੇ ਵੀ ਵਰਤ ਸਕੋ, ਆਪਣੀ ਪਛਾਣ ਦੀ ਪੁਸ਼ਟੀ ਕਰੋ</translation>
@@ -78,8 +78,8 @@
 <translation id="1318262688555255786">ਵੈੱਬ-ਪੰਨੇ <ph name="PAGE_TITLE" /> ਦਾ ਲਿੰਕ ਸਾਂਝਾ ਕਰੋ। ਸਰੋਤ: <ph name="PAGE_URL" /></translation>
 <translation id="1320912611264252795">ਬੁੱਕਮਾਰਕ ਰੱਖਿਅਤ ਕਰਨ ਸੰਬੰਧੀ ਪ੍ਰਵਾਹ ਵਾਲਾ ਫੋਲਡਰ ਪੂਰੀ ਉਚਾਈ ਤੱਕ ਖੋਲ੍ਹਿਆ ਗਿਆ ਹੈ</translation>
 <translation id="1327257854815634930">ਨੈਵੀਗੇਸ਼ਨ ਇਤਿਹਾਸ ਖੁੱਲ੍ਹਾ ਹੋਇਆ ਹੈ</translation>
-<translation id="1331212799747679585">Chrome ਅੱਪਡੇਟ ਨਹੀਂ ਕੀਤਾ ਜਾ ਸਕਦਾ। ਹੋਰ ਵਿਕਲਪ</translation>
-<translation id="1332501820983677155">Google Chrome ਵਿਸ਼ੇਸ਼ਤਾ ਸ਼ਾਰਟਕੱਟ</translation>
+<translation id="1331212799747679585">Ultimatum ਅੱਪਡੇਟ ਨਹੀਂ ਕੀਤਾ ਜਾ ਸਕਦਾ। ਹੋਰ ਵਿਕਲਪ</translation>
+<translation id="1332501820983677155">Ultimatum ਵਿਸ਼ੇਸ਼ਤਾ ਸ਼ਾਰਟਕੱਟ</translation>
 <translation id="1333491156693005331">ਹਾਲ ਹੀ ਵਿੱਚ ਜਾਂਚ ਕੀਤੀ ਗਈ</translation>
 <translation id="1336996151357442890"><ph name="SITE_NAME" /> ਤੋਂ ਅਣਸਬਸਕ੍ਰਾਈਬ ਕੀਤਾ। ਤੁਹਾਡੀ ਅਗਲੀ ਫੇਰੀ 'ਤੇ ਤੁਹਾਡੇ ਤੋਂ ਦੁਬਾਰਾ ਪੁੱਛਿਆ ਜਾਵੇਗਾ।</translation>
 <translation id="1340839264183302272">ਗਰੁੱਪ ਛੱਡੋ</translation>
@@ -96,28 +96,28 @@
 <translation id="1383876407941801731">ਖੋਜੋ</translation>
 <translation id="1384704387250346179">Google Lens ਨਾਲ ਚਿੱਤਰ ਦਾ ਅਨੁਵਾਦ ਕਰੋ <ph name="BEGIN_NEW" />ਨਵਾਂ<ph name="END_NEW" /></translation>
 <translation id="1386674309198842382"><ph name="LAST_UPDATED" /> ਦਿਨ ਪਹਿਲਾਂ ਕਿਰਿਆਸ਼ੀਲ</translation>
-<translation id="1390418506739274310">ਤੁਸੀਂ ਉਨ੍ਹਾਂ ਹੋਰ ਐਪਾਂ ਦਾ ਇਤਿਹਾਸ ਦੇਖ ਸਕਦੇ ਹੋ, ਜਿਨ੍ਹਾਂ ਦੇ ਲਿੰਕ Chrome ਵਿੱਚ ਖੁੱਲ੍ਹਦੇ ਹਨ। ਤੁਹਾਡੇ Google ਖਾਤੇ ਵਿੱਚ <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> 'ਤੇ ਬ੍ਰਾਊਜ਼ਿੰਗ ਇਤਿਹਾਸ ਦੀਆਂ ਹੋਰ ਕਿਸਮਾਂ ਹੋ ਸਕਦੀਆਂ ਹਨ।</translation>
+<translation id="1390418506739274310">ਤੁਸੀਂ ਉਨ੍ਹਾਂ ਹੋਰ ਐਪਾਂ ਦਾ ਇਤਿਹਾਸ ਦੇਖ ਸਕਦੇ ਹੋ, ਜਿਨ੍ਹਾਂ ਦੇ ਲਿੰਕ Ultimatum ਵਿੱਚ ਖੁੱਲ੍ਹਦੇ ਹਨ। ਤੁਹਾਡੇ Google ਖਾਤੇ ਵਿੱਚ <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> 'ਤੇ ਬ੍ਰਾਊਜ਼ਿੰਗ ਇਤਿਹਾਸ ਦੀਆਂ ਹੋਰ ਕਿਸਮਾਂ ਹੋ ਸਕਦੀਆਂ ਹਨ।</translation>
 <translation id="139752016751285248">ਕੀਮਤਾਂ ਬਾਰੇ ਅੰਦਰੂਨੀ-ਝਾਤਾਂ ਦੀ ਹੇਠਲੀ ਸ਼ੀਟ ਪੂਰੀ ਉਚਾਈ ਤੱਕ ਖੋਲ੍ਹੀ ਗਈ</translation>
 <translation id="1397811292916898096"><ph name="PRODUCT_NAME" /> ਨਾਲ ਖੋਜੋ</translation>
-<translation id="1398057416966591719">ਤੁਹਾਡੇ Google ਖਾਤੇ ਵਿੱਚ <ph name="BEGIN_LINK1" />ਕਿਹੜਾ Chrome ਡਾਟਾ ਰੱਖਿਅਤ ਕੀਤਾ ਜਾਂਦਾ ਹੈ, ਤੁਸੀਂ ਇਸਦਾ ਪ੍ਰਬੰਧਨ ਕਰ ਸਕਦੇ ਹੋ<ph name="END_LINK1" />।
+<translation id="1398057416966591719">ਤੁਹਾਡੇ Google ਖਾਤੇ ਵਿੱਚ <ph name="BEGIN_LINK1" />ਕਿਹੜਾ Ultimatum ਡਾਟਾ ਰੱਖਿਅਤ ਕੀਤਾ ਜਾਂਦਾ ਹੈ, ਤੁਸੀਂ ਇਸਦਾ ਪ੍ਰਬੰਧਨ ਕਰ ਸਕਦੇ ਹੋ<ph name="END_LINK1" />।
 
-ਤੁਹਾਡੇ Chrome ਦੇ ਅਨੁਭਵ ਨੂੰ ਬਿਹਤਰ ਬਣਾਉਣ ਲਈ ਡਾਟੇ ਦੀ ਵਰਤੋਂ ਕਰਨ ਵਾਲੀਆਂ ਹੋਰ ਸੈਟਿੰਗਾਂ ਵਾਸਤੇ, <ph name="BEGIN_LINK2" />Google ਸੇਵਾਵਾਂ<ph name="END_LINK2" /> 'ਤੇ ਜਾਓ।</translation>
+ਤੁਹਾਡੇ Ultimatum ਦੇ ਅਨੁਭਵ ਨੂੰ ਬਿਹਤਰ ਬਣਾਉਣ ਲਈ ਡਾਟੇ ਦੀ ਵਰਤੋਂ ਕਰਨ ਵਾਲੀਆਂ ਹੋਰ ਸੈਟਿੰਗਾਂ ਵਾਸਤੇ, <ph name="BEGIN_LINK2" />Google ਸੇਵਾਵਾਂ<ph name="END_LINK2" /> 'ਤੇ ਜਾਓ।</translation>
 <translation id="1407069428457324124">ਗੂੜ੍ਹਾ ਥੀਮ</translation>
 <translation id="1407135791313364759">ਸਾਰੇ ਖੋਲ੍ਹੋ</translation>
 <translation id="1409879593029778104"><ph name="FILE_NAME" /> ਡਾਊਨਲੋਡ ਰੋਕਿਆ ਗਿਆ ਕਿਉਂਕਿ ਫ਼ਾਈਲ ਪਹਿਲਾਂ ਤੋਂ ਹੀ ਮੌਜੂਦ ਹੈ।</translation>
 <translation id="1413446866325418126">ਆਪਣੇ Google ਖਾਤੇ ਵਿੱਚ ਡਾਟਾ ਰੱਖਿਅਤ ਕਰੋ</translation>
 <translation id="1416550906796893042">ਐਪਲੀਕੇਸ਼ਨ ਵਰਜਨ</translation>
-<translation id="1419753403124156396">ਕੀ Chrome ਨੂੰ ਮੁੜ-ਸ਼ੁਰੂ ਕਰਨਾ ਹੈ?</translation>
+<translation id="1419753403124156396">ਕੀ Ultimatum ਨੂੰ ਮੁੜ-ਸ਼ੁਰੂ ਕਰਨਾ ਹੈ?</translation>
 <translation id="1428770807407000502">ਕੀ ਸਿੰਕ ਨੂੰ ਬੰਦ ਕਰਨਾ ਹੈ?</translation>
 <translation id="1430915738399379752">ਪ੍ਰਿੰਟ ਕਰੋ</translation>
 <translation id="1435593198351412143">PDF ਫ਼ਾਈਲਾਂ ਨੂੰ ਸਵੈਚਲਿਤ ਤੌਰ 'ਤੇ ਖੋਲ੍ਹੋ</translation>
 <translation id="1437543266176261764">ਇਹ ਸਰਗਰਮੀ <ph name="APP_NAME" /> ਵਿੱਚ ਚੱਲ ਰਹੀ ਹੈ</translation>
 <translation id="1448440926884431741">Bookmarks ਵਿੱਚ ਆਪਣੇ ਟਰੈਕ ਕੀਤੇ ਉਤਪਾਦਾਂ ਨੂੰ ਵਿਵਸਥਿਤ ਕਰੋ</translation>
 <translation id="1460751212339734034">ਸਮਾਂ ਬਚਾਓ, ਘੱਟ ਟਾਈਪ ਕਰੋ</translation>
-<translation id="1466383950273130737">Chrome ਦੀ ਭਾਸ਼ਾ ਚੁਣੋ</translation>
+<translation id="1466383950273130737">Ultimatum ਦੀ ਭਾਸ਼ਾ ਚੁਣੋ</translation>
 <translation id="1477626028522505441">ਸਰਵਰ ਸਮੱਸਿਆਵਾਂ ਦੇ ਕਾਰਨ <ph name="FILE_NAME" /> ਡਾਊਨਲੋਡ ਅਸਫ਼ਲ ਰਿਹਾ।</translation>
 <translation id="147982357559798527">ਬਦਲੀ ਗਈ</translation>
-<translation id="1480287803138246127">ਤੁਹਾਡਾ ਕੁਝ ਇਤਿਹਾਸ ਸ਼ਾਇਦ ਇੱਥੇ ਦਿਖਾਈ ਨਾ ਦੇਵੇ। ਆਪਣਾ ਸਾਰਾ Chrome ਇਤਿਹਾਸ ਦੇਖਣ ਲਈ, ਪੂਰਾ Chrome ਇਤਿਹਾਸ ਖੋਲ੍ਹੋ।</translation>
+<translation id="1480287803138246127">ਤੁਹਾਡਾ ਕੁਝ ਇਤਿਹਾਸ ਸ਼ਾਇਦ ਇੱਥੇ ਦਿਖਾਈ ਨਾ ਦੇਵੇ। ਆਪਣਾ ਸਾਰਾ Ultimatum ਇਤਿਹਾਸ ਦੇਖਣ ਲਈ, ਪੂਰਾ Ultimatum ਇਤਿਹਾਸ ਖੋਲ੍ਹੋ।</translation>
 <translation id="1492417797159476138">ਤੁਸੀਂ ਪਹਿਲਾਂ ਹੀ ਇਸ ਸਾਈਟ ਲਈ ਇਹ ਵਰਤੋਂਕਾਰ ਨਾਮ ਰੱਖਿਅਤ ਕਰ ਚੁੱਕੇ ਹੋ</translation>
 <translation id="1493287004536771723">ਤੁਸੀਂ <ph name="SITE_NAME" /> ਦਾ ਅਨੁਸਰਣ ਕਰ ਰਹੇ ਹੋ</translation>
 <translation id="1496514951988037011">ਵਰਤੋਂਕਾਰ ਨਾਮ</translation>
@@ -128,15 +128,15 @@
 <translation id="1513858653616922153">ਪਾਸਵਰਡ ਮਿਟਾਓ</translation>
 <translation id="1515901671075971249">ਨੈਵੀਗੇਸ਼ਨ ਸ਼ਾਰਟਕੱਟ ਟੈਬ</translation>
 <translation id="1521774566618522728">ਅੱਜ ਕਿਰਿਆਸ਼ੀਲ</translation>
-<translation id="153446405401665083">Chrome ਦਾ ਨਵਾਂ ਵਰਜਨ ਉਪਲਬਧ ਹੈ</translation>
+<translation id="153446405401665083">Ultimatum ਦਾ ਨਵਾਂ ਵਰਜਨ ਉਪਲਬਧ ਹੈ</translation>
 <translation id="1540012742443808215">ਪਤਾ ਬਾਰ ਇਸ ਵੇਲੇ ਸਿਖਰ 'ਤੇ ਹੈ</translation>
 <translation id="1543379346429265919">{BOOKMARKS_COUNT,plural, =1{1 ਬੁੱਕਮਾਰਕ ਨੂੰ ਸਿਰਫ਼ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਰੱਖਿਅਤ ਕੀਤਾ ਜਾਵੇਗਾ। ਦੂਜੇ ਡੀਵਾਈਸਾਂ 'ਤੇ ਵਰਤਣ ਲਈ, ਇਸ ਨੂੰ ਆਪਣੇ Google ਖਾਤੇ, <ph name="ACCOUNT_EMAIL" /> ਵਿੱਚ ਰੱਖਿਅਤ ਕਰੋ।}one{# ਬੁੱਕਮਾਰਕ ਨੂੰ ਸਿਰਫ਼ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਰੱਖਿਅਤ ਕੀਤਾ ਜਾਵੇਗਾ। ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੇ ਹੋਰ ਡੀਵਾਈਸਾਂ 'ਤੇ ਵਰਤਣ ਲਈ, ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੇ Google ਖਾਤੇ, <ph name="ACCOUNT_EMAIL" /> ਵਿੱਚ ਰੱਖਿਅਤ ਕਰੋ।}other{# ਬੁੱਕਮਾਰਕਾਂ ਨੂੰ ਸਿਰਫ਼ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਰੱਖਿਅਤ ਕੀਤਾ ਜਾਵੇਗਾ। ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੇ ਹੋਰ ਡੀਵਾਈਸਾਂ 'ਤੇ ਵਰਤਣ ਲਈ, ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੇ Google ਖਾਤੇ, <ph name="ACCOUNT_EMAIL" /> ਵਿੱਚ ਰੱਖਿਅਤ ਕਰੋ।}}</translation>
-<translation id="1544084554881119930">ਭੁਗਤਾਨ ਵਿਧੀਆਂ ਅਤੇ ਪਤਿਆਂ ਨੂੰ ਇਨਕ੍ਰਿਪਟ ਨਹੀਂ ਕੀਤਾ ਜਾਵੇਗਾ। Chrome ਦੇ ਬ੍ਰਾਊਜ਼ਿੰਗ ਇਤਿਹਾਸ ਨੂੰ ਸਿੰਕ ਨਹੀਂ ਕੀਤਾ ਜਾਵੇਗਾ।
-ਸਿਰਫ਼ ਤੁਹਾਡੇ ਪਾਸਫਰੇਜ਼ ਨਾਲ ਹੀ ਕੋਈ ਤੁਹਾਡੇ ਇਨਕ੍ਰਿਪਟਡ ਡਾਟੇ ਨੂੰ ਪੜ੍ਹ ਸਕਦਾ ਹੈ। ਪਾਸਫਰੇਜ਼ Google ਨੂੰ ਨਹੀਂ ਭੇਜਿਆ ਜਾਂਦਾ ਜਾਂ ਇਸ ਵੱਲੋਂ ਸਟੋਰ ਨਹੀਂ ਕੀਤਾ ਜਾਂਦਾ। ਜੇ ਤੁਸੀਂ ਆਪਣਾ ਪਾਸਫਰੇਜ਼ ਭੁੱਲ ਜਾਂਦੇ ਹੋ ਜਾਂ ਇਸ ਸੈਟਿੰਗ ਨੂੰ ਬਦਲਣਾ ਚਾਹੁੰਦੇ ਹੋ, ਤਾਂ <ph name="BEGIN_LINK" />ਆਪਣੇ ਖਾਤੇ ਵਿੱਚ Chrome ਡਾਟੇ ਨੂੰ ਕਲੀਅਰ ਕਰੋ<ph name="END_LINK" />।</translation>
+<translation id="1544084554881119930">ਭੁਗਤਾਨ ਵਿਧੀਆਂ ਅਤੇ ਪਤਿਆਂ ਨੂੰ ਇਨਕ੍ਰਿਪਟ ਨਹੀਂ ਕੀਤਾ ਜਾਵੇਗਾ। Ultimatum ਦੇ ਬ੍ਰਾਊਜ਼ਿੰਗ ਇਤਿਹਾਸ ਨੂੰ ਸਿੰਕ ਨਹੀਂ ਕੀਤਾ ਜਾਵੇਗਾ।
+ਸਿਰਫ਼ ਤੁਹਾਡੇ ਪਾਸਫਰੇਜ਼ ਨਾਲ ਹੀ ਕੋਈ ਤੁਹਾਡੇ ਇਨਕ੍ਰਿਪਟਡ ਡਾਟੇ ਨੂੰ ਪੜ੍ਹ ਸਕਦਾ ਹੈ। ਪਾਸਫਰੇਜ਼ Google ਨੂੰ ਨਹੀਂ ਭੇਜਿਆ ਜਾਂਦਾ ਜਾਂ ਇਸ ਵੱਲੋਂ ਸਟੋਰ ਨਹੀਂ ਕੀਤਾ ਜਾਂਦਾ। ਜੇ ਤੁਸੀਂ ਆਪਣਾ ਪਾਸਫਰੇਜ਼ ਭੁੱਲ ਜਾਂਦੇ ਹੋ ਜਾਂ ਇਸ ਸੈਟਿੰਗ ਨੂੰ ਬਦਲਣਾ ਚਾਹੁੰਦੇ ਹੋ, ਤਾਂ <ph name="BEGIN_LINK" />ਆਪਣੇ ਖਾਤੇ ਵਿੱਚ Ultimatum ਡਾਟੇ ਨੂੰ ਕਲੀਅਰ ਕਰੋ<ph name="END_LINK" />।</translation>
 <translation id="1544826120773021464">ਆਪਣੇ Google ਖਾਤੇ ਦਾ ਪ੍ਰਬੰਧਨ ਕਰਨ ਲਈ, "ਖਾਤੇ ਦਾ ਪ੍ਰਬੰਧਨ ਕਰੋ" ਬਟਨ 'ਤੇ ਟੈਪ ਕਰੋ</translation>
 <translation id="1549000191223877751">ਹੋਰ ਵਿੰਡੋ 'ਤੇ ਤਬਦੀਲ ਕਰੋ</translation>
-<translation id="1553358976309200471">Chrome ਨੂੰ ਅੱਪਡੇਟ ਕਰੋ</translation>
-<translation id="1554532453982918912">ਉਨ੍ਹਾਂ ਲੋਕਾਂ ਲਈ Chrome ਨੂੰ ਬਿਹਤਰ ਬਣਾਉਣ ਵਿੱਚ ਮਦਦ ਕਰੋ ਜੋ ਇਸਨੂੰ ਤੁਹਾਡੇ ਤਰੀਕੇ ਨਾਲ ਵਰਤਦੇ ਹਨ</translation>
+<translation id="1553358976309200471">Ultimatum ਨੂੰ ਅੱਪਡੇਟ ਕਰੋ</translation>
+<translation id="1554532453982918912">ਉਨ੍ਹਾਂ ਲੋਕਾਂ ਲਈ Ultimatum ਨੂੰ ਬਿਹਤਰ ਬਣਾਉਣ ਵਿੱਚ ਮਦਦ ਕਰੋ ਜੋ ਇਸਨੂੰ ਤੁਹਾਡੇ ਤਰੀਕੇ ਨਾਲ ਵਰਤਦੇ ਹਨ</translation>
 <translation id="1568636008098739136">ਇਸ ਪੰਨੇ ਨੂੰ ਸੁਣੋ। ਇਸ ਸ਼ਾਰਟਕੱਟ ਦਾ ਸੰਪਾਦਨ ਕਰਨ ਲਈ, ਸਪਰਸ਼ ਕਰ ਕੇ ਰੱਖੋ।</translation>
 <translation id="1571041387761170095">ਕੋਈ ਵੀ ਕਮਜ਼ੋਰ ਜਾਂ ਮੁੜ-ਵਰਤਿਆ ਪਾਸਵਰਡ ਨਹੀਂ</translation>
 <translation id="1571304935088121812">ਵਰਤੋਂਕਾਰ ਨਾਮ ਕਾਪੀ ਕਰੋ</translation>
@@ -161,7 +161,7 @@
 <translation id="1702907158640575240">ਪ੍ਰਬੰਧਨ ਕੀਤਾ ਬ੍ਰਾਊਜ਼ਰ</translation>
 <translation id="1718835860248848330">ਪਿਛਲਾ ਘੰਟਾ</translation>
 <translation id="1724977129262658800">ਆਪਣੇ ਪਾਸਵਰਡ ਦਾ ਸੰਪਾਦਨ ਕਰਨ ਲਈ ਅਣਲਾਕ ਕਰੋ</translation>
-<translation id="1726477445370128854">Chrome ਮੁਤਾਬਕ ਜਿਨ੍ਹਾਂ ਪੰਨਿਆਂ 'ਤੇ ਤੁਸੀਂ ਜਾ ਸਕਦੇ ਹੋ ਜਦੋਂ ਇਹ ਉਨ੍ਹਾਂ ਨੂੰ ਪ੍ਰੀਲੋਡ ਕਰਦਾ ਹੈ, ਤਾਂ ਤੁਸੀਂ ਉਨ੍ਹਾਂ ਨੂੰ ਤੇਜ਼ੀ ਨਾਲ ਬ੍ਰਾਊਜ਼ ਕਰ ਸਕਦੇ ਹੋ ਅਤੇ ਖੋਜ ਕਰ ਸਕਦੇ ਹੋ</translation>
+<translation id="1726477445370128854">Ultimatum ਮੁਤਾਬਕ ਜਿਨ੍ਹਾਂ ਪੰਨਿਆਂ 'ਤੇ ਤੁਸੀਂ ਜਾ ਸਕਦੇ ਹੋ ਜਦੋਂ ਇਹ ਉਨ੍ਹਾਂ ਨੂੰ ਪ੍ਰੀਲੋਡ ਕਰਦਾ ਹੈ, ਤਾਂ ਤੁਸੀਂ ਉਨ੍ਹਾਂ ਨੂੰ ਤੇਜ਼ੀ ਨਾਲ ਬ੍ਰਾਊਜ਼ ਕਰ ਸਕਦੇ ਹੋ ਅਤੇ ਖੋਜ ਕਰ ਸਕਦੇ ਹੋ</translation>
 <translation id="1728803206919861584">ਕੀ ਪਾਸਕੀ ਨੂੰ ਇਨਕੋਗਨਿਟੋ ਤੋਂ ਬਾਹਰ ਰੱਖਿਅਤ ਕਰਨਾ ਹੈ?</translation>
 <translation id="1732514748744806741">ਪਾਸਵਰਡਾਂ ਨਾਲ ਛੇੜਛਾੜ ਹੋਣ 'ਤੇ, ਅਸੀਂ ਤੁਹਾਨੂੰ ਸੂਚਿਤ ਕਰਾਂਗੇ</translation>
 <translation id="1747593111377567311">{NUM_SITES,plural, =1{1 ਸਾਈਟ ਵੱਲੋਂ ਹਾਲ ਹੀ ਵਿੱਚ ਬਹੁਤ ਸਾਰੀਆਂ ਸੂਚਨਾਵਾਂ ਭੇਜੀਆਂ ਗਈਆਂ ਹਨ}one{# ਸਾਈਟ ਵੱਲੋਂ ਹਾਲ ਹੀ ਵਿੱਚ ਬਹੁਤ ਸਾਰੀਆਂ ਸੂਚਨਾਵਾਂ ਭੇਜੀਆਂ ਗਈਆਂ ਹਨ}other{# ਸਾਈਟਾਂ ਵੱਲੋਂ ਹਾਲ ਹੀ ਵਿੱਚ ਬਹੁਤ ਸਾਰੀਆਂ ਸੂਚਨਾਵਾਂ ਭੇਜੀਆਂ ਗਈਆਂ ਹਨ}}</translation>
@@ -171,7 +171,7 @@
 <translation id="1755203724116202818">ਕਿਸੇ ਵਿਗਿਆਪਨ ਦੀ ਕਾਰਗੁਜ਼ਾਰੀ ਦਾ ਮੁਲਾਂਕਣ ਕਰਨ ਲਈ, ਸਾਈਟਾਂ ਵਿਚਕਾਰ ਸੀਮਤ ਕਿਸਮ ਦਾ ਡਾਟਾ ਸਾਂਝਾ ਕੀਤਾ ਜਾਂਦਾ ਹੈ, ਜਿਵੇਂ ਕਿ ਕਿਸੇ ਸਾਈਟ 'ਤੇ ਜਾਣ ਤੋਂ ਬਾਅਦ ਤੁਸੀਂ ਕੋਈ ਖਰੀਦ ਕੀਤੀ ਹੈ ਜਾਂ ਨਹੀਂ।</translation>
 <translation id="1757620656501361327">Google Password Manager ਸੰਬੰਧੀ ਅੱਪਡੇਟ</translation>
 <translation id="1760873718737761808">{FILE_COUNT,plural, =1{ਪੰਨੇ, ਸੂਚੀ ਵਿੱਚ 1 ਪੰਨਾ ਹੈ}one{ਪੰਨੇ, ਸੂਚੀ ਵਿੱਚ # ਪੰਨਾ ਹੈ}other{ਪੰਨੇ, ਸੂਚੀ ਵਿੱਚ # ਪੰਨੇ ਹਨ}}</translation>
-<translation id="1771929606532798550">ਤੁਹਾਡੀ Chrome ਵਰਤੋਂ ਦੀ ਜਾਣਕਾਰੀ Google ਨੂੰ ਭੇਜੀ ਜਾਂਦੀ ਹੈ, ਪਰ ਇਹ ਤੁਹਾਡੇ ਨਾਲ ਸੰਬੰਧਿਤ ਨਹੀਂ ਹੁੰਦੀ ਹੈ\n\nਜੇ Chrome ਕ੍ਰੈਸ਼ ਹੋ ਜਾਂਦਾ ਹੈ, ਤਾਂ ਕ੍ਰੈਸ਼ ਦੇ ਵੇਰਵਿਆਂ ਵਿੱਚ ਕੁਝ ਨਿੱਜੀ ਜਾਣਕਾਰੀ ਸ਼ਾਮਲ ਹੋ ਸਕਦੀ ਹੈ\n\nਜੇ ਤੁਸੀਂ ਆਪਣੇ Google ਖਾਤੇ ਨਾਲ ਆਪਣੇ ਇਤਿਹਾਸ ਨੂੰ ਸਿੰਕ ਕਰਦੇ ਹੋ, ਤਾਂ ਮਾਪਕਾਂ ਵਿੱਚ ਉਨ੍ਹਾਂ URL ਦੀ ਜਾਣਕਾਰੀ ਵੀ ਸ਼ਾਮਲ ਹੋ ਸਕਦੀ ਹੈ, ਜਿਨ੍ਹਾਂ 'ਤੇ ਤੁਸੀਂ ਜਾਂਦੇ ਹੋ</translation>
+<translation id="1771929606532798550">ਤੁਹਾਡੀ Ultimatum ਵਰਤੋਂ ਦੀ ਜਾਣਕਾਰੀ Google ਨੂੰ ਭੇਜੀ ਜਾਂਦੀ ਹੈ, ਪਰ ਇਹ ਤੁਹਾਡੇ ਨਾਲ ਸੰਬੰਧਿਤ ਨਹੀਂ ਹੁੰਦੀ ਹੈ\n\nਜੇ Ultimatum ਕ੍ਰੈਸ਼ ਹੋ ਜਾਂਦਾ ਹੈ, ਤਾਂ ਕ੍ਰੈਸ਼ ਦੇ ਵੇਰਵਿਆਂ ਵਿੱਚ ਕੁਝ ਨਿੱਜੀ ਜਾਣਕਾਰੀ ਸ਼ਾਮਲ ਹੋ ਸਕਦੀ ਹੈ\n\nਜੇ ਤੁਸੀਂ ਆਪਣੇ Google ਖਾਤੇ ਨਾਲ ਆਪਣੇ ਇਤਿਹਾਸ ਨੂੰ ਸਿੰਕ ਕਰਦੇ ਹੋ, ਤਾਂ ਮਾਪਕਾਂ ਵਿੱਚ ਉਨ੍ਹਾਂ URL ਦੀ ਜਾਣਕਾਰੀ ਵੀ ਸ਼ਾਮਲ ਹੋ ਸਕਦੀ ਹੈ, ਜਿਨ੍ਹਾਂ 'ਤੇ ਤੁਸੀਂ ਜਾਂਦੇ ਹੋ</translation>
 <translation id="1778457539567749232">ਨਾ-ਪੜ੍ਹੇ ਵਜੋਂ ਨਿਸ਼ਾਨਦੇਹੀ ਕਰੋ</translation>
 <translation id="1779766957982586368">window ਬੰਦ ਕਰੋ</translation>
 <translation id="1780023393214832643">ਪਾਸਵਰਡਾਂ ਨੂੰ <ph name="USERNAME" /> ਵਿੱਚ ਰੱਖਿਅਤ ਕੀਤਾ ਗਿਆ</translation>
@@ -183,13 +183,13 @@
 <translation id="1810845389119482123">ਸ਼ੁਰੂਆਤੀ ਸਿੰਕ ਸੈੱਟਅੱਪ ਪੂਰਾ ਨਹੀਂ ਹੋਇਆ</translation>
 <translation id="1812027881030482584"><ph name="SITE_ETLD_PLUS_ONE" /> <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> ਦੀ ਵਰਤੋਂ ਜਾਰੀ ਨਹੀਂ ਰੱਖ ਸਕਦਾ</translation>
 <translation id="1820408774134375111">ਸਾਈਨ-ਇਨ ਕਰਨ ਲਈ ਹੇਠਲੀ ਸ਼ੀਟ</translation>
-<translation id="1825772852827001597">Google Pay ਦੀਆਂ ਭੁਗਤਾਨ ਵਿਧੀਆਂ ਅਤੇ ਪਤਿਆਂ ਨੂੰ ਇਨਕ੍ਰਿਪਟ ਨਹੀਂ ਕੀਤਾ ਜਾਵੇਗਾ। Chrome ਦੇ ਬ੍ਰਾਊਜ਼ਿੰਗ ਇਤਿਹਾਸ ਨੂੰ ਸਿੰਕ ਨਹੀਂ ਕੀਤਾ ਜਾਵੇਗਾ।
-ਸਿਰਫ਼ ਤੁਹਾਡੇ ਪਾਸਫਰੇਜ਼ ਨਾਲ ਹੀ ਕੋਈ ਤੁਹਾਡੇ ਇਨਕ੍ਰਿਪਟਡ ਡਾਟੇ ਨੂੰ ਪੜ੍ਹ ਸਕਦਾ ਹੈ। ਪਾਸਫਰੇਜ਼ Google ਨੂੰ ਨਹੀਂ ਭੇਜਿਆ ਜਾਂਦਾ ਜਾਂ ਇਸ ਵੱਲੋਂ ਸਟੋਰ ਨਹੀਂ ਕੀਤਾ ਜਾਂਦਾ। ਜੇ ਤੁਸੀਂ ਆਪਣਾ ਪਾਸਫਰੇਜ਼ ਭੁੱਲ ਜਾਂਦੇ ਹੋ ਜਾਂ ਇਸ ਸੈਟਿੰਗ ਨੂੰ ਬਦਲਣਾ ਚਾਹੁੰਦੇ ਹੋ, ਤਾਂ <ph name="BEGIN_LINK" />ਆਪਣੇ ਖਾਤੇ ਵਿੱਚ Chrome ਡਾਟੇ ਨੂੰ ਮਿਟਾਓ<ph name="END_LINK" />।</translation>
+<translation id="1825772852827001597">Google Pay ਦੀਆਂ ਭੁਗਤਾਨ ਵਿਧੀਆਂ ਅਤੇ ਪਤਿਆਂ ਨੂੰ ਇਨਕ੍ਰਿਪਟ ਨਹੀਂ ਕੀਤਾ ਜਾਵੇਗਾ। Ultimatum ਦੇ ਬ੍ਰਾਊਜ਼ਿੰਗ ਇਤਿਹਾਸ ਨੂੰ ਸਿੰਕ ਨਹੀਂ ਕੀਤਾ ਜਾਵੇਗਾ।
+ਸਿਰਫ਼ ਤੁਹਾਡੇ ਪਾਸਫਰੇਜ਼ ਨਾਲ ਹੀ ਕੋਈ ਤੁਹਾਡੇ ਇਨਕ੍ਰਿਪਟਡ ਡਾਟੇ ਨੂੰ ਪੜ੍ਹ ਸਕਦਾ ਹੈ। ਪਾਸਫਰੇਜ਼ Google ਨੂੰ ਨਹੀਂ ਭੇਜਿਆ ਜਾਂਦਾ ਜਾਂ ਇਸ ਵੱਲੋਂ ਸਟੋਰ ਨਹੀਂ ਕੀਤਾ ਜਾਂਦਾ। ਜੇ ਤੁਸੀਂ ਆਪਣਾ ਪਾਸਫਰੇਜ਼ ਭੁੱਲ ਜਾਂਦੇ ਹੋ ਜਾਂ ਇਸ ਸੈਟਿੰਗ ਨੂੰ ਬਦਲਣਾ ਚਾਹੁੰਦੇ ਹੋ, ਤਾਂ <ph name="BEGIN_LINK" />ਆਪਣੇ ਖਾਤੇ ਵਿੱਚ Ultimatum ਡਾਟੇ ਨੂੰ ਮਿਟਾਓ<ph name="END_LINK" />।</translation>
 <translation id="1829244130665387512">ਸਫ਼ੇ ਵਿੱਚ ਲੱਭੋ</translation>
 <translation id="1832459821645506983">ਹਾਂ, ਮੈਂ ਸਹਿਮਤ ਹਾਂ</translation>
-<translation id="1845958458910716240">ਆਪਣੇ ਡਾਟੇ ਨੂੰ ਸੁਰੱਖਿਅਤ ਕਰਨ ਲਈ, Chrome ਨੂੰ ਉਨ੍ਹਾਂ ਸਾਈਟਾਂ ਤੋਂ ਇਜਾਜ਼ਤਾਂ ਹਟਾਉਣ ਦਿਓ, ਜਿਨ੍ਹਾਂ 'ਤੇ ਤੁਸੀਂ ਹਾਲ ਹੀ ਵਿੱਚ ਨਹੀਂ ਗਏ ਹੋ</translation>
-<translation id="1871098866036088250">Chrome ਬ੍ਰਾਊਜ਼ਰ ਵਿੱਚ ਖੋਲ੍ਹੋ</translation>
-<translation id="1877026089748256423">Chrome ਦਾ ਇਹ ਵਰਜਨ ਪੁਰਾਣਾ ਹੈ</translation>
+<translation id="1845958458910716240">ਆਪਣੇ ਡਾਟੇ ਨੂੰ ਸੁਰੱਖਿਅਤ ਕਰਨ ਲਈ, Ultimatum ਨੂੰ ਉਨ੍ਹਾਂ ਸਾਈਟਾਂ ਤੋਂ ਇਜਾਜ਼ਤਾਂ ਹਟਾਉਣ ਦਿਓ, ਜਿਨ੍ਹਾਂ 'ਤੇ ਤੁਸੀਂ ਹਾਲ ਹੀ ਵਿੱਚ ਨਹੀਂ ਗਏ ਹੋ</translation>
+<translation id="1871098866036088250">Ultimatum ਬ੍ਰਾਊਜ਼ਰ ਵਿੱਚ ਖੋਲ੍ਹੋ</translation>
+<translation id="1877026089748256423">Ultimatum ਦਾ ਇਹ ਵਰਜਨ ਪੁਰਾਣਾ ਹੈ</translation>
 <translation id="1877073879466606884">ਤੁਸੀਂ ਜਿਸ ਪ੍ਰੋਫਾਈਲ ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕੀਤਾ ਹੈ, ਉਹ ਇੱਕ ਪ੍ਰਬੰਧਿਤ ਪ੍ਰੋਫਾਈਲ ਹੈ। ਤੁਹਾਡਾ ਪ੍ਰਸ਼ਾਸਕ ਦੂਰ-ਦੁਰਾਡੇ ਤੋਂ ਤੁਹਾਡੀਆਂ ਪ੍ਰੋਫਾਈਲ ਸੈਟਿੰਗਾਂ ਵਿੱਚ ਤਬਦੀਲੀਆਂ ਕਰ ਸਕਦਾ ਹੈ, ਰਿਪੋਰਟਿੰਗ ਰਾਹੀਂ ਬ੍ਰਾਊਜ਼ਰ ਬਾਰੇ ਜਾਣਕਾਰੀ ਦਾ ਵਿਸ਼ਲੇਸ਼ਣ ਕਰ ਸਕਦਾ ਹੈ ਅਤੇ ਹੋਰ ਜ਼ਰੂਰੀ ਕਾਰਜ ਕਰ ਸਕਦਾ ਹੈ।</translation>
 <translation id="1879904908408734349">ਸਾਈਨ-ਇਨ ਕਰਨ ਲਈ ਹੇਠਲੀ ਸ਼ੀਟ ਬੰਦ ਹੈ</translation>
 <translation id="1883903952484604915">ਮੇਰੀਆਂ ਫ਼ਾਈਲਾਂ</translation>
@@ -200,7 +200,7 @@
 <translation id="1910950723001426294">ਸਾਂਝਾਕਰਨ ਵਿਕਲਪਾਂ ਦੀ ਸੂਚੀ ਬੰਦ ਹੈ।</translation>
 <translation id="191726024256261717">ਇਜਾਜ਼ਤਾਂ ਦੀ ਸਮੀਖਿਆ ਕਰੋ</translation>
 <translation id="1917766536967060661">ਤੁਸੀਂ ਤੁਰੰਤ “<ph name="GROUP_NAME" />” ਟੈਬ ਗਰੁੱਪ ਤੱਕ ਪਹੁੰਚ ਗੁਆ ਬੈਠੋਗੇ ਅਤੇ <ph name="BLOCKED_MEMBER_FULL_NAME" /> (<ph name="BLOCKED_MEMBER_EMAIL" />) ਵੱਲੋਂ ਹੁਣ Google ਸੇਵਾਵਾਂ 'ਤੇ ਤੁਹਾਡੇ ਨਾਲ ਅੰਤਰਕਿਰਿਆ ਨਹੀਂ ਕੀਤੀ ਜਾ ਸਕੇਗੀ।</translation>
-<translation id="1919130412786645364">Chrome ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰਨ ਦਿਓ</translation>
+<translation id="1919130412786645364">Ultimatum ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰਨ ਦਿਓ</translation>
 <translation id="1922362554271624559">ਸੁਝਾਈਆਂ ਗਈਆਂ ਭਾਸ਼ਾਵਾਂ</translation>
 <translation id="1924255092154549435">ਟੈਬ ਦਾ ਵਿਸਤਾਰ ਕੀਤਾ ਗਿਆ ਹੈ</translation>
 <translation id="1925021887439448749">ਵਿਉਂਤਬੱਧ ਵੈੱਬ ਪਤਾ ਦਾਖਲ ਕਰੋ</translation>
@@ -212,11 +212,11 @@
 <translation id="1944535645109964458">ਕੋਈ ਪਾਸਕੀ ਉਪਲਬਧ ਨਹੀਂ ਹੈ</translation>
 <translation id="1957557050935255529">PDF ਨੂੰ ਲੋਡ ਕੀਤਾ ਜਾ ਰਿਹਾ ਹੈ…</translation>
 <translation id="1959679933317802873">ਸਮੱਗਰੀ ਲਈ ਉਡੀਕ ਕੀਤੀ ਜਾ ਰਹੀ ਹੈ</translation>
-<translation id="1960290143419248813">Chrome ਅੱਪਡੇਟਾਂ ਹੁਣ Android ਦੇ ਇਸ ਵਰਜਨ ਲਈ ਸਮਰਥਿਤ ਨਹੀਂ ਹਨ</translation>
+<translation id="1960290143419248813">Ultimatum ਅੱਪਡੇਟਾਂ ਹੁਣ Android ਦੇ ਇਸ ਵਰਜਨ ਲਈ ਸਮਰਥਿਤ ਨਹੀਂ ਹਨ</translation>
 <translation id="1963056249988316027">ਪਛਾਣ ਦੀ ਜਾਂਚ ਕਰਨ ਦੀ ਸੁਵਿਧਾ ਚਾਲੂ ਹੈ, ਪਰ ਤੁਹਾਡੀ ਪਛਾਣ ਦੀ ਪੁਸ਼ਟੀ ਨਹੀਂ ਹੋ ਰਹੀ</translation>
 <translation id="1963976881984600709">ਮਿਆਰੀ ਸੁਰੱਖਿਆ</translation>
 <translation id="1966710179511230534">ਕਿਰਪਾ ਕਰਕੇ ਆਪਣੇ ਸਾਈਨ-ਇਨ ਵੇਰਵੇ ਅੱਪਡੇਟ ਕਰੋ।</translation>
-<translation id="1969037871259811890">ਆਪਣੇ ਬ੍ਰਾਊਜ਼ਿੰਗ ਡਾਟੇ ਨੂੰ ਮਿਟਾਉਣ ਨਾਲ ਤੁਸੀਂ ਆਪਣੇ Google ਖਾਤੇ ਤੋਂ ਸਾਈਨ-ਆਊਟ ਨਹੀਂ ਹੋਵੋਗੇ। ਅਜਿਹਾ ਕਰਨ ਲਈ, <ph name="BEGIN_LINK1" />Chrome ਤੋਂ ਸਾਈਨ-ਆਊਟ ਕਰੋ<ph name="END_LINK1" />।</translation>
+<translation id="1969037871259811890">ਆਪਣੇ ਬ੍ਰਾਊਜ਼ਿੰਗ ਡਾਟੇ ਨੂੰ ਮਿਟਾਉਣ ਨਾਲ ਤੁਸੀਂ ਆਪਣੇ Google ਖਾਤੇ ਤੋਂ ਸਾਈਨ-ਆਊਟ ਨਹੀਂ ਹੋਵੋਗੇ। ਅਜਿਹਾ ਕਰਨ ਲਈ, <ph name="BEGIN_LINK1" />Ultimatum ਤੋਂ ਸਾਈਨ-ਆਊਟ ਕਰੋ<ph name="END_LINK1" />।</translation>
 <translation id="197288927597451399">Keep</translation>
 <translation id="1973912524893600642">ਡਾਟਾ ਰੱਖੋ</translation>
 <translation id="1974060860693918893">ਉੱਨਤ</translation>
@@ -226,7 +226,7 @@
 <translation id="200114059308480249">ਕੀ Google ਖੋਜਾਂ ਵਿੱਚ ਆਲੇ-ਦੁਆਲੇ ਦੀ ਲਿਖਤ ਨੂੰ ਸ਼ਾਮਲ ਕਰਨਾ ਹੈ?</translation>
 <translation id="2021896219286479412">ਪੂਰੀ ਸਕ੍ਰੀਨ ਦੇ ਸਾਈਟ ਕੰਟਰੋਲ</translation>
 <translation id="2038563949887743358">ਬੇਨਤੀ ਡੈਸਕਟਾਪ ਸਾਈਟ ਚਾਲੂ ਕਰੋ</translation>
-<translation id="204321170514947529"><ph name="APP_NAME" /> ਦਾ ਡਾਟਾ ਵੀ Chrome ਵਿੱਚ ਹੈ</translation>
+<translation id="204321170514947529"><ph name="APP_NAME" /> ਦਾ ਡਾਟਾ ਵੀ Ultimatum ਵਿੱਚ ਹੈ</translation>
 <translation id="2047378580182589770">ਇਨਕੋਗਨਿਟੋ ਮੋਡ ਤੋਂ ਬਾਹਰ ਜਾਣ ਲਈ ਸਪਰਸ਼ ਕਰ ਕੇ ਦਬਾਈ ਰੱਖੋ</translation>
 <translation id="2049574241039454490"><ph name="FILE_SIZE_OF_TOTAL" /> <ph name="SEPARATOR" /> <ph name="DESCRIPTION" /></translation>
 <translation id="2051669996101374349">ਜਦੋਂ ਵੀ ਸੰਭਵ ਹੋਵੇ HTTPS ਦੀ ਵਰਤੋਂ ਕਰੋ ਅਤੇ ਉਨ੍ਹਾਂ ਸਾਈਟਾਂ ਨੂੰ ਲੋਡ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਚਿਤਾਵਨੀ ਪ੍ਰਾਪਤ ਕਰੋ ਜੋ ਇਸਦਾ ਸਮਰਥਨ ਨਹੀਂ ਕਰਦੀਆਂ ਹਨ। ਤੁਸੀਂ ਇਸ ਸੈਟਿੰਗ ਨੂੰ ਬਦਲ ਨਹੀਂ ਸਕਦੇ ਕਿਉਂਕਿ ਤੁਸੀਂ ਅਡਵਾਂਸ ਸੁਰੱਖਿਆ ਨੂੰ ਚਾਲੂ ਕੀਤਾ ਹੋਇਆ ਹੈ।</translation>
@@ -236,7 +236,7 @@
 <translation id="2067805253194386918">ਲਿਖਤ</translation>
 <translation id="2079545284768500474">ਅਣਕੀਤਾ ਕਰੋ</translation>
 <translation id="2082238445998314030"><ph name="TOTAL_RESULTS" /> ਦਾ <ph name="RESULT_NUMBER" /> ਨਤੀਜਾ</translation>
-<translation id="2088833076121753253">ਆਟੋਫਿਲ ਦਾ ਸੈੱਟਅੱਪ ਪੂਰਾ ਕਰਨ ਲਈ, Chrome ਨੂੰ ਹੁਣੇ ਮੁੜ-ਸ਼ੁਰੂ ਕਰੋ। ਤੁਹਾਡੀਆਂ ਟੈਬਾਂ ਸਵੈਚਲਿਤ ਤੌਰ 'ਤੇ ਮੁੜ-ਖੁੱਲ੍ਹ ਜਾਣਗੀਆਂ।</translation>
+<translation id="2088833076121753253">ਆਟੋਫਿਲ ਦਾ ਸੈੱਟਅੱਪ ਪੂਰਾ ਕਰਨ ਲਈ, Ultimatum ਨੂੰ ਹੁਣੇ ਮੁੜ-ਸ਼ੁਰੂ ਕਰੋ। ਤੁਹਾਡੀਆਂ ਟੈਬਾਂ ਸਵੈਚਲਿਤ ਤੌਰ 'ਤੇ ਮੁੜ-ਖੁੱਲ੍ਹ ਜਾਣਗੀਆਂ।</translation>
 <translation id="2091863218454846791">ਸੰਖਿਪਤ ਦ੍ਰਿਸ਼ ਦਿਖਾਇਆ ਜਾ ਰਿਹਾ ਹੈ</translation>
 <translation id="2093731487903423814">ਪਿਛਲੇ 15 ਮਿੰਟ</translation>
 <translation id="2100273922101894616">ਸਵੈਚਲਿਤ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
@@ -246,10 +246,10 @@
 <translation id="2122601567107267586">ਐਪ ਖੋਲ੍ਹੀ ਨਹੀਂ ਜਾ ਸਕੀ</translation>
 <translation id="213279576345780926"><ph name="TAB_TITLE" /> ਬੰਦ ਕੀਤਾ</translation>
 <translation id="2141396931810938595">ਤੁਹਾਡੀ ਵਰਤੋਂ ਦੇ ਆਧਾਰ 'ਤੇ</translation>
-<translation id="2145315049852051678">Chrome ਇਹ ਪੱਕਾ ਕਰਨ ਲਈ ਨਿਯਮਿਤ ਤੌਰ 'ਤੇ ਜਾਂਚ ਕਰਦਾ ਹੈ ਕਿ ਤੁਹਾਡੇ ਬ੍ਰਾਊਜ਼ਰ ਦੀਆਂ ਸੈਟਿੰਗਾਂ ਸਭ ਤੋਂ ਸੁਰੱਖਿਅਤ ਹਨ। ਜੇ ਕਿਸੇ ਚੀਜ਼ ਨੂੰ ਸਮੀਖਿਆ ਦੀ ਲੋੜ ਹੁੰਦੀ ਹੈ, ਤਾਂ ਅਸੀਂ ਤੁਹਾਨੂੰ ਦੱਸ ਦੇਵਾਂਗੇ।</translation>
+<translation id="2145315049852051678">Ultimatum ਇਹ ਪੱਕਾ ਕਰਨ ਲਈ ਨਿਯਮਿਤ ਤੌਰ 'ਤੇ ਜਾਂਚ ਕਰਦਾ ਹੈ ਕਿ ਤੁਹਾਡੇ ਬ੍ਰਾਊਜ਼ਰ ਦੀਆਂ ਸੈਟਿੰਗਾਂ ਸਭ ਤੋਂ ਸੁਰੱਖਿਅਤ ਹਨ। ਜੇ ਕਿਸੇ ਚੀਜ਼ ਨੂੰ ਸਮੀਖਿਆ ਦੀ ਲੋੜ ਹੁੰਦੀ ਹੈ, ਤਾਂ ਅਸੀਂ ਤੁਹਾਨੂੰ ਦੱਸ ਦੇਵਾਂਗੇ।</translation>
 <translation id="2149973817440762519">ਬੁੱਕਮਾਰਕ ਸੰਪਾਦਿਤ ਕਰੋ</translation>
-<translation id="2158408438301413340">Chrome ਸਾਰੇ ਪਾਸਵਰਡਾਂ ਦੀ ਜਾਂਚ ਨਹੀਂ ਕਰ ਸਕਿਆ</translation>
-<translation id="2163089732491971196">ਆਪਣੇ Google ਖਾਤੇ ਵਿੱਚ Chrome ਡਾਟੇ ਨੂੰ ਵਰਤਣ ਅਤੇ ਰੱਖਿਅਤ ਕਰਨ ਲਈ, ਆਪਣਾ ਪਾਸਫਰੇਜ਼ ਦਾਖਲ ਕਰੋ</translation>
+<translation id="2158408438301413340">Ultimatum ਸਾਰੇ ਪਾਸਵਰਡਾਂ ਦੀ ਜਾਂਚ ਨਹੀਂ ਕਰ ਸਕਿਆ</translation>
+<translation id="2163089732491971196">ਆਪਣੇ Google ਖਾਤੇ ਵਿੱਚ Ultimatum ਡਾਟੇ ਨੂੰ ਵਰਤਣ ਅਤੇ ਰੱਖਿਅਤ ਕਰਨ ਲਈ, ਆਪਣਾ ਪਾਸਫਰੇਜ਼ ਦਾਖਲ ਕਰੋ</translation>
 <translation id="2166228530126694506">ਵਰਜਨ <ph name="VERSION_NUMBER" /></translation>
 <translation id="2172688499998841696">ਚਿੱਤਰ ਦੇ ਵਰਣਨ ਬੰਦ ਹਨ</translation>
 <translation id="2172905120685242547">ਕੀ ਵਿੰਡੋ ਨੂੰ ਬੰਦ ਕਰਨਾ ਹੈ?</translation>
@@ -261,7 +261,7 @@
 <translation id="219283042927675668">ਗਰੁੱਪ ਵਿਚਲੇ ਟੈਬ</translation>
 <translation id="2194856509914051091">ਵਿਚਾਰੇ ਜਾਣ ਵਾਲੀਆਂ ਚੀਜ਼ਾਂ</translation>
 <translation id="22091350895006575">ਵਰਤੋਂਕਾਰ ਨਾਮ ਸ਼ਾਮਲ ਕਰੋ</translation>
-<translation id="221494669172414749">ਪ੍ਰੋਫਾਈਲ ਲਾਕ ਤੋਂ ਬਿਨਾਂ Chrome ਨੂੰ ਖੋਲ੍ਹਣ ਨਾਲ ਕਾਰ ਤੋਂ ਤੁਹਾਡੇ ਰੱਖਿਅਤ ਕੀਤੇ ਗਏ ਪਾਸਵਰਡ ਅਤੇ ਭੁਗਤਾਨ ਵਿਧੀਆਂ ਹਟ ਜਾਣਗੀਆਂ। ਪ੍ਰੋਫਾਈਲ ਲਾਕ ਵਰਤਣ ਨਾਲ ਇਹ ਡਾਟਾ ਸੁਰੱਖਿਅਤ ਰਹਿੰਦਾ ਹੈ।</translation>
+<translation id="221494669172414749">ਪ੍ਰੋਫਾਈਲ ਲਾਕ ਤੋਂ ਬਿਨਾਂ Ultimatum ਨੂੰ ਖੋਲ੍ਹਣ ਨਾਲ ਕਾਰ ਤੋਂ ਤੁਹਾਡੇ ਰੱਖਿਅਤ ਕੀਤੇ ਗਏ ਪਾਸਵਰਡ ਅਤੇ ਭੁਗਤਾਨ ਵਿਧੀਆਂ ਹਟ ਜਾਣਗੀਆਂ। ਪ੍ਰੋਫਾਈਲ ਲਾਕ ਵਰਤਣ ਨਾਲ ਇਹ ਡਾਟਾ ਸੁਰੱਖਿਅਤ ਰਹਿੰਦਾ ਹੈ।</translation>
 <translation id="2227444325776770048"><ph name="USER_FULL_NAME" /> ਵਜੋਂ ਜਾਰੀ ਰੱਖੋ</translation>
 <translation id="2230777942707397948">ਖਾਲੀ ਵਿੰਡੋ</translation>
 <translation id="223356358902285214">ਵੈੱਬ ਅਤੇ ਐਪ ਸਰਗਰਮੀ</translation>
@@ -287,7 +287,7 @@
 <translation id="2332515770639153015">ਵਿਸਤ੍ਰਿਤ ਸੁਰੱਖਿਅਤ ਬ੍ਰਾਊਜ਼ਿੰਗ ਚਾਲੂ ਹੈ</translation>
 <translation id="233375395665273385">ਮਿਟਾਓ ਅਤੇ ਸਾਈਨ-ਆਊਟ ਕਰੋ</translation>
 <translation id="2341410551640223969"><ph name="WEBAPK_NAME" /> ਨੂੰ ਸਥਾਪਤ ਨਹੀਂ ਕੀਤਾ ਜਾ ਸਕਿਆ।</translation>
-<translation id="2349710944427398404">Chrome ਵੱਲੋਂ ਵਰਤਿਆ ਜਾਣ ਵਾਲਾ ਕੁੱਲ ਡਾਟਾ, ਜਿਸ ਵਿੱਚ ਖਾਤੇ, ਬੁੱਕਮਾਰਕ, ਅਤੇ ਰੱਖਿਅਤ ਕੀਤੀਆਂ ਸੈਟਿੰਗਾਂ ਸ਼ਾਮਲ ਹਨ</translation>
+<translation id="2349710944427398404">Ultimatum ਵੱਲੋਂ ਵਰਤਿਆ ਜਾਣ ਵਾਲਾ ਕੁੱਲ ਡਾਟਾ, ਜਿਸ ਵਿੱਚ ਖਾਤੇ, ਬੁੱਕਮਾਰਕ, ਅਤੇ ਰੱਖਿਅਤ ਕੀਤੀਆਂ ਸੈਟਿੰਗਾਂ ਸ਼ਾਮਲ ਹਨ</translation>
 <translation id="2349954856814571872">ਬੁੱਕਮਾਰਕ ਬਾਰ ਬਟਨ ਦਾ ਪ੍ਰਤੀਕ</translation>
 <translation id="235789365079050412">Google ਪਰਦੇਦਾਰੀ ਨੀਤੀ</translation>
 <translation id="2359808026110333948">ਜਾਰੀ ਰੱਖੋ</translation>
@@ -307,7 +307,7 @@
 <translation id="2433507940547922241">ਪ੍ਰਗਟਾਅ</translation>
 <translation id="2435457462613246316">ਪਾਸਵਰਡ ਵੇਖੋ</translation>
 <translation id="2439153523196674349"><ph name="SITE_NAME" /> ਦੀ ਪੂਰਵ-ਝਲਕ</translation>
-<translation id="2449931042095204989">ਜਦੋਂ ਕੋਈ Google ਦੀ ਕੋਈ ਸਾਈਟ ਜਾਂ ਐਪ ਆਪਣੇ ਪੰਨੇ 'ਤੇ ਨਿੱਜੀ ਤੌਰ 'ਤੇ ਲਿੰਕਾਂ ਨੂੰ ਪ੍ਰੀਲੋਡ ਕਰਨ ਲਈ ਕਹਿੰਦੀ ਹੈ, ਤਾਂ Chrome ਕੁਕੀਜ਼ ਤੋਂ ਬਿਨਾਂ Google ਸਰਵਰਾਂ ਰਾਹੀਂ ਪੰਨਿਆਂ ਨੂੰ ਇਨਕ੍ਰਿਪਟ ਅਤੇ ਪ੍ਰੀਲੋਡ ਕਰਦਾ ਹੈ। ਇਹ ਪ੍ਰੀਲੋਡ ਕੀਤੀ ਸਾਈਟ ਤੋਂ ਤੁਹਾਡੀ ਪਛਾਣ ਨੂੰ ਲੁਕਾਉਂਦਾ ਹੈ।</translation>
+<translation id="2449931042095204989">ਜਦੋਂ ਕੋਈ Google ਦੀ ਕੋਈ ਸਾਈਟ ਜਾਂ ਐਪ ਆਪਣੇ ਪੰਨੇ 'ਤੇ ਨਿੱਜੀ ਤੌਰ 'ਤੇ ਲਿੰਕਾਂ ਨੂੰ ਪ੍ਰੀਲੋਡ ਕਰਨ ਲਈ ਕਹਿੰਦੀ ਹੈ, ਤਾਂ Ultimatum ਕੁਕੀਜ਼ ਤੋਂ ਬਿਨਾਂ Google ਸਰਵਰਾਂ ਰਾਹੀਂ ਪੰਨਿਆਂ ਨੂੰ ਇਨਕ੍ਰਿਪਟ ਅਤੇ ਪ੍ਰੀਲੋਡ ਕਰਦਾ ਹੈ। ਇਹ ਪ੍ਰੀਲੋਡ ਕੀਤੀ ਸਾਈਟ ਤੋਂ ਤੁਹਾਡੀ ਪਛਾਣ ਨੂੰ ਲੁਕਾਉਂਦਾ ਹੈ।</translation>
 <translation id="2450083983707403292">ਕੀ ਤੁਸੀਂ <ph name="FILE_NAME" /> ਨੂੰ ਦੁਬਾਰਾ ਡਾਊਨਲੋਡ ਕਰਨਾ ਸ਼ੁਰੂ ਕਰਨਾ ਚਾਹੁੰਦੇ ਹੋ?</translation>
 <translation id="2451607499823206582">ਨਜ਼ਰ ਰੱਖੀ ਜਾ ਰਹੀ ਹੈ</translation>
 <translation id="2453860139492968684">ਖ਼ਤਮ</translation>
@@ -315,17 +315,17 @@
 <translation id="2461822463642141190">ਮੌਜੂਦਾ</translation>
 <translation id="2463770278804271243">ਪੰਨਾ</translation>
 <translation id="2468444275314013497">ਤੁਹਾਡਾ ਬ੍ਰਾਊਜ਼ਰ ਸੁਰੱਖਿਅਤ ਹੈ</translation>
-<translation id="2472163211318554013">Chrome ਦਾ ਵੱਧ ਤੋਂ ਵੱਧ ਲਾਹਾ ਲੈਣ ਲਈ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
+<translation id="2472163211318554013">Ultimatum ਦਾ ਵੱਧ ਤੋਂ ਵੱਧ ਲਾਹਾ ਲੈਣ ਲਈ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
 <translation id="247737702124049222">ਚਿੱਤਰ ਦੇ ਵਰਣਨ ਚਾਲੂ ਹਨ</translation>
 <translation id="2479148705183875116">ਸੈਟਿੰਗਾਂ 'ਤੇ ਜਾਓ</translation>
 <translation id="2482878487686419369">ਸੂਚਨਾਵਾਂ</translation>
 <translation id="2496180316473517155">ਬ੍ਰਾਊਜ਼ਿੰਗ ਇਤਿਹਾਸ</translation>
 <translation id="2497852260688568942">ਸਿੰਕ ਤੁਹਾਡੇ ਪ੍ਰਸ਼ਾਸਕ ਦੁਆਰਾ ਅਯੋਗ ਬਣਾਇਆ ਗਿਆ ਹੈ।</translation>
-<translation id="250020030759455918">ਤੁਸੀਂ Chrome ਵਿੱਚ ਆਪਣੀ <ph name="SITE_NAME" /> ਸਾਈਨ-ਇਨ ਸਥਿਤੀ, ਬ੍ਰਾਊਜ਼ਿੰਗ ਡਾਟਾ ਅਤੇ ਸਾਈਟ ਡਾਟਾ ਦੇਖੋਗੇ</translation>
+<translation id="250020030759455918">ਤੁਸੀਂ Ultimatum ਵਿੱਚ ਆਪਣੀ <ph name="SITE_NAME" /> ਸਾਈਨ-ਇਨ ਸਥਿਤੀ, ਬ੍ਰਾਊਜ਼ਿੰਗ ਡਾਟਾ ਅਤੇ ਸਾਈਟ ਡਾਟਾ ਦੇਖੋਗੇ</translation>
 <translation id="2510106555128151389"><ph name="WEBAPK_NAME" /> ਨੂੰ ਸਥਾਪਤ ਕੀਤਾ ਜਾ ਰਿਹਾ ਹੈ...</translation>
 <translation id="2512234228327349533">ਖਰੀਦਦਾਰੀ ਦੇ ਵਿਕਲਪ ਖੋਜੋ</translation>
 <translation id="2513403576141822879">ਪਰਦੇਦਾਰੀ, ਸੁਰੱਖਿਆ ਅਤੇ ਡਾਟਾ ਇਕੱਤਰ ਕਰਨ ਸੰਬੰਧੀ ਹੋਰ ਸੈਟਿੰਗਾਂ ਲਈ, <ph name="BEGIN_LINK" />ਸਿੰਕ ਅਤੇ Google ਸੇਵਾਵਾਂ<ph name="END_LINK" /> ਦੇਖੋ</translation>
-<translation id="2515921719039583189">ਇਸ ਡੀਵਾਈਸ ਤੋਂ ਤੁਹਾਡਾ Chrome ਡਾਟਾ ਮਿਟਾਈਏ?</translation>
+<translation id="2515921719039583189">ਇਸ ਡੀਵਾਈਸ ਤੋਂ ਤੁਹਾਡਾ Ultimatum ਡਾਟਾ ਮਿਟਾਈਏ?</translation>
 <translation id="2517113738956581680">ਪੂਰੇ-ਆਕਾਰ ਦੀ ਸ਼ੀਟ</translation>
 <translation id="2523184218357549926">Google ਨੂੰ ਤੁਹਾਡੇ ਵੱਲੋਂ ਦੇਖੇ ਜਾਣ ਵਾਲੇ ਪੰਨਿਆਂ ਦੇ URL ਭੇਜਦੀ ਹੈ</translation>
 <translation id="2524132927880411790">Google ਐਪ ਦੀ ਅਵਾਜ਼ੀ ਖੋਜ 'ਤੇ ਜਾਓ</translation>
@@ -343,10 +343,10 @@
 <translation id="2569733278091928697">ਤੁਸੀਂ ਮੀਡੀਆ ਕੰਟਰੋਲਾਂ, ਇਨਕੋਗਨਿਟੋ ਸੈਸ਼ਨਾਂ, ਡਾਊਨਲੋਡਾਂ ਅਤੇ ਹੋਰ ਚੀਜ਼ਾਂ ਦਾ ਆਸਾਨੀ ਨਾਲ ਪ੍ਰਬੰਧਨ ਕਰ ਸਕੋਗੇ</translation>
 <translation id="2571711316400087311">Google Translate 'ਤੇ ਹੋਰ ਭਾਸ਼ਾਵਾਂ ਵਿੱਚ ਪੰਨੇ ਭੇਜਣ ਦੀ ਪੇਸ਼ਕਸ਼ ਕਰੋ</translation>
 <translation id="2571834852878229351">ਮੇਰਾ ਖੁਦ ਦਾ ਪਾਸਵਰਡ ਬਣਾਓ</translation>
-<translation id="2574249610672786438">ਜਿਸ ਡੀਵਾਈਸ 'ਤੇ ਵੀ ਤੁਸੀਂ Chrome ਵਰਤਦੇ ਹੋ, ਉੱਥੇ ਆਪਣੀਆਂ ਟੈਬਾਂ ਦੇਖਣ ਲਈ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
+<translation id="2574249610672786438">ਜਿਸ ਡੀਵਾਈਸ 'ਤੇ ਵੀ ਤੁਸੀਂ Ultimatum ਵਰਤਦੇ ਹੋ, ਉੱਥੇ ਆਪਣੀਆਂ ਟੈਬਾਂ ਦੇਖਣ ਲਈ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
 <translation id="2577981599306533385"><ph name="MEMBER_FULL_NAME" /> (<ph name="EMAIL" />) ਤੁਰੰਤ “<ph name="GROUP_NAME" />” ਟੈਬ ਗਰੁੱਪ ਤੱਕ ਪਹੁੰਚ ਗੁਆ ਬੈਠੇਗਾ ਅਤੇ ਇਸ ਵੱਲੋਂ ਹੁਣ Google ਸੇਵਾਵਾਂ 'ਤੇ ਤੁਹਾਡੇ ਨਾਲ ਅੰਤਰਕਿਰਿਆ ਨਹੀਂ ਕੀਤੀ ਜਾ ਸਕੇਗੀ।</translation>
 <translation id="2579297619530305344">ਤੁਹਾਡੇ ਸਾਰੇ ਡੀਵਾਈਸਾਂ 'ਤੇ ਪਾਸਵਰਡ ਪੂਰੀ ਉਚਾਈ ਤੱਕ ਖੁੱਲ੍ਹੇ ਹਨ</translation>
-<translation id="2581165646603367611">ਇਹ ਉਹਨਾਂ ਸਾਈਟਾਂ ਦੀਆਂ ਕੁਕੀਜ਼, ਕੈਸ਼ੇ, ਅਤੇ ਹੋਰ ਡਾਟੇ ਨੂੰ ਮਿਟਾ ਦੇਵੇਗਾ ਜੋ Chrome ਅਨੁਸਾਰ ਮਹੱਤਵਪੂਰਨ ਨਹੀਂ ਹਨ।</translation>
+<translation id="2581165646603367611">ਇਹ ਉਹਨਾਂ ਸਾਈਟਾਂ ਦੀਆਂ ਕੁਕੀਜ਼, ਕੈਸ਼ੇ, ਅਤੇ ਹੋਰ ਡਾਟੇ ਨੂੰ ਮਿਟਾ ਦੇਵੇਗਾ ਜੋ Ultimatum ਅਨੁਸਾਰ ਮਹੱਤਵਪੂਰਨ ਨਹੀਂ ਹਨ।</translation>
 <translation id="2587052924345400782">ਨਵਾਂ ਵਰਜਨ ਉਪਲਬਧ ਹੈ</translation>
 <translation id="2593272815202181319">ਮੋਨੋਸਪੇਸ</translation>
 <translation id="260403163289591229">ਅਨੁਸਰਣ ਕੀਤਾ ਜਾ ਰਿਹਾ ਹੈ</translation>
@@ -386,7 +386,7 @@
 <translation id="2779651927720337254">ਅਸਫਲ</translation>
 <translation id="2781151931089541271">1 ਸਕਿੰਟ ਬਾਕੀ</translation>
 <translation id="2789486458103222910">ਠੀਕ ਹੈ</translation>
-<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Chrome ਨੇ ਇੱਕ ਮੁੜ-ਵਰਤੇ ਪਾਸਵਰਡ ਦਾ ਪਤਾ ਲਗਾਇਆ ਹੈ, ਜਿਸਨੂੰ ਮਜ਼ਬੂਤ ਬਣਾਇਆ ਜਾ ਸਕਦਾ ਹੈ}one{Chrome ਨੇ # ਮੁੜ-ਵਰਤੇ ਪਾਸਵਰਡ ਦਾ ਪਤਾ ਲਗਾਇਆ ਹੈ, ਜਿਸਨੂੰ ਮਜ਼ਬੂਤ ਬਣਾਇਆ ਜਾ ਸਕਦਾ ਹੈ}other{Chrome ਨੇ # ਮੁੜ-ਵਰਤੇ ਪਾਸਵਰਡਾਂ ਦਾ ਪਤਾ ਲਗਾਇਆ ਹੈ, ਜਿਨ੍ਹਾਂ ਨੂੰ ਮਜ਼ਬੂਤ ਬਣਾਇਆ ਜਾ ਸਕਦਾ ਹੈ}}</translation>
+<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Ultimatum ਨੇ ਇੱਕ ਮੁੜ-ਵਰਤੇ ਪਾਸਵਰਡ ਦਾ ਪਤਾ ਲਗਾਇਆ ਹੈ, ਜਿਸਨੂੰ ਮਜ਼ਬੂਤ ਬਣਾਇਆ ਜਾ ਸਕਦਾ ਹੈ}one{Ultimatum ਨੇ # ਮੁੜ-ਵਰਤੇ ਪਾਸਵਰਡ ਦਾ ਪਤਾ ਲਗਾਇਆ ਹੈ, ਜਿਸਨੂੰ ਮਜ਼ਬੂਤ ਬਣਾਇਆ ਜਾ ਸਕਦਾ ਹੈ}other{Ultimatum ਨੇ # ਮੁੜ-ਵਰਤੇ ਪਾਸਵਰਡਾਂ ਦਾ ਪਤਾ ਲਗਾਇਆ ਹੈ, ਜਿਨ੍ਹਾਂ ਨੂੰ ਮਜ਼ਬੂਤ ਬਣਾਇਆ ਜਾ ਸਕਦਾ ਹੈ}}</translation>
 <translation id="2800066122460699237">ਟੈਬ <ph name="TAB_TITLE" /> ਨੂੰ ਬੰਦ ਕਰ ਦਿੱਤਾ ਜਾਵੇਗਾ</translation>
 <translation id="2805756323405976993">ਐਪਸ</translation>
 <translation id="281504910091592009">ਆਪਣੇ <ph name="BEGIN_LINK" />Google ਖਾਤੇ<ph name="END_LINK" /> ਵਿੱਚ ਰੱਖਿਅਤ ਕੀਤੇ ਪਾਸਵਰਡ ਦੇਖੋ ਅਤੇ ਉਹਨਾਂ ਦਾ ਪ੍ਰਬੰਧਨ ਕਰੋ</translation>
@@ -402,14 +402,14 @@
 <translation id="2842985007712546952">ਪੇਰੈਂਟ ਫੋਲਡਰ</translation>
 <translation id="2854916915045135148">ਇਨਕੋਗਨਿਟੋ ਮੋਡ 'ਤੇ ਸਵਿੱਚ ਕਰਨ ਲਈ ਸਪਰਸ਼ ਕਰ ਕੇ ਦਬਾਈ ਰੱਖੋ</translation>
 <translation id="2860954141821109167">ਪੱਕਾ ਕਰੋ ਕਿ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਫ਼ੋਨ ਐਪ ਚਾਲੂ ਹੋਵੇ</translation>
-<translation id="2861923151411510142">ਕੁਝ Chrome ਵਿਸ਼ੇਸ਼ਤਾਵਾਂ ਹੁਣ ਉਪਲਬਧ ਨਹੀਂ ਰਹਿਣਗੀਆਂ</translation>
+<translation id="2861923151411510142">ਕੁਝ Ultimatum ਵਿਸ਼ੇਸ਼ਤਾਵਾਂ ਹੁਣ ਉਪਲਬਧ ਨਹੀਂ ਰਹਿਣਗੀਆਂ</translation>
 <translation id="2869430948265924908">ਕਾਰ ਵਿੱਚ ਆਪਣੀ ਸੰਵੇਦਨਸ਼ੀਲ ਸਮੱਗਰੀ ਦੀ ਸੁਰੱਖਿਆ ਕਰਨ ਲਈ, ਤੁਹਾਡੇ ਲਈ ਕਾਰ ਪ੍ਰੋਫਾਈਲ ਲਾਕ ਬਣਾਉਣਾ ਲਾਜ਼ਮੀ ਹੈ।  ਤੁਸੀਂ ਅਜਿਹਾ ਪਿੰਨ, ਕੋਡ ਜਾਂ ਪਾਸਵਰਡ ਨਾਲ ਕਰ ਸਕਦੇ ਹੋ।</translation>
 <translation id="2870560284913253234">ਸਾਈਟ</translation>
 <translation id="2871733351037274014">ਪੰਨੇ ਪ੍ਰੀਲੋਡ ਕਰੋ</translation>
 <translation id="2876136027428473467"><ph name="CHILD_NAME" /> ਦੀ ਇੱਛਾ ਹੈ ਕਿ ਤੁਸੀਂ ਇਸ ਵੈੱਬਸਾਈਟ ਨੂੰ ਮਨਜ਼ੂਰੀ ਦਿਓ:</translation>
-<translation id="2876628302275096482"><ph name="BEGIN_LINK" />Chrome ਤੁਹਾਡੇ ਡਾਟੇ ਨੂੰ ਨਿੱਜੀ ਕਿਵੇਂ ਰੱਖਦਾ ਹੈ<ph name="END_LINK" /> ਇਸ ਬਾਰੇ ਹੋਰ ਜਾਣੋ</translation>
+<translation id="2876628302275096482"><ph name="BEGIN_LINK" />Ultimatum ਤੁਹਾਡੇ ਡਾਟੇ ਨੂੰ ਨਿੱਜੀ ਕਿਵੇਂ ਰੱਖਦਾ ਹੈ<ph name="END_LINK" /> ਇਸ ਬਾਰੇ ਹੋਰ ਜਾਣੋ</translation>
 <translation id="2883644600102358131">ਪਾਸਵਰਡ ਜਲਦ ਹੀ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਕੰਮ ਕਰਨਾ ਬੰਦ ਕਰ ਦੇਣਗੇ। ਆਪਣੇ ਪਾਸਵਰਡਾਂ ਦੀ ਵਰਤੋਂ ਕਰਨਾ ਜਾਰੀ ਰੱਖਣ ਲਈ, Google Play ਸੇਵਾਵਾਂ ਨੂੰ ਅੱਪਡੇਟ ਕਰੋ।</translation>
-<translation id="2888126860611144412">Chrome ਬਾਰੇ</translation>
+<translation id="2888126860611144412">Ultimatum ਬਾਰੇ</translation>
 <translation id="2891154217021530873">ਲੋਡ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਰੁਕੋ</translation>
 <translation id="2894821468041866720">ਤੁਹਾਡੇ ਬ੍ਰਾਊਜ਼ਰ ਜਾਂ ਡੀਵਾਈਸ ਨੂੰ ਹੌਲੀ ਨਹੀਂ ਕਰਦੀ।</translation>
 <translation id="2895521649038438824">ਤੁਸੀਂ ਇਸ ਪੰਨੇ ਨੂੰ ਸੁਣ ਸਕਦੇ ਹੋ</translation>
@@ -424,14 +424,14 @@
 <translation id="2923908459366352541">ਨਾਮ ਅਵੈਧ ਹੈ</translation>
 <translation id="2932150158123903946">Google <ph name="APP_NAME" /> ਸਟੋਰੇਜ</translation>
 <translation id="2932222164150889403">ਤੁਹਾਡਾ ਕੀ-ਬੋਰਡ ਨਹੀਂ ਬਦਲੇਗਾ</translation>
-<translation id="2936980480904111527">Chrome ਸੂਚਨਾਵਾਂ ਚੀਜ਼ਾਂ ਨੂੰ ਆਸਾਨ ਬਣਾਉਂਦੀਆਂ ਹਨ</translation>
+<translation id="2936980480904111527">Ultimatum ਸੂਚਨਾਵਾਂ ਚੀਜ਼ਾਂ ਨੂੰ ਆਸਾਨ ਬਣਾਉਂਦੀਆਂ ਹਨ</translation>
 <translation id="2940075786175545812">ਕਿਸੇ ਵੈੱਬਸਾਈਟ ਨੂੰ ਮਨਜ਼ੂਰੀ ਦੇਣ ਜਾਂ ਨਾ ਦੇਣ ਦਾ ਵਿਕਲਪ</translation>
 <translation id="2942036813789421260">ਪੂਰਵ-ਝਲਕ ਟੈਬ ਬੰਦ ਹੈ</translation>
 <translation id="2951071800649516099">ਬਾਅਦ 'ਚ ਪੜ੍ਹਨ ਲਈ ਪੰਨਿਆਂ ਨੂੰ ਆਪਣੀ ਪੜ੍ਹਨ-ਸੂਚੀ ਵਿੱਚ ਸ਼ਾਮਲ ਕਰੋ</translation>
 <translation id="2954586176076923855">ਪਤਾ ਬਾਰ ਨੂੰ ਸਿਖਰ 'ਤੇ ਲਿਜਾਓ</translation>
 <translation id="2961208450284224863">{READING_LIST_UNREAD_PAGE_COUNT,plural, =1{<ph name="READING_LIST_UNREAD_PAGE_COUNT_ONE" /> ਨਾ-ਪੜ੍ਹਿਆ ਪੰਨਾ}one{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> ਨਾ-ਪੜ੍ਹਿਆ ਪੰਨਾ}other{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> ਨਾ-ਪੜ੍ਹੇ ਪੰਨੇ}}</translation>
 <translation id="2972109037780336501">ਇਜਾਜ਼ਤਾਂ ਨੂੰ ਸਵੈਚਲਿਤ ਤੌਰ 'ਤੇ ਹਟਾਓ</translation>
-<translation id="2976550651269220761">ਤੁਹਾਡੇ ਕੁਝ Chrome ਡਾਟੇ ਨੂੰ ਹਾਲੇ ਤੁਹਾਡੇ Google ਖਾਤੇ ਵਿੱਚ ਰੱਖਿਅਤ ਨਹੀਂ ਕੀਤਾ ਗਿਆ ਹੈ।\nਸਾਈਨ-ਆਊਟ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਕੁਝ ਮਿੰਟਾਂ ਦੀ ਉਡੀਕ ਕਰ ਕੇ ਦੇਖੋ। ਜੇ ਤੁਸੀਂ ਹੁਣੇ ਸਾਈਨ-ਆਊਟ ਕਰਦੇ ਹੋ, ਤਾਂ ਇਸ ਡਾਟੇ ਨੂੰ ਮਿਟਾ ਦਿੱਤਾ ਜਾਵੇਗਾ।</translation>
+<translation id="2976550651269220761">ਤੁਹਾਡੇ ਕੁਝ Ultimatum ਡਾਟੇ ਨੂੰ ਹਾਲੇ ਤੁਹਾਡੇ Google ਖਾਤੇ ਵਿੱਚ ਰੱਖਿਅਤ ਨਹੀਂ ਕੀਤਾ ਗਿਆ ਹੈ।\nਸਾਈਨ-ਆਊਟ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਕੁਝ ਮਿੰਟਾਂ ਦੀ ਉਡੀਕ ਕਰ ਕੇ ਦੇਖੋ। ਜੇ ਤੁਸੀਂ ਹੁਣੇ ਸਾਈਨ-ਆਊਟ ਕਰਦੇ ਹੋ, ਤਾਂ ਇਸ ਡਾਟੇ ਨੂੰ ਮਿਟਾ ਦਿੱਤਾ ਜਾਵੇਗਾ।</translation>
 <translation id="2977350910003566746">ਪਿਛਲੀ ਵਾਰ ਖੋਲ੍ਹੇ ਜਾਣ ਦੀ ਤਾਰੀਖ ਮੁਤਾਬਕ ਕ੍ਰਮ-ਬੱਧ ਕਰਨਾ</translation>
 <translation id="297771753501244313">ਪਿਛਲੀ ਵਾਰ ਖੋਲ੍ਹਣ ਦੀ ਤਾਰੀਖ ਮੁਤਾਬਕ ਕ੍ਰਮ-ਬੱਧ ਕਰੋ</translation>
 <translation id="2979639724566107830">ਨਵੀਂ ਵਿੰਡੋ ਵਿੱਚ ਖੋਲ੍ਹੋ</translation>
@@ -451,14 +451,14 @@
 <translation id="3029704984691124060">ਪਾਸਫਰੇਜ ਮੇਲ ਨਹੀਂ ਖਾਂਦੇ।</translation>
 <translation id="3036750288708366620"><ph name="BEGIN_LINK" />ਮਦਦ ਪ੍ਰਾਪਤ ਕਰੋ<ph name="END_LINK" /></translation>
 <translation id="3037177537145227281">ਕੀਮਤ 'ਤੇ ਨਜ਼ਰ ਰੱਖੀ ਜਾ ਰਹੀ ਹੈ</translation>
-<translation id="3037517125981011456">Chrome ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰਨ ਲਈ ਉਤਪ੍ਰੇਰਕਾਂ ਨੂੰ ਦਿਖਾਉਂਦਾ ਹੈ</translation>
+<translation id="3037517125981011456">Ultimatum ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰਨ ਲਈ ਉਤਪ੍ਰੇਰਕਾਂ ਨੂੰ ਦਿਖਾਉਂਦਾ ਹੈ</translation>
 <translation id="3038272154009688107">ਸਾਰੀਆਂ ਸਾਈਟਾਂ ਦੇਖੋ</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> ਬੁੱਕਮਾਰਕ}one{<ph name="BOOKMARKS_COUNT_MANY" /> ਬੁੱਕਮਾਰਕ}other{<ph name="BOOKMARKS_COUNT_MANY" /> ਬੁੱਕਮਾਰਕ}}</translation>
-<translation id="3062802207422175757">Chrome 'ਤੇ ਤੁਹਾਡੀਆਂ ਦਿਲਚਸਪੀਆਂ ਬਾਰੇ ਲੇਖ</translation>
+<translation id="3062802207422175757">Ultimatum 'ਤੇ ਤੁਹਾਡੀਆਂ ਦਿਲਚਸਪੀਆਂ ਬਾਰੇ ਲੇਖ</translation>
 <translation id="3066573403916685335">ਹੇਠਾਂ ਮੂਵ ਕਰੋ</translation>
 <translation id="3067505415088964188">ਕੀਮਤ ਘੱਟ ਹੈ</translation>
 <translation id="3070005020161560471">ਸਵੈਚਲਿਤ ਤੌਰ 'ਤੇ ਅਨੁਵਾਦ ਕਰੋ</translation>
-<translation id="3072980200212375806"><ph name="APP_NAME" /> ਨੂੰ Chrome ਵਿੱਚ ਖੋਲ੍ਹਿਆ ਜਾਵੇਗਾ। ਜਾਰੀ ਰੱਖ ਕੇ, ਤੁਸੀਂ <ph name="BEGIN_LINK1" />Google ਦੇ ਸੇਵਾ ਦੇ ਨਿਯਮਾਂ<ph name="END_LINK1" /> ਅਤੇ <ph name="BEGIN_LINK2" />Google Chrome ਅਤੇ ChromeOS ਦੇ ਵਧੀਕ ਸੇਵਾ ਦੇ ਨਿਯਮਾਂ<ph name="END_LINK2" /> ਨਾਲ ਸਹਿਮਤ ਹੁੰਦੇ ਹੋ। <ph name="BEGIN_LINK3" />ਪਰਦੇਦਾਰੀ ਨੀਤੀ<ph name="END_LINK3" /> ਵੀ ਲਾਗੂ ਹੁੰਦੀ ਹੈ।</translation>
+<translation id="3072980200212375806"><ph name="APP_NAME" /> ਨੂੰ Ultimatum ਵਿੱਚ ਖੋਲ੍ਹਿਆ ਜਾਵੇਗਾ। ਜਾਰੀ ਰੱਖ ਕੇ, ਤੁਸੀਂ <ph name="BEGIN_LINK1" />Google ਦੇ ਸੇਵਾ ਦੇ ਨਿਯਮਾਂ<ph name="END_LINK1" /> ਅਤੇ <ph name="BEGIN_LINK2" />Ultimatum ਅਤੇ UltimatumOS ਦੇ ਵਧੀਕ ਸੇਵਾ ਦੇ ਨਿਯਮਾਂ<ph name="END_LINK2" /> ਨਾਲ ਸਹਿਮਤ ਹੁੰਦੇ ਹੋ। <ph name="BEGIN_LINK3" />ਪਰਦੇਦਾਰੀ ਨੀਤੀ<ph name="END_LINK3" /> ਵੀ ਲਾਗੂ ਹੁੰਦੀ ਹੈ।</translation>
 <translation id="3080525922482950719">ਬਾਅਦ ਵਿੱਚ ਜਾਂ ਆਫ਼ਲਾਈਨ ਪੜ੍ਹਨ ਲਈ ਤੁਸੀਂ ਪੰਨੇ ਰੱਖਿਅਤ ਕਰ ਸਕਦੇ ਹੋ</translation>
 <translation id="3087734570205094154">ਹੇਠਲਾ</translation>
 <translation id="3091010850649238832">ਕਲਿੱਪਬੋਰਡ ਸਮੱਗਰੀ ਦਿਖਾਓ</translation>
@@ -467,12 +467,12 @@
 <translation id="3122883569442693641">ਹੋਰ ਵੇਰਵੇ</translation>
 <translation id="3123734510202723619">ਘੋਸ਼ਣਾਵਾਂ</translation>
 <translation id="3148237711805373460">ਮੈਨੂੰ ਉੱਥੇ ਲੈ ਜਾਓ</translation>
-<translation id="314939179385989105">Chrome ਦਾ ਹੋਮਪੇਜ</translation>
+<translation id="314939179385989105">Ultimatum ਦਾ ਹੋਮਪੇਜ</translation>
 <translation id="3158667104057012316">ਹੱਥੀਂ ਆਰਡਰ ਮੁਤਾਬਕ ਕ੍ਰਮ-ਬੱਧ ਕਰਨਾ</translation>
 <translation id="3159335509547415276">ਬਲਾਕ ਕੀਤੇ ਖਾਤਿਆਂ ਬਾਰੇ ਜਾਣੋ</translation>
 <translation id="3161699713309727585"><ph name="BUTTON_TEXT" />, ਨਵੀਂ ਟੈਬ ਵਿੱਚ ਖੁੱਲ੍ਹਦਾ ਹੈ</translation>
 <translation id="3166827708714933426">ਟੈਬ ਅਤੇ ਵਿੰਡੋ ਸ਼ਾਰਟਕੱਟ</translation>
-<translation id="316694332262407393">Chrome ਪਹਿਲਾਂ ਹੀ ਇੱਥੇ ਚੱਲ ਰਿਹਾ ਹੈ।</translation>
+<translation id="316694332262407393">Ultimatum ਪਹਿਲਾਂ ਹੀ ਇੱਥੇ ਚੱਲ ਰਿਹਾ ਹੈ।</translation>
 <translation id="3167258285411721858">ਤੁਸੀਂ <ph name="HOST_NAME" /> ਲਈ ਮੋਬਾਈਲ ਸਾਈਟ ਦੀ ਬੇਨਤੀ ਕਰ ਸਕਦੇ ਹੋ</translation>
 <translation id="3169472444629675720">Discover</translation>
 <translation id="3172472771272043251">{PASSWORDS_COUNT,plural, =1{1 ਪਾਸਵਰਡ ਅਤੇ ਹੋਰ ਆਈਟਮਾਂ ਨੂੰ ਸਿਰਫ਼ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਰੱਖਿਅਤ ਕੀਤਾ ਗਿਆ ਹੈ। ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੇ ਹੋਰ ਡੀਵਾਈਸਾਂ 'ਤੇ ਵਰਤਣ ਲਈ, ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੇ Google ਖਾਤੇ, <ph name="ACCOUNT_EMAIL" /> ਵਿੱਚ ਰੱਖਿਅਤ ਕਰੋ।}one{# ਪਾਸਵਰਡ ਅਤੇ ਹੋਰ ਆਈਟਮਾਂ ਨੂੰ ਸਿਰਫ਼ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਰੱਖਿਅਤ ਕੀਤਾ ਗਿਆ ਹੈ। ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੇ ਹੋਰ ਡੀਵਾਈਸਾਂ 'ਤੇ ਵਰਤਣ ਲਈ, ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੇ Google ਖਾਤੇ, <ph name="ACCOUNT_EMAIL" /> ਵਿੱਚ ਰੱਖਿਅਤ ਕਰੋ।}other{# ਪਾਸਵਰਡਾਂ ਅਤੇ ਹੋਰ ਆਈਟਮਾਂ ਨੂੰ ਸਿਰਫ਼ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਰੱਖਿਅਤ ਕੀਤਾ ਗਿਆ ਹੈ। ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੇ ਹੋਰ ਡੀਵਾਈਸਾਂ 'ਤੇ ਵਰਤਣ ਲਈ, ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੇ Google ਖਾਤੇ, <ph name="ACCOUNT_EMAIL" /> ਵਿੱਚ ਰੱਖਿਅਤ ਕਰੋ।}}</translation>
@@ -488,7 +488,7 @@
 <translation id="3236059992281584593">1 ਮਿੰਟ ਬਾਕੀ</translation>
 <translation id="3237087289225714896">ਮਿਆਰੀ ਪ੍ਰੀਲੋਡਿੰਗ:</translation>
 <translation id="3244271242291266297">MM</translation>
-<translation id="3245429137663807393">ਜੇ ਤੁਸੀਂ Chrome ਵਰਤੋਂ ਸੰਬੰਧੀ ਰਿਪੋਰਟਾਂ ਨੂੰ ਵੀ ਸਾਂਝਾ ਕਰਦੇ ਹੋ, ਤਾਂ ਇਨ੍ਹਾਂ ਰਿਪੋਰਟਾਂ ਵਿੱਚ ਤੁਹਾਡੇ ਵੱਲੋਂ ਖੋਲ੍ਹੇ ਜਾਣ ਵਾਲੇ URL ਵੀ ਸ਼ਾਮਲ ਹੁੰਦੇ ਹਨ</translation>
+<translation id="3245429137663807393">ਜੇ ਤੁਸੀਂ Ultimatum ਵਰਤੋਂ ਸੰਬੰਧੀ ਰਿਪੋਰਟਾਂ ਨੂੰ ਵੀ ਸਾਂਝਾ ਕਰਦੇ ਹੋ, ਤਾਂ ਇਨ੍ਹਾਂ ਰਿਪੋਰਟਾਂ ਵਿੱਚ ਤੁਹਾਡੇ ਵੱਲੋਂ ਖੋਲ੍ਹੇ ਜਾਣ ਵਾਲੇ URL ਵੀ ਸ਼ਾਮਲ ਹੁੰਦੇ ਹਨ</translation>
 <translation id="3250563604907490871">ਜਦੋਂ ਤੁਸੀਂ ਵਾਈ-ਫਾਈ ਨਾਲ ਕਨੈਕਟ ਕਰੋਗੇ ਤਾਂ ਚਿੱਤਰ ਵਰਣਨ ਮੁੜ-ਚਾਲੂ ਹੋਵੇਗਾ</translation>
 <translation id="3254409185687681395">ਇਸ ਪੰਨੇ ਨੂੰ ਬੁੱਕਮਾਰਕ ਕਰੋ</translation>
 <translation id="3259831549858767975">ਪੰਨੇ 'ਤੇ ਹਰੇਕ ਚੀਜ਼ ਨੂੰ ਵਧੇਰੇ ਛੋਟਾ ਬਣਾਓ</translation>
@@ -496,7 +496,7 @@
 <translation id="3269093882174072735">ਚਿੱਤਰ ਲੋਡ ਕਰੋ</translation>
 <translation id="327204079441056603">ਅਸੀਂ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਪਾਸਵਰਡਾਂ ਨੂੰ ਰੱਖਿਅਤ ਕਰਨ ਦੇ ਤਰੀਕੇ ਨੂੰ ਬਦਲ ਦਿੱਤਾ ਹੈ</translation>
 <translation id="3280562213547448728">ਅਵਾਜ਼ੀ ਖੋਜ</translation>
-<translation id="3282568296779691940">Chrome 'ਤੇ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
+<translation id="3282568296779691940">Ultimatum 'ਤੇ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
 <translation id="3285065882678541460">{TAB_COUNT,plural, =1{<ph name="TAB_GROUPS_PART" />, <ph name="TAB_COUNT_ONE" /> ਟੈਬ}one{<ph name="TAB_GROUPS_PART" />, <ph name="TAB_COUNT_MANY" /> ਟੈਬ}other{<ph name="TAB_GROUPS_PART" />, <ph name="TAB_COUNT_MANY" /> ਟੈਬਾਂ}}</translation>
 <translation id="3293181007446299124">ਤੁਹਾਡਾ ਬ੍ਰਾਊਜ਼ਿੰਗ ਇਤਿਹਾਸ ਤੁਹਾਡੇ ਡੀਵਾਈਸ 'ਤੇ ਪ੍ਰਾਈਵੇਟ ਰੱਖਿਆ ਜਾਂਦਾ ਹੈ ਅਤੇ ਤੁਹਾਡੀ ਪਛਾਣ ਨੂੰ ਸੁਰੱਖਿਅਤ ਰੱਖਣ ਲਈ ਰਿਪੋਰਟਾਂ ਨੂੰ ਦੇਰੀ ਨਾਲ ਭੇਜਿਆ ਜਾਂਦਾ ਹੈ</translation>
 <translation id="3301936297336370235">ਪਾਸਵਰਡ ਸੁਝਾਅ ਸੰਬੰਧੀ ਤਸਦੀਕ</translation>
@@ -513,7 +513,7 @@
 <translation id="3351165113450806415">ਸਵਾਈਪ ਕਰਨ ਦਾ ਨਵਾਂ ਤਰੀਕਾ</translation>
 <translation id="3359667936385849800">ਆਪਣਾ ਮੌਜੂਦਾ ਸੇਵਾ ਪ੍ਰਦਾਨਕ ਵਰਤੋ</translation>
 <translation id="3373701465337594448">ਚਾਲੂ ਹੋਣ 'ਤੇ, ਜਿਨ੍ਹਾਂ ਸਾਈਟਾਂ 'ਤੇ ਤੁਸੀਂ ਜਾਂਦੇ ਹੋ ਜੋ ਤੁਹਾਡੀਆਂ ਦਿਲਚਸਪੀਆਂ ਦਾ ਅੰਦਾਜ਼ਾ ਲਗਾਉਂਦੀਆਂ ਹਨ, ਉਨ੍ਹਾਂ ਦੀ ਸੂਚੀ ਇੱਥੇ ਦਿਸਦੀ ਹੈ</translation>
-<translation id="3374023511497244703">ਤੁਹਾਡੇ ਬੁੱਕਮਾਰਕਾਂ, ਇਤਿਹਾਸ, ਪਾਸਵਰਡਾਂ ਅਤੇ ਹੋਰ Chrome ਡਾਟੇ ਦਾ ਹੁਣ ਤੁਹਾਡੇ Google ਖਾਤੇ ਨਾਲ ਸਿੰਕ ਨਹੀਂ ਕੀਤਾ ਜਾਵੇਗਾ</translation>
+<translation id="3374023511497244703">ਤੁਹਾਡੇ ਬੁੱਕਮਾਰਕਾਂ, ਇਤਿਹਾਸ, ਪਾਸਵਰਡਾਂ ਅਤੇ ਹੋਰ Ultimatum ਡਾਟੇ ਦਾ ਹੁਣ ਤੁਹਾਡੇ Google ਖਾਤੇ ਨਾਲ ਸਿੰਕ ਨਹੀਂ ਕੀਤਾ ਜਾਵੇਗਾ</translation>
 <translation id="3384347053049321195">ਚਿਤਰ ਸਾਂਝੇ ਕਰੋ</translation>
 <translation id="3387650086002190359">ਫ਼ਾਈਲ ਸਿਸਟਮ ਗੜਬੜੀਆਂ ਦੇ ਕਾਰਨ <ph name="FILE_NAME" /> ਡਾਊਨਲੋਡ ਅਸਫ਼ਲ ਰਿਹਾ।</translation>
 <translation id="3398320232533725830">ਬੁੱਕਮਾਰਕ ਪ੍ਰਬੰਧਕ ਖੋਲ੍ਹੋ</translation>
@@ -528,19 +528,19 @@
 <translation id="3443221991560634068">ਮੌਜੂਦਾ ਪੰਨੇ ਨੂੰ ਮੁੜ-ਲੋਡ ਕਰੋ</translation>
 <translation id="3444179773590444986">ਕੀ ਸਾਈਟਾਂ ਲਈ ਗੂੜ੍ਹੇ ਥੀਮ ਬਾਰੇ ਵਿਚਾਰ ਸਾਂਝਾ ਕਰਨਾ ਹੈ?</translation>
 <translation id="3448874648066942074">AI ਨਾਲ ਪੰਨੇ ਦਾ ਸਾਰਾਂਸ਼ ਬਣਾਓ</translation>
-<translation id="3452832259067974318">ਤੁਹਾਡੀ ਪਰਦੇਦਾਰੀ ਦੀ ਸੁਰੱਖਿਆ ਲਈ, Chrome ਇਸ ਖੇਤਰ ਵਿੱਚ ਤੁਹਾਡੇ ਪਾਸਵਰਡ ਨੂੰ ਆਟੋਫਿਲ ਨਹੀਂ ਕਰੇਗਾ।</translation>
+<translation id="3452832259067974318">ਤੁਹਾਡੀ ਪਰਦੇਦਾਰੀ ਦੀ ਸੁਰੱਖਿਆ ਲਈ, Ultimatum ਇਸ ਖੇਤਰ ਵਿੱਚ ਤੁਹਾਡੇ ਪਾਸਵਰਡ ਨੂੰ ਆਟੋਫਿਲ ਨਹੀਂ ਕਰੇਗਾ।</translation>
 <translation id="3467081767799433066">ਵਿਗਿਆਪਨ ਮਾਪ ਨਾਲ, ਸਾਈਟਾਂ ਦੇ ਵਿਗਿਆਪਨਾਂ ਦੀ ਕਾਰਗੁਜ਼ਾਰੀ ਦਾ ਮੁਲਾਂਕਣ ਕਰਨ ਲਈ ਉਨ੍ਹਾਂ ਵਿਚਕਾਰ ਸੀਮਤ ਕਿਸਮ ਦਾ ਡਾਟਾ ਸਾਂਝਾ ਕੀਤਾ ਜਾਂਦਾ ਹੈ, ਜਿਵੇਂ ਕਿ ਕਿਸੇ ਸਾਈਟ 'ਤੇ ਜਾਣ ਤੋਂ ਬਾਅਦ ਤੁਸੀਂ ਕੋਈ ਖਰੀਦ ਕੀਤੀ ਹੈ ਜਾਂ ਨਹੀਂ।</translation>
 <translation id="3474624961160222204"><ph name="NAME" /> ਵਜੋਂ ਜਾਰੀ ਰੱਖੋ</translation>
 <translation id="3478363558367712427">ਤੁਸੀਂ ਆਪਣਾ ਖੋਜ ਇੰਜਣ ਚੁਣ ਸਕਦੇ ਹੋ</translation>
 <translation id="3479552764303398839">ਹੁਣ ਨਹੀਂ</translation>
 <translation id="3482805106082349287">ਕੀ-ਬੋਰਡ, ਅਵਾਜ਼, ਇਨਕੋਗਨਿਟੋ ਮੋਡ ਜਾਂ ਕੈਮਰੇ ਨੂੰ ਵਰਤ ਕੇ ਖੋਜ ਕਰੋ</translation>
-<translation id="3487903178221457900">ਨਿਰਯਾਤ ਕੀਤੀ ਫ਼ਾਈਲ ਐਪਾਂ ਸਮੇਤ ਹੋਰਾਂ ਲਈ ਪਹੁੰਚਯੋਗ ਹੋ ਸਕਦੀ ਹੈ। ਤੁਹਾਡੇ ਵੱਲੋਂ ਨਿਰਯਾਤ ਕੀਤੇ ਜਾਣ ਤੋਂ ਬਾਅਦ, ਤੁਹਾਡੇ ਪਾਸਵਰਡਾਂ ਨੂੰ Chrome ਤੋਂ ਮਿਟਾਇਆ ਜਾਂਦਾ ਹੈ।</translation>
+<translation id="3487903178221457900">ਨਿਰਯਾਤ ਕੀਤੀ ਫ਼ਾਈਲ ਐਪਾਂ ਸਮੇਤ ਹੋਰਾਂ ਲਈ ਪਹੁੰਚਯੋਗ ਹੋ ਸਕਦੀ ਹੈ। ਤੁਹਾਡੇ ਵੱਲੋਂ ਨਿਰਯਾਤ ਕੀਤੇ ਜਾਣ ਤੋਂ ਬਾਅਦ, ਤੁਹਾਡੇ ਪਾਸਵਰਡਾਂ ਨੂੰ Ultimatum ਤੋਂ ਮਿਟਾਇਆ ਜਾਂਦਾ ਹੈ।</translation>
 <translation id="3488199663160411179">ਨਾਮ</translation>
 <translation id="3493531032208478708">ਸੁਝਾਈ ਗਈ ਸਮੱਗਰੀ ਬਾਰੇ <ph name="BEGIN_LINK" />ਹੋਰ ਜਾਣੋ<ph name="END_LINK" /></translation>
 <translation id="3499246418971111862">chrome_qrcode_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="350276055892098337">ਪੁਰਾਣੇ ਮੁਤਾਬਕ ਕ੍ਰਮ-ਬੱਧ</translation>
 <translation id="3507132249039706973">ਮਿਆਰੀ ਸੁਰੱਖਿਆ ਚਾਲੂ ਹੈ</translation>
-<translation id="3509330069915219067">ਆਫ਼ਲਾਈਨ। Chrome ਅੱਪਡੇਟਾਂ ਲਈ ਜਾਂਚ ਨਹੀਂ ਕਰ ਸਕਦਾ।</translation>
+<translation id="3509330069915219067">ਆਫ਼ਲਾਈਨ। Ultimatum ਅੱਪਡੇਟਾਂ ਲਈ ਜਾਂਚ ਨਹੀਂ ਕਰ ਸਕਦਾ।</translation>
 <translation id="3513019849832307207">ਸ਼ਾਮਲ ਹੋਵੋ ਅਤੇ ਖੋਲ੍ਹੋ</translation>
 <translation id="3513704683820682405">ਆਗਮੈਂਟਿਡ ਰਿਐਲਿਟੀ</translation>
 <translation id="3516053221628030540">Google Play 'ਤੇ ਜਾਓ</translation>
@@ -573,10 +573,10 @@
 <translation id="3627893290277153986">ਪੰਨੇ ਨੂੰ ਰੱਖਿਅਤ ਕਰਨ ਲਈ ਵਿਕਲਪ ਖੋਲ੍ਹੋ</translation>
 <translation id="3631987586758005671"><ph name="DEVICE_NAME" /> ਨਾਲ ਸਾਂਝਾ ਕੀਤਾ ਜਾ ਰਿਹਾ ਹੈ</translation>
 <translation id="363484704507524488">ਤੁਸੀਂ ਚੋਰੀ ਤੋਂ ਸੁਰੱਖਿਆ ਸੈਟਿੰਗਾਂ ਵਿੱਚ ਜਾ ਕੇ ਪਛਾਣ ਜਾਂਚ ਦਾ ਪ੍ਰਬੰਧਨ ਕਰ ਸਕਦੇ ਹੋ। <ph name="BEGIN_LINK" />ਸੈਟਿੰਗਾਂ 'ਤੇ ਜਾਓ<ph name="END_LINK" /></translation>
-<translation id="3635073343384702370">ਤੁਹਾਡੇ ਵੱਲੋਂ ਆਪਣੇ ਪਾਸਵਰਡ ਰੱਖਿਅਤ ਕਰਨ 'ਤੇ Chrome ਉਨ੍ਹਾਂ ਦੀ ਜਾਂਚ ਕਰ ਸਕਦਾ ਹੈ</translation>
+<translation id="3635073343384702370">ਤੁਹਾਡੇ ਵੱਲੋਂ ਆਪਣੇ ਪਾਸਵਰਡ ਰੱਖਿਅਤ ਕਰਨ 'ਤੇ Ultimatum ਉਨ੍ਹਾਂ ਦੀ ਜਾਂਚ ਕਰ ਸਕਦਾ ਹੈ</translation>
 <translation id="363596933471559332">ਸਟੋਰ ਕੀਤੇ ਕ੍ਰੀਡੈਂਸ਼ੀਅਲਾਂ ਦੀ ਵਰਤੋਂ ਕਰਕੇ ਆਪਣੇ-ਆਪ ਸਾਈਟਾਂ ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰੋ। ਜਦੋਂ ਵਿਸ਼ੇਸ਼ਤਾ ਬੰਦ ਹੋਵੇ, ਤਾਂ ਤੁਹਾਨੂੰ ਇੱਕ ਵੈੱਬਸਾਈਟ 'ਤੇ ਸਾਈਨ-ਇਨ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਹਰ ਵਾਰ ਪੁਸ਼ਟੀ ਕਰਨ ਲਈ ਕਿਹਾ ਜਾਵੇਗਾ।</translation>
 <translation id="3636940436873918441">ਤਰਜੀਹੀ ਭਾਸ਼ਾਵਾਂ</translation>
-<translation id="3637744895182738742">ਜੇ ਤੁਸੀਂ ਆਪਣਾ ਪਾਸਫਰੇਜ਼ ਭੁੱਲ ਗਏ ਹੋ ਜਾਂ ਇਸ ਸੈਟਿੰਗ ਨੂੰ ਬਦਲਣਾ ਚਾਹੁੰਦੇ ਹੋ, ਤਾਂ <ph name="BEGIN_LINK" />ਆਪਣੇ ਖਾਤੇ ਵਿੱਚ Chrome ਡਾਟੇ ਨੂੰ ਮਿਟਾਓ<ph name="END_LINK" />।</translation>
+<translation id="3637744895182738742">ਜੇ ਤੁਸੀਂ ਆਪਣਾ ਪਾਸਫਰੇਜ਼ ਭੁੱਲ ਗਏ ਹੋ ਜਾਂ ਇਸ ਸੈਟਿੰਗ ਨੂੰ ਬਦਲਣਾ ਚਾਹੁੰਦੇ ਹੋ, ਤਾਂ <ph name="BEGIN_LINK" />ਆਪਣੇ ਖਾਤੇ ਵਿੱਚ Ultimatum ਡਾਟੇ ਨੂੰ ਮਿਟਾਓ<ph name="END_LINK" />।</translation>
 <translation id="3653111872753786013"><ph name="WEBSITE_TITLE" />: <ph name="WEBSITE_URL" /></translation>
 <translation id="3674208116086565128">Google ਐਪ ਦੀ ਹੋਮ ਟੈਬ 'ਤੇ ਜਾਓ</translation>
 <translation id="368329460027487650">ਸਾਈਨ-ਆਊਟ ਕੀਤਾ ਗਿਆ। ਇਹ ਸਾਈਨ-ਇਨ ਕਰਨ ਦੇ ਵਿਕਲਪਾਂ ਨੂੰ ਖੋਲ੍ਹਦਾ ਹੈ।</translation>
@@ -592,7 +592,7 @@
 <translation id="3710501561113687889">ਜਾਰੀ ਰੱਖਣ ਲਈ, <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> ਤੁਹਾਡੇ <ph name="FIELDS_STRING" /> ਨੂੰ ਇਸ ਸਾਈਟ ਨਾਲ ਸਾਂਝਾ ਕਰੇਗਾ।</translation>
 <translation id="3710560693796335511">ਸਹਿਯੋਗ</translation>
 <translation id="3714981814255182093">ਖੋਜ ਬਾਰ ਖੋਲ੍ਹੋ</translation>
-<translation id="3718765429352682176">ਤੁਸੀਂ ਉਨ੍ਹਾਂ ਹੋਰ ਐਪਾਂ ਦਾ ਇਤਿਹਾਸ ਦੇਖ ਸਕਦੇ ਹੋ, ਜਿਨ੍ਹਾਂ ਦੇ ਲਿੰਕ Chrome ਵਿੱਚ ਖੁੱਲ੍ਹਦੇ ਹਨ।</translation>
+<translation id="3718765429352682176">ਤੁਸੀਂ ਉਨ੍ਹਾਂ ਹੋਰ ਐਪਾਂ ਦਾ ਇਤਿਹਾਸ ਦੇਖ ਸਕਦੇ ਹੋ, ਜਿਨ੍ਹਾਂ ਦੇ ਲਿੰਕ Ultimatum ਵਿੱਚ ਖੁੱਲ੍ਹਦੇ ਹਨ।</translation>
 <translation id="3721119614952978349">ਤੁਸੀਂ ਅਤੇ Google</translation>
 <translation id="3737319253362202215">ਅਨੁਵਾਦ ਸੈਟਿੰਗਾਂ</translation>
 <translation id="3738139272394829648">ਖੋਜਣ ਲਈ ਸਪਰਸ਼ ਕਰੋ</translation>
@@ -640,8 +640,8 @@
 <translation id="3950820424414687140">ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
 <translation id="395377504920307820">ਕਿਸੇ ਖਾਤੇ ਦੇ ਬਿਨਾਂ ਵਰਤੋ</translation>
 <translation id="3955219620682768253">ਇਤਿਹਾਸ ਵਿੱਚ ਪਿਛਲੇ ਪੰਨੇ 'ਤੇ ਜਾਓ</translation>
-<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{ਤਿਆਰ ਹੋਣ 'ਤੇ Chrome ਤੁਹਾਡੇ ਪੰਨੇ ਨੂੰ ਲੋਡ ਕਰੇਗਾ}one{ਤਿਆਰ ਹੋਣ 'ਤੇ Chrome ਤੁਹਾਡੇ ਪੰਨੇ ਨੂੰ ਲੋਡ ਕਰੇਗਾ}other{ਤਿਆਰ ਹੋਣ 'ਤੇ Chrome ਤੁਹਾਡੇ ਪੰਨਿਆਂ ਨੂੰ ਲੋਡ ਕਰੇਗਾ}}</translation>
-<translation id="3969142555815019568">Chrome ਤੁਹਾਡੇ ਪਾਸਵਰਡਾਂ ਦੀ ਜਾਂਚ ਨਹੀਂ ਕਰ ਸਕਦਾ</translation>
+<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{ਤਿਆਰ ਹੋਣ 'ਤੇ Ultimatum ਤੁਹਾਡੇ ਪੰਨੇ ਨੂੰ ਲੋਡ ਕਰੇਗਾ}one{ਤਿਆਰ ਹੋਣ 'ਤੇ Ultimatum ਤੁਹਾਡੇ ਪੰਨੇ ਨੂੰ ਲੋਡ ਕਰੇਗਾ}other{ਤਿਆਰ ਹੋਣ 'ਤੇ Ultimatum ਤੁਹਾਡੇ ਪੰਨਿਆਂ ਨੂੰ ਲੋਡ ਕਰੇਗਾ}}</translation>
+<translation id="3969142555815019568">Ultimatum ਤੁਹਾਡੇ ਪਾਸਵਰਡਾਂ ਦੀ ਜਾਂਚ ਨਹੀਂ ਕਰ ਸਕਦਾ</translation>
 <translation id="3969863827134279083">ਉੱਪਰ ਮੂਵ ਕਰੋ</translation>
 <translation id="397105322502079400">ਅਨੁਮਾਨ ਲਗਾ ਰਿਹਾ ਹੈ...</translation>
 <translation id="397583555483684758">ਸਿੰਕ ਨੇ ਕੰਮ ਕਰਨਾ ਬੰਦ ਕਰ ਦਿੱਤਾ ਹੈ</translation>
@@ -678,7 +678,7 @@
 <translation id="4132137475637520539">ਜਿਸ ਕੋਲ ਵੀ ਲਿੰਕ ਹੈ, ਉਸ ਨੂੰ ਸ਼ਾਮਲ ਹੋਣ ਦੀ ਆਗਿਆ ਦਿਓ</translation>
 <translation id="4135200667068010335">ਟੈਬ ਨੂੰ ਸਾਂਝਾ ਕਰਨ ਲਈ ਡੀਵਾਈਸਾਂ ਦੀ ਸੂਚੀ ਬੰਦ ਹੈ।</translation>
 <translation id="4137746084635924146">ਡੀਵਾਈਸ ਦੀ ਮੌਜੂਦਾ ਭਾਸ਼ਾ</translation>
-<translation id="4139654229316918773">Chrome Canary</translation>
+<translation id="4139654229316918773">Ultimatum Canary</translation>
 <translation id="414128724510021958">ਡੈਸਕਟਾਪ ਸਾਈਟਾਂ ਲਈ ਪੂਰਵ-ਨਿਰਧਾਰਿਤ ਤੌਰ 'ਤੇ ਬੇਨਤੀ ਕੀਤੀ ਗਈ</translation>
 <translation id="4162867837470729563">ਸਾਂਝਾਕਰਨ ਵਿਕਲਪਾਂ ਦੀ ਸੂਚੀ ਪੂਰੀ ਸਕ੍ਰੀਨ 'ਤੇ ਖੁੱਲ੍ਹੀ ਹੋਈ ਹੈ।</translation>
 <translation id="4170011742729630528">ਸੇਵਾ ਉਪਲਬਧ ਨਹੀਂ ਹੈ; ਬਾਅਦ ਵਿੱਚ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।</translation>
@@ -691,14 +691,14 @@
 <translation id="4197828496439691735">{NUM_TABS,plural, =1{ਇਸ ਡੀਵਾਈਸ 'ਤੇ 1 ਟੈਬ}one{ਇਸ ਡੀਵਾਈਸ 'ਤੇ # ਟੈਬ}other{ਇਸ ਡੀਵਾਈਸ 'ਤੇ # ਟੈਬਾਂ}}</translation>
 <translation id="4198423547019359126">ਡਾਊਨਲੋਡ ਕਰਨ ਲਈ ਕੋਈ ਟਿਕਾਣਾ ਉਪਲਬਧ ਨਹੀਂ ਹੈ</translation>
 <translation id="4209029522667123437"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> • ਤੁਸੀਂ ਇਸ ਸਾਈਟ 'ਤੇ ਵਰਤੋਂ ਕੀਤੀ</translation>
-<translation id="4214315110991671325">ਜੇ ਤੁਸੀਂ ਕੁਕੀਜ਼ ਦੀ ਆਗਿਆ ਦਿੰਦੇ ਹੋ, ਤਾਂ Chrome ਉਨ੍ਹਾਂ ਨੂੰ ਪ੍ਰੀਲੋਡ ਕਰਨ ਲਈ ਵਰਤ ਸਕਦਾ ਹੈ।</translation>
+<translation id="4214315110991671325">ਜੇ ਤੁਸੀਂ ਕੁਕੀਜ਼ ਦੀ ਆਗਿਆ ਦਿੰਦੇ ਹੋ, ਤਾਂ Ultimatum ਉਨ੍ਹਾਂ ਨੂੰ ਪ੍ਰੀਲੋਡ ਕਰਨ ਲਈ ਵਰਤ ਸਕਦਾ ਹੈ।</translation>
 <translation id="4216511743389425832">ਇਸ ਪੰਨੇ ਨੂੰ ਸੁਣੋ</translation>
 <translation id="4225725533026049334">ਅਨੁਸਰਣ ਕੀਤਾ ਜਾ ਰਿਹਾ ਹੈ</translation>
 <translation id="4225895483398857530">ਟੂਲਬਾਰ ਸ਼ਾਰਟਕੱਟ</translation>
 <translation id="4232376164796433044">ਪਾਸਵਰਡ ਅਤੇ ਆਟੋਫਿਲ</translation>
 <translation id="4242533952199664413">ਸੈਟਿੰਗਾਂ ਖੋਲ੍ਹੋ</translation>
 <translation id="4248098802131000011">ਆਪਣੇ ਪਾਸਵਰਡਾਂ ਨੂੰ ਡਾਟਾ ਉਲੰਘਣਾਵਾਂ ਅਤੇ ਹੋਰ ਸੁਰੱਖਿਆ ਸੰਬੰਧੀ ਸਮੱਸਿਆਵਾਂ ਤੋਂ ਸੁਰੱਖਿਅਤ ਰੱਖੋ</translation>
-<translation id="424864128008805179">ਕੀ Chrome ਤੋਂ ਸਾਈਨ-ਆਊਟ ਹੋਣਾ ਹੈ?</translation>
+<translation id="424864128008805179">ਕੀ Ultimatum ਤੋਂ ਸਾਈਨ-ਆਊਟ ਹੋਣਾ ਹੈ?</translation>
 <translation id="4249955472157341256">ਨਵੀਨਤਮ ਮੁਤਾਬਲ ਕ੍ਰਮ-ਬੱਧ ਕਰੋ</translation>
 <translation id="4255841059940367080">ਉਨ੍ਹਾਂ ਖਤਰਨਾਕ ਸਾਈਟਾਂ, ਡਾਊਨਲੋਡਾਂ ਅਤੇ ਐਕਸਟੈਂਸ਼ਨਾਂ ਦੇ ਵਿਰੁੱਧ ਅਸਲ-ਸਮੇਂ ਦੀ, AI-ਸੰਚਾਲਿਤ ਸੁਰੱਖਿਆ ਜੋ ਕਿ Google ਨੂੰ ਭੇਜੇ ਜਾਣ ਵਾਲੇ ਤੁਹਾਡੇ ਬ੍ਰਾਊਜ਼ਿੰਗ ਡਾਟੇ 'ਤੇ ਆਧਾਰਿਤ ਹੁੰਦੀ ਹੈ</translation>
 <translation id="4256782883801055595">ਖੁੱਲ੍ਹਾ ਸਰੋਤ ਲਾਇਸੰਸ</translation>
@@ -707,7 +707,7 @@
 <translation id="4270730597186910506">ਕਿਸੇ ਉਤਪਾਦ ਨੂੰ ਟਰੈਕ ਕਰੋ ਜਾਂ ਟਰੈਕ ਕਰਨਾ ਬੰਦ ਕਰੋ।</translation>
 <translation id="4277529130885813215">ਕੋਈ ਹੋਰ ਡੀਵਾਈਸ ਦੀ ਵਰਤੋਂ ਕਰੋ</translation>
 <translation id="427987768447457592">ਨਵਾਂ ਟੈਬ ਗਰੁੱਪ</translation>
-<translation id="4282440837784183472">ਤੁਹਾਡੀ ਸੰਸਥਾ, <ph name="MANAGED_DOMAIN" />, ਤੁਹਾਡੇ ਵੱਲੋਂ ਸਾਈਨ-ਇਨ ਕੀਤੇ ਜਾਣ ਵਾਲੇ ਖਾਤੇ ਅਤੇ Chrome ਦੇ ਵਰਤੇ ਜਾਣ ਦੇ ਤਰੀਕੇ ਦਾ ਪ੍ਰਬੰਧਨ ਕਰਦੀ ਹੈ। ਤੁਹਾਡਾ ਪ੍ਰਸ਼ਾਸਕ ਕੁਝ ਖਾਸ ਵਿਸ਼ੇਸ਼ਤਾਵਾਂ ਦਾ ਸੈੱਟਅੱਪ ਜਾਂ ਉਨ੍ਹਾਂ ਨੂੰ ਪ੍ਰਤਿਬੰਧਿਤ ਕਰ ਸਕਦਾ ਹੈ।</translation>
+<translation id="4282440837784183472">ਤੁਹਾਡੀ ਸੰਸਥਾ, <ph name="MANAGED_DOMAIN" />, ਤੁਹਾਡੇ ਵੱਲੋਂ ਸਾਈਨ-ਇਨ ਕੀਤੇ ਜਾਣ ਵਾਲੇ ਖਾਤੇ ਅਤੇ Ultimatum ਦੇ ਵਰਤੇ ਜਾਣ ਦੇ ਤਰੀਕੇ ਦਾ ਪ੍ਰਬੰਧਨ ਕਰਦੀ ਹੈ। ਤੁਹਾਡਾ ਪ੍ਰਸ਼ਾਸਕ ਕੁਝ ਖਾਸ ਵਿਸ਼ੇਸ਼ਤਾਵਾਂ ਦਾ ਸੈੱਟਅੱਪ ਜਾਂ ਉਨ੍ਹਾਂ ਨੂੰ ਪ੍ਰਤਿਬੰਧਿਤ ਕਰ ਸਕਦਾ ਹੈ।</translation>
 <translation id="4285498937028063278">ਅਨਪਿਨ ਕਰੋ</translation>
 <translation id="4285846616383034558">ਕੁਕੀਜ਼, ਕੈਸ਼ੇ ਅਤੇ ਹੋਰ ਸਾਈਟ ਡਾਟਾ</translation>
 <translation id="4291407919474070700"><ph name="BEGIN_LINK" />Android ਸੈਟਿੰਗਾਂ ਵਿੱਚ ਸਕ੍ਰੀਨ ਲਾਕ ਚਾਲੂ ਕਰੋ<ph name="END_LINK" /></translation>
@@ -717,7 +717,7 @@
 <translation id="4307992518367153382">ਮੂਲ</translation>
 <translation id="4311652497846705514">ਕੀ PDF ਨੂੰ ਖੋਲ੍ਹਣਾ ਹੈ?</translation>
 <translation id="4320177379694898372">ਕੋਈ ਇੰਟਰਨੈਟ ਕਨੈਕਸ਼ਨ ਨਹੀਂ</translation>
-<translation id="4326079409704643112">ਆਪਣੇ Google ਖਾਤੇ ਵਿੱਚ Chrome ਡਾਟੇ ਨੂੰ ਵਰਤਣ ਅਤੇ ਰੱਖਿਅਤ ਕਰਨ ਲਈ, ਆਪਣੀ ਪਛਾਣ ਦੀ ਪੁਸ਼ਟੀ ਕਰੋ</translation>
+<translation id="4326079409704643112">ਆਪਣੇ Google ਖਾਤੇ ਵਿੱਚ Ultimatum ਡਾਟੇ ਨੂੰ ਵਰਤਣ ਅਤੇ ਰੱਖਿਅਤ ਕਰਨ ਲਈ, ਆਪਣੀ ਪਛਾਣ ਦੀ ਪੁਸ਼ਟੀ ਕਰੋ</translation>
 <translation id="433213510553688132">ਅਨੁਸਰਣ ਕੀਤਾ ਜਾ ਰਿਹਾ ਹੈ...</translation>
 <translation id="4335835283689002019">ਸੁਰੱਖਿਅਤ ਬ੍ਰਾਊਜ਼ਿੰਗ ਬੰਦ ਹੈ</translation>
 <translation id="4351244548802238354">ਡਾਇਲੌਗ ਬੰਦ ਕਰੋ</translation>
@@ -745,15 +745,15 @@
 <translation id="4452548195519783679"><ph name="FOLDER_NAME" /> ਵਿੱਚ ਬੁੱਕਮਾਰਕ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="4460861538906892109">{ITEMS_COUNT,plural, =1{1 ਬੁੱਕਮਾਰਕ}one{# ਬੁੱਕਮਾਰਕ}other{# ਬੁੱਕਮਾਰਕ}}</translation>
 <translation id="4478161224666880173">ਤੁਸੀਂ ਇਸ ਸਾਈਟ 'ਤੇ ਆਪਣੇ<ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> ਖਾਤੇ ਦੀ ਵਰਤੋਂ ਕਰ ਸਕਦੇ ਹੋ। ਜਾਰੀ ਰੱਖਣ ਲਈ, <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰੋ।</translation>
-<translation id="4479972344484327217">Chrome ਲਈ <ph name="MODULE" /> ਨੂੰ ਸਥਾਪਤ ਕੀਤਾ ਜਾ ਰਿਹਾ ਹੈ…</translation>
+<translation id="4479972344484327217">Ultimatum ਲਈ <ph name="MODULE" /> ਨੂੰ ਸਥਾਪਤ ਕੀਤਾ ਜਾ ਰਿਹਾ ਹੈ…</translation>
 <translation id="4484496141267039529">ਕੋਈ ਕਨੈਕਸ਼ਨ ਨਹੀਂ। ਬਾਅਦ ਵਿੱਚ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।</translation>
-<translation id="4487967297491345095">Chrome ਦਾ ਸਾਰਾ ਐਪ ਡਾਟਾ ਸਥਾਈ ਤੌਰ 'ਤੇ ਮਿਟਾ ਦਿੱਤਾ ਜਾਵੇਗਾ। ਇਸ ਵਿੱਚ ਸਾਰੀਆਂ ਫ਼ਾਈਲਾਂ, ਸੈਟਿੰਗਾਂ, ਖਾਤੇ, ਡਾਟਾਬੇਸ ਆਦਿ ਸ਼ਾਮਲ ਹਨ।</translation>
+<translation id="4487967297491345095">Ultimatum ਦਾ ਸਾਰਾ ਐਪ ਡਾਟਾ ਸਥਾਈ ਤੌਰ 'ਤੇ ਮਿਟਾ ਦਿੱਤਾ ਜਾਵੇਗਾ। ਇਸ ਵਿੱਚ ਸਾਰੀਆਂ ਫ਼ਾਈਲਾਂ, ਸੈਟਿੰਗਾਂ, ਖਾਤੇ, ਡਾਟਾਬੇਸ ਆਦਿ ਸ਼ਾਮਲ ਹਨ।</translation>
 <translation id="4494806687727322324">ਤੁਹਾਡੇ ਪ੍ਰਸ਼ਾਸਕ ਨੇ ਪਾਸਵਰਡ ਰੱਖਿਅਤ ਕਰਨ ਦੀ ਸੁਵਿਧਾ ਨੂੰ ਚਾਲੂ ਕਰ ਦਿੱਤਾ ਹੈ</translation>
 <translation id="4508528996305412043">ਫ਼ੀਡ ਕਾਰਡ ਮੀਨੂ ਖੁੱਲ੍ਹਾ ਹੈ</translation>
 <translation id="4509741852167209430">ਸਾਈਟਾਂ ਦੇ ਵਿਗਿਆਪਨਾਂ ਦੀ ਕਾਰਗੁਜ਼ਾਰੀ ਦਾ ਮੁਲਾਂਕਣ ਕਰਨ ਲਈ ਉਨ੍ਹਾਂ ਵਿਚਕਾਰ ਸੀਮਤ ਕਿਸਮ ਦਾ ਡਾਟਾ ਸਾਂਝਾ ਕੀਤਾ ਜਾਂਦਾ ਹੈ, ਜਿਵੇਂ ਕਿ ਕਿਸੇ ਸਾਈਟ 'ਤੇ ਜਾਣ ਤੋਂ ਬਾਅਦ ਤੁਸੀਂ ਕੋਈ ਖਰੀਦ ਕੀਤੀ ਹੈ ਜਾਂ ਨਹੀਂ</translation>
 <translation id="4513387527876475750">{DAYS,plural, =1{# ਦਿਨ ਪਹਿਲਾਂ}one{# ਦਿਨ ਪਹਿਲਾਂ}other{# ਦਿਨ ਪਹਿਲਾਂ}}</translation>
 <translation id="451872707440238414">ਆਪਣੇ ਬੁੱਕਮਾਰਕ ਖੋਜੋ</translation>
-<translation id="4521489764227272523">ਚੁਣੇ ਗਏ ਡਾਟਾ ਨੂੰ Chrome ਅਤੇ ਤੁਹਾਡੇ ਸਿੰਕ ਕੀਤੇ ਡੀਵਾਈਸਾਂ ਤੋਂ ਹਟਾ ਦਿੱਤਾ ਗਿਆ ਹੈ।
+<translation id="4521489764227272523">ਚੁਣੇ ਗਏ ਡਾਟਾ ਨੂੰ Ultimatum ਅਤੇ ਤੁਹਾਡੇ ਸਿੰਕ ਕੀਤੇ ਡੀਵਾਈਸਾਂ ਤੋਂ ਹਟਾ ਦਿੱਤਾ ਗਿਆ ਹੈ।
 
 ਤੁਹਾਡੇ Google ਖਾਤੇ ਵਿੱਚ <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> 'ਤੇ ਹੋਰ Google ਸੇਵਾਵਾਂ ਤੋਂ ਖੋਜਾਂ ਅਤੇ ਸਰਗਰਮੀ ਵਰਗੇ ਹੋਰ ਕਿਸਮ ਦਾ ਬ੍ਰਾਊਜ਼ਿੰਗ ਇਤਿਹਾਸ ਵੀ ਸ਼ਾਮਲ ਹੋ ਸਕਦਾ ਹੈ।</translation>
 <translation id="4523326818319942067">ਪਿਛਲਾ ਘੰਟਾ</translation>
@@ -772,10 +772,10 @@
 <translation id="4594952190837476234">ਇਹ ਆਫ਼ਲਾਈਨ ਪੰਨਾ <ph name="CREATION_TIME" /> ਦਾ ਹੈ ਅਤੇ ਆਨਲਾਈਨ ਵਰਜਨ ਤੋਂ ਵੱਖਰਾ ਹੋ ਸਕਦਾ ਹੈ।</translation>
 <translation id="4595805675102978678">Google ਖਾਤੇ ਸੰਬੰਧੀ ਗੜਬੜ</translation>
 <translation id="4601095002996233687">ਸ਼ੱਕੀ ਡਾਊਨਲੋਡਾਂ ਦੀ ਗਹਿਰਾਈ ਨਾਲ ਸਕੈਨਿੰਗ ਕੀਤੀ ਜਾਂਦੀ ਹੈ।</translation>
-<translation id="4606559747793337066">ਜਦੋਂ ਕੋਈ ਸਾਈਟ ਜਾਂ ਐਪ ਆਪਣੇ ਪੰਨੇ 'ਤੇ ਨਿੱਜੀ ਤੌਰ 'ਤੇ ਲਿੰਕਾਂ ਨੂੰ ਪ੍ਰੀਲੋਡ ਕਰਨ ਲਈ ਕਹਿੰਦੀ ਹੈ, ਤਾਂ Chrome ਕੁਕੀਜ਼ ਤੋਂ ਬਿਨਾਂ Google ਸਰਵਰਾਂ ਰਾਹੀਂ ਪੰਨਿਆਂ ਨੂੰ ਇਨਕ੍ਰਿਪਟ ਅਤੇ ਪ੍ਰੀਲੋਡ ਕਰਦਾ ਹੈ। ਇਹ ਪ੍ਰੀਲੋਡ ਕੀਤੀ ਸਾਈਟ ਤੋਂ ਤੁਹਾਡੀ ਪਛਾਣ ਨੂੰ ਲੁਕਾਉਂਦਾ ਹੈ।</translation>
+<translation id="4606559747793337066">ਜਦੋਂ ਕੋਈ ਸਾਈਟ ਜਾਂ ਐਪ ਆਪਣੇ ਪੰਨੇ 'ਤੇ ਨਿੱਜੀ ਤੌਰ 'ਤੇ ਲਿੰਕਾਂ ਨੂੰ ਪ੍ਰੀਲੋਡ ਕਰਨ ਲਈ ਕਹਿੰਦੀ ਹੈ, ਤਾਂ Ultimatum ਕੁਕੀਜ਼ ਤੋਂ ਬਿਨਾਂ Google ਸਰਵਰਾਂ ਰਾਹੀਂ ਪੰਨਿਆਂ ਨੂੰ ਇਨਕ੍ਰਿਪਟ ਅਤੇ ਪ੍ਰੀਲੋਡ ਕਰਦਾ ਹੈ। ਇਹ ਪ੍ਰੀਲੋਡ ਕੀਤੀ ਸਾਈਟ ਤੋਂ ਤੁਹਾਡੀ ਪਛਾਣ ਨੂੰ ਲੁਕਾਉਂਦਾ ਹੈ।</translation>
 <translation id="4616150815774728855"><ph name="WEBAPK_NAME" /> ਖੋਲ੍ਹੋ</translation>
 <translation id="4619564267100705184">ਆਪਣੀ ਪਛਾਣ ਦੀ ਪੁਸ਼ਟੀ ਕਰੋ</translation>
-<translation id="4624065194742029982">Chrome ਇਨਕੋਗਨਿਟੋ</translation>
+<translation id="4624065194742029982">Ultimatum ਇਨਕੋਗਨਿਟੋ</translation>
 <translation id="4634124774493850572">ਪਾਸਵਰਡ ਵਰਤੋ</translation>
 <translation id="4640331037679501949">{NUM_PASSWORDS,plural, =1{1 ਪਾਸਵਰਡ ਨਾਲ ਛੇੜਛਾੜ ਹੋਈ}one{# ਪਾਸਵਰਡ ਨਾਲ ਛੇੜਛਾੜ ਹੋਈ}other{# ਪਾਸਵਰਡਾਂ ਨਾਲ ਛੇੜਛਾੜ ਹੋਈ}}</translation>
 <translation id="4642472735733036929">ਕੀਮਤਾਂ ਦੀ ਟਰੈਕਿੰਗ ਨੂੰ ਰੋਕਿਆ ਗਿਆ</translation>
@@ -786,7 +786,7 @@
 <translation id="4663756553811254707"><ph name="NUMBER_OF_BOOKMARKS" /> ਬੁੁੱਕਮਾਰਕ ਮਿਟਾਏ ਗਏ</translation>
 <translation id="4668279686271488041">ਵਿਗਿਆਪਨ ਮਾਪ ਡਾਟਾ ਤੁਹਾਡੇ ਡੀਵਾਈਸ ਤੋਂ ਨਿਯਮਿਤ ਤੌਰ 'ਤੇ ਮਿਟਾਇਆ ਜਾਂਦਾ ਹੈ</translation>
 <translation id="4668347365065281350">ਕੁਕੀਜ਼ ਅਤੇ ਸਥਾਨਕ ਤੌਰ 'ਤੇ ਸਟੋਰ ਕੀਤੇ ਹੋਰ ਡਾਟੇ ਸਮੇਤ ਸਾਰੀਆਂ ਸਾਈਟਾਂ ਵੱਲੋਂ ਸਟੋਰ ਕੀਤਾ ਗਿਆ ਡਾਟਾ</translation>
-<translation id="4678082183394354975">ਸਾਈਟਾਂ ਲਈ ਗੂੜ੍ਹਾ ਥੀਮ Chrome ਵਿੱਚ ਚਾਲੂ ਹੈ</translation>
+<translation id="4678082183394354975">ਸਾਈਟਾਂ ਲਈ ਗੂੜ੍ਹਾ ਥੀਮ Ultimatum ਵਿੱਚ ਚਾਲੂ ਹੈ</translation>
 <translation id="4684427112815847243">ਸਭ ਕੁਝ ਸਿੰਕ ਕਰੋ</translation>
 <translation id="4685741273709472646">ਡ੍ਰੌਪ-ਡਾਊਨ ਸੂਚੀ ਵਿੱਚੋਂ ਚੁਣੋ</translation>
 <translation id="4687718960473379118">ਸਾਈਟ ਵੱਲੋਂ ਸੁਝਾਏ ਵਿਗਿਆਪਨ</translation>
@@ -807,7 +807,7 @@
 <translation id="4738836084190194332">ਆਖਰੀ ਵਾਰ ਸਮਕਾਲੀ ਕੀਤੀ: <ph name="WHEN" /></translation>
 <translation id="474121291218385686">ਐਪ ਮੁਤਾਬਕ ਫਿਲਟਰ ਕਰੋ</translation>
 <translation id="4741753828624614066">ਤੁਹਾਨੂੰ ਪਤਾ ਬਾਰ ਵਿੱਚ ਬਿਹਤਰ ਸੁਝਾਅ ਪ੍ਰਾਪਤ ਹੋਣਗੇ</translation>
-<translation id="4742795653798179840">Chrome ਡਾਟਾ ਮਿਟਾਇਆ ਗਿਆ</translation>
+<translation id="4742795653798179840">Ultimatum ਡਾਟਾ ਮਿਟਾਇਆ ਗਿਆ</translation>
 <translation id="4742970037960872810">ਹਾਈਲਾਈਟ ਹਟਾਓ</translation>
 <translation id="4749960740855309258">ਇੱਕ ਨਵੀਂ ਟੈਬ ਖੋਲ੍ਹੋ</translation>
 <translation id="4753600213727157212"><ph name="USER_NAME" /> ਵਜੋਂ ਸਾਈਨ-ਇਨ ਕੀਤਾ ਗਿਆ। <ph name="USER_EMAIL" />. Google ਖਾਤੇ ਸੰਬੰਧੀ ਗੜਬੜ। ਇਸ ਬਟਨ ਨਾਲ ਸੈਟਿੰਗਾਂ ਖੁੱਲ੍ਹਦੀਆਂ ਹਨ।</translation>
@@ -816,7 +816,7 @@
 <translation id="4763480195061959176">ਵੀਡੀਓ</translation>
 <translation id="4766313118839197559">ਪਾਸਵਰਡ ਇਸ ਡੀਵਾਈਸ ਦੇ ਪਾਸਵਰਡ ਪ੍ਰਬੰਧਕ ਵਿੱਚ ਰੱਖਿਅਤ ਕੀਤੇ ਗਏ ਹਨ</translation>
 <translation id="4766678251456904326">ਡੀਵਾਈਸ ਵਿੱਚ ਖਾਤਾ ਸ਼ਾਮਲ ਕਰੋ</translation>
-<translation id="4767947714785277816">ਅਸੀਂ ਵਿਗਿਆਪਨ ਪਰਦੇਦਾਰੀ ਸੰਬੰਧੀ ਨਵੀਂ ਵਿਸ਼ੇਸ਼ਤਾ ਲਾਂਚ ਕਰ ਰਹੇ ਹਾਂ ਜਿਨ੍ਹਾਂ ਨੂੰ ਵਿਗਿਆਪਨ ਮਾਪ ਕਹਿੰਦੇ ਹਨ। Chrome ਸਾਈਟਾਂ ਅਤੇ ਐਪਾਂ ਵਿਚਕਾਰ ਬਹੁਤ ਹੀ ਸੀਮਤ ਜਾਣਕਾਰੀ ਨੂੰ ਸਾਂਝਾ ਕਰਦਾ ਹੈ, ਜਿਵੇਂ ਕਿ ਜਦੋਂ ਤੁਹਾਨੂੰ ਕੋਈ ਵਿਗਿਆਪਨ ਦਿਖਾਇਆ ਗਿਆ ਸੀ, ਤਾਂ ਜੋ ਵਿਗਿਆਪਨਾਂ ਦੀ ਕਾਰਗੁਜ਼ਾਰੀ ਨੂੰ ਮਾਪਨ ਵਿੱਚ ਮਦਦ ਕੀਤੀ ਜਾ ਸਕੇ।</translation>
+<translation id="4767947714785277816">ਅਸੀਂ ਵਿਗਿਆਪਨ ਪਰਦੇਦਾਰੀ ਸੰਬੰਧੀ ਨਵੀਂ ਵਿਸ਼ੇਸ਼ਤਾ ਲਾਂਚ ਕਰ ਰਹੇ ਹਾਂ ਜਿਨ੍ਹਾਂ ਨੂੰ ਵਿਗਿਆਪਨ ਮਾਪ ਕਹਿੰਦੇ ਹਨ। Ultimatum ਸਾਈਟਾਂ ਅਤੇ ਐਪਾਂ ਵਿਚਕਾਰ ਬਹੁਤ ਹੀ ਸੀਮਤ ਜਾਣਕਾਰੀ ਨੂੰ ਸਾਂਝਾ ਕਰਦਾ ਹੈ, ਜਿਵੇਂ ਕਿ ਜਦੋਂ ਤੁਹਾਨੂੰ ਕੋਈ ਵਿਗਿਆਪਨ ਦਿਖਾਇਆ ਗਿਆ ਸੀ, ਤਾਂ ਜੋ ਵਿਗਿਆਪਨਾਂ ਦੀ ਕਾਰਗੁਜ਼ਾਰੀ ਨੂੰ ਮਾਪਨ ਵਿੱਚ ਮਦਦ ਕੀਤੀ ਜਾ ਸਕੇ।</translation>
 <translation id="4769095993849849966">ਨਵਾਂ ਫ਼ਾਈਲ ਨਾਮ</translation>
 <translation id="4769632191812288342">ਤੁਸੀਂ ਮਿਆਰੀ ਸੁਰੱਖਿਆ ਪ੍ਰਾਪਤ ਕਰ ਰਹੇ ਹੋ</translation>
 <translation id="4773122030389014189">“<ph name="GROUP_NAME" />” ਟੈਬ ਗਰੁੱਪ ਨੂੰ ਸਾਂਝਾ ਕਰੋ</translation>
@@ -826,13 +826,13 @@
 <translation id="4782929588435725897"><ph name="SEARCH_ENGINE" /> ਤੁਹਾਡਾ ਪੂਰਵ-ਨਿਰਧਾਰਿਤ ਖੋਜ ਇੰਜਣ ਹੈ</translation>
 <translation id="4784349455504343791"><ph name="WEBSITE_ORIGIN" /> ਦੀ ਤੁਹਾਡੇ ਡਿਜੀਟਲ ਵਾਲੇਟ ਤੋਂ ਨਿੱਜੀ ਜਾਣਕਾਰੀ ਦੀ ਵਰਤੋਂ ਕਰਨ ਦੀ ਇੱਛਾ ਹੈ।</translation>
 <translation id="4787736314074622408">ਕੀ ਤੁਸੀਂ <ph name="ITEM_TITLE" /> ਨੂੰ ਮਿਟਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ?</translation>
-<translation id="4793679854893018356">ਜਾਣੋ ਕਿ Chrome ਤੁਹਾਨੂੰ ਕਿਵੇਂ ਸੁਰੱਖਿਅਤ ਰੱਖਦਾ ਹੈ</translation>
+<translation id="4793679854893018356">ਜਾਣੋ ਕਿ Ultimatum ਤੁਹਾਨੂੰ ਕਿਵੇਂ ਸੁਰੱਖਿਅਤ ਰੱਖਦਾ ਹੈ</translation>
 <translation id="4794291718671962615">(<ph name="MEGABYTES" />) <ph name="URL" /></translation>
 <translation id="4807098396393229769">ਕਾਰਡ ਤੇ ਨਾਮ</translation>
 <translation id="480990236307250886">ਹੋਮ ਪੇਜ ਖੋਲ੍ਹੋ</translation>
 <translation id="4822710610088666676"><ph name="TAB_GROUP_TITLE" /> ਟੈਬ ਗਰੁੱਪ ਨੂੰ ਬੰਦ ਅਤੇ ਰੱਖਿਅਤ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="4834250788637067901">Google Pay ਦੀ ਵਰਤੋਂ ਕਰਨ ਵਾਲੀਆਂ ਭੁਗਤਾਨ ਵਿਧੀਆਂ, ਪੇਸ਼ਕਸ਼ਾਂ ਅਤੇ ਪਤੇ</translation>
-<translation id="4835385943915508971">Chrome ਦੀ ਬੇਨਤੀ ਕੀਤੇ ਸਰੋਤ 'ਤੇ ਪਹੁੰਚ ਨਹੀਂ ਹੈ।</translation>
+<translation id="4835385943915508971">Ultimatum ਦੀ ਬੇਨਤੀ ਕੀਤੇ ਸਰੋਤ 'ਤੇ ਪਹੁੰਚ ਨਹੀਂ ਹੈ।</translation>
 <translation id="483742037940503070">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> ਟੈਬ, ਰੰਗ <ph name="COLOR_NAME" /> ਦੇ ਟੈਬ ਗਰੁੱਪ ਨੂੰ ਨਵੇਂ ਬੈਕਗ੍ਰਾਊਂਡ ਟੈਬ ਗਰੁੱਪ ਵਜੋਂ ਮੁੜ-ਬਹਾਲ ਕਰੋ।}one{<ph name="TAB_COUNT_MANY" /> ਟੈਬ, ਰੰਗ <ph name="COLOR_NAME" /> ਦੇ ਟੈਬ ਗਰੁੱਪ ਨੂੰ ਨਵੇਂ ਬੈਕਗ੍ਰਾਊਂਡ ਟੈਬ ਗਰੁੱਪ ਵਜੋਂ ਮੁੜ-ਬਹਾਲ ਕਰੋ।}other{<ph name="TAB_COUNT_MANY" /> ਟੈਬਾਂ, ਰੰਗ <ph name="COLOR_NAME" /> ਦੇ ਟੈਬ ਗਰੁੱਪ ਨੂੰ ਨਵੇਂ ਬੈਕਗ੍ਰਾਊਂਡ ਟੈਬ ਗਰੁੱਪ ਵਜੋਂ ਮੁੜ-ਬਹਾਲ ਕਰੋ।}}</translation>
 <translation id="4837753911714442426">ਪੰਨਾ ਪ੍ਰਿੰਟ ਕਰਨ ਲਈ ਵਿਕਲਪਾਂ ਨੂੰ ਖੋਲ੍ਹੋ</translation>
 <translation id="4844633725025837809">ਵਾਧੂ ਸੁਰੱਖਿਆ ਲਈ, Google ਪਾਸਵਰਡ ਪ੍ਰਬੰਧਕ 'ਤੇ ਰੱਖਿਅਤ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਪਾਸਵਰਡਾਂ ਨੂੰ ਆਪਣੇ ਡੀਵਾਈਸ 'ਤੇ ਇਨਕ੍ਰਿਪਟ ਕਰੋ</translation>
@@ -841,7 +841,7 @@
 <translation id="4852014461738377247">ਸਾਈਨ-ਇਨ ਕੀਤਾ ਜਾ ਰਿਹਾ ਹੈ\u2026</translation>
 <translation id="4860895144060829044">ਕਾਲ ਕਰੋ</translation>
 <translation id="4864369630010738180">ਸਾਈਨ ਇਨ ਕੀਤਾ ਜਾ ਰਿਹਾ ਹੈ...</translation>
-<translation id="4866368707455379617">Chrome ਲਈ <ph name="MODULE" /> ਨੂੰ ਸਥਾਪਤ ਨਹੀਂ ਕੀਤਾ ਜਾ ਸਕਿਆ</translation>
+<translation id="4866368707455379617">Ultimatum ਲਈ <ph name="MODULE" /> ਨੂੰ ਸਥਾਪਤ ਨਹੀਂ ਕੀਤਾ ਜਾ ਸਕਿਆ</translation>
 <translation id="4871568871368204250">ਸਿੰਕ ਬੰਦ ਕਰੋ</translation>
 <translation id="4875775213178255010">ਸਮੱਗਰੀ ਦੇ ਸੁਝਾਅ</translation>
 <translation id="4877678010818027629">ਇਨਕੋਗਨਿਟੋ ਮੋਡ ਵਿੱਚ ਦਾਖਲ ਹੋਵੋ</translation>
@@ -849,7 +849,7 @@
 <translation id="4880127995492972015">ਅਨੁਵਾਦ ਕਰੋ…</translation>
 <translation id="4881695831933465202">ਖੋਲ੍ਹੋ</translation>
 <translation id="488187801263602086">ਫ਼ਾਈਲ ਦਾ ਨਾਮ ਬਦਲੋ</translation>
-<translation id="4885273946141277891">Chrome ਦੇ ਕਈ ਅਸਮਰਥਿਤ ਵਰਜਨ</translation>
+<translation id="4885273946141277891">Ultimatum ਦੇ ਕਈ ਅਸਮਰਥਿਤ ਵਰਜਨ</translation>
 <translation id="4890973535105146893">ਤੁਹਾਡੇ Google ਖਾਤੇ ਵਿੱਚ ਕੋਈ ਰੱਖਿਅਤ ਕੀਤਾ ਪਾਸਵਰਡ ਨਹੀਂ ਹੈ</translation>
 <translation id="4905823827770127520">ਪੰਨੇ ਵਿੱਚ ਕੋਈ ਲਿੰਕ ਸ਼ਾਮਲ ਕਰੋ</translation>
 <translation id="4908869848243824489">Google ਵੱਲੋਂ Discover</translation>
@@ -858,15 +858,15 @@
 <translation id="4913169188695071480">ਮੁੜ-ਤਾਜ਼ਾ ਕਰਨਾ ਬੰਦ ਕਰੋ</translation>
 <translation id="4925120120285606924">ਸਕ੍ਰੀਨਸ਼ਾਟ <ph name="CURRENT_DATE_ISO" /></translation>
 <translation id="4926901776383726965">ਆਫ਼ਲਾਈਨ ਦੇਖਣ ਜਾਂ ਹੋਰ ਐਪਾਂ ਵਿੱਚ ਸਾਂਝਾ ਕਰਨ ਲਈ ਤੁਸੀਂ ਚਿੱਤਰ ਅਤੇ ਫ਼ਾਈਲਾਂ ਨੂੰ ਰੱਖਿਅਤ ਕਰ ਸਕਦੇ ਹੋ</translation>
-<translation id="4932247056774066048">ਕਿਉਂਕਿ ਤੁਸੀਂ <ph name="DOMAIN_NAME" /> ਵੱਲੋਂ ਪ੍ਰਬੰਧਿਤ ਕੀਤੇ ਖਾਤੇ ਤੋਂ ਸਾਈਨ-ਆਊਟ ਕਰ ਰਹੇ ਹੋ, ਤਾਂ ਇਸ ਡੀਵਾਈਸ ਤੋਂ ਤੁਹਾਡਾ Chrome ਡਾਟਾ ਮਿਟਾ ਦਿੱਤਾ ਜਾਵੇਗਾ। ਪਰ ਇਹ ਤੁਹਾਡੇ Google ਖਾਤੇ ਵਿੱਚ ਬਰਕਰਾਰ ਰਹੇਗਾ।</translation>
+<translation id="4932247056774066048">ਕਿਉਂਕਿ ਤੁਸੀਂ <ph name="DOMAIN_NAME" /> ਵੱਲੋਂ ਪ੍ਰਬੰਧਿਤ ਕੀਤੇ ਖਾਤੇ ਤੋਂ ਸਾਈਨ-ਆਊਟ ਕਰ ਰਹੇ ਹੋ, ਤਾਂ ਇਸ ਡੀਵਾਈਸ ਤੋਂ ਤੁਹਾਡਾ Ultimatum ਡਾਟਾ ਮਿਟਾ ਦਿੱਤਾ ਜਾਵੇਗਾ। ਪਰ ਇਹ ਤੁਹਾਡੇ Google ਖਾਤੇ ਵਿੱਚ ਬਰਕਰਾਰ ਰਹੇਗਾ।</translation>
 <translation id="4943703118917034429">ਆਭਾਸੀ ਵਾਸਤਵਿਕਤਾ</translation>
 <translation id="4943872375798546930">ਕੋਈ ਨਤੀਜੇ ਨਹੀਂ</translation>
 <translation id="4957722034734105353">ਹੋਰ ਜਾਣੋ...</translation>
 <translation id="4959115606310463263">ਸਾਈਨ-ਇਨ ਕਰਨ ਲਈ ਹੇਠਲੀ ਸ਼ੀਟ ਨੂੰ ਅੱਧੀ ਉਚਾਈ ਤੱਕ ਖੋਲ੍ਹਿਆ ਗਿਆ</translation>
 <translation id="4961107849584082341">ਇਸ ਪੰਨੇ ਦਾ ਕਿਸੇ ਵੀ ਭਾਸ਼ਾ ਵਿੱਚ ਅਨੁਵਾਦ ਕਰੋ</translation>
-<translation id="4964614743143953889">ਅਸੁਰੱਖਿਅਤ ਸਾਈਟਾਂ ਅਤੇ ਡਾਊਨਲੋਡਾਂ ਬਾਰੇ Chrome ਤੁਹਾਨੂੰ ਚਿਤਾਵਨੀ ਦਿੰਦਾ ਹੈ</translation>
+<translation id="4964614743143953889">ਅਸੁਰੱਖਿਅਤ ਸਾਈਟਾਂ ਅਤੇ ਡਾਊਨਲੋਡਾਂ ਬਾਰੇ Ultimatum ਤੁਹਾਨੂੰ ਚਿਤਾਵਨੀ ਦਿੰਦਾ ਹੈ</translation>
 <translation id="496607651705915226">ਆਪਣੇ Google ਖਾਤੇ ਵਿੱਚ ਨਵੇਂ ਪਾਸਵਰਡਾਂ ਨੂੰ ਰੱਖਿਅਤ ਕਰਨ ਅਤੇ ਉਨ੍ਹਾਂ ਨੂੰ ਵਰਤਣ ਲਈ, Google Play ਸੇਵਾਵਾਂ ਨੂੰ ਅੱਪਡੇਟ ਕਰੋ</translation>
-<translation id="4971753085054504448">ਕੁਝ ਹੋਰ ਖੋਜ ਕੇ ਦੇਖੋ ਜਾਂ ਹੋਰ ਨਤੀਜੇ ਦੇਖਣ ਲਈ ਪੂਰਾ Chrome ਇਤਿਹਾਸ ਖੋਲ੍ਹੋ।</translation>
+<translation id="4971753085054504448">ਕੁਝ ਹੋਰ ਖੋਜ ਕੇ ਦੇਖੋ ਜਾਂ ਹੋਰ ਨਤੀਜੇ ਦੇਖਣ ਲਈ ਪੂਰਾ Ultimatum ਇਤਿਹਾਸ ਖੋਲ੍ਹੋ।</translation>
 <translation id="497421865427891073">ਅੱਗੇ ਵੱਲ ਜਾਓ</translation>
 <translation id="498624032394115435">ਜਿਸ ਕੋਲ ਵੀ ਲਿੰਕ ਹੈ, ਉਹ ਸਾਰੀਆਂ ਟੈਬਾਂ ਦਾ ਸੰਪਾਦਨ ਕਰ ਸਕਦਾ ਹੈ।</translation>
 <translation id="4987271110129728827">ਉਹ ਪੰਨਾ ਨਹੀਂ ਮਿਲਿਆ। ਆਪਣੇ ਸ਼ਬਦ-ਜੋੜ ਦੀ ਜਾਂਚ ਕਰੋ ਜਾਂ ਵੈੱਬ ਖੋਜ ਕਰ ਕੇ ਦੇਖੋ।</translation>
@@ -890,7 +890,7 @@
 <translation id="506254248375231072">ਕੋਈ ਟੈਬ ਨਹੀਂ</translation>
 <translation id="5062960805900435602">ਪਾਸਵਰਡ ਮਿਲਾਨ ਬਾਰੇ ਅੱਪਡੇਟ ਬੰਦ ਹੈ</translation>
 <translation id="5075939510584558547">ਇਨਕ੍ਰਿਪਸ਼ਨ ਤੋਂ ਬਿਨਾਂ ਰੱਖਿਅਤ ਕਰੋ</translation>
-<translation id="5085038751173179818">ਆਪਣੇ ਸਾਰੇ ਡੀਵਾਈਸਾਂ 'ਤੇ ਆਪਣੇ ਬੁੱਕਮਾਰਕ ਅਤੇ ਹੋਰ ਬਹੁਤ ਕੁਝ ਪ੍ਰਾਪਤ ਕਰਨ ਲਈ, ਇਸ ਸਾਈਟ ਅਤੇ Chrome ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
+<translation id="5085038751173179818">ਆਪਣੇ ਸਾਰੇ ਡੀਵਾਈਸਾਂ 'ਤੇ ਆਪਣੇ ਬੁੱਕਮਾਰਕ ਅਤੇ ਹੋਰ ਬਹੁਤ ਕੁਝ ਪ੍ਰਾਪਤ ਕਰਨ ਲਈ, ਇਸ ਸਾਈਟ ਅਤੇ Ultimatum ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
 <translation id="5091199029769593641">ਜਲਦ ਹੀ, ਤੁਹਾਨੂੰ ਨਵੀਂ ਟੈਬ ਖੋਲ੍ਹਣ 'ਤੇ <ph name="SITE_NAME" /> ਦੀਆਂ ਕਹਾਣੀਆਂ ਦਿਖਾਈ ਦੇਣਗੀਆਂ। ਤੁਹਾਡੇ ਵੱਲੋਂ ਅਨੁਸਰਣ ਕੀਤੀਆਂ ਸਾਈਟਾਂ ਤੁਹਾਡੇ Google ਖਾਤੇ ਵਿੱਚ ਰੱਖਿਅਤ ਕੀਤੀਆਂ ਜਾਂਦੀਆਂ ਹਨ। ਤੁਸੀਂ ਉਨ੍ਹਾਂ ਦਾ ਪ੍ਰਬੰਧਨ ਡਿਸਕਵਰ ਸੈਟਿੰਗਾਂ ਵਿੱਚ ਜਾ ਕੇ ਕਰ ਸਕਦੇ ਹੋ।</translation>
 <translation id="509429900233858213">ਇੱਕ ਗੜਬੜ ਹੋਈ</translation>
 <translation id="5096775069898886423">ਸੁਰੱਖਿਅਤ ਕਨੈਕਸ਼ਨਾਂ ਦਾ ਸਮਰਥਨ ਨਾ ਕਰਨ ਵਾਲੀਆਂ ਸਾਈਟਾਂ ਲਈ, ਸਾਈਟ 'ਤੇ ਜਾਣ ਤੋਂ ਪਹਿਲਾਂ ਚਿਤਾਵਨੀ ਪ੍ਰਾਪਤ ਕਰੋ</translation>
@@ -898,7 +898,7 @@
 <translation id="510275257476243843">1 ਘੰਟਾ ਬਾਕੀ</translation>
 <translation id="5114895953710637392">ਐਪ ਫਿਲਟਰ ਸ਼ੀਟ ਬੰਦ ਹੈ।</translation>
 <translation id="5115811374190515607"><ph name="PRODUCT_NAME" /> ਵੱਲ</translation>
-<translation id="5116239826668864748">ਸੁਨੇਹੇ, ਦਸਤਾਵੇਜ਼ ਅਤੇ ਹੋਰ ਐਪਾਂ ਵਿੱਚ ਲਿੰਕ 'ਤੇ ਟੈਪ ਕਰ ਕੇ ਤੁਸੀਂ ਕਿਸੇ ਵੇਲੇ ਵੀ Chrome ਵਰਤ ਸਕਦੇ ਹੋ</translation>
+<translation id="5116239826668864748">ਸੁਨੇਹੇ, ਦਸਤਾਵੇਜ਼ ਅਤੇ ਹੋਰ ਐਪਾਂ ਵਿੱਚ ਲਿੰਕ 'ਤੇ ਟੈਪ ਕਰ ਕੇ ਤੁਸੀਂ ਕਿਸੇ ਵੇਲੇ ਵੀ Ultimatum ਵਰਤ ਸਕਦੇ ਹੋ</translation>
 <translation id="5118713593561876160">ਦਿਲਚਸਪੀਆਂ</translation>
 <translation id="5122378528687922675">ਜੇ ਤੁਹਾਨੂੰ ਮਦਦ ਦੀ ਲੋੜ ਹੈ, ਤਾਂ ਆਪਣੇ ਮਾਂ-ਪਿਓ (<ph name="PARENT_NAME_1" /> ਜਾਂ <ph name="PARENT_NAME_2" />) ਨੂੰ ਕਹੋ</translation>
 <translation id="5123685120097942451">ਇਨਕੋਗਨਿਟੋ ਟੈਬ</translation>
@@ -922,7 +922,7 @@
 <translation id="5210286577605176222">ਪਿੱਛਲੀ ਟੈਬ 'ਤੇ ਜਾਓ</translation>
 <translation id="5210365745912300556">ਟੈਬ ਬੰਦ ਕਰੋ</translation>
 <translation id="5215957675041756913">ਆਪਣਾ ਡਾਟਾ ਅਤੇ ਖਾਤਾ ਕੰਟਰੋਲ ਕਰੋ</translation>
-<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> ਅਤੇ ਹੋਰ <ph name="SEPARATOR" /> Chrome ਵੱਲੋਂ ਇਨ੍ਹਾਂ ਇਜਾਜ਼ਤਾਂ ਨੂੰ ਹਟਾ ਦਿੱਤਾ ਗਿਆ ਹੈ ਕਿਉਂਕਿ ਤੁਸੀਂ ਹਾਲ ਹੀ ਵਿੱਚ ਇਨ੍ਹਾਂ 'ਤੇ ਨਹੀਂ ਗਏ</translation>
+<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> ਅਤੇ ਹੋਰ <ph name="SEPARATOR" /> Ultimatum ਵੱਲੋਂ ਇਨ੍ਹਾਂ ਇਜਾਜ਼ਤਾਂ ਨੂੰ ਹਟਾ ਦਿੱਤਾ ਗਿਆ ਹੈ ਕਿਉਂਕਿ ਤੁਸੀਂ ਹਾਲ ਹੀ ਵਿੱਚ ਇਨ੍ਹਾਂ 'ਤੇ ਨਹੀਂ ਗਏ</translation>
 <translation id="5222676887888702881">ਸਾਈਨ-ਆਊਟ ਕਰੋ</translation>
 <translation id="5226378907213531272">ਤੁਸੀਂ ਕਾਰ ਨੂੰ ਹਰੇਕ ਵਾਰ ਵਰਤਣ ਵੇਲੇ ਆਪਣੀ ਸਕ੍ਰੀਨ ਨੂੰ ਅਣਲਾਕ ਕਰੋਗੇ</translation>
 <translation id="5227554086496586518">ਖੋਜ ਨਤੀਜੇ ਦੇਖਣ ਲਈ ਟੈਪ ਕਰੋ</translation>
@@ -940,7 +940,7 @@
 <translation id="5308380583665731573">ਕਨੈਕਟ ਕਰੋ</translation>
 <translation id="5316947901395241499">ਤੁਹਾਡੇ ਪ੍ਰਸ਼ਾਸਕ ਨੇ ਪਾਸਵਰਡ ਰੱਖਿਅਤ ਕਰਨ ਦੀ ਸੁਵਿਧਾ ਨੂੰ ਬੰਦ ਕਰ ਦਿੱਤਾ ਹੈ</translation>
 <translation id="5317780077021120954">ਰੱਖਿਅਤ ਕਰੋ</translation>
-<translation id="5319359161174645648">Google, Chrome ਦੀ ਸਿਫ਼ਾਰਸ਼ ਕਰਦਾ ਹੈ</translation>
+<translation id="5319359161174645648">Google, Ultimatum ਦੀ ਸਿਫ਼ਾਰਸ਼ ਕਰਦਾ ਹੈ</translation>
 <translation id="5326246328175179736">ਤੁਸੀਂ ਇਸ ਖਾਤੇ ਦੀ ਵਰਤੋਂ ਕਰ ਕੇ ਸਾਈਨ-ਇਨ ਨਹੀਂ ਕਰ ਸਕਦੇ</translation>
 <translation id="5327248766486351172">ਨਾਮ</translation>
 <translation id="5328542107300944283"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> ਨਾਲ ਵਰਤੋ</translation>
@@ -952,7 +952,7 @@
 <translation id="5375577065097716013">Google Lens ਨਾਲ ਚਿੱਤਰ ਖੋਜੋ <ph name="BEGIN_NEW" />ਨਵਾਂ<ph name="END_NEW" /></translation>
 <translation id="5390367025924544771"><ph name="WEBSITE_ORIGIN" /> ਦੀ ਤੁਹਾਡੇ ਡਿਜੀਟਲ ਵਾਲੇਟ ਤੋਂ ਨਿੱਜੀ ਜਾਣਕਾਰੀ ਦੀ ਵਰਤੋਂ ਕਰਨ ਦੀ ਇੱਛਾ ਹੈ। ਜੇ ਤੁਸੀਂ ਇਸ ਸਾਈਟ 'ਤੇ ਭਰੋਸਾ ਕਰਦੇ ਹੋ, ਤਾਂ ਹੀ ਜਾਰੀ ਰੱਖੋ। ਖਤਰਨਾਕ ਸਾਈਟਾਂ ਤੁਹਾਨੂੰ ਧੋਖੇ ਨਾਲ ਤੁਹਾਡੇ ਤੋਂ ਕਨੂੰਨੀ ਨਾਮ ਜਾਂ ਆਈਡੀ ਨੰਬਰ ਵਰਗੀਆਂ ਚੀਜ਼ਾਂ ਨੂੰ ਜ਼ਾਹਰ ਕਰਨ ਲਈ ਭਰਮਾ ਸਕਦੀਆਂ ਹਨ।</translation>
 <translation id="5394331612381306435">ਇਨਕੋਗਨਿਟੋ ਮੋਡ ਤੋਂ ਸਵਿੱਚ ਕਰੋ</translation>
-<translation id="5395376160638294582">ਪੱਕਾ ਕਰੋ ਕਿ ਤੁਸੀਂ ਆਪਣੇ Google ਖਾਤੇ ਵਿੱਚ ਕਦੇ ਵੀ Chrome ਡਾਟਾ ਵਰਤ ਸਕਦੇ ਹੋ</translation>
+<translation id="5395376160638294582">ਪੱਕਾ ਕਰੋ ਕਿ ਤੁਸੀਂ ਆਪਣੇ Google ਖਾਤੇ ਵਿੱਚ ਕਦੇ ਵੀ Ultimatum ਡਾਟਾ ਵਰਤ ਸਕਦੇ ਹੋ</translation>
 <translation id="539881862970320163">ਮਜ਼ਬੂਤ ਪਾਸਵਰਡ ਦਾ ਸੁਝਾਅ ਦਿੱਤਾ ਗਿਆ। ਕੀ-ਬੋਰਡ ਲੁਕਾਇਆ ਗਿਆ।</translation>
 <translation id="5409881200985013443">ਕੀ <ph name="CLIENT_NAME" /> 'ਤੇ <ph name="ONE_TIME_CODE" /> ਸਪੁਰਦ ਕਰਨਾ ਹੈ?</translation>
 <translation id="5410300144953132176"><ph name="OWNER_FULL_NAME" /> (<ph name="OWNER_EMAIL" />) ਨੇ ਤੁਹਾਨੂੰ ਟੈਬ ਗਰੁੱਪ ਵਿੱਚ ਸ਼ਾਮਲ ਹੋਣ ਦੀ ਬੇਨਤੀ ਕੀਤੀ ਹੈ। ਜਿਸ ਕੋਲ ਵੀ ਲਿੰਕ ਹੈ, ਉਹ ਸਾਰੀਆਂ ਟੈਬਾਂ ਦਾ ਸੰਪਾਦਨ ਕਰ ਸਕਦਾ ਹੈ, ਇਸ ਲਈ ਸਾਵਧਾਨੀ ਨਾਲ ਸ਼ਾਮਲ ਹੋਵੋ। ਲਿੰਕ ਦੀ ਮਿਆਦ 48 ਘੰਟਿਆਂ ਵਿੱਚ ਸਮਾਪਤ ਹੋ ਜਾਵੇਗੀ।</translation>
@@ -966,7 +966,7 @@
 <translation id="5433691172869980887">ਵਰਤੋਂਕਾਰ ਨਾਮ ਕਾਪੀ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="5436928407363358055">ਜਿੱਥੇ ਤੁਸੀਂ ਛੱਡਿਆ ਸੀ ਉੱਥੋਂ ਹੀ ਅਸਾਨੀ ਨਾਲ ਸ਼ੁਰੂ ਕਰਨ ਲਈ ਆਪਣੇ ਇਤਿਹਾਸ ਅਤੇ ਟੈਬਾਂ ਨੂੰ ਸਿੰਕ ਕਰੋ</translation>
 <translation id="5438292632479953702">ਦੁਬਾਰਾ ਡਾਉਨਲੋਡ ਕਰੋ</translation>
-<translation id="5439191312780166229">ਇਹ ਸੁਵਿਧਾ ਮਿਆਰੀ ਸੁਰੱਖਿਆ ਨਾਲੋਂ ਜ਼ਿਆਦਾ ਡਾਟੇ ਦਾ ਵਿਸ਼ਲੇਸ਼ਣ ਕਰ ਕੇ ਤੁਹਾਨੂੰ ਅਜਿਹੀਆਂ ਖਤਰਨਾਕ ਸਾਈਟਾਂ ਬਾਰੇ ਚਿਤਾਵਨੀ ਦਿੰਦੀ ਹੈ ਜਿਨ੍ਹਾਂ ਬਾਰੇ Google ਨੂੰ ਪਹਿਲਾਂ ਨਹੀਂ ਪਤਾ ਸੀ। ਤੁਸੀਂ Chrome ਚਿਤਾਵਨੀਆਂ ਨੂੰ ਛੱਡਣ ਦੀ ਚੋਣ ਕਰ ਸਕਦੇ ਹੋ।</translation>
+<translation id="5439191312780166229">ਇਹ ਸੁਵਿਧਾ ਮਿਆਰੀ ਸੁਰੱਖਿਆ ਨਾਲੋਂ ਜ਼ਿਆਦਾ ਡਾਟੇ ਦਾ ਵਿਸ਼ਲੇਸ਼ਣ ਕਰ ਕੇ ਤੁਹਾਨੂੰ ਅਜਿਹੀਆਂ ਖਤਰਨਾਕ ਸਾਈਟਾਂ ਬਾਰੇ ਚਿਤਾਵਨੀ ਦਿੰਦੀ ਹੈ ਜਿਨ੍ਹਾਂ ਬਾਰੇ Google ਨੂੰ ਪਹਿਲਾਂ ਨਹੀਂ ਪਤਾ ਸੀ। ਤੁਸੀਂ Ultimatum ਚਿਤਾਵਨੀਆਂ ਨੂੰ ਛੱਡਣ ਦੀ ਚੋਣ ਕਰ ਸਕਦੇ ਹੋ।</translation>
 <translation id="5441137934526263133">ਕੀ ਸਾਈਟ ਕੰਮ ਨਹੀਂ ਕਰ ਰਹੀ ਹੈ? ਤੀਜੀ-ਧਿਰ ਦੀਆਂ ਕੁਕੀਜ਼ ਨੂੰ ਬਲਾਕ ਕੀਤਾ ਗਿਆ ਹੈ</translation>
 <translation id="5441466871879044658">ਇਸ ਭਾਸ਼ਾ ਵਿੱਚ ਅਨੁਵਾਦ ਕਰੋ</translation>
 <translation id="5441522332038954058">ਪਤਾ ਬਾਰ 'ਤੇ ਜਾਓ</translation>
@@ -986,7 +986,7 @@
 <translation id="5517326820028369152">ਹਾਲੀਆ ਸਰਗਰਮੀ ਸੰਬੰਧੀ ਹੇਠਲੀ ਸ਼ੀਟ</translation>
 <translation id="5526281268548144413">ਇਨ੍ਹਾਂ ਨੂੰ ਇੱਕ ਤੋਂ ਵੱਧ ਵਿੰਡੋਆਂ 'ਤੇ ਬੰਦ ਨਹੀਂ ਕੀਤਾ ਜਾ ਸਕਦਾ</translation>
 <translation id="5548606607480005320">ਸੁਰੱਖਿਆ ਜਾਂਚ</translation>
-<translation id="5554520618550346933">ਜਦੋਂ ਤੁਸੀਂ ਪਾਸਵਰਡ ਵਰਤਦੇ ਹੋ, ਤਾਂ Chrome ਉਸਦੇ ਆਨਲਾਈਨ ਪ੍ਰਕਾਸ਼ਿਤ ਹੋਣ ਦੀ ਸਥਿਤੀ ਵਿੱਚ ਤੁਹਾਨੂੰ ਚਿਤਾਵਨੀ ਦਿੰਦਾ ਹੈ। ਅਜਿਹਾ ਕਰਨ ਵੇਲੇ, ਤੁਹਾਡੇ ਪਾਸਵਰਡ ਅਤੇ ਵਰਤੋਂਕਾਰ ਨਾਮ ਇਨਕ੍ਰਿਪਟ ਕੀਤੇ ਜਾਂਦੇ ਹਨ, ਇਸ ਲਈ ਉਹ Google ਸਮੇਤ ਕਿਸੇ ਵੱਲੋਂ ਵੀ ਪੜ੍ਹੇ ਨਹੀਂ ਜਾ ਸਕਦੇ।</translation>
+<translation id="5554520618550346933">ਜਦੋਂ ਤੁਸੀਂ ਪਾਸਵਰਡ ਵਰਤਦੇ ਹੋ, ਤਾਂ Ultimatum ਉਸਦੇ ਆਨਲਾਈਨ ਪ੍ਰਕਾਸ਼ਿਤ ਹੋਣ ਦੀ ਸਥਿਤੀ ਵਿੱਚ ਤੁਹਾਨੂੰ ਚਿਤਾਵਨੀ ਦਿੰਦਾ ਹੈ। ਅਜਿਹਾ ਕਰਨ ਵੇਲੇ, ਤੁਹਾਡੇ ਪਾਸਵਰਡ ਅਤੇ ਵਰਤੋਂਕਾਰ ਨਾਮ ਇਨਕ੍ਰਿਪਟ ਕੀਤੇ ਜਾਂਦੇ ਹਨ, ਇਸ ਲਈ ਉਹ Google ਸਮੇਤ ਕਿਸੇ ਵੱਲੋਂ ਵੀ ਪੜ੍ਹੇ ਨਹੀਂ ਜਾ ਸਕਦੇ।</translation>
 <translation id="5555525474779371165">ਸੁਰੱਖਿਅਤ ਬ੍ਰਾਊਜ਼ਿੰਗ ਸੰਬੰਧੀ ਸੁਰੱਖਿਆ ਲਈ ਆਪਣੀਆਂ ਸੈਟਿੰਗਾਂ ਚੁਣੋ</translation>
 <translation id="5556459405103347317">ਰੀਲੋਡ ਕਰੋ</translation>
 <translation id="555671485580955310">ਇਤਿਹਾਸ ਅਤੇ ਟੈਬਾਂ ਨੂੰ ਸਿੰਕ ਕਰਨਾ</translation>
@@ -998,7 +998,7 @@
 <translation id="5578795271662203820">ਇਸ ਚਿੱਤਰ ਲਈ <ph name="SEARCH_ENGINE" /> ਖੋਜੋ</translation>
 <translation id="5596627076506792578">ਹੋਰ ਵਿਕਲਪ</translation>
 <translation id="5599455543593328020">ਇਨਕੋਗਨਿਟੋ ਮੋਡ</translation>
-<translation id="5601180634394228718">ਤੁਹਾਡੇ Chrome ਦੇ ਅਨੁਭਵ ਨੂੰ ਬਿਹਤਰ ਬਣਾਉਣ ਲਈ ਡਾਟੇ ਦੀ ਵਰਤੋਂ ਕਰਨ ਵਾਲੀਆਂ ਹੋਰ ਸੈਟਿੰਗਾਂ ਲਈ, <ph name="BEGIN_LINK" />Google ਸੇਵਾਵਾਂ<ph name="END_LINK" /> 'ਤੇ ਜਾਓ।</translation>
+<translation id="5601180634394228718">ਤੁਹਾਡੇ Ultimatum ਦੇ ਅਨੁਭਵ ਨੂੰ ਬਿਹਤਰ ਬਣਾਉਣ ਲਈ ਡਾਟੇ ਦੀ ਵਰਤੋਂ ਕਰਨ ਵਾਲੀਆਂ ਹੋਰ ਸੈਟਿੰਗਾਂ ਲਈ, <ph name="BEGIN_LINK" />Google ਸੇਵਾਵਾਂ<ph name="END_LINK" /> 'ਤੇ ਜਾਓ।</translation>
 <translation id="5611398002774823980">ਖਾਤੇ ਵਿੱਚ ਰੱਖਿਅਤ ਕਰੋ</translation>
 <translation id="5614625640221885312">ਆਪਣੇ ਸਾਰੇ ਡੀਵਾਈਸਾਂ 'ਤੇ ਆਪਣੇ ਬੁੱਕਮਾਰਕ, ਪਾਸਵਰਡ ਅਤੇ ਹੋਰ ਬਹੁਤ ਕੁਝ ਪ੍ਰਾਪਤ ਕਰਨ ਲਈ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
 <translation id="5619633276517849615">ਤੁਹਾਡੀ ਸੰਸਥਾ ਨੇ ਸੁਰੱਖਿਅਤ ਬ੍ਰਾਊਜ਼ਿੰਗ ਨੂੰ ਚਾਲੂ ਕਰ ਦਿੱਤਾ ਹੈ</translation>
@@ -1014,23 +1014,23 @@
 <translation id="5657871969392618475">ਤੁਹਾਡੀ ਜਾਣਕਾਰੀ ਨੂੰ ਪ੍ਰੋਫਾਈਲ ਲਾਕ ਦੀ ਮਦਦ ਨਾਲ ਸੁਰੱਖਿਅਤ ਕੀਤਾ ਗਿਆ ਹੈ</translation>
 <translation id="5659593005791499971">ਈਮੇਲ</translation>
 <translation id="5665379678064389456"><ph name="APP_NAME" /> ਵਿੱਚ ਇਵੈਂਟ ਬਣਾਓ</translation>
-<translation id="5683547024293500885">Chrome ਅੱਪਡੇਟਾਂ ਲਈ ਜਾਂਚ ਨਹੀਂ ਕਰ ਸਕਦਾ</translation>
+<translation id="5683547024293500885">Ultimatum ਅੱਪਡੇਟਾਂ ਲਈ ਜਾਂਚ ਨਹੀਂ ਕਰ ਸਕਦਾ</translation>
 <translation id="5683916195767086779">ਟੈਬ ਗਰੁੱਪ</translation>
 <translation id="5686790454216892815">ਫ਼ਾਈਲ ਨਾਮ ਬਹੁਤ ਜ਼ਿਆਦਾ ਵੱਡਾ ਹੈ</translation>
-<translation id="5687606994963670306">Chrome 30 ਦਿਨਾਂ ਤੋਂ ਵੱਧ ਪੁਰਾਣੀਆਂ ਸਾਈਟਾਂ ਨੂੰ ਸਵੈਚਲਿਤ-ਮਿਟਾਉਂਦਾ ਹੈ। ਉਹ ਸਾਈਟ ਸੂਚੀ ਵਿੱਚ ਮੁੜ ਦਿਖਾਈ ਦੇ ਸਕਦੀ ਹੈ, ਜਿਸ 'ਤੇ ਤੁਸੀਂ ਦੁਬਾਰਾ ਜਾਂਦੇ ਹੋ। ਜਾਂ ਤੁਸੀਂ ਕਿਸੇ ਸਾਈਟ ਨੂੰ ਤੁਹਾਡੇ ਲਈ ਵਿਗਿਆਪਨਾਂ ਦੇ ਸੁਝਾਅ ਦੇਣ ਤੋਂ ਬਲਾਕ ਕਰ ਸਕਦੇ ਹੋ। <ph name="BEGIN_LINK" />Chrome ਵਿੱਚ ਆਪਣੀ ਵਿਗਿਆਪਨ ਪਰਦੇਦਾਰੀ ਦਾ ਪ੍ਰਬੰਧਨ ਕਰਨ<ph name="END_LINK" /> ਬਾਰੇ ਹੋਰ ਜਾਣੋ।</translation>
+<translation id="5687606994963670306">Ultimatum 30 ਦਿਨਾਂ ਤੋਂ ਵੱਧ ਪੁਰਾਣੀਆਂ ਸਾਈਟਾਂ ਨੂੰ ਸਵੈਚਲਿਤ-ਮਿਟਾਉਂਦਾ ਹੈ। ਉਹ ਸਾਈਟ ਸੂਚੀ ਵਿੱਚ ਮੁੜ ਦਿਖਾਈ ਦੇ ਸਕਦੀ ਹੈ, ਜਿਸ 'ਤੇ ਤੁਸੀਂ ਦੁਬਾਰਾ ਜਾਂਦੇ ਹੋ। ਜਾਂ ਤੁਸੀਂ ਕਿਸੇ ਸਾਈਟ ਨੂੰ ਤੁਹਾਡੇ ਲਈ ਵਿਗਿਆਪਨਾਂ ਦੇ ਸੁਝਾਅ ਦੇਣ ਤੋਂ ਬਲਾਕ ਕਰ ਸਕਦੇ ਹੋ। <ph name="BEGIN_LINK" />Ultimatum ਵਿੱਚ ਆਪਣੀ ਵਿਗਿਆਪਨ ਪਰਦੇਦਾਰੀ ਦਾ ਪ੍ਰਬੰਧਨ ਕਰਨ<ph name="END_LINK" /> ਬਾਰੇ ਹੋਰ ਜਾਣੋ।</translation>
 <translation id="569536719314091526">'ਹੋਰ ਵਿਕਲਪ' ਬਟਨ ਤੋਂ ਇਸ ਪੰਨੇ ਦਾ ਕਿਸੇ ਵੀ ਭਾਸ਼ਾ ਵਿੱਚ ਅਨੁਵਾਦ ਕਰੋ</translation>
-<translation id="5696597120588531049">ਡਾਟਾ ਉਲੰਘਣਾਵਾਂ, ਅਸੁਰੱਖਿਅਤ ਵੈੱਬਸਾਈਟਾਂ ਅਤੇ ਹੋਰ ਚੀਜ਼ਾਂ ਤੋਂ ਸੁਰੱਖਿਅਤ ਰਹਿਣ ਵਿੱਚ Chrome ਤੁਹਾਡੀ ਮਦਦ ਕਰ ਸਕਦਾ ਹੈ</translation>
+<translation id="5696597120588531049">ਡਾਟਾ ਉਲੰਘਣਾਵਾਂ, ਅਸੁਰੱਖਿਅਤ ਵੈੱਬਸਾਈਟਾਂ ਅਤੇ ਹੋਰ ਚੀਜ਼ਾਂ ਤੋਂ ਸੁਰੱਖਿਅਤ ਰਹਿਣ ਵਿੱਚ Ultimatum ਤੁਹਾਡੀ ਮਦਦ ਕਰ ਸਕਦਾ ਹੈ</translation>
 <translation id="5698878456427040674">ਜਾਂਚ ਕਰੋ ਕਿ ਚੁਣਿਆ ਗਿਆ ਖਾਤਾ ਸਮਰਥਿਤ ਹੈ ਜਾਂ ਨਹੀਂ।</translation>
 <translation id="570347048394355941">ਟੈਬ 'ਤੇ ਜਾਓ</translation>
 <translation id="5709213329446699338"><ph name="SITE" /> ਕਿਸੇ ਸੀਰੀਅਲ ਪੋਰਟ ਨਾਲ ਕਨੈਕਟ ਹੋਣਾ ਚਾਹੁੰਦੀ ਹੈ</translation>
 <translation id="5715150588940290235">ਕੀ ਰੱਖਿਅਤ ਕੀਤੇ ਸੁਰੱਖਿਆ ਕੋਡਾਂ ਨੂੰ ਮਿਟਾਉਣਾ ਹੈ?</translation>
-<translation id="571930967925877633">ਤੁਹਾਡੇ ਬੁੱਕਮਾਰਕਾਂ, ਇਤਿਹਾਸ ਅਤੇ ਹੋਰ Chrome ਡਾਟੇ ਦਾ ਹੁਣ ਤੁਹਾਡੇ Google ਖਾਤੇ ਨਾਲ ਸਿੰਕ ਨਹੀਂ ਕੀਤਾ ਜਾਵੇਗਾ</translation>
+<translation id="571930967925877633">ਤੁਹਾਡੇ ਬੁੱਕਮਾਰਕਾਂ, ਇਤਿਹਾਸ ਅਤੇ ਹੋਰ Ultimatum ਡਾਟੇ ਦਾ ਹੁਣ ਤੁਹਾਡੇ Google ਖਾਤੇ ਨਾਲ ਸਿੰਕ ਨਹੀਂ ਕੀਤਾ ਜਾਵੇਗਾ</translation>
 <translation id="572328651809341494">ਹਾਲੀਆ ਟੈਬਸ</translation>
 <translation id="5726692708398506830">ਪੰਨੇ 'ਤੇ ਹਰੇਕ ਚੀਜ਼ ਨੂੰ ਵਧੇਰੇ ਵੱਡਾ ਬਣਾਓ</translation>
 <translation id="5728072125198221967">ਲਿੰਕ ਕੀਤੀਆਂ Google ਸੇਵਾਵਾਂ</translation>
 <translation id="5744751019568455640">ਇੱਥੇ ਉਹ ਅਵਾਜ਼ਾਂ ਹਨ, ਜਿਨ੍ਹਾਂ ਨੂੰ ਤੁਸੀਂ ਆਪਣੇ ਵੈੱਬ ਪੰਨੇ ਪੜ੍ਹਨ ਲਈ ਚੁਣ ਸਕਦੇ ਹੋ। ਜੇ ਤੁਹਾਨੂੰ ਇਹ ਅਵਾਜ਼ ਪਸੰਦ ਆਉਂਦੀ ਹੈ ਅਤੇ ਤੁਸੀਂ ਇਸਨੂੰ ਵਰਤਣਾ ਜਾਰੀ ਰੱਖਣਾ ਚਾਹੁੰਦੇ ਹੋ, ਤਾਂ ਸਿਰਫ਼ ਅਵਾਜ਼ ਦੇ ਨਾਮ 'ਤੇ ਟੈਪ ਕਰੋ।</translation>
 <translation id="574845902699630049"><ph name="OWNER_FULL_NAME" /> ਵਜੋਂ ਸਾਂਝਾ ਕਰੋ</translation>
-<translation id="5749068826913805084">ਫ਼ਾਈਲਾਂ ਡਾਉਨਲੋਡ ਕਰਨ ਲਈ Chrome ਨੂੰ ਸਟੋਰੋਜ ਤੱਕ ਪਹੁੰਚ ਦੀ ਲੋੜ ਹੁੰਦੀ ਹੈ।</translation>
+<translation id="5749068826913805084">ਫ਼ਾਈਲਾਂ ਡਾਉਨਲੋਡ ਕਰਨ ਲਈ Ultimatum ਨੂੰ ਸਟੋਰੋਜ ਤੱਕ ਪਹੁੰਚ ਦੀ ਲੋੜ ਹੁੰਦੀ ਹੈ।</translation>
 <translation id="5749237766298580851">ਬੰਦ ਹੈ <ph name="SEPARATOR" /> ਇਸਦੀ ਸਿਫ਼ਾਰਸ਼ ਨਹੀਂ ਕੀਤੀ ਜਾਂਦੀ</translation>
 <translation id="5752232708629533680">ਸਿਰਫ਼ GIF ਨੂੰ ਸਾਂਝਾ ਕਰੋ</translation>
 <translation id="5754350196967618083">Discover ਨੂੰ ਰਿਫ੍ਰੈਸ਼ ਨਹੀਂ ਕੀਤਾ ਜਾ ਸਕਦਾ</translation>
@@ -1047,11 +1047,11 @@
 <translation id="5809361687334836369">{HOURS,plural, =1{# ਘੰਟਾ ਪਹਿਲਾਂ}one{# ਘੰਟੇ ਪਹਿਲਾਂ}other{# ਘੰਟੇ ਪਹਿਲਾਂ}}</translation>
 <translation id="5810288467834065221">ਕਾਪੀਰਾਈਟ <ph name="YEAR" /> Google LLC. ਸਾਰੇ ਹੱਕ ਰਾਖਵੇਂ ਹਨ।</translation>
 <translation id="5814749351757353073">ਆਪਣੀਆਂ ਮਨਪਸੰਦ ਸਾਈਟਾਂ ਦਾ ਅਨੁਸਰਣ ਕਰਨਾ ਜਾਰੀ ਰੱਖੋ</translation>
-<translation id="5828921839638612740">ਤੁਸੀਂ ਡਾਟੇ ਨੂੰ Chrome ਸੈਟਿੰਗਾਂ ਵਿੱਚ ਮਿਟਾ ਸਕਦੇ ਹੋ</translation>
+<translation id="5828921839638612740">ਤੁਸੀਂ ਡਾਟੇ ਨੂੰ Ultimatum ਸੈਟਿੰਗਾਂ ਵਿੱਚ ਮਿਟਾ ਸਕਦੇ ਹੋ</translation>
 <translation id="5829586821381540080"><ph name="FOLDER_NAME" /> ਵਿੱਚ ਰੱਖਿਅਤ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="583281660410589416">ਅਗਿਆਤ</translation>
 <translation id="5833984609253377421">ਲਿੰਕ ਸਾਂਝਾ ਕਰੋ</translation>
-<translation id="5839058148541733625">Chrome Dino</translation>
+<translation id="5839058148541733625">Ultimatum Dino</translation>
 <translation id="5848257610304005265">ਕੀ PDF ਫ਼ਾਈਲ ਨੂੰ <ph name="APP_NAME" /> ਨਾਲ ਖੋਲ੍ਹਣਾ ਹੈ?</translation>
 <translation id="5849288995120328556">ਕੀ ਸਾਂਝਾਕਰਨ ਬੰਦ ਕਰਨਾ ਹੈ?</translation>
 <translation id="5853623416121554550">ਰੋਕਿਆ ਗਿਆ</translation>
@@ -1063,9 +1063,9 @@
 <translation id="5864419784173784555">ਕਿਸੇ ਹੋਰ ਡਾਊਨਲੋਡ ਵੱਲੋਂ ਨੈੱਟਵਰਕ ਦੀ ਉਡੀਕ ਕੀਤੀ ਜਾ ਰਹੀ ਹੈ…</translation>
 <translation id="5865733239029070421">Google ਨੂੰ ਵਰਤੋਂ ਅੰਕੜੇ ਅਤੇ ਕ੍ਰੈਸ਼ ਰਿਪੋਰਟਾਂ ਸਵੈਚਲਿਤ ਤੌਰ 'ਤੇ ਭੇਜਦੀ ਹੈ</translation>
 <translation id="5869522115854928033">ਸੁਰੱਖਿਅਤ ਕੀਤੇ ਪਾਸਵਰਡ</translation>
-<translation id="587735546353481577">ਕਿਸੇ ਸਾਈਟ ਦਾ ਅਨੁਸਰਣ ਕਰਨ ਲਈ, ਸਾਈਟ 'ਤੇ ਜਾਓ, Chrome ਮੀਨੂ ਖੋਲ੍ਹੋ, ਅਤੇ 'ਅਨੁਸਰਣ ਕਰੋ' 'ਤੇ ਟੈਪ ਕਰੋ।</translation>
+<translation id="587735546353481577">ਕਿਸੇ ਸਾਈਟ ਦਾ ਅਨੁਸਰਣ ਕਰਨ ਲਈ, ਸਾਈਟ 'ਤੇ ਜਾਓ, Ultimatum ਮੀਨੂ ਖੋਲ੍ਹੋ, ਅਤੇ 'ਅਨੁਸਰਣ ਕਰੋ' 'ਤੇ ਟੈਪ ਕਰੋ।</translation>
 <translation id="5883855034004058011">ਬਾਇਓਮੈਟ੍ਰਿਕ ਕਈ ਵਾਰ ਅਸਫਲ ਹੋਇਆ। ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰਨ ਲਈ ਆਪਣੇ ਡੀਵਾਈਸ ਨੂੰ ਲਾਕ ਅਤੇ ਅਣਲਾਕ ਕਰੋ।</translation>
-<translation id="5885378508678660271">ਸੂਚਨਾਵਾਂ <ph name="SEPARATOR" /> Chrome ਵੱਲੋਂ ਇਨ੍ਹਾਂ ਇਜਾਜ਼ਤਾਂ ਨੂੰ ਹਟਾ ਦਿੱਤਾ ਗਿਆ ਹੈ ਕਿਉਂਕਿ ਇਹ ਸਾਈਟ ਖਤਰਨਾਕ ਹੈ</translation>
+<translation id="5885378508678660271">ਸੂਚਨਾਵਾਂ <ph name="SEPARATOR" /> Ultimatum ਵੱਲੋਂ ਇਨ੍ਹਾਂ ਇਜਾਜ਼ਤਾਂ ਨੂੰ ਹਟਾ ਦਿੱਤਾ ਗਿਆ ਹੈ ਕਿਉਂਕਿ ਇਹ ਸਾਈਟ ਖਤਰਨਾਕ ਹੈ</translation>
 <translation id="5895834791314695851">ਹੋ ਸਕਦਾ ਹੈ ਕਿ ਪਾਸਵਰਡ ਜਲਦ ਹੀ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਕੰਮ ਕਰਨਾ ਬੰਦ ਕਰ ਦੇਣ। ਆਪਣੇ ਪਾਸਵਰਡ ਵਰਤਣਾ ਜਾਰੀ ਰੱਖਣ ਲਈ, Google Play ਸੇਵਾਵਾਂ ਨੂੰ ਅੱਪਡੇਟ ਕਰੋ। <ph name="BEGIN_LINK" />ਹੋਰ ਜਾਣੋ<ph name="END_LINK" /></translation>
 <translation id="5899667542927581604">ਕਿਸੇ ਵੀ ਪਾਸਕੀ ਸ਼ੀਟ ਨੂੰ ਬੰਦ ਨਹੀਂ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="5907542076239273525">ਬੁੱਕਮਾਰਕ ਨੂੰ <ph name="FOLDER_NAME" /> ਵਿੱਚ ਰੱਖਿਅਤ ਕੀਤਾ ਗਿਆ</translation>
@@ -1076,7 +1076,7 @@
 <translation id="5942872142862698679">ਖੋਜ ਲਈ Google ਦੀ ਵਰਤੋਂ ਹੋ ਰਹੀ ਹੈ</translation>
 <translation id="5945035219773565305">ਮੌਜੂਦਾ ਸਿਫ਼ਾਰਸ਼:  <ph name="RECOMMENDATION" /></translation>
 <translation id="5951119116059277034">ਲਾਈਵ ਪੰਨਾ ਦੇਖਿਆ ਜਾ ਰਿਹਾ ਹੈ</translation>
-<translation id="5956665950594638604">ਇੱਕ ਨਵੀਂ ਟੈਬ ਵਿੱਚ Chrome ਮਦਦ ਕੇਂਦਰ ਖੋਲ੍ਹੋ</translation>
+<translation id="5956665950594638604">ਇੱਕ ਨਵੀਂ ਟੈਬ ਵਿੱਚ Ultimatum ਮਦਦ ਕੇਂਦਰ ਖੋਲ੍ਹੋ</translation>
 <translation id="59577092665511740">ਕੋਈ ਖਾਤਾ ਚੁਣੋ।</translation>
 <translation id="5958275228015807058">ਡਾਊਨਲੋਡਾਂ ਵਿੱਚ ਆਪਣੀਆਂ ਫ਼ਾਈਲਾਂ ਅਤੇ ਪੰਨਿਆਂ ਨੂੰ ਲੱਭੋ</translation>
 <translation id="5958994127112619898">ਸਫ਼ੇ ਨੂੰ ਇਕਹਿਰਾ ਕਰੋ</translation>
@@ -1085,13 +1085,13 @@
 <translation id="5977976211062815271">ਇਸ ਡੀਵਾਈਸ 'ਤੇ</translation>
 <translation id="5978661847409534366">{ITEMS_COUNT,plural, =1{ਤੁਹਾਡੀ ਪੜ੍ਹਨ-ਸੂਚੀ ਵਿੱਚ 1 ਪੰਨਾ}one{ਤੁਹਾਡੀ ਪੜ੍ਹਨ-ਸੂਚੀ ਵਿੱਚ # ਪੰਨਾ}other{ਤੁਹਾਡੀ ਪੜ੍ਹਨ-ਸੂਚੀ ਵਿੱਚ # ਪੰਨੇ}}</translation>
 <translation id="5979084224081478209">ਪਾਸਵਰਡਾਂ ਦੀ ਜਾਂਚ ਕਰੋ</translation>
-<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Chrome ਵੱਲੋਂ ਇਨ੍ਹਾਂ ਇਜਾਜ਼ਤਾਂ ਨੂੰ ਹਟਾ ਦਿੱਤਾ ਗਿਆ ਹੈ ਕਿਉਂਕਿ ਤੁਸੀਂ ਹਾਲ ਹੀ ਵਿੱਚ ਇਨ੍ਹਾਂ 'ਤੇ ਨਹੀਂ ਗਏ</translation>
+<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Ultimatum ਵੱਲੋਂ ਇਨ੍ਹਾਂ ਇਜਾਜ਼ਤਾਂ ਨੂੰ ਹਟਾ ਦਿੱਤਾ ਗਿਆ ਹੈ ਕਿਉਂਕਿ ਤੁਸੀਂ ਹਾਲ ਹੀ ਵਿੱਚ ਇਨ੍ਹਾਂ 'ਤੇ ਨਹੀਂ ਗਏ</translation>
 <translation id="5995726099713306770">ਕੀ ਪੰਨਾ ਦੁਬਾਰਾ ਡਾਊਨਲੋਡ ਕਰਨਾ ਹੈ?</translation>
 <translation id="6000066717592683814">Google ਰੱਖੋ</translation>
 <translation id="6000203700195075278">ਮੁੜ-ਅਨੁਸਰਣ ਕਰੋ</translation>
 <translation id="6011308810877101166">ਖੋਜ ਸੁਝਾਵਾਂ ਨੂੰ ਬਿਹਤਰ ਬਣਾਓ</translation>
 <translation id="6013305291643746595">ਪੁਰਾਣੇ ਮੁਤਾਬਕ ਕ੍ਰਮ-ਬੱਧ ਕਰਨਾ</translation>
-<translation id="6022659036123304283">Chrome ਨੂੰ ਆਪਣੇ ਅਨੁਸਾਰ ਵਿਵਸਥਿਤ ਕਰੋ</translation>
+<translation id="6022659036123304283">Ultimatum ਨੂੰ ਆਪਣੇ ਅਨੁਸਾਰ ਵਿਵਸਥਿਤ ਕਰੋ</translation>
 <translation id="6026538407078977628">ਪੂਰੀ-ਸਕ੍ਰੀਨ 'ਤੇ ਵਿਸਤਾਰ ਕਰੋ</translation>
 <translation id="6030719887161080597">ਵਿਗਿਆਪਨ ਦੀ ਕਾਰਗੁਜ਼ਾਰੀ ਨੂੰ ਮਾਪਨ ਲਈ ਸਾਈਟ ਵੱਲੋਂ ਵਰਤੀ ਜਾਣ ਵਾਲੀ ਜਾਣਕਾਰੀ ਦਾ ਪ੍ਰਬੰਧਨ ਕਰੋ</translation>
 <translation id="6039379616847168523">ਅਗਲੀ ਟੈਬ 'ਤੇ ਜਾਓ</translation>
@@ -1125,17 +1125,17 @@
 <translation id="6146563240635539929">ਵੀਡੀਓ ਫ਼ਾਈਲਾਂ</translation>
 <translation id="614890671148262506">ਇਸ ਸਾਈਟ ਤੋਂ ਸੂਚਨਾਵਾਂ ਨੂੰ ਹਮੇਸ਼ਾਂ ਇਜਾਜ਼ਤ ਦਿਓ</translation>
 <translation id="6150320133806434356">ਬੁੱਕਮਾਰਕ ਨੂੰ ਰੱਖਿਅਤ ਕੀਤਾ ਗਿਆ</translation>
-<translation id="6150706324143004339">ਆਪਣੇ Google ਖਾਤੇ ਵਿੱਚ Chrome ਡਾਟੇ ਨੂੰ ਵਰਤਣ ਅਤੇ ਰੱਖਿਅਤ ਕਰਨ ਲਈ, Chrome ਨੂੰ ਅੱਪਡੇਟ ਕਰੋ</translation>
+<translation id="6150706324143004339">ਆਪਣੇ Google ਖਾਤੇ ਵਿੱਚ Ultimatum ਡਾਟੇ ਨੂੰ ਵਰਤਣ ਅਤੇ ਰੱਖਿਅਤ ਕਰਨ ਲਈ, Ultimatum ਨੂੰ ਅੱਪਡੇਟ ਕਰੋ</translation>
 <translation id="6154478581116148741">ਇਸ ਡੀਵਾਈਸ ਤੋਂ ਆਪਣੇ ਪਾਸਵਰਡ ਨਿਰਯਾਤ ਕਰਨ ਲਈ ਸੈਟਿੰਗਾਂ ਵਿੱਚ ਸਕ੍ਰੀਨ ਲੌਕ ਚਾਲੂ ਕਰੋ</translation>
 <translation id="6156323911414505561">ਬੁੱਕਮਾਰਕ ਬਾਰ  ਦਿਖਾਓ </translation>
-<translation id="6162892189396105610">Chrome ਮੁਤਾਬਕ ਜਿਨ੍ਹਾਂ ਪੰਨਿਆਂ 'ਤੇ ਤੁਸੀਂ ਜਾ ਸਕਦੇ ਹੋ, ਇਹ ਉਨ੍ਹਾਂ ਨੂੰ ਪ੍ਰੀਲੋਡ ਕਰਦਾ ਹੈ।</translation>
+<translation id="6162892189396105610">Ultimatum ਮੁਤਾਬਕ ਜਿਨ੍ਹਾਂ ਪੰਨਿਆਂ 'ਤੇ ਤੁਸੀਂ ਜਾ ਸਕਦੇ ਹੋ, ਇਹ ਉਨ੍ਹਾਂ ਨੂੰ ਪ੍ਰੀਲੋਡ ਕਰਦਾ ਹੈ।</translation>
 <translation id="6170675927290506430">ਸੂਚਨਾ ਸੈਟਿੰਗਾਂ 'ਤੇ ਜਾਓ</translation>
 <translation id="6186394685773237175">ਕੋਈ ਛੇੜਛਾੜ ਵਾਲੇ ਪਾਸਵਰਡ ਨਹੀਂ ਮਿਲੇ</translation>
 <translation id="6192907950379606605">ਚਿੱਤਰ ਵਰਣਨ ਪ੍ਰਾਪਤ ਕਰੋ</translation>
 <translation id="6193448654517602979">ਟੈਬਾਂ ਚੁਣੋ</translation>
 <translation id="6196315980958524839">ਪਾਸਵਰਡ ਇਸ ਡੀਵਾਈਸ ਦੇ Google ਪਾਸਵਰਡ ਪ੍ਰਬੰਧਕ ਵਿੱਚ ਰੱਖਿਅਤ ਕੀਤੇ ਗਏ ਹਨ</translation>
 <translation id="6202812185118613467">ਸਿੰਕ ਸ਼ੁਰੂ ਕਰਨ ਲਈ ਵਾਪਸ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
-<translation id="6204781143409202534">Chrome ਨੇ <ph name="DOMAIN" /> ਤੋਂ ਸੰਭਾਵੀ ਤੌਰ 'ਤੇ ਸਪੈਮ ਦਾ ਪਤਾ ਲਗਾਇਆ।</translation>
+<translation id="6204781143409202534">Ultimatum ਨੇ <ph name="DOMAIN" /> ਤੋਂ ਸੰਭਾਵੀ ਤੌਰ 'ਤੇ ਸਪੈਮ ਦਾ ਪਤਾ ਲਗਾਇਆ।</translation>
 <translation id="6205314730813004066">ਵਿਗਿਆਪਨ ਪਰਦੇਦਾਰੀ</translation>
 <translation id="6210748933810148297"><ph name="EMAIL" /> ਨਹੀਂ ਹੋ?</translation>
 <translation id="6211386937064921208">ਇਸ ਪੰਨੇ ਦੀ ਪੂਰਵ-ਝਲਕ ਦਿਖਾਈ ਜਾ ਰਹੀ ਹੈ</translation>
@@ -1146,10 +1146,10 @@
 
 ਉਦਾਹਰਨ ਲਈ, ਕੁਝ ਵੈੱਬਸਾਈਟਾਂ ਤੁਹਾਨੂੰ ਉਹ ਵਿਗਿਆਪਨ ਦਿਖਾ ਕੇ ਇਸ ਬੇਨਤੀ ਦਾ ਜਵਾਬ ਦੇ ਸਕਦੀਆਂ ਹਨ ਜੋ ਤੁਹਾਡੇ ਵੱਲੋਂ ਹੋਰਾਂ ਵੈੱਬਸਾਈਟਾਂ 'ਤੇ ਜਾਣ 'ਤੇ ਆਧਾਰਿਤ ਨਹੀਂ ਹਨ। ਕਈ ਵੈੱਬਸਾਈਟਾਂ ਤਦ ਵੀ ਤੁਹਾਡਾ ਬ੍ਰਾਊਜ਼ ਕਰਨ ਸੰਬੰਧੀ ਡਾਟਾ ਇਕੱਤਰ ਕਰਨਗੀਆਂ ਅਤੇ ਇਸ ਦੀ ਵਰਤੋਂ ਕਰਨਗੀਆਂ - ਉਦਾਹਰਨ ਲਈ ਸੁਰੱਖਿਆ ਨੂੰ ਬਿਹਤਰ ਬਣਾਉਣ ਲਈ, ਸਮੱਗਰੀ, ਵਿਗਿਆਪਨ ਅਤੇ ਸਿਫ਼ਾਰਸ਼ਾਂ ਮੁਹੱਈਆ ਕਰਵਾਉਣ ਲਈ ਅਤੇ ਰਿਪੋਰਟਿੰਗ ਅੰਕੜੇ ਸਿਰਜਣ ਲਈ।</translation>
 <translation id="6247557882553405851">Google Password Manager</translation>
-<translation id="6251449557817521191">ਆਪਣਾ Chrome ਇਤਿਹਾਸ ਇੱਥੇ ਦੇਖੋ</translation>
+<translation id="6251449557817521191">ਆਪਣਾ Ultimatum ਇਤਿਹਾਸ ਇੱਥੇ ਦੇਖੋ</translation>
 <translation id="6253680439349691381">{ITEMS_COUNT,plural, =1{1 ਆਈਟਮ ਸਿਰਫ਼ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਰੱਖਿਅਤ ਕੀਤੀ ਗਈ ਹੈ। ਦੂਜੇ ਡੀਵਾਈਸਾਂ 'ਤੇ ਵਰਤਣ ਲਈ, ਇਸਨੂੰ ਆਪਣੇ Google ਖਾਤੇ, <ph name="ACCOUNT_EMAIL" /> ਵਿੱਚ ਰੱਖਿਅਤ ਕਰੋ।}one{# ਆਈਟਮ ਸਿਰਫ਼ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਰੱਖਿਅਤ ਕੀਤੀ ਗਈ ਹੈ। ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੇ ਹੋਰ ਡੀਵਾਈਸਾਂ 'ਤੇ ਵਰਤਣ ਲਈ, ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੇ Google ਖਾਤੇ, <ph name="ACCOUNT_EMAIL" /> ਵਿੱਚ ਰੱਖਿਅਤ ਕਰੋ।}other{# ਆਈਟਮਾਂ ਸਿਰਫ਼ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਰੱਖਿਅਤ ਕੀਤੀਆਂ ਗਈਆਂ ਹਨ। ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੇ ਹੋਰ ਡੀਵਾਈਸਾਂ 'ਤੇ ਵਰਤਣ ਲਈ, ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੇ Google ਖਾਤੇ, <ph name="ACCOUNT_EMAIL" /> ਵਿੱਚ ਰੱਖਿਅਤ ਕਰੋ।}}</translation>
 <translation id="6254139308321626268">ਤੁਸੀਂ ਇੱਕ PDF ਫ਼ਾਈਲ ਦੇਖ ਰਹੇ ਹੋ</translation>
-<translation id="6255809143828972562">Chrome ਤੋਂ ਟੂਲਾਂ ਨਾਲ, ਤੁਸੀਂ ਸੁਰੱਖਿਅਤ ਢੰਗ ਨਾਲ ਬ੍ਰਾਊਜ਼ ਕਰ ਸਕਦੇ ਹੋ ਅਤੇ ਖੁਦ ਕੰਟਰੋਲ ਕਰ ਸਕਦੇ ਹੋ</translation>
+<translation id="6255809143828972562">Ultimatum ਤੋਂ ਟੂਲਾਂ ਨਾਲ, ਤੁਸੀਂ ਸੁਰੱਖਿਅਤ ਢੰਗ ਨਾਲ ਬ੍ਰਾਊਜ਼ ਕਰ ਸਕਦੇ ਹੋ ਅਤੇ ਖੁਦ ਕੰਟਰੋਲ ਕਰ ਸਕਦੇ ਹੋ</translation>
 <translation id="6264376385120300461">ਫਿਰ ਵੀ ਡਾਊਨਲੋਡ ਕਰੋ</translation>
 <translation id="6264485186158353794">ਸੁਰੱਖਿਆ 'ਤੇ ਵਾਪਸ ਜਾਓ</translation>
 <translation id="6277522088822131679">ਸਫ਼ਾ ਪ੍ਰਿੰਟ ਕਰਨ ਵਿੱਚ ਇੱਕ ਸਮੱਸਿਆ ਹੋਈ ਸੀ। ਕਿਰਪਾ ਕਰਕੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।</translation>
@@ -1179,14 +1179,14 @@
 <translation id="6356893102071098867">ਜਾਂਚ ਕਰੋ ਕਿ ਤੁਸੀਂ ਸਹੀ ਖਾਤਾ ਚੁਣਿਆ ਹੈ ਜਾਂ ਨਹੀਂ</translation>
 <translation id="6363990818884053551">ਸਿੰਕ ਸ਼ੁਰੂ ਕਰਨ ਲਈ, ਆਪਣੀ ਪਛਾਣ ਦੀ ਪੁਸ਼ਟੀ ਕਰੋ</translation>
 <translation id="6364438453358674297">ਕੀ ਇਤਿਹਾਸ ਵਿੱਚੋਂ ਸੁਝਾਅ ਹਟਾਉਣਾ ਹੈ?</translation>
-<translation id="6380100320871303656">Chrome ਮੁਤਾਬਕ ਜਿਨ੍ਹਾਂ ਪੰਨਿਆਂ 'ਤੇ ਤੁਸੀਂ ਜਾ ਸਕਦੇ ਹੋ, ਇਹ ਉਨ੍ਹਾਂ ਨੂੰ ਜ਼ਿਆਦਾ ਵਾਰ ਪ੍ਰੀਲੋਡ ਕਰਦਾ ਹੈ। ਇਸ ਸੈਟਿੰਗ ਦੇ ਨਤੀਜੇ ਵਜੋਂ ਡਾਟਾ ਵਰਤੋਂ ਵਧ ਸਕਦੀ ਹੈ।</translation>
+<translation id="6380100320871303656">Ultimatum ਮੁਤਾਬਕ ਜਿਨ੍ਹਾਂ ਪੰਨਿਆਂ 'ਤੇ ਤੁਸੀਂ ਜਾ ਸਕਦੇ ਹੋ, ਇਹ ਉਨ੍ਹਾਂ ਨੂੰ ਜ਼ਿਆਦਾ ਵਾਰ ਪ੍ਰੀਲੋਡ ਕਰਦਾ ਹੈ। ਇਸ ਸੈਟਿੰਗ ਦੇ ਨਤੀਜੇ ਵਜੋਂ ਡਾਟਾ ਵਰਤੋਂ ਵਧ ਸਕਦੀ ਹੈ।</translation>
 <translation id="6382848304055775421">ਨਿਰਯਾਤ ਕੀਤਾ ਜਾ ਰਿਹਾ ਹੈ</translation>
 <translation id="6388152137132427505">ਹਮੇਸ਼ਾਂ ਸਮਝਦਾਰੀ ਨਾਲ ਸਾਂਝਾ ਕਰੋ। ਲਿੰਕਾਂ ਦੀ ਮਿਆਦ 48 ਘੰਟਿਆਂ ਵਿੱਚ ਸਮਾਪਤ ਹੋ ਜਾਵੇਗੀ।</translation>
 <translation id="6394791151443660613">ਖੋਜੋ: <ph name="SEARCH_QUERY" /></translation>
 <translation id="6395288395575013217">ਲਿੰਕ</translation>
 <translation id="6397616442223433927">ਵਾਪਸ ਆਨਲਾਈਨ ਹੋ ਗਿਆ</translation>
 <translation id="6399363707848566877">ਤੁਸੀਂ ਇੱਥੇ ਆਸਾਨੀ ਨਾਲ ਗਰੁੱਪਾਂ ਵਿੱਚ ਟੈਬਾਂ ਨੂੰ ਸ਼ਾਮਲ ਕਰ ਸਕਦੇ ਹੋ</translation>
-<translation id="6401458660421980302">ਇਸ ਟੈਬ ਨੂੰ ਕਿਸੇ ਹੋਰ ਡੀਵਾਈਸ 'ਤੇ ਭੇਜਣ ਲਈ ਉਸ ਡੀਵਾਈਸ 'ਤੇ Chrome ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
+<translation id="6401458660421980302">ਇਸ ਟੈਬ ਨੂੰ ਕਿਸੇ ਹੋਰ ਡੀਵਾਈਸ 'ਤੇ ਭੇਜਣ ਲਈ ਉਸ ਡੀਵਾਈਸ 'ਤੇ Ultimatum ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
 <translation id="6404511346730675251">ਬੁੱਕਮਾਰਕ ਸੰਪਾਦਿਤ ਕਰੋ</translation>
 <translation id="6406506848690869874">ਸਿੰਕ ਕਰੋ</translation>
 <translation id="6410883413783534063">ਇੱਕੋ ਵੇਲੇ ਵੱਖ-ਵੱਖ ਪੰਨਿਆਂ 'ਤੇ ਜਾਣ ਲਈ ਟੈਬਾਂ ਖੋਲ੍ਹੋ</translation>
@@ -1202,22 +1202,22 @@
 <translation id="6452534462676960500">ਨਵੀਂ ਸਰਗਰਮੀ</translation>
 <translation id="6459045781120991510">ਸਰਵੇਖਣ</translation>
 <translation id="6461962085415701688">ਫ਼ਾਈਲ ਨੂੰ ਖੋਲ੍ਹਿਆ ਨਹੀਂ ਜਾ ਸਕਦਾ</translation>
-<translation id="6464977750820128603">ਤੁਸੀਂ ਉਨ੍ਹਾਂ ਸਾਈਟਾਂ ਨੂੰ ਦੇਖ ਸਕਦੇ ਹੋ ਜਿਨ੍ਹਾਂ 'ਤੇ ਤੁਸੀਂ Chrome ਵਿੱਚ ਜਾਂਦੇ ਹੋ ਅਤੇ ਉਨ੍ਹਾਂ ਲਈ ਟਾਈਮਰ ਸੈੱਟ ਕਰ ਸਕਦੇ ਹੋ।\n\nGoogle ਉਨ੍ਹਾਂ ਸਾਈਟਾਂ ਬਾਰੇ ਜਾਣਕਾਰੀ ਪ੍ਰਾਪਤ ਕਰਦਾ ਹੈ ਜਿਨ੍ਹਾਂ ਲਈ ਤੁਸੀਂ ਟਾਈਮਰ ਸੈੱਟ ਕੀਤਾ ਹੁੰਦਾ ਹੈ ਅਤੇ ਨਾਲ ਹੀ ਇਹ ਜਾਣਕਾਰੀ ਵੀ ਪ੍ਰਾਪਤ ਕਰਦਾ ਹੈ ਕਿ ਤੁਸੀਂ ਉਨ੍ਹਾਂ ਸਾਈਟਾਂ ਨੂੰ ਕਿੰਨੀ ਦੇਰ ਤੱਕ ਦੇਖਦੇ ਰਹੇ ਹੋ। ਇਹ ਜਾਣਕਾਰੀ ਡਿਜੀਟਲ ਜੀਵਨਸ਼ੈਲੀ ਨੂੰ ਬਿਹਤਰ ਬਣਾਉਣ ਲਈ ਵਰਤੀ ਜਾਂਦੀ ਹੈ।</translation>
+<translation id="6464977750820128603">ਤੁਸੀਂ ਉਨ੍ਹਾਂ ਸਾਈਟਾਂ ਨੂੰ ਦੇਖ ਸਕਦੇ ਹੋ ਜਿਨ੍ਹਾਂ 'ਤੇ ਤੁਸੀਂ Ultimatum ਵਿੱਚ ਜਾਂਦੇ ਹੋ ਅਤੇ ਉਨ੍ਹਾਂ ਲਈ ਟਾਈਮਰ ਸੈੱਟ ਕਰ ਸਕਦੇ ਹੋ।\n\nGoogle ਉਨ੍ਹਾਂ ਸਾਈਟਾਂ ਬਾਰੇ ਜਾਣਕਾਰੀ ਪ੍ਰਾਪਤ ਕਰਦਾ ਹੈ ਜਿਨ੍ਹਾਂ ਲਈ ਤੁਸੀਂ ਟਾਈਮਰ ਸੈੱਟ ਕੀਤਾ ਹੁੰਦਾ ਹੈ ਅਤੇ ਨਾਲ ਹੀ ਇਹ ਜਾਣਕਾਰੀ ਵੀ ਪ੍ਰਾਪਤ ਕਰਦਾ ਹੈ ਕਿ ਤੁਸੀਂ ਉਨ੍ਹਾਂ ਸਾਈਟਾਂ ਨੂੰ ਕਿੰਨੀ ਦੇਰ ਤੱਕ ਦੇਖਦੇ ਰਹੇ ਹੋ। ਇਹ ਜਾਣਕਾਰੀ ਡਿਜੀਟਲ ਜੀਵਨਸ਼ੈਲੀ ਨੂੰ ਬਿਹਤਰ ਬਣਾਉਣ ਲਈ ਵਰਤੀ ਜਾਂਦੀ ਹੈ।</translation>
 <translation id="6468703991511753953">ਪਤਾ ਬਾਰ ਇਸ ਵੇਲੇ ਹੇਠਾਂ ਹੈ</translation>
-<translation id="6470181189905173055"><ph name="APP_LABEL" /> ਦੀ ਵਰਤੋਂ ਕਰਨ ਵੇਲੇ ਤੁਹਾਡੇ ਵੱਲੋਂ Chrome ਵਿੱਚ ਖੋਲ੍ਹੇ ਗਏ ਪੰਨੇ ਇੱਥੇ ਦਿਸਣਗੇ।</translation>
+<translation id="6470181189905173055"><ph name="APP_LABEL" /> ਦੀ ਵਰਤੋਂ ਕਰਨ ਵੇਲੇ ਤੁਹਾਡੇ ਵੱਲੋਂ Ultimatum ਵਿੱਚ ਖੋਲ੍ਹੇ ਗਏ ਪੰਨੇ ਇੱਥੇ ਦਿਸਣਗੇ।</translation>
 <translation id="6473086018775716761">ਸਾਂਝਾਕਰਨ ਵਿਕਲਪਾਂ ਦੀ ਸੂਚੀ ਅੱਧੀ ਸਕ੍ਰੀਨ 'ਤੇ ਖੁੱਲ੍ਹੀ ਹੋਈ ਹੈ।</translation>
 <translation id="6475951671322991020">ਵੀਡੀਓ ਡਾਊਨਲੋਡ ਕਰੋ</translation>
 <translation id="6477928892249167417">ਇਹ ਸਾਈਟਾਂ ਤੁਹਾਡੇ ਲਈ ਮਹੱਤਵਪੂਰਨ ਲੱਗ ਰਹੀਆਂ ਹਨ:</translation>
-<translation id="6481963882741794338">ਵਿਅਕਤੀਗਤਕਰਨ ਅਤੇ ਹੋਰ ਉਦੇਸ਼ਾਂ ਲਈ Chrome ਅਤੇ ਹੋਰ Google ਸੇਵਾਵਾਂ ਨੂੰ ਲਿੰਕ ਕਰੋ</translation>
+<translation id="6481963882741794338">ਵਿਅਕਤੀਗਤਕਰਨ ਅਤੇ ਹੋਰ ਉਦੇਸ਼ਾਂ ਲਈ Ultimatum ਅਤੇ ਹੋਰ Google ਸੇਵਾਵਾਂ ਨੂੰ ਲਿੰਕ ਕਰੋ</translation>
 <translation id="6482749332252372425">ਸਟੋਰੇਜ ਜਗ੍ਹਾ ਦੀ ਕਮੀ ਦੇ ਕਾਰਨ <ph name="FILE_NAME" /> ਡਾਊਨਲੋਡ ਅਸਫ਼ਲ ਰਿਹਾ।</translation>
 <translation id="6486420406192123355">ਇਹ PDF ਫ਼ਾਈਲ ਇੱਕ ਅਸੁਰੱਖਿਅਤ ਕਨੈਕਸ਼ਨ ਦੀ ਵਰਤੋਂ ਕਰਨ ਵਾਲੀ ਸਾਈਟ ਤੋਂ ਹੈ</translation>
 <translation id="650224091954855786">{FILE_COUNT,plural, =1{ਫ਼ਾਈਲ ਡਾਊਨਲੋਡ ਕੀਤੀ ਗਈ}one{# ਡਾਊਨਲੋਡ ਪੂਰਾ ਹੋਇਆ}other{# ਡਾਊਨਲੋਡ ਪੂਰੇ ਹੋਏ}}</translation>
-<translation id="6508722015517270189">Chrome ਨੂੰ ਮੁੜ-ਸ਼ੁਰੂ ਕਰੋ</translation>
+<translation id="6508722015517270189">Ultimatum ਨੂੰ ਮੁੜ-ਸ਼ੁਰੂ ਕਰੋ</translation>
 <translation id="6513924416597632811">ਇਸਦੇ ਲਈ ਖੋਜ ਨਤੀਜਿਆਂ ਵਾਲੇ ਪੰਨੇ ਦਾ ਲਿੰਕ ਕਾਪੀ ਕਰੋ: <ph name="SEARCH_QUERY" />। ਸਰੋਤ: <ph name="PAGE_URL" /></translation>
 <translation id="6518133107902771759">ਪ੍ਰਮਾਣਿਤ ਕਰੋ</translation>
 <translation id="6527303717912515753">ਸ਼ੇਅਰ ਕਰੋ</translation>
-<translation id="652948702951888897">Chrome ਇਤਿਹਾਸ</translation>
-<translation id="6532866250404780454">Chrome ਵਿੱਚ ਉਹ ਸਾਈਟਾਂ ਨਹੀਂ ਦਿਸਣਗੀਆਂ, ਜਿਨ੍ਹਾਂ 'ਤੇ ਤੁਸੀਂ ਜਾਂਦੇ ਹੋ। ਸਾਰੇ ਸਾਈਟ ਟਾਈਮਰ ਮਿਟਾ ਦਿੱਤੇ ਜਾਣਗੇ।</translation>
+<translation id="652948702951888897">Ultimatum ਇਤਿਹਾਸ</translation>
+<translation id="6532866250404780454">Ultimatum ਵਿੱਚ ਉਹ ਸਾਈਟਾਂ ਨਹੀਂ ਦਿਸਣਗੀਆਂ, ਜਿਨ੍ਹਾਂ 'ਤੇ ਤੁਸੀਂ ਜਾਂਦੇ ਹੋ। ਸਾਰੇ ਸਾਈਟ ਟਾਈਮਰ ਮਿਟਾ ਦਿੱਤੇ ਜਾਣਗੇ।</translation>
 <translation id="6539092367496845964">ਕੋਈ ਗੜਬੜ ਹੋਈ। ਬਾਅਦ ਵਿੱਚ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।</translation>
 <translation id="6541983376925655882">{NUM_HOURS,plural, =1{1 ਘੰਟਾ ਪਹਿਲਾਂ ਜਾਂਚ ਕੀਤੀ ਗਈ}one{# ਘੰਟਾ ਪਹਿਲਾਂ ਜਾਂਚ ਕੀਤੀ ਗਈ}other{# ਘੰਟੇ ਪਹਿਲਾਂ ਜਾਂਚ ਕੀਤੀ ਗਈ}}</translation>
 <translation id="6545017243486555795">ਸਾਰਾ ਡਾਟਾ ਕਲੀਅਰ ਕਰੋ</translation>
@@ -1226,12 +1226,12 @@
 <translation id="6556542240154580383">{TAB_COUNT,plural, =1{<ph name="TAB_TITLE" /> ਅਤੇ <ph name="TAB_COUNT_ONE" /> ਹੋਰ ਟੈਬ ਨੂੰ ਬੰਦ ਕੀਤਾ ਜਾਵੇਗਾ}one{<ph name="TAB_TITLE" /> ਅਤੇ <ph name="TAB_COUNT_MANY" /> ਹੋਰ ਟੈਬ ਨੂੰ ਬੰਦ ਕੀਤਾ ਜਾਵੇਗਾ}other{<ph name="TAB_TITLE" /> ਅਤੇ <ph name="TAB_COUNT_MANY" /> ਹੋਰ ਟੈਬਾਂ ਨੂੰ ਬੰਦ ਕੀਤਾ ਜਾਵੇਗਾ}}</translation>
 <translation id="6560414384669816528">Sogou ਨਾਲ ਖੋਜੋ</translation>
 <translation id="656065428026159829">ਹੋਰ ਦੇਖੋ</translation>
-<translation id="6564820424018738527">ਤੁਹਾਡੇ Android ਡੀਵਾਈਸ ਵਿੱਚ ਮਿਲਦੀ-ਜੁਲਦੀ ਸੈਟਿੰਗ ਸ਼ਾਮਲ ਹੋ ਸਕਦੀ ਹੈ। ਜੇ ਵਿਗਿਆਪਨ ਮਾਪ Chrome ਅਤੇ ਤੁਹਾਡੇ Android ਡੀਵਾਈਸ 'ਤੇ ਚਾਲੂ ਹੈ, ਤਾਂ ਕੋਈ ਕੰਪਨੀ ਤੁਹਾਡੇ ਵੱਲੋਂ ਦੇਖੀਆਂ ਜਾਣ ਵਾਲੀਆਂ ਵੈੱਬਸਾਈਟਾਂ ਅਤੇ ਤੁਹਾਡੇ ਵੱਲੋਂ ਵਰਤੀਆਂ ਜਾਣ ਵਾਲੀਆਂ ਐਪਾਂ ਵਿਚਕਾਰ ਵਿਗਿਆਪਨ ਦੀ ਪ੍ਰਭਾਵਕਤਾ ਦਾ ਮੁਲਾਂਕਣ ਕਰ ਸਕੇਗੀ।</translation>
+<translation id="6564820424018738527">ਤੁਹਾਡੇ Android ਡੀਵਾਈਸ ਵਿੱਚ ਮਿਲਦੀ-ਜੁਲਦੀ ਸੈਟਿੰਗ ਸ਼ਾਮਲ ਹੋ ਸਕਦੀ ਹੈ। ਜੇ ਵਿਗਿਆਪਨ ਮਾਪ Ultimatum ਅਤੇ ਤੁਹਾਡੇ Android ਡੀਵਾਈਸ 'ਤੇ ਚਾਲੂ ਹੈ, ਤਾਂ ਕੋਈ ਕੰਪਨੀ ਤੁਹਾਡੇ ਵੱਲੋਂ ਦੇਖੀਆਂ ਜਾਣ ਵਾਲੀਆਂ ਵੈੱਬਸਾਈਟਾਂ ਅਤੇ ਤੁਹਾਡੇ ਵੱਲੋਂ ਵਰਤੀਆਂ ਜਾਣ ਵਾਲੀਆਂ ਐਪਾਂ ਵਿਚਕਾਰ ਵਿਗਿਆਪਨ ਦੀ ਪ੍ਰਭਾਵਕਤਾ ਦਾ ਮੁਲਾਂਕਣ ਕਰ ਸਕੇਗੀ।</translation>
 <translation id="6565959834589222080">ਉਪਲਬਧ ਹੋਣ 'ਤੇ ਵਾਈ-ਫਾਈ ਵਰਤਿਆ ਜਾਂਦਾ ਹੈ</translation>
 <translation id="6569373978618239158">ਤੁਹਾਨੂੰ ਨਵੀਂ ਟੈਬ ਖੋਲ੍ਹਣ 'ਤੇ ਹੁਣ <ph name="SITE_NAME" /> ਦੀਆਂ ਕਹਾਣੀਆਂ ਦਿਖਾਈ ਦੇਣਗੀਆਂ। ਤੁਹਾਡੇ ਵੱਲੋਂ ਅਨੁਸਰਣ ਕੀਤੀਆਂ ਸਾਈਟਾਂ ਤੁਹਾਡੇ Google ਖਾਤੇ ਵਿੱਚ ਰੱਖਿਅਤ ਕੀਤੀਆਂ ਜਾਂਦੀਆਂ ਹਨ। ਤੁਸੀਂ ਉਨ੍ਹਾਂ ਦਾ ਪ੍ਰਬੰਧਨ ਡਿਸਕਵਰ ਸੈਟਿੰਗਾਂ ਵਿੱਚ ਜਾ ਕੇ ਕਰ ਸਕਦੇ ਹੋ।</translation>
 <translation id="657177046675873214">ਆਪਣੇ ਸਾਰੇ ਡੀਵਾਈਸਾਂ 'ਤੇ ਆਪਣੇ ਬੁੱਕਮਾਰਕ ਪ੍ਰਾਪਤ ਕਰਨ ਲਈ, ਸੈਟਿੰਗਾਂ ਵਿੱਚ "ਬੁੱਕਮਾਰਕ" ਚਾਲੂ ਕਰੋ</translation>
 <translation id="6573096386450695060">ਹਮੇਸ਼ਾਂ ਰੀਡਾਇਰੈਕਟ ਕਰਨ ਦਿਓ</translation>
-<translation id="6573431926118603307">ਤੁਹਾਡੇ ਹੋਰ ਡੀਵਾਈਸਾਂ 'ਤੇ Chrome ਵਿੱਚ ਤੁਹਾਡੇ ਵੱਲੋਂ ਖੋਲ੍ਹੀਆਂ ਗਈਆਂ ਟੈਬਾਂ ਇੱਥੇ ਦਿਖਾਈ ਦੇਣਗੀਆਂ।</translation>
+<translation id="6573431926118603307">ਤੁਹਾਡੇ ਹੋਰ ਡੀਵਾਈਸਾਂ 'ਤੇ Ultimatum ਵਿੱਚ ਤੁਹਾਡੇ ਵੱਲੋਂ ਖੋਲ੍ਹੀਆਂ ਗਈਆਂ ਟੈਬਾਂ ਇੱਥੇ ਦਿਖਾਈ ਦੇਣਗੀਆਂ।</translation>
 <translation id="6583199322650523874">ਮੌਜੂਦਾ ਪੰਨੇ ਨੂੰ ਬੁੱਕਮਾਰਕ ਕਰੋ</translation>
 <translation id="6588043302623806746">ਸੁਰੱਖਿਅਤ DNS ਵਰਤੋ</translation>
 <translation id="6590471736817333463">60% ਤੱਕ ਡਾਟਾ ਬਚਾਓ</translation>
@@ -1239,13 +1239,13 @@
 <translation id="6593061639179217415">ਡੈਸਕਟਾਪ ਸਾਈਟ</translation>
 <translation id="6594347733515723558">ਕ੍ਰਮਬੱਧ/ਦੇਖਣ ਦੇ ਵਿਕਲਪ</translation>
 <translation id="6595046016124923392">ਤੁਹਾਡੇ ਲਈ ਵਰਣਨ ਨੂੰ ਬਿਹਤਰ ਬਣਾਉਣ ਲਈ ਚਿੱਤਰਾਂ ਨੂੰ Google ਨੂੰ ਭੇਜਿਆ ਜਾਂਦਾ ਹੈ।</translation>
-<translation id="6604931690954120417">ਤੁਹਾਡੇ ਵੱਲੋਂ Chrome ਵਿੱਚ ਸਾਈਨ-ਇਨ ਹੋਣ 'ਤੇ, ਤੁਹਾਡੇ ਵੱਲੋਂ ਰੱਖਿਅਤ ਕੀਤੇ ਪਾਸਵਰਡ ਤੁਹਾਡੇ Google ਖਾਤੇ ਵਿੱਚ ਚਲੇ ਜਾਣਗੇ। ਇਸ ਸੁਵਿਧਾ ਨੂੰ ਬੰਦ ਕਰਨ ਲਈ, <ph name="BEGIN_LINK" />ਸੈਟਿੰਗਾਂ 'ਤੇ ਜਾਓ<ph name="END_LINK" />।</translation>
+<translation id="6604931690954120417">ਤੁਹਾਡੇ ਵੱਲੋਂ Ultimatum ਵਿੱਚ ਸਾਈਨ-ਇਨ ਹੋਣ 'ਤੇ, ਤੁਹਾਡੇ ਵੱਲੋਂ ਰੱਖਿਅਤ ਕੀਤੇ ਪਾਸਵਰਡ ਤੁਹਾਡੇ Google ਖਾਤੇ ਵਿੱਚ ਚਲੇ ਜਾਣਗੇ। ਇਸ ਸੁਵਿਧਾ ਨੂੰ ਬੰਦ ਕਰਨ ਲਈ, <ph name="BEGIN_LINK" />ਸੈਟਿੰਗਾਂ 'ਤੇ ਜਾਓ<ph name="END_LINK" />।</translation>
 <translation id="661266467055912436">ਵੈੱਬ 'ਤੇ ਤੁਹਾਡੇ ਅਤੇ ਹਰ ਕਿਸੇ ਲਈ ਸੁਰੱਖਿਆ ਨੂੰ ਬਿਹਤਰ ਬਣਾਇਆ ਜਾਂਦਾ ਹੈ।</translation>
-<translation id="6621391692573306628">ਇਸ ਟੈਬ ਨੂੰ ਕਿਸੇ ਹੋਰ ਡੀਵਾਈਸ 'ਤੇ ਭੇਜਣ ਲਈ ਦੋਵਾਂ ਡੀਵਾਈਸਾਂ 'ਤੇ Chrome ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
+<translation id="6621391692573306628">ਇਸ ਟੈਬ ਨੂੰ ਕਿਸੇ ਹੋਰ ਡੀਵਾਈਸ 'ਤੇ ਭੇਜਣ ਲਈ ਦੋਵਾਂ ਡੀਵਾਈਸਾਂ 'ਤੇ Ultimatum ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
 <translation id="6627583120233659107">ਫੋਲਡਰ ਸੰਪਾਦਿਤ ਕਰੋ</translation>
 <translation id="6633067410344541938">ਇਨਕੋਗਨਿਟੋ ਨੂੰ ਅਣਲਾਕ ਕਰੋ</translation>
 <translation id="6636623428211296678">ਹੇਠਾਂ ਹੋਰ ਸੈਟਿੰਗਾਂ ਦੀ ਪੜਚੋਲ ਕਰੋ ਜਾਂ ਹੁਣੇ ਪੂਰਾ ਕਰੋ</translation>
-<translation id="6637100877383020115">ਐਪ ਨੂੰ ਬਿਹਤਰ ਬਣਾਉਣ ਵਿੱਚ ਮਦਦ ਕਰਨ ਲਈ, Chrome ਵਰਤੋਂ ਅਤੇ ਕ੍ਰੈਸ਼ ਡਾਟਾ Google ਨੂੰ ਭੇਜਦਾ ਹੈ। <ph name="BEGIN_UMA_LINK" />ਪ੍ਰਬੰਧਨ ਕਰੋ<ph name="END_UMA_LINK" /></translation>
+<translation id="6637100877383020115">ਐਪ ਨੂੰ ਬਿਹਤਰ ਬਣਾਉਣ ਵਿੱਚ ਮਦਦ ਕਰਨ ਲਈ, Ultimatum ਵਰਤੋਂ ਅਤੇ ਕ੍ਰੈਸ਼ ਡਾਟਾ Google ਨੂੰ ਭੇਜਦਾ ਹੈ। <ph name="BEGIN_UMA_LINK" />ਪ੍ਰਬੰਧਨ ਕਰੋ<ph name="END_UMA_LINK" /></translation>
 <translation id="6640207029842583248">ਹਮੇਸ਼ਾਂ ਬਲਾਕ ਕਰੋ</translation>
 <translation id="6641780377503683465"><ph name="INTEREST" /> ਨੂੰ ਹਟਾਓ</translation>
 <translation id="6647441008198474441">ਤੁਹਾਡੇ ਵੱਲੋਂ ਖੋਲ੍ਹੇ ਜਾਣ ਵਾਲੇ URL Google ਨੂੰ ਇਹ ਪੂਰਵ-ਅਨੁਮਾਨ ਲਗਾਉਣ ਲਈ ਭੇਜੇ ਜਾਂਦੇ ਹਨ ਕਿ ਤੁਸੀਂ ਅਗਲੀਆਂ ਕਿਹੜੀਆਂ ਸਾਈਟਾਂ 'ਤੇ ਜਾਉਗੇ</translation>
@@ -1257,8 +1257,8 @@
 <translation id="6672697278890207089">ਆਪਣਾ ਪਾਸਫਰੇਜ਼ ਦਾਖਲ ਕਰੋ</translation>
 <translation id="6672917148207387131"><ph name="DOMAIN" /> ਸ਼ਾਮਲ ਕਰੋ</translation>
 <translation id="6674571176963658787">ਸਿੰਕ ਸ਼ੁਰੂ ਕਰਨ ਲਈ, ਆਪਣਾ ਪਾਸਫਰੇਜ਼ ਦਾਖਲ ਕਰੋ</translation>
-<translation id="6676927815633975364">ਇਸ ਸਾਈਟ ਅਤੇ Chrome ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
-<translation id="6684809838922667136">Chrome ਨੂੰ ਬਿਹਤਰ ਬਣਾਓ</translation>
+<translation id="6676927815633975364">ਇਸ ਸਾਈਟ ਅਤੇ Ultimatum ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
+<translation id="6684809838922667136">Ultimatum ਨੂੰ ਬਿਹਤਰ ਬਣਾਓ</translation>
 <translation id="6700279777779583398">ਚੋਣਾਂ ਨੂੰ ਰੱਖਿਅਤ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="6704048624334633734">ਪਾਸਵਰਡ ਨੂੰ ਨਿਰਯਾਤ ਕਰ ਕੇ ਮਿਟਾਉਣਾ</translation>
 <translation id="670498945988402717">ਬੀਤੇ ਕੱਲ੍ਹ ਜਾਂਚ ਕੀਤੀ ਗਈ</translation>
@@ -1269,7 +1269,7 @@
 <translation id="6723740634201835758">ਤੁਹਾਡੇ Google ਖਾਤੇ ਵਿੱਚ</translation>
 <translation id="6734310707649923383">ਤੁਸੀਂ ਤੁਹਾਡੇ ਵੱਲੋਂ ਦੇਖੇ ਗਏ ਪੰਨਿਆਂ ਨੂੰ ਦੇਖ ਸਕਦੇ ਹੋ ਜਾਂ ਆਪਣੇ ਇਤਿਹਾਸ ਵਿੱਚੋਂ ਉਨ੍ਹਾਂ ਨੂੰ ਮਿਟਾ ਸਕਦੇ ਹੋ</translation>
 <translation id="6738867403308150051">ਡਾਊਨਲੋਡ ਕਰ ਰਿਹਾ ਹੈ…</translation>
-<translation id="674388916582496364">ਤੁਹਾਡੇ ਅਨੁਭਵ ਨੂੰ ਵਿਅਕਤੀਗਤ ਬਣਾਉਣ ਲਈ, ਤੁਹਾਡੀ ਦਿਲਚਸਪੀ ਵਾਲੀਆਂ ਚੀਜ਼ਾਂ ਨੂੰ ਯਾਦ ਰੱਖਣਾ ਉਨ੍ਹਾਂ ਸਾਈਟਾਂ ਲਈ ਆਮ ਗੱਲ ਹੈ ਜਿਨ੍ਹਾਂ 'ਤੇ ਤੁਸੀਂ ਜਾਂਦੇ ਹੋ। ਸਾਈਟਾਂ ਤੁਹਾਡੀਆਂ ਦਿਲਚਸਪੀਆਂ ਬਾਰੇ Chrome ਵਿੱਚ ਜਾਣਕਾਰੀ ਵੀ ਸਟੋਰ ਕਰ ਸਕਦੀਆਂ ਹਨ।</translation>
+<translation id="674388916582496364">ਤੁਹਾਡੇ ਅਨੁਭਵ ਨੂੰ ਵਿਅਕਤੀਗਤ ਬਣਾਉਣ ਲਈ, ਤੁਹਾਡੀ ਦਿਲਚਸਪੀ ਵਾਲੀਆਂ ਚੀਜ਼ਾਂ ਨੂੰ ਯਾਦ ਰੱਖਣਾ ਉਨ੍ਹਾਂ ਸਾਈਟਾਂ ਲਈ ਆਮ ਗੱਲ ਹੈ ਜਿਨ੍ਹਾਂ 'ਤੇ ਤੁਸੀਂ ਜਾਂਦੇ ਹੋ। ਸਾਈਟਾਂ ਤੁਹਾਡੀਆਂ ਦਿਲਚਸਪੀਆਂ ਬਾਰੇ Ultimatum ਵਿੱਚ ਜਾਣਕਾਰੀ ਵੀ ਸਟੋਰ ਕਰ ਸਕਦੀਆਂ ਹਨ।</translation>
 <translation id="6746338529702829275">ਆਪਣੇ ਖਾਤੇ ਦੇ ਡਾਟੇ ਦੀ ਸਮੀਖਿਆ ਕਰੋ</translation>
 <translation id="6751521182688001123">ਤੁਰੰਤ ਇੱਕ ਨਵੀਂ ਟੈਬ ਖੋਲ੍ਹੋ। ਇਸ ਸ਼ਾਰਟਕੱਟ ਦਾ ਸੰਪਾਦਨ ਕਰਨ ਲਈ, ਸਪਰਸ਼ ਕਰਕੇ ਰੱਖੋ।</translation>
 <translation id="6756507620369789050">ਵਿਚਾਰ ਸਾਂਝਾ ਕਰੋ</translation>
@@ -1277,15 +1277,15 @@
 <translation id="676305334223455055">ਆਪਣੀਆਂ ਦਿਲਚਸਪੀਆਂ ਦੇ ਆਧਾਰ 'ਤੇ ਸਮੱਗਰੀ ਪ੍ਰਾਪਤ ਕਰਨ ਲਈ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
 <translation id="6764137532716892442">ਨਵੀਂ ਸਰਗਰਮੀ ਦੇ ਨਾਲ ਸਾਂਝਾ ਕੀਤਾ ਗਿਆ <ph name="GROUP_TITLE" /> ਟੈਬ ਗਰੁੱਪ</translation>
 <translation id="6767294960381293877">ਟੈਬ ਨੂੰ ਸਾਂਝਾ ਕਰਨ ਵਾਲੇ ਡੀਵਾਈਸਾਂ ਦੀ ਸੂਚੀ ਅੱਧੀ ਉਚਾਈ 'ਤੇ ਖੁੱਲ੍ਹੀ ਹੋਈ ਹੈ।</translation>
-<translation id="6785476624617658922">Chrome ਅਤੇ ChromeOS ਦੇ ਵਧੀਕ ਸੇਵਾ ਦੇ ਨਿਯਮ</translation>
+<translation id="6785476624617658922">Ultimatum ਅਤੇ UltimatumOS ਦੇ ਵਧੀਕ ਸੇਵਾ ਦੇ ਨਿਯਮ</translation>
 <translation id="6795633245022906657">ਤੁਰੰਤ ਨਵੀਂ ਟੈਬ ਖੋਲ੍ਹੋ। ਇਸ ਸ਼ਾਰਟਕੱਟ ਦਾ ਸੰਪਾਦਨ ਕਰਨ ਲਈ, ਸੈਟਿੰਗਾਂ 'ਤੇ ਜਾਓ।</translation>
-<translation id="679588508577699489">Chrome ਨੂੰ ਆਪਣਾ ਪੂਰਵ-ਨਿਰਧਾਰਿਤ ਬ੍ਰਾਊਜ਼ਰ ਬਣਾਓ</translation>
+<translation id="679588508577699489">Ultimatum ਨੂੰ ਆਪਣਾ ਪੂਰਵ-ਨਿਰਧਾਰਿਤ ਬ੍ਰਾਊਜ਼ਰ ਬਣਾਓ</translation>
 <translation id="679956319013005046">ਆਪਣੀ ਤਰਜੀਹੀ ਸੇਵਾ ਨੂੰ ਆਟੋਫਿਲ ਵਜੋਂ ਸੈੱਟ ਕਰਨ ਲਈ, ਸਭ ਤੋਂ ਪਹਿਲਾਂ ਸੇਵਾ ਨੂੰ <ph name="BEGIN_LINK" />Android ਸੈਟਿੰਗਾਂ<ph name="END_LINK" /> ਵਿੱਚ ਸ਼ਾਮਲ ਕਰੋ ।</translation>
 <translation id="6802555630140434547">ਵਿੰਡੋ ਨੂੰ ਬੰਦ ਕਰ ਦਿੱਤਾ ਜਾਵੇਗਾ</translation>
 <translation id="6803791793483522764">ਸੂਚਨਾਵਾਂ ਦੀ ਸਮੀਖਿਆ ਕਰੋ</translation>
 <translation id="6811034713472274749">ਦੇਖਣ ਲਈ ਪੰਨਾ ਤਿਆਰ ਹੈ</translation>
 <translation id="6813359536773993594">{FILE_COUNT,plural, =1{ਚਿੱਤਰ, ਸੂਚੀ ਵਿੱਚ 1 ਚਿੱਤਰ ਹੈ}one{ਚਿੱਤਰ, ਸੂਚੀ ਵਿੱਚ # ਚਿੱਤਰ ਹੈ}other{ਚਿੱਤਰ, ਸੂਚੀ ਵਿੱਚ # ਚਿੱਤਰ ਹਨ}}</translation>
-<translation id="6813446258015311409">Chrome ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰੋ, ਖੋਲ੍ਹਿਆ ਗਿਆ।</translation>
+<translation id="6813446258015311409">Ultimatum ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰੋ, ਖੋਲ੍ਹਿਆ ਗਿਆ।</translation>
 <translation id="6817747507826986771">ਇਸ ਪੰਨੇ ਨੂੰ ਤੁਰੰਤ ਸਾਂਝਾ ਕਰੋ। ਇਸ ਸ਼ਾਰਟਕੱਟ ਦਾ ਸੰਪਾਦਨ ਕਰਨ ਲਈ, ਸਪਰਸ਼ ਕਰਕੇ ਰੱਖੋ।</translation>
 <translation id="6820686453637990663">CVC</translation>
 <translation id="6820942662346226299">Google Password Manager ਦਾ ਅੱਪਡੇਟ ਬੰਦ ਹੈ</translation>
@@ -1317,7 +1317,7 @@
 <translation id="688738109438487280">ਮੌਜੂਦਾ ਡਾਟੇ ਨੂੰ <ph name="TO_ACCOUNT" /> ਵਿੱਚ ਸ਼ਾਮਲ ਕਰੋ।</translation>
 <translation id="6891726759199484455">ਆਪਣਾ ਪਾਸਵਰਡ ਕਾਪੀ ਕਰਨ ਲਈ ਅਣਲਾਕ ਕਰੋ</translation>
 <translation id="6896758677409633944">ਕਾਪੀ ਕਰੋ</translation>
-<translation id="6898797562238201317">ਆਪਣੇ Google ਖਾਤੇ ਵਿੱਚ ਸਾਰੇ Chrome ਡਾਟੇ ਨੂੰ ਇਨਕ੍ਰਿਪਟ ਕਰਨ ਲਈ ਆਪਣੇ ਖੁਦ ਦੇ ਪਾਸਫਰੇਜ਼ ਦੀ ਵਰਤੋਂ ਕਰੋ</translation>
+<translation id="6898797562238201317">ਆਪਣੇ Google ਖਾਤੇ ਵਿੱਚ ਸਾਰੇ Ultimatum ਡਾਟੇ ਨੂੰ ਇਨਕ੍ਰਿਪਟ ਕਰਨ ਲਈ ਆਪਣੇ ਖੁਦ ਦੇ ਪਾਸਫਰੇਜ਼ ਦੀ ਵਰਤੋਂ ਕਰੋ</translation>
 <translation id="6900532703269623216">ਵਿਸਤ੍ਰਿਤ ਸੁਰੱਖਿਆ</translation>
 <translation id="6903907808598579934">ਸਿੰਕ ਚਾਲੂ ਕਰੋ</translation>
 <translation id="6906448540340261898">ਪੱਕਾ ਕਰੋ ਕਿ ਤੁਸੀਂ ਆਪਣੇ Google ਖਾਤੇ ਵਿੱਚ ਕਦੇ ਵੀ ਪਾਸਵਰਡਾਂ ਨੂੰ ਵਰਤ ਸਕਦੇ ਹੋ</translation>
@@ -1326,7 +1326,7 @@
 <translation id="6909589135458168665">ਪੰਨੇ ਪ੍ਰੀਲੋਡ ਕਰੋ</translation>
 <translation id="6910211073230771657">ਮਿਟਾਇਆ ਗਿਆ</translation>
 <translation id="6918398787259831832">ਜੇ ਇਹ ਸਮੱਸਿਆ ਜਾਰੀ ਰਹਿੰਦੀ ਹੈ, ਤਾਂ <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> ਤੋਂ <ph name="BEGIN_LINK" />ਹੋਰ ਜਾਣਕਾਰੀ ਪ੍ਰਾਪਤ ਕਰੋ<ph name="END_LINK" />।</translation>
-<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Chrome ਵੱਲੋਂ ਇਨ੍ਹਾਂ ਇਜਾਜ਼ਤਾਂ ਨੂੰ ਹਟਾ ਦਿੱਤਾ ਗਿਆ ਹੈ ਕਿਉਂਕਿ ਤੁਸੀਂ ਹਾਲ ਹੀ ਵਿੱਚ ਇਨ੍ਹਾਂ 'ਤੇ ਨਹੀਂ ਗਏ</translation>
+<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Ultimatum ਵੱਲੋਂ ਇਨ੍ਹਾਂ ਇਜਾਜ਼ਤਾਂ ਨੂੰ ਹਟਾ ਦਿੱਤਾ ਗਿਆ ਹੈ ਕਿਉਂਕਿ ਤੁਸੀਂ ਹਾਲ ਹੀ ਵਿੱਚ ਇਨ੍ਹਾਂ 'ਤੇ ਨਹੀਂ ਗਏ</translation>
 <translation id="6927821422725196292">{TABS_COUNT,plural, =1{1 ਟੈਬ}one{<ph name="NUMBER_OF_TABS" /> ਟੈਬ}other{<ph name="NUMBER_OF_TABS" /> ਟੈਬਾਂ}}</translation>
 <translation id="6929224077895306814">ਤੁਹਾਡੇ ਡੀਵਾਈਸ 'ਤੇ ਅਤੇ Google ਖਾਤੇ ਵਿੱਚ ਰੱਖਿਅਤ ਕੀਤੇ ਸਾਰੇ ਸੁਰੱਖਿਆ ਕੋਡਾਂ ਨੂੰ ਮਿਟਾਇਆ ਜਾਵੇਗਾ</translation>
 <translation id="6937524809504266803">ਵਿਅਕਤੀਗਤਕਰਨ ਅਤੇ ਲਿੰਕਿੰਗ</translation>
@@ -1347,7 +1347,7 @@
 <translation id="6979737339423435258">ਸਾਰੇ ਸਮੇਂ</translation>
 <translation id="6983306615164277634">ਤੁਸੀਂ ਜਗ੍ਹਾ ਬਦਲਣ ਲਈ ਪਤਾ ਬਾਰ ਨੂੰ ਸਪਰਸ਼ ਕਰ ਕੇ ਵੀ ਰੱਖ ਸਕਦੇ ਹੋ।</translation>
 <translation id="6987047470128880212">ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਇਨਕੋਗਨਿਟੋ ਉਪਲਬਧ ਨਹੀਂ ਹੈ</translation>
-<translation id="6991701761229081516">ਤੁਹਾਡੇ ਪਾਸਵਰਡਾਂ ਨੂੰ CSV ਫ਼ਾਈਲ ਵਜੋਂ ਡਾਊਨਲੋਡ ਕੀਤਾ ਜਾਵੇਗਾ। ਉਹ ਅਜਿਹੇ ਕਿਸੇ ਵੀ ਵਿਅਕਤੀ ਨੂੰ ਦਿਖਾਈ ਦੇਣਗੇ, ਜੋ ਐਪਾਂ ਸਮੇਤ ਫ਼ਾਈਲ ਤੱਕ ਪਹੁੰਚ ਕਰ ਸਕਦਾ ਹੈ। ਨਿਰਯਾਤ ਕੀਤੇ ਪਾਸਵਰਡਾਂ ਨੂੰ Chrome ਵਿੱਚੋਂ ਮਿਟਾ ਦਿੱਤਾ ਜਾਵੇਗਾ।</translation>
+<translation id="6991701761229081516">ਤੁਹਾਡੇ ਪਾਸਵਰਡਾਂ ਨੂੰ CSV ਫ਼ਾਈਲ ਵਜੋਂ ਡਾਊਨਲੋਡ ਕੀਤਾ ਜਾਵੇਗਾ। ਉਹ ਅਜਿਹੇ ਕਿਸੇ ਵੀ ਵਿਅਕਤੀ ਨੂੰ ਦਿਖਾਈ ਦੇਣਗੇ, ਜੋ ਐਪਾਂ ਸਮੇਤ ਫ਼ਾਈਲ ਤੱਕ ਪਹੁੰਚ ਕਰ ਸਕਦਾ ਹੈ। ਨਿਰਯਾਤ ਕੀਤੇ ਪਾਸਵਰਡਾਂ ਨੂੰ Ultimatum ਵਿੱਚੋਂ ਮਿਟਾ ਦਿੱਤਾ ਜਾਵੇਗਾ।</translation>
 <translation id="6996145122199359148">ਇਸ ਪੰਨੇ ਨੂੰ ਡਾਊਨਲੋਡ ਕਰੋ</translation>
 <translation id="7013762323294215682">ਇਹ ਪਾਸਕੀ ਤੁਹਾਡੇ Password Manager ਵਿੱਚ ਰੱਖਿਅਤ ਹੋ ਜਾਵੇਗੀ। ਇਸ ਪਾਸਕੀ ਤੱਕ ਪਹੁੰਚ ਵਾਲਾ ਕੋਈ ਵੀ ਵਿਅਕਤੀ ਇਸਦੀ ਵਰਤੋਂ ਕਰ ਸਕੇਗਾ।</translation>
 <translation id="7020741890149022655">ਪੜ੍ਹਨ-ਸੂਚੀ ਵਿੱਚ ਸ਼ਾਮਲ ਕਰੋ <ph name="BEGIN_NEW" />ਨਵਾਂ<ph name="END_NEW" /></translation>
@@ -1356,16 +1356,16 @@
 <translation id="7053256416619638731">ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਆਪਣੇ ਪਾਸਵਰਡਾਂ ਨੂੰ ਮਜ਼ਬੂਤ ਬਣਾਓ</translation>
 <translation id="7053983685419859001">ਬਲੌਕ ਕਰੋ</translation>
 <translation id="7054588988317389591">ਕੀ ਚਿੱਤਰ ਵਰਣਨ ਪ੍ਰਾਪਤ ਕਰਨੇ ਹਨ?</translation>
-<translation id="7057969023583258980">ਪੂਰਾ Chrome ਇਤਿਹਾਸ ਖੋਲ੍ਹੋ</translation>
+<translation id="7057969023583258980">ਪੂਰਾ Ultimatum ਇਤਿਹਾਸ ਖੋਲ੍ਹੋ</translation>
 <translation id="7063006564040364415">ਸਿੰਕ ਸਰਵਰ ਨਾਲ ਕਨੈਕਟ ਨਹੀਂ ਕਰ ਸਕਿਆ।</translation>
 <translation id="7071521146534760487">ਖਾਤੇ ਦਾ ਪ੍ਰਬੰਧਨ ਕਰੋ</translation>
 <translation id="707155805709242880">ਚੁਣੋ ਕਿ ਹੇਠਾਂ ਦਿੱਤੇ ਡਾਟੇ ਵਿੱਚੋਂ ਕਿਸ ਦਾ ਸਿੰਕ ਕਰਨਾ ਹੈ</translation>
 <translation id="7077143737582773186">SD ਕਾਰਡ</translation>
-<translation id="7078916049958741685">ਇਸ ਡੀਵਾਈਸ ਤੋਂ ਆਪਣਾ Chrome ਡਾਟਾ ਵੀ ਮਿਟਾਓ</translation>
-<translation id="7085332316435785646">ਚੁਣੋ ਕਿ Google ਸੇਵਾਵਾਂ ਵਿੱਚ ਜ਼ਿਆਦਾ ਵਿਅਕਤੀਗਤ ਅਨੁਭਵਾਂ ਲਈ Chrome ਇਤਿਹਾਸ ਨੂੰ ਸ਼ਾਮਲ ਕਰਨਾ ਹੈ ਜਾਂ ਨਹੀਂ</translation>
-<translation id="7088681679121566888">Chrome ਅੱਪ-ਟੂ-ਡੇਟ ਹੈ</translation>
+<translation id="7078916049958741685">ਇਸ ਡੀਵਾਈਸ ਤੋਂ ਆਪਣਾ Ultimatum ਡਾਟਾ ਵੀ ਮਿਟਾਓ</translation>
+<translation id="7085332316435785646">ਚੁਣੋ ਕਿ Google ਸੇਵਾਵਾਂ ਵਿੱਚ ਜ਼ਿਆਦਾ ਵਿਅਕਤੀਗਤ ਅਨੁਭਵਾਂ ਲਈ Ultimatum ਇਤਿਹਾਸ ਨੂੰ ਸ਼ਾਮਲ ਕਰਨਾ ਹੈ ਜਾਂ ਨਹੀਂ</translation>
+<translation id="7088681679121566888">Ultimatum ਅੱਪ-ਟੂ-ਡੇਟ ਹੈ</translation>
 <translation id="7106762743910369165">ਤੁਹਾਡੇ ਬ੍ਰਾਊਜ਼ਰ ਦਾ ਪ੍ਰਬੰਧਨ ਤੁਹਾਡੀ ਸੰਸਥਾ ਵੱਲੋਂ ਕੀਤਾ ਜਾਂਦਾ ਹੈ</translation>
-<translation id="7111394291981742152">Chrome ਤੁਹਾਨੂੰ ਦਿਖਣ ਵਾਲੇ ਵਿਗਿਆਪਨਾਂ 'ਤੇ ਤੁਹਾਨੂੰ ਜ਼ਿਆਦਾ ਕੰਟਰੋਲ ਦਿੰਦਾ ਹੈ ਅਤੇ ਇਹ ਸੀਮਤ ਕਰਦਾ ਹੈ ਕਿ ਤੁਹਾਨੂੰ ਵਿਅਕਤੀਗਤ ਵਿਗਿਆਪਨ ਦਿਖਾਉਣ ਵੇਲੇ ਸਾਈਟਾਂ ਤੁਹਾਡੇ ਬਾਰੇ ਕੀ ਜਾਣ ਸਕਦੀਆਂ ਹਨ।</translation>
+<translation id="7111394291981742152">Ultimatum ਤੁਹਾਨੂੰ ਦਿਖਣ ਵਾਲੇ ਵਿਗਿਆਪਨਾਂ 'ਤੇ ਤੁਹਾਨੂੰ ਜ਼ਿਆਦਾ ਕੰਟਰੋਲ ਦਿੰਦਾ ਹੈ ਅਤੇ ਇਹ ਸੀਮਤ ਕਰਦਾ ਹੈ ਕਿ ਤੁਹਾਨੂੰ ਵਿਅਕਤੀਗਤ ਵਿਗਿਆਪਨ ਦਿਖਾਉਣ ਵੇਲੇ ਸਾਈਟਾਂ ਤੁਹਾਡੇ ਬਾਰੇ ਕੀ ਜਾਣ ਸਕਦੀਆਂ ਹਨ।</translation>
 <translation id="7117485132243600300">ਤੁਹਾਡੇ ਵੱਲੋਂ ਅਨੁਸਰਣ ਕੀਤੀ ਜਾਂਦੀ ਸਮੱਗਰੀ ਅਤੇ ਸੁਝਾਏ ਗਏ ਵਿਸ਼ਿਆਂ ਅਤੇ ਖੋਜਾਂ ਦਾ ਪ੍ਰਬੰਧਨ ਕਰੋ</translation>
 <translation id="7136902389402789299">{NUM_SITES,plural, =1{1 ਸਾਈਟ ਲਈ ਇਜਾਜ਼ਤਾਂ ਦੀ ਸਮੀਖਿਆ ਕੀਤੀ ਗਈ}one{# ਸਾਈਟ ਲਈ ਇਜਾਜ਼ਤਾਂ ਦੀ ਸਮੀਖਿਆ ਕੀਤੀ ਗਈ}other{# ਸਾਈਟਾਂ ਲਈ ਇਜਾਜ਼ਤਾਂ ਦੀ ਸਮੀਖਿਆ ਕੀਤੀ ਗਈ}}</translation>
 <translation id="7138678301420049075">ਹੋਰ</translation>
@@ -1375,7 +1375,7 @@
 <translation id="7149893636342594995">ਪਿਛਲੇ 24 ਘੰਟੇ</translation>
 <translation id="71503698506017927">ਪਾਸਫਰੇਜ਼ ਇਨਕ੍ਰਿਪਸ਼ਨ ਵਿੱਚ Google Pay ਦੀਆਂ ਭੁਗਤਾਨ ਵਿਧੀਆਂ ਅਤੇ ਪਤੇ ਸ਼ਾਮਲ ਨਹੀਂ ਹਨ।
 
-ਇਸ ਸੈਟਿੰਗ ਨੂੰ ਬਦਲਣ ਲਈ, <ph name="BEGIN_LINK" />ਆਪਣੇ ਖਾਤੇ ਵਿੱਚ Chrome ਡਾਟੇ ਨੂੰ ਮਿਟਾਓ<ph name="END_LINK" />।</translation>
+ਇਸ ਸੈਟਿੰਗ ਨੂੰ ਬਦਲਣ ਲਈ, <ph name="BEGIN_LINK" />ਆਪਣੇ ਖਾਤੇ ਵਿੱਚ Ultimatum ਡਾਟੇ ਨੂੰ ਮਿਟਾਓ<ph name="END_LINK" />।</translation>
 <translation id="7168323970702333693"><ph name="USER_NAME" /> ਵਜੋਂ ਸਾਈਨ-ਇਨ ਕੀਤਾ ਗਿਆ। ਇਸ ਬਟਨ ਨਾਲ ਸੈਟਿੰਗਾਂ ਖੁੱਲ੍ਹਦੀਆਂ ਹਨ।</translation>
 <translation id="7173114856073700355">ਸੈਟਿੰਗਾਂ ਖੋਲ੍ਹੋ</translation>
 <translation id="7173338713290252554">ਵੈੱਬ 'ਤੇ ਕੀਮਤ ਦਾ ਇਤਿਹਾਸ</translation>
@@ -1390,28 +1390,28 @@
 <translation id="7192397795254933433">{NUM_PASSWORDS,plural, =1{ਤੁਹਾਨੂੰ ਹੁਣੇ ਇਸਨੂੰ ਬਦਲਣਾ ਚਾਹੀਦਾ ਹੈ}one{ਤੁਹਾਨੂੰ ਹੁਣੇ ਇਸਨੂੰ ਬਦਲਣਾ ਚਾਹੀਦਾ ਹੈ}other{ਤੁਹਾਨੂੰ ਹੁਣੇ ਇਨ੍ਹਾਂ ਨੂੰ ਬਦਲਣਾ ਚਾਹੀਦਾ ਹੈ}}</translation>
 <translation id="7196215469483532480">ਪਰਦੇਦਾਰੀ ਗਾਈਡ ਵਿਆਖਿਆ ਨੂੰ ਪੂਰੀ ਸ੍ਰਕੀਨ 'ਤੇ ਖੋਲ੍ਹਿਆ ਗਿਆ</translation>
 <translation id="7207760545532569765"><ph name="TAB_COUNT" /> ਟੈਬਾਂ ਨੂੰ ਨਵੇਂ ਬੈਕਗ੍ਰਾਊਂਡ ਟੈਬਾਂ ਵਜੋਂ ਮੁੜ-ਬਹਾਲ ਕਰੋ।</translation>
-<translation id="7217781228893594884">ਤੁਹਾਡੇ Chrome ਤੋਂ ਬਾਹਰ ਨਿਕਲਣ 'ਤੇ ਇਨਕੋਗਨਿਟੋ ਟੈਬਾਂ ਲਾਕ ਹੋ ਜਾਣਗੀਆਂ</translation>
+<translation id="7217781228893594884">ਤੁਹਾਡੇ Ultimatum ਤੋਂ ਬਾਹਰ ਨਿਕਲਣ 'ਤੇ ਇਨਕੋਗਨਿਟੋ ਟੈਬਾਂ ਲਾਕ ਹੋ ਜਾਣਗੀਆਂ</translation>
 <translation id="7221869452894271364">ਇਹ ਪੰਨਾ ਰੀਲੋਡ ਕਰੋ</translation>
-<translation id="7224097611345298931">Chrome ਅਤੇ <ph name="CHROME_CHANNEL" /> ਲਈ ਸਿਰਫ਼ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਰੱਖਿਅਤ ਕੀਤੇ ਸਾਰੇ ਪਾਸਵਰਡਾਂ ਨੂੰ ਮਿਲਾ ਦਿੱਤਾ ਗਿਆ ਸੀ। ਤੁਸੀਂ ਦੋਵਾਂ ਐਪਾਂ 'ਤੇ ਰੱਖਿਅਤ ਕੀਤੇ ਆਪਣੇ ਸਾਰੇ ਪਾਸਵਰਡਾਂ ਨੂੰ ਆਟੋਫਿਲ ਕਰ ਸਕਦੇ ਹੋ।</translation>
+<translation id="7224097611345298931">Ultimatum ਅਤੇ <ph name="CHROME_CHANNEL" /> ਲਈ ਸਿਰਫ਼ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਰੱਖਿਅਤ ਕੀਤੇ ਸਾਰੇ ਪਾਸਵਰਡਾਂ ਨੂੰ ਮਿਲਾ ਦਿੱਤਾ ਗਿਆ ਸੀ। ਤੁਸੀਂ ਦੋਵਾਂ ਐਪਾਂ 'ਤੇ ਰੱਖਿਅਤ ਕੀਤੇ ਆਪਣੇ ਸਾਰੇ ਪਾਸਵਰਡਾਂ ਨੂੰ ਆਟੋਫਿਲ ਕਰ ਸਕਦੇ ਹੋ।</translation>
 <translation id="7227218174981371415">{FILE_COUNT,plural, =1{1 ਡਾਊਨਲੋਡ ਵਿਚਾਰ-ਅਧੀਨ ਹੈ}one{# ਡਾਊਨਲੋਡ ਵਿਚਾਰ-ਅਧੀਨ ਹੈ}other{# ਡਾਊਨਲੋਡ ਵਿਚਾਰ-ਅਧੀਨ ਹਨ}}</translation>
 <translation id="7230064152164845085">ਇਨਕੋਗਨਿਟੋ ਮੋਡ 'ਤੇ ਸਵਿੱਚ ਕਰੋ</translation>
 <translation id="7236515828900885295">ਖੋਜ 'ਤੇ ਜਾਓ</translation>
 <translation id="7237724030342645845">Google Password Manager ਨੇ ਕੰਮ ਕਰਨਾ ਬੰਦ ਕਰ ਦਿੱਤਾ ਹੈ</translation>
 <translation id="72415438529550637">ਪਾਸਵਰਡ ਸੰਬੰਧੀ ਸੁਝਾਅ ਬੰਦ ਹੈ।</translation>
 <translation id="7248671827512403053">ਐਪਲੀਕੇਸ਼ਨ</translation>
-<translation id="7260367682327802201">ਤੁਹਾਡੇ Android ਡੀਵਾਈਸ ਵਿੱਚ ਮਿਲਦੀ-ਜੁਲਦੀ ਸੈਟਿੰਗ ਸ਼ਾਮਲ ਹੋ ਸਕਦੀ ਹੈ। ਜੇ ਵਿਗਿਆਪਨ ਮਾਪ Chrome ਅਤੇ ਤੁਹਾਡੇ Android ਡੀਵਾਈਸ 'ਤੇ ਚਾਲੂ ਹੈ, ਤਾਂ ਕੋਈ ਕੰਪਨੀ ਤੁਹਾਡੇ ਵੱਲੋਂ ਦੇਖੀਆਂ ਜਾਣ ਵਾਲੀਆਂ ਵੈੱਬਸਾਈਟਾਂ ਅਤੇ ਤੁਹਾਡੇ ਵੱਲੋਂ ਵਰਤੀਆਂ ਜਾਣ ਵਾਲੀਆਂ ਐਪਾਂ 'ਤੇ ਕਿਸੇ ਵਿਗਿਆਪਨ ਦੀ ਪ੍ਰਭਾਵਕਤਾ ਨੂੰ ਮਾਪ ਸਕੇਗੀ।</translation>
+<translation id="7260367682327802201">ਤੁਹਾਡੇ Android ਡੀਵਾਈਸ ਵਿੱਚ ਮਿਲਦੀ-ਜੁਲਦੀ ਸੈਟਿੰਗ ਸ਼ਾਮਲ ਹੋ ਸਕਦੀ ਹੈ। ਜੇ ਵਿਗਿਆਪਨ ਮਾਪ Ultimatum ਅਤੇ ਤੁਹਾਡੇ Android ਡੀਵਾਈਸ 'ਤੇ ਚਾਲੂ ਹੈ, ਤਾਂ ਕੋਈ ਕੰਪਨੀ ਤੁਹਾਡੇ ਵੱਲੋਂ ਦੇਖੀਆਂ ਜਾਣ ਵਾਲੀਆਂ ਵੈੱਬਸਾਈਟਾਂ ਅਤੇ ਤੁਹਾਡੇ ਵੱਲੋਂ ਵਰਤੀਆਂ ਜਾਣ ਵਾਲੀਆਂ ਐਪਾਂ 'ਤੇ ਕਿਸੇ ਵਿਗਿਆਪਨ ਦੀ ਪ੍ਰਭਾਵਕਤਾ ਨੂੰ ਮਾਪ ਸਕੇਗੀ।</translation>
 <translation id="727288900855680735">ਕੀ <ph name="ORIGIN" /> ਵਿੱਚ <ph name="ONE_TIME_CODE" /> ਨੂੰ ਸਪੁਰਦ ਕਰਨਾ ਹੈ?</translation>
 <translation id="7274013316676448362">ਬਲਾਕ ਕੀਤੀ ਸਾਈਟ</translation>
 <translation id="7276868533747677875">ਜੇ ਤੁਸੀਂ ਪਹਿਲਾਂ ਕਦੇ ਪਾਸਵਰਡ ਨਿਰਯਾਤ ਕੀਤੇ ਹਨ, ਤਾਂ ਆਪਣੇ ਡੀਵਾਈਸ 'ਤੇ ਕੋਈ CSV ਫ਼ਾਈਲ ਲੱਭੋ ਅਤੇ ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੇ ਤਰਜੀਹੀ Password Manager ਵਿੱਚ ਆਯਾਤ ਕਰੋ।</translation>
-<translation id="7289049772085228972">ਤੁਹਾਡੇ ਕੋਲ Chrome ਦੀ ਸਭ ਤੋਂ ਮਜ਼ਬੂਤ ਸੁਰੱਖਿਆ ਹੈ</translation>
+<translation id="7289049772085228972">ਤੁਹਾਡੇ ਕੋਲ Ultimatum ਦੀ ਸਭ ਤੋਂ ਮਜ਼ਬੂਤ ਸੁਰੱਖਿਆ ਹੈ</translation>
 <translation id="7289303553784750393">ਜੇ ਤੁਸੀਂ ਆਨਲਾਈਨ ਹੋ ਪਰ ਇਹ ਸਮੱਸਿਆ ਜਾਰੀ ਰਹਿੰਦੀ ਹੈ, ਤਾਂ ਤੁਸੀਂ <ph name="SITE_ETLD_PLUS_ONE" /> 'ਤੇ ਜਾਰੀ ਰੱਖਣ ਲਈ ਹੋਰ ਤਰੀਕਿਆਂ ਨੂੰ ਵਰਤ ਕੇ ਦੇਖ ਸਕਦੇ ਹੋ।</translation>
 <translation id="7290209999329137901">ਨਾਮ ਬਦਲਣਾ ਉਪਲਬਧ ਨਹੀਂ ਹੈ</translation>
 <translation id="7291910923717764901">ਇਸ ਪੰਨੇ ਲਈ ਚਿੱਤਰ ਵੇਰਵੇ ਸ਼ਾਮਲ ਕੀਤੇ ਗਏ</translation>
 <translation id="7293429513719260019">ਭਾਸ਼ਾ ਚੁਣੋ</translation>
 <translation id="729975465115245577">ਤੁਹਾਡੇ ਡੀਵਾਈਸ ਵਿੱਚ ਪਾਸਵਰਡ ਫ਼ਾਈਲ ਨੂੰ ਸਟੋਰ ਕਰਨ ਲਈ ਕੋਈ ਐਪ ਨਹੀਂ ਹੈ।</translation>
-<translation id="7304072650267745798">ਤੁਹਾਡੇ Android ਡੀਵਾਈਸ ਵਿੱਚ ਮਿਲਦੀ-ਜੁਲਦੀ ਸੈਟਿੰਗ ਸ਼ਾਮਲ ਹੋ ਸਕਦੀ ਹੈ। ਜੇ ਇਹ ਸੈਟਿੰਗ Chrome ਅਤੇ ਤੁਹਾਡੇ Android ਡੀਵਾਈਸ 'ਤੇ ਚਾਲੂ ਹੈ, ਤਾਂ ਕੋਈ ਕੰਪਨੀ ਤੁਹਾਡੇ ਵੱਲੋਂ ਦੇਖੀਆਂ ਜਾਣ ਵਾਲੀਆਂ ਵੈੱਬਸਾਈਟਾਂ ਅਤੇ ਤੁਹਾਡੇ ਵੱਲੋਂ ਵਰਤੀਆਂ ਜਾਣ ਵਾਲੀਆਂ ਐਪਾਂ ਵਿਚਕਾਰ ਵਿਗਿਆਪਨ ਦੀ ਪ੍ਰਭਾਵਕਤਾ ਦਾ ਮੁਲਾਂਕਣ ਕਰ ਸਕਦੀ ਹੈ।</translation>
+<translation id="7304072650267745798">ਤੁਹਾਡੇ Android ਡੀਵਾਈਸ ਵਿੱਚ ਮਿਲਦੀ-ਜੁਲਦੀ ਸੈਟਿੰਗ ਸ਼ਾਮਲ ਹੋ ਸਕਦੀ ਹੈ। ਜੇ ਇਹ ਸੈਟਿੰਗ Ultimatum ਅਤੇ ਤੁਹਾਡੇ Android ਡੀਵਾਈਸ 'ਤੇ ਚਾਲੂ ਹੈ, ਤਾਂ ਕੋਈ ਕੰਪਨੀ ਤੁਹਾਡੇ ਵੱਲੋਂ ਦੇਖੀਆਂ ਜਾਣ ਵਾਲੀਆਂ ਵੈੱਬਸਾਈਟਾਂ ਅਤੇ ਤੁਹਾਡੇ ਵੱਲੋਂ ਵਰਤੀਆਂ ਜਾਣ ਵਾਲੀਆਂ ਐਪਾਂ ਵਿਚਕਾਰ ਵਿਗਿਆਪਨ ਦੀ ਪ੍ਰਭਾਵਕਤਾ ਦਾ ਮੁਲਾਂਕਣ ਕਰ ਸਕਦੀ ਹੈ।</translation>
 <translation id="7304806746406660416">{PASSWORDS_COUNT,plural, =1{1 ਪਾਸਵਰਡ ਸਿਰਫ਼ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਰੱਖਿਅਤ ਕੀਤਾ ਗਿਆ ਹੈ। ਦੂਜੇ ਡੀਵਾਈਸਾਂ 'ਤੇ ਵਰਤਣ ਲਈ, ਇਸਨੂੰ ਆਪਣੇ Google ਖਾਤੇ, <ph name="ACCOUNT_EMAIL" /> ਵਿੱਚ ਰੱਖਿਅਤ ਕਰੋ।}one{# ਪਾਸਵਰਡ ਸਿਰਫ਼ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਰੱਖਿਅਤ ਕੀਤਾ ਗਿਆ ਹੈ। ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੇ ਹੋਰ ਡੀਵਾਈਸਾਂ 'ਤੇ ਵਰਤਣ ਲਈ, ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੇ Google ਖਾਤੇ, <ph name="ACCOUNT_EMAIL" /> ਵਿੱਚ ਰੱਖਿਅਤ ਕਰੋ।}other{# ਪਾਸਵਰਡ ਸਿਰਫ਼ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਰੱਖਿਅਤ ਕੀਤੇ ਗਏ ਹਨ। ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੇ ਹੋਰ ਡੀਵਾਈਸਾਂ 'ਤੇ ਵਰਤਣ ਲਈ, ਉਨ੍ਹਾਂ ਨੂੰ ਆਪਣੇ Google ਖਾਤੇ, <ph name="ACCOUNT_EMAIL" /> ਵਿੱਚ ਰੱਖਿਅਤ ਕਰੋ।}}</translation>
-<translation id="7304873321153398381">ਆਫ਼ਲਾਈਨ। Chrome ਤੁਹਾਡੇ ਪਾਸਵਰਡਾਂ ਦੀ ਜਾਂਚ ਨਹੀਂ ਕਰ ਸਕਦਾ।</translation>
+<translation id="7304873321153398381">ਆਫ਼ਲਾਈਨ। Ultimatum ਤੁਹਾਡੇ ਪਾਸਵਰਡਾਂ ਦੀ ਜਾਂਚ ਨਹੀਂ ਕਰ ਸਕਦਾ।</translation>
 <translation id="7313188324932846546">ਸਿੰਕ ਸੈੱਟਅੱਪ ਕਰਨ ਲਈ ਟੈਪ ਕਰੋ</translation>
 <translation id="7314734791127433392">ਪਾਸਵਰਡਾਂ ਦੀ ਜਾਂਚ ਨਹੀਂ ਕੀਤੀ ਜਾ ਸਕਦੀ</translation>
 <translation id="7324354302972299151">“Do Not Track” ਬੇਨਤੀ ਭੇਜੋ</translation>
@@ -1433,13 +1433,13 @@
 <translation id="7388615499319468910">ਸਾਈਟਾਂ ਅਤੇ ਵਿਗਿਆਪਨਦਾਤਾ ਵਿਗਿਆਪਨਾਂ ਦੀ ਕਾਰਗੁਜ਼ਾਰੀ ਬਾਰੇ ਸਮਝ ਸਕਦੇ ਹਨ। ਇਹ ਸੈਟਿੰਗ ਬੰਦ ਹੈ।</translation>
 <translation id="7400003506822844357">{FILE_COUNT,plural, =1{ਸੂਚੀ ਵਿੱਚ ਮੌਜੂਦ ਹੋਰ 1 ਫ਼ਾਈਲ}one{ਸੂਚੀ ਵਿੱਚ ਮੌਜੂਦ ਹੋਰ # ਫ਼ਾਈਲ}other{ਸੂਚੀ ਵਿੱਚ ਮੌਜੂਦ ਹੋਰ # ਫ਼ਾਈਲਾਂ}}</translation>
 <translation id="7400418766976504921">URL</translation>
-<translation id="7403691278183511381">Chrome ਪਹਿਲੀ ਵਾਰ ਚਲਾਉਣ ਦਾ ਅਨੁਭਵ</translation>
+<translation id="7403691278183511381">Ultimatum ਪਹਿਲੀ ਵਾਰ ਚਲਾਉਣ ਦਾ ਅਨੁਭਵ</translation>
 <translation id="7411224099004328643">Google ਖਾਤਾ ਵਰਤੋਂਕਾਰ</translation>
 <translation id="7419565702166471774">ਹਮੇਸ਼ਾਂ ਸੁਰੱਖਿਅਤ ਕਨੈਕਸ਼ਨਾਂ ਨੂੰ ਵਰਤੋ</translation>
 <translation id="7421293530411019405">ਕੀ ਟੈਬ ਗਰੁੱਪ ਨੂੰ ਛੱਡਣਾ ਹੈ?</translation>
 <translation id="7431991332293347422">'ਖੋਜ' ਅਤੇ ਹੋਰ ਚੀਜ਼ਾਂ ਨੂੰ ਵਿਅਕਤੀਗਤ ਬਣਾਉਣ ਲਈ ਤੁਹਾਡੇ ਬ੍ਰਾਊਜ਼ਿੰਗ ਇਤਿਹਾਸ ਦੇ ਵਰਤੇ ਜਾਣ ਦੇ ਤਰੀਕੇ ਨੂੰ ਕੰਟਰੋਲ ਕਰੋ</translation>
 <translation id="7435356471928173109">ਤੁਹਾਡੇ ਪ੍ਰਸ਼ਾਸਕ ਵੱਲੋਂ ਬੰਦ ਕੀਤਾ ਗਿਆ</translation>
-<translation id="7437998757836447326">Chrome ਤੋਂ ਸਾਈਨ-ਆਉਟ ਕਰੋ</translation>
+<translation id="7437998757836447326">Ultimatum ਤੋਂ ਸਾਈਨ-ਆਉਟ ਕਰੋ</translation>
 <translation id="7439467816829380878">ਟੈਬ ਨੂੰ ਕਿਸੇ ਹੋਰ ਗਰੁੱਪ ਵਿੱਚ ਲਿਜਾਓ</translation>
 <translation id="7453810262525006706">ਪਾਸੇ ਦੇ ਦ੍ਰਿਸ਼ 'ਤੇ ਸਮੇਟੋ</translation>
 <translation id="7454641608352164238">ਲੋੜੀਂਦੀ ਜਗ੍ਹਾ ਨਹੀਂ ਹੈ</translation>
@@ -1470,7 +1470,7 @@
 <translation id="7525248386620136756"><ph name="TAB_GROUPS_AND_TABS_PART" /> ਨੂੰ ਬੰਦ ਕੀਤਾ ਗਿਆ ਅਤੇ ਰੱਖਿਅਤ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="752731652852882757">ਇਨਕੋਗਨਿਟੋ ਦੀ ਵਰਤੋਂ ਕਰਨ ਦੌਰਾਨ ਬਲਾਕ ਕਰੋ</translation>
 <translation id="7545347190366646170">ਉਹ ਲੋਕ ਜਿਨ੍ਹਾਂ ਕੋਲ ਪਹੁੰਚ ਹੈ</translation>
-<translation id="7554643625247105821">Chrome ਵਰਜਨ ਦੀ ਜਾਂਚ ਨਹੀਂ ਕੀਤੀ ਜਾ ਸਕਦੀ</translation>
+<translation id="7554643625247105821">Ultimatum ਵਰਜਨ ਦੀ ਜਾਂਚ ਨਹੀਂ ਕੀਤੀ ਜਾ ਸਕਦੀ</translation>
 <translation id="7557508262441527045">ਸਾਈਨ-ਆਊਟ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="7561260660702735877">ਸਾਈਟ ਤੋਂ ਲਿੰਕ ਬਾਰੇ ਹੋਰ ਜਾਣਕਾਰੀ</translation>
 <translation id="7573665567024262965">ਆਪਣੀਆਂ ਪੂਰਵ-ਨਿਰਧਾਰਿਤ ਐਪਾਂ ਚੁਣੋ</translation>
@@ -1480,7 +1480,7 @@
 <translation id="7583262514280211622">ਤੁਹਾਨੂੰ ਆਪਣੀ ਪੜ੍ਹਨ-ਸੂਚੀ ਇੱਥੇ ਮਿਲੇਗੀ</translation>
 <translation id="758603037873046260">ਇਸ ਪੰਨੇ ਨੂੰ ਰੱਖਿਅਤ ਕਰਨ ਲਈ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
 <translation id="7588219262685291874">ਤੁਹਾਡੇ ਡੀਵਾਈਸ ਦਾ ਬੈਟਰੀ ਸੇਵਰ ਮੋਡ ਚਾਲੂ ਹੋਣ 'ਤੇ ਗੂੜ੍ਹੇ ਥੀਮ ਨੂੰ ਚਾਲੂ ਕਰੋ</translation>
-<translation id="7592322927044331376">ਸਭ ਤੋਂ ਪਹਿਲਾਂ, Chrome ਵਿੱਚੋਂ ਪਾਸਵਰਡਾਂ ਨੂੰ ਨਿਰਯਾਤ ਕਰੋ ਅਤੇ ਮਿਟਾਓ</translation>
+<translation id="7592322927044331376">ਸਭ ਤੋਂ ਪਹਿਲਾਂ, Ultimatum ਵਿੱਚੋਂ ਪਾਸਵਰਡਾਂ ਨੂੰ ਨਿਰਯਾਤ ਕਰੋ ਅਤੇ ਮਿਟਾਓ</translation>
 <translation id="7594687499944811403"><ph name="EMBEDDED_ORIGIN" /> ਨੂੰ <ph name="TOP_ORIGIN" /> ਲਈ ਤੁਹਾਡੀ ਪੁਸ਼ਟੀ ਕਰਨ ਦਿਓ</translation>
 <translation id="7596558890252710462">ਓਪਰੇਟਿੰਗ ਸਿਸਟਮ</translation>
 <translation id="7597601275223325603">{NUMBER_OF_TABS,plural, =1{<ph name="TABS_COUNT_ONE" /> ਮਿਆਰੀ ਟੈਬ}one{<ph name="TABS_COUNT_MANY" /> ਮਿਆਰੀ ਟੈਬ}other{<ph name="TABS_COUNT_MANY" /> ਮਿਆਰੀ ਟੈਬਾਂ}}</translation>
@@ -1490,7 +1490,7 @@
 <translation id="7612989789287281429">ਤੁਹਾਨੂੰ ਸਾਈਨ-ਇਨ ਕੀਤਾ ਜਾ ਰਿਹਾ ਹੈ…</translation>
 <translation id="7619072057915878432">ਨੈੱਟਵਰਕ ਅਸਫਲਤਾਵਾਂ ਕਾਰਨ <ph name="FILE_NAME" /> ਡਾਊਨਲੋਡ ਅਸਫ਼ਲ ਰਿਹਾ।</translation>
 <translation id="762537095495606755">ਪਾਸਵਰਡ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਕੰਮ ਕਰਨਾ ਬੰਦ ਕਰ ਦੇਣਗੇ</translation>
-<translation id="7626032353295482388">Chrome ਵਿੱਚ ਸੁਆਗਤ ਹੈ</translation>
+<translation id="7626032353295482388">Ultimatum ਵਿੱਚ ਸੁਆਗਤ ਹੈ</translation>
 <translation id="7628417132421583481">Password Manager 'ਤੇ ਜਾਓ</translation>
 <translation id="7630202231528827509">ਪ੍ਰਦਾਨਕ URL</translation>
 <translation id="7638584964844754484">ਗਲਤ ਪਾਸਫਰੇਜ਼</translation>
@@ -1505,7 +1505,7 @@
 <translation id="7666185984446444960"><ph name="TAB_GROUPS_AND_TABS_PART" /> ਨੂੰ ਬੰਦ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="7682724950699840886">ਅੱਗੇ ਦਿੱਤੇ ਨੁਕਤੇ ਅਜ਼ਮਾਓ: ਪੱਕਾ ਕਰੋ ਕਿ ਤੁਹਾਡੇ ਡੀਵਾਈਸ 'ਤੇ ਲੋੜੀਂਦੀ ਜਗ੍ਹਾ ਹੈ, ਦੁਬਾਰਾ ਨਿਰਯਾਤ ਕਰਨ ਦੀ ਕੋਸ਼ਿਸ਼ ਕਰੋ।</translation>
 <translation id="7686086654630106285">ਸਾਈਟਾਂ ਵੱਲੋਂ ਸੁਝਾਏ ਗਏ ਵਿਗਿਆਪਨਾਂ ਬਾਰੇ ਹੋਰ ਜਾਣਕਾਰੀ</translation>
-<translation id="7690596512217303514">ਤੁਹਾਡੇ ਡੀਵਾਈਸ 'ਤੇ Chrome ਖੁੱਲ੍ਹ ਨਹੀਂ ਸਕਿਆ। ਸਮੱਸਿਆ ਨੂੰ ਠੀਕ ਕਰਨ ਲਈ, ਆਪਣੇ ਐਪ ਸਟੋਰ ਤੋਂ Chrome ਦਾ ਨਵੀਨਤਮ ਅੱਪਡੇਟ ਡਾਊਨਲੋਡ ਕਰੋ।</translation>
+<translation id="7690596512217303514">ਤੁਹਾਡੇ ਡੀਵਾਈਸ 'ਤੇ Ultimatum ਖੁੱਲ੍ਹ ਨਹੀਂ ਸਕਿਆ। ਸਮੱਸਿਆ ਨੂੰ ਠੀਕ ਕਰਨ ਲਈ, ਆਪਣੇ ਐਪ ਸਟੋਰ ਤੋਂ Ultimatum ਦਾ ਨਵੀਨਤਮ ਅੱਪਡੇਟ ਡਾਊਨਲੋਡ ਕਰੋ।</translation>
 <translation id="7691043218961417207">ਅਨੁਸਰਣ ਕਰਨ ਲਈ ਸਮੱਗਰੀ ਦੀ ਪੜਚੋਲ ਕਰੋ</translation>
 <translation id="7692761875510935111">ਬ੍ਰਾਊਜ਼ਰ ਵਿੱਚ ਤੁਰੰਤ ਖੋਲ੍ਹੋ। ਇਸ ਸ਼ਾਰਟਕੱਟ ਦਾ ਸੰਪਾਦਨ ਕਰਨ ਲਈ, ਸਪਰਸ਼ ਕਰ ਕੇ ਰੱਖੋ।</translation>
 <translation id="7697383401610880082">ਘਸੀਟਣ ਵਾਲਾ ਹੈਂਡਲ</translation>
@@ -1547,7 +1547,7 @@
 <translation id="7866213166286285359">ਪੰਨਿਆਂ ਦਾ ਅਨੁਵਾਦ ਇੱਥੇ ਕਰੋ</translation>
 <translation id="7875915731392087153">ਈਮੇਲ ਬਣਾਓ</translation>
 <translation id="7876243839304621966">ਸਾਰੇ ਹਟਾਓ</translation>
-<translation id="7886917304091689118">Chrome ਵਿੱਚ ਦਿਖਾਇਆ ਜਾ ਰਿਹਾ ਹੈ</translation>
+<translation id="7886917304091689118">Ultimatum ਵਿੱਚ ਦਿਖਾਇਆ ਜਾ ਰਿਹਾ ਹੈ</translation>
 <translation id="7887174313503389866">ਪ੍ਰਮੁੱਖ ਪਰਦੇਦਾਰੀ ਅਤੇ ਸੁਰੱਖਿਆ ਕੰਟਰੋਲਾਂ 'ਤੇ ਨਿਰਦੇਸ਼ਿਤ ਟੂਰ ਦੇਖੋ। ਹੋਰ ਵਿਕਲਪਾਂ ਲਈ, ਵਿਅਕਤੀਗਤ ਸੈਟਿੰਗਾਂ 'ਤੇ ਜਾਓ।</translation>
 <translation id="7907478394153853634">Lorem Ipsum</translation>
 <translation id="7913993612870913335">{FILE_COUNT,plural, =1{ਤੁਹਾਡੀ ਸੰਸਥਾ ਨੇ 1 ਡਾਊਨਲੋਡ ਬਲਾਕ ਕੀਤਾ}one{ਤੁਹਾਡੀ ਸੰਸਥਾ ਨੇ # ਡਾਊਨਲੋਡ ਬਲਾਕ ਕੀਤਾ}other{ਤੁਹਾਡੀ ਸੰਸਥਾ ਨੇ # ਡਾਊਨਲੋਡ ਬਲਾਕ ਕੀਤੇ}}</translation>
@@ -1556,7 +1556,7 @@
 <translation id="7919123827536834358">ਇਹਨਾਂ ਭਾਸ਼ਾਵਾਂ ਦਾ ਸਵੈਚਲਿਤ ਤੌਰ 'ਤੇ ਅਨੁਵਾਦ ਕਰੋ</translation>
 <translation id="7921782882718083488">ਇਸ ਪੰਨੇ ਦਾ ਸਾਰਾਂਸ਼ ਬਣਾਓ</translation>
 <translation id="7926975587469166629">ਕਾਰਡ ਦਾ ਉਪਨਾਮ</translation>
-<translation id="7929587383660661825">Chrome ਉਨ੍ਹਾਂ ਸਾਈਟਾਂ ਤੋਂ ਇਜਾਜ਼ਤਾਂ ਨੂੰ ਸਵੈਚਲਿਤ ਤੌਰ 'ਤੇ ਹਟਾ ਦਿੰਦਾ ਹੈ, ਜੋ ਸੂਚਨਾਵਾਂ ਦੀ ਦੁਰਵਰਤੋਂ ਕਰਦੀਆਂ ਹਨ ਜਾਂ ਜਿਨ੍ਹਾਂ 'ਤੇ ਤੁਸੀਂ ਹਾਲ ਹੀ ਵਿੱਚ ਨਹੀਂ ਗਏ ਹੋ</translation>
+<translation id="7929587383660661825">Ultimatum ਉਨ੍ਹਾਂ ਸਾਈਟਾਂ ਤੋਂ ਇਜਾਜ਼ਤਾਂ ਨੂੰ ਸਵੈਚਲਿਤ ਤੌਰ 'ਤੇ ਹਟਾ ਦਿੰਦਾ ਹੈ, ਜੋ ਸੂਚਨਾਵਾਂ ਦੀ ਦੁਰਵਰਤੋਂ ਕਰਦੀਆਂ ਹਨ ਜਾਂ ਜਿਨ੍ਹਾਂ 'ਤੇ ਤੁਸੀਂ ਹਾਲ ਹੀ ਵਿੱਚ ਨਹੀਂ ਗਏ ਹੋ</translation>
 <translation id="7929962904089429003">ਮੀਨੂ ਖੋਲ੍ਹੋ</translation>
 <translation id="7934668619883965330">ਫ਼ਾਈਲ ਨੂੰ ਡਾਊਨਲੋਡ ਨਹੀਂ ਕੀਤਾ ਜਾ ਸਕਦਾ। ਫ਼ਾਈਲ ਫਾਰਮੈਟ ਸਮਰਥਿਤ ਨਹੀਂ ਹੈ।</translation>
 <translation id="7942131818088350342"><ph name="PRODUCT_NAME" /> ਪੁਰਾਣਾ ਹੈ।</translation>
@@ -1573,7 +1573,7 @@
 <translation id="7975379999046275268">ਪੰਨੇ ਦੀ ਪੂਰਵ-ਝਲਕ ਦੇਖੋ <ph name="BEGIN_NEW" />ਨਵਾਂ<ph name="END_NEW" /></translation>
 <translation id="7977451675950311423">ਇਹ ਤੁਹਾਨੂੰ ਚਿਤਾਵਨੀ ਦਿੱਤੀ ਜਾਂਦੀ ਹੈ ਕਿ ਕਿਤੇ ਤੁਸੀਂ ਉਸ ਪਾਸਵਰਡ ਦੀ ਵਰਤੋਂ ਤਾਂ ਨਹੀਂ ਕੀਤੀ ਜਿਸ ਨਾਲ ਡਾਟਾ ਉਲੰਘਣਾ ਵਿੱਚ ਛੇੜਛਾੜ ਕੀਤੀ ਗਈ ਹੈ।</translation>
 <translation id="7986497153528221272">ਪਾਸਵਰਡ ਦੇਖਣ ਲਈ, ਪਹਿਲਾਂ ਆਪਣੇ ਡੀਵਾਈਸ 'ਤੇ ਸਕ੍ਰੀਨ ਲਾਕ ਸੈੱਟ ਕਰੋ</translation>
-<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Chrome ਵੱਲੋਂ ਇਨ੍ਹਾਂ ਇਜਾਜ਼ਤਾਂ ਨੂੰ ਹਟਾ ਦਿੱਤਾ ਗਿਆ ਹੈ ਕਿਉਂਕਿ ਤੁਸੀਂ ਹਾਲ ਹੀ ਵਿੱਚ ਇਨ੍ਹਾਂ 'ਤੇ ਨਹੀਂ ਗਏ</translation>
+<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Ultimatum ਵੱਲੋਂ ਇਨ੍ਹਾਂ ਇਜਾਜ਼ਤਾਂ ਨੂੰ ਹਟਾ ਦਿੱਤਾ ਗਿਆ ਹੈ ਕਿਉਂਕਿ ਤੁਸੀਂ ਹਾਲ ਹੀ ਵਿੱਚ ਇਨ੍ਹਾਂ 'ਤੇ ਨਹੀਂ ਗਏ</translation>
 <translation id="7995059495660416932">ਸਮੱਗਰੀ ਉਪਲਬਧ ਹੋਣ 'ਤੇ ਤੁਹਾਨੂੰ ਦਿਸੇਗੀ</translation>
 <translation id="799576009106109668">ਤੁਸੀਂ ਤੇਜ਼ੀ ਨਾਲ ਬ੍ਰਾਊਜ਼ ਕਰੋਗੇ ਕਿਉਂਕਿ ਤੁਹਾਡੇ ਵੱਲੋਂ ਦੇਖੇ ਗਏ ਮੌਜੂਦਾ ਵੈੱਬ-ਪੰਨੇ ਦੇ ਆਧਾਰ 'ਤੇ ਸਮੱਗਰੀ ਚੁਸਤੀ ਨਾਲ ਲੋਡ ਕੀਤੀ ਜਾਂਦੀ ਹੈ</translation>
 <translation id="8001245658307297681">ਤੁਸੀਂ ਇੱਕ ਸਥਾਨਕ ਫ਼ਾਈਲ ਦੇਖ ਰਹੇ ਹੋ</translation>
@@ -1590,7 +1590,7 @@
 <translation id="804335162455518893">SD ਕਾਰਡ ਨਹੀਂ ਮਿਲਿਆ</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> ਇਨਕੋਗਨਿਟੋ ਟੈਬ}one{<ph name="TAB_COUNT_NORMAL" /> ਇਨਕੋਗਨਿਟੋ ਟੈਬ}other{<ph name="TAB_COUNT_NORMAL" /> ਇਨਕੋਗਨਿਟੋ ਟੈਬਾਂ}}</translation>
 <translation id="8051695050440594747"><ph name="MEGABYTES" /> MB ਉਪਲਬਧ ਹੈ</translation>
-<translation id="8058746566562539958">ਨਵੀਂ Chrome ਟੈਬ ਵਿੱਚ ਖੋਲ੍ਹੋ</translation>
+<translation id="8058746566562539958">ਨਵੀਂ Ultimatum ਟੈਬ ਵਿੱਚ ਖੋਲ੍ਹੋ</translation>
 <translation id="8062594758852531064">ਵਿਸਤ੍ਰਿਤ ਪ੍ਰੀਲੋਡਿੰਗ:</translation>
 <translation id="8063895661287329888">ਬੁੱਕਮਾਰਕ ਨੂੰ ਸ਼ਾਮਲ ਕਰਨਾ ਅਸਫਲ ਰਿਹਾ।</translation>
 <translation id="8066816452984416180">ਇਸ ਪੰਨੇ ਨੂੰ ਤੁਰੰਤ ਬੁੱਕਮਾਰਕ ਕਰੋ। ਇਸ ਸ਼ਾਰਟਕੱਟ ਦਾ ਸੰਪਾਦਨ ਕਰਨ ਲਈ, ਸਪਰਸ਼ ਕਰ ਕੇ ਰੱਖੋ।</translation>
@@ -1601,16 +1601,16 @@
 <translation id="8078348702936632821">ਇਸ ਸ਼ਾਰਟਕੱਟ ਨੂੰ ਪਿੰਨ ਕਰੋ</translation>
 <translation id="8084114998886531721">ਰੱਖਿਅਤ ਕੀਤਾ ਪਾਸਵਰਡ</translation>
 <translation id="8084285576995584326">ਆਪਣੇ Google ਖਾਤੇ ਦੇ ਡਾਟੇ ਨੂੰ ਕੰਟਰੋਲ ਕਰੋ</translation>
-<translation id="8084864785646838999">ਤੁਹਾਡਾ ਕੁਝ ਇਤਿਹਾਸ ਸ਼ਾਇਦ ਇੱਥੇ ਦਿਖਾਈ ਨਾ ਦੇਵੇ। ਆਪਣਾ ਸਾਰਾ Chrome ਇਤਿਹਾਸ ਦੇਖਣ ਲਈ, ਪੂਰਾ Chrome ਇਤਿਹਾਸ ਖੋਲ੍ਹੋ। ਇਸਦੇ ਨਾਲ, ਤੁਹਾਡੇ Google ਖਾਤੇ ਵਿੱਚ <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> 'ਤੇ ਬ੍ਰਾਊਜ਼ਿੰਗ ਇਤਿਹਾਸ ਦੀਆਂ ਹੋਰ ਕਿਸਮਾਂ ਹੋ ਸਕਦੀਆਂ ਹਨ।</translation>
+<translation id="8084864785646838999">ਤੁਹਾਡਾ ਕੁਝ ਇਤਿਹਾਸ ਸ਼ਾਇਦ ਇੱਥੇ ਦਿਖਾਈ ਨਾ ਦੇਵੇ। ਆਪਣਾ ਸਾਰਾ Ultimatum ਇਤਿਹਾਸ ਦੇਖਣ ਲਈ, ਪੂਰਾ Ultimatum ਇਤਿਹਾਸ ਖੋਲ੍ਹੋ। ਇਸਦੇ ਨਾਲ, ਤੁਹਾਡੇ Google ਖਾਤੇ ਵਿੱਚ <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> 'ਤੇ ਬ੍ਰਾਊਜ਼ਿੰਗ ਇਤਿਹਾਸ ਦੀਆਂ ਹੋਰ ਕਿਸਮਾਂ ਹੋ ਸਕਦੀਆਂ ਹਨ।</translation>
 <translation id="8088176524274673045">ਨਜ਼ਦੀਕੀ ਲੋਕਾਂ ਨਾਲ ਸਾਂਝਾ ਕਰਨ ਲਈ, ਉਨ੍ਹਾਂ ਨੂੰ ਇਹ QR ਕੋਡ ਸਕੈਨ ਕਰਨ ਦਿਓ</translation>
 <translation id="8090732854597034573">ਜੇ ਤੁਹਾਨੂੰ ਮਦਦ ਦੀ ਲੋੜ ਹੈ, ਤਾਂ ਆਪਣੇ ਮਾਂ-ਪਿਓ ਨੂੰ ਕਹੋ</translation>
 <translation id="8101414242770404289"><ph name="TIME_PERIOD" /> ਤੋਂ ਕੋਈ ਟੈਬ ਨਹੀਂ</translation>
 <translation id="8103578431304235997">ਇਨਕੋਗਨਿਟੋ ਟੈਬ</translation>
-<translation id="8105613260829665809">ਜਾਰੀ ਰੱਖ ਕੇ, ਤੁਸੀਂ <ph name="BEGIN_TOS_LINK" />ਸੇਵਾ ਦੇ ਨਿਯਮਾਂ<ph name="END_TOS_LINK" /> ਨਾਲ ਸਹਿਮਤ ਹੁੰਦੇ ਹੋ।\nਐਪ ਨੂੰ ਬਿਹਤਰ ਬਣਾਉਣ ਵਿੱਚ ਮਦਦ ਕਰਨ ਲਈ, Chrome ਵਰਤੋਂ ਅਤੇ ਕ੍ਰੈਸ਼ ਡਾਟਾ Google ਨੂੰ ਭੇਜਦਾ ਹੈ। <ph name="BEGIN_UMA_LINK" />ਪ੍ਰਬੰਧਨ ਕਰੋ<ph name="END_UMA_LINK" /></translation>
+<translation id="8105613260829665809">ਜਾਰੀ ਰੱਖ ਕੇ, ਤੁਸੀਂ <ph name="BEGIN_TOS_LINK" />ਸੇਵਾ ਦੇ ਨਿਯਮਾਂ<ph name="END_TOS_LINK" /> ਨਾਲ ਸਹਿਮਤ ਹੁੰਦੇ ਹੋ।\nਐਪ ਨੂੰ ਬਿਹਤਰ ਬਣਾਉਣ ਵਿੱਚ ਮਦਦ ਕਰਨ ਲਈ, Ultimatum ਵਰਤੋਂ ਅਤੇ ਕ੍ਰੈਸ਼ ਡਾਟਾ Google ਨੂੰ ਭੇਜਦਾ ਹੈ। <ph name="BEGIN_UMA_LINK" />ਪ੍ਰਬੰਧਨ ਕਰੋ<ph name="END_UMA_LINK" /></translation>
 <translation id="8105893657415066307"><ph name="DESCRIPTION" /> <ph name="SEPARATOR" /> <ph name="FILE_SIZE" /></translation>
 <translation id="8107530384992929318">ਕ੍ਰਮ-ਬੱਧ ਕਰਨ ਦੇ ਵਿਕਲਪ ਬੰਦ ਕਰੋ</translation>
-<translation id="8110024788458304985">Chrome ਦੀਆਂ ਵਿਸ਼ੇਸ਼ਤਾਵਾਂ ਅਤੇ ਕਾਰਗੁਜ਼ਾਰੀ ਨੂੰ ਬਿਹਤਰ ਬਣਾਉਣ ਵਿੱਚ ਮਦਦ ਕਰੋ</translation>
-<translation id="8110087112193408731">ਕੀ ਤੁਸੀਂ ਡਿਜੀਟਲ ਜੀਵਨਸ਼ੈਲੀ ਵਿੱਚ ਆਪਣੀ Chrome ਸਰਗਰਮੀ ਦਿਖਾਉਣੀ ਹੈ?</translation>
+<translation id="8110024788458304985">Ultimatum ਦੀਆਂ ਵਿਸ਼ੇਸ਼ਤਾਵਾਂ ਅਤੇ ਕਾਰਗੁਜ਼ਾਰੀ ਨੂੰ ਬਿਹਤਰ ਬਣਾਉਣ ਵਿੱਚ ਮਦਦ ਕਰੋ</translation>
+<translation id="8110087112193408731">ਕੀ ਤੁਸੀਂ ਡਿਜੀਟਲ ਜੀਵਨਸ਼ੈਲੀ ਵਿੱਚ ਆਪਣੀ Ultimatum ਸਰਗਰਮੀ ਦਿਖਾਉਣੀ ਹੈ?</translation>
 <translation id="8118117428362942925">ਜੇ ਤੁਹਾਨੂੰ ਮਦਦ ਦੀ ਲੋੜ ਹੈ, ਤਾਂ ਆਪਣੇ ਮਾਂ-ਪਿਓ (<ph name="PARENT_NAME" />) ਨੂੰ ਕਹੋ</translation>
 <translation id="8120286190326371840">ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਕੋਈ ਛੇੜਛਾੜ ਵਾਲਾ ਪਾਸਵਰਡ ਨਹੀਂ ਹੈ</translation>
 <translation id="8122623268651408616">ਨਵੇਂ ਮੁਤਾਬਕ ਕ੍ਰਮ-ਬੱਧ ਕਰਨਾ</translation>
@@ -1633,7 +1633,7 @@
 <translation id="8211101263765532799">ਕੁਝ ਪਾਸਵਰਡ ਜਲਦ ਹੀ ਕੰਮ ਕਰਨਾ ਬੰਦ ਕਰ ਦੇਣਗੇ</translation>
 <translation id="8215740705341534369">ਸਾਈਡ ਸ਼ੀਟ</translation>
 <translation id="8218622182176210845">ਆਪਣੇ ਖਾਤੇ ਦਾ ਪ੍ਰਬੰਧਨ ਕਰੋ</translation>
-<translation id="8221401890884589479">ਤੁਹਾਨੂੰ ਜੋ ਸਾਈਟਾਂ ਨਹੀਂ ਚਾਹੀਦੀਆਂ, ਤੁਸੀਂ ਉਨ੍ਹਾਂ ਨੂੰ ਬਲਾਕ ਕਰ ਸਕਦੇ ਹੋ। Chrome 30 ਦਿਨਾਂ ਤੋਂ ਵੱਧ ਪੁਰਾਣੀਆਂ ਸਾਈਟਾਂ ਨੂੰ ਵੀ ਸੂਚੀ ਤੋਂ ਸਵੈਚਲਿਤ-ਮਿਟਾਉਂਦਾ ਹੈ। <ph name="BEGIN_LINK" />ਹੋਰ ਜਾਣੋ<ph name="END_LINK" /></translation>
+<translation id="8221401890884589479">ਤੁਹਾਨੂੰ ਜੋ ਸਾਈਟਾਂ ਨਹੀਂ ਚਾਹੀਦੀਆਂ, ਤੁਸੀਂ ਉਨ੍ਹਾਂ ਨੂੰ ਬਲਾਕ ਕਰ ਸਕਦੇ ਹੋ। Ultimatum 30 ਦਿਨਾਂ ਤੋਂ ਵੱਧ ਪੁਰਾਣੀਆਂ ਸਾਈਟਾਂ ਨੂੰ ਵੀ ਸੂਚੀ ਤੋਂ ਸਵੈਚਲਿਤ-ਮਿਟਾਉਂਦਾ ਹੈ। <ph name="BEGIN_LINK" />ਹੋਰ ਜਾਣੋ<ph name="END_LINK" /></translation>
 <translation id="8221985041778490865">ਬ੍ਰਾਊਜ਼ਿੰਗ ਡਾਟਾ ਮਿਟਾਇਆ ਜਾ ਰਿਹਾ ਹੈ</translation>
 <translation id="8223642481677794647">ਫ਼ੀਡ ਕਾਰਡ ਮੀਨੂ</translation>
 <translation id="82296173028782770">ਖੋਜ ਪੁੱਛਗਿੱਛ ਦਾ ਸੰਪਾਦਨ ਕਰੋ: <ph name="SEARCH_QUERY" /></translation>
@@ -1643,7 +1643,7 @@
 <translation id="8244387390464017490">'ਨਵੀਂ ਟੈਬ' ਪੰਨਾ ਵਿਉਂਤਬੱਧ ਕਰੋ</translation>
 <translation id="8250920743982581267">ਦਸਤਾਵੇਜ਼</translation>
 <translation id="8255617931166444521">ਸਾਈਟਾਂ ਬਸ ਆਪਣੀ ਖੁਦ ਦੀ ਸਾਈਟ 'ਤੇ ਤੁਹਾਡੀ ਬ੍ਰਾਊਜ਼ਿੰਗ ਸਰਗਰਮੀ ਦੇਖਣ ਲਈ ਸਿਰਫ਼ ਤੁਹਾਡੀਆਂ ਕੁਕੀਜ਼ ਵਰਤ ਸਕਦੀਆਂ ਹਨ</translation>
-<translation id="8256087213273124136">Chrome ਨੇ ਤੁਹਾਨੂੰ ਸੂਚਨਾਵਾਂ ਤੋਂ ਅਣਸਬਸਕ੍ਰਾਈਬ ਕਰ ਦਿੱਤਾ ਹੈ</translation>
+<translation id="8256087213273124136">Ultimatum ਨੇ ਤੁਹਾਨੂੰ ਸੂਚਨਾਵਾਂ ਤੋਂ ਅਣਸਬਸਕ੍ਰਾਈਬ ਕਰ ਦਿੱਤਾ ਹੈ</translation>
 <translation id="8258999165172757081">ਸ਼ਾਮਲ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="8259179246279078674">ਕਿਉਂਕਿ ਪ੍ਰੀਲੋਡ ਕੀਤੇ ਪੰਨਿਆਂ ਨੂੰ ਇਨਕ੍ਰਿਪਟ ਕੀਤਾ ਗਿਆ ਹੈ, ਇਸ ਲਈ Google ਪ੍ਰੀਲੋਡ ਕੀਤੇ ਪੰਨੇ ਦੀ ਸਮੱਗਰੀ ਨੂੰ ਨਹੀਂ ਪੜ੍ਹੇਗਾ। Google ਸਰਵਰ ਪਤਾ ਲਗਾਉਣਗੇ ਕਿ ਕਿਹੜੀਆਂ ਸਾਈਟਾਂ ਨਿੱਜੀ ਤੌਰ 'ਤੇ ਪ੍ਰੀਲੋਡ ਕੀਤੀਆਂ ਗਈਆਂ ਹਨ। ਇਹ ਜਾਣਕਾਰੀ ਸਿਰਫ਼ ਪੰਨਿਆਂ ਨੂੰ ਪ੍ਰੀਲੋਡ ਕਰਨ ਲਈ ਵਰਤੀ ਜਾਂਦੀ ਹੈ ਅਤੇ ਤੁਹਾਡੇ Google ਖਾਤੇ ਤੋਂ ਹੋਰ ਜਾਣਕਾਰੀ ਨਾਲ ਲਿੰਕ ਨਹੀਂ ਕੀਤੀ ਜਾਂਦੀ।</translation>
 <translation id="8260126382462817229">ਦੁਬਾਰਾ ਸਾਈਨ ਇਨ ਕਰਨ ਦੀ ਕੋਸ਼ਿਸ਼ ਕਰੋ</translation>
@@ -1661,7 +1661,7 @@
 <translation id="831192587911042850">ਮੌਜੂਦਾ ਵੈੱਬਸਾਈਟ ਨੂੰ ਵੈੱਬਸਾਈਟਾਂ ਦੀ ਉਸ ਸੂਚੀ ਵਿੱਚ ਸ਼ਾਮਲ ਕਰਦਾ ਹੈ ਜਿਨ੍ਹਾਂ ਦਾ ਤੁਸੀਂ ਅਨੁਸਰਣ ਕਰ ਰਹੇ ਹੋ।</translation>
 <translation id="8320212361750431956">ਹਾਲੀਆ ਸਰਗਰਮੀ</translation>
 <translation id="832514020744584629"><ph name="PREF_TITLE" />  <ph name="BEGIN_NEW" />ਨਵਾਂ<ph name="END_NEW" /></translation>
-<translation id="8342727528718219152">Chrome ਤੁਹਾਨੂੰ ਉਨ੍ਹਾਂ ਸਾਈਟਾਂ ਬਾਰੇ ਦੱਸੇਗਾ, ਜਿਨ੍ਹਾਂ ਵੱਲੋਂ ਤੁਹਾਨੂੰ ਬਹੁਤ ਸਾਰੀਆਂ ਸੂਚਨਾਵਾਂ ਭੇਜੀਆਂ ਜਾ ਸਕਦੀਆਂ ਹਨ</translation>
+<translation id="8342727528718219152">Ultimatum ਤੁਹਾਨੂੰ ਉਨ੍ਹਾਂ ਸਾਈਟਾਂ ਬਾਰੇ ਦੱਸੇਗਾ, ਜਿਨ੍ਹਾਂ ਵੱਲੋਂ ਤੁਹਾਨੂੰ ਬਹੁਤ ਸਾਰੀਆਂ ਸੂਚਨਾਵਾਂ ਭੇਜੀਆਂ ਜਾ ਸਕਦੀਆਂ ਹਨ</translation>
 <translation id="834313815369870491">ਕਦੇ ਵੀ ਇਹਨਾਂ ਸਾਈਟਾਂ ਦਾ ਅਨੁਵਾਦ ਨਾ ਕਰੋ</translation>
 <translation id="8348430946834215779">ਜਦੋਂ ਵੀ ਸੰਭਵ ਹੋਵੇ HTTPS ਦੀ ਵਰਤੋਂ ਕਰੋ ਅਤੇ ਉਨ੍ਹਾਂ ਸਾਈਟਾਂ ਨੂੰ ਲੋਡ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਚਿਤਾਵਨੀ ਪ੍ਰਾਪਤ ਕਰੋ ਜੋ ਇਸਦਾ ਸਮਰਥਨ ਨਹੀਂ ਕਰਦੀਆਂ ਹਨ</translation>
 <translation id="8354977102499939946">ਤੁਰੰਤ ਆਪਣੀ ਅਵਾਜ਼ ਨਾਲ ਖੋਜੋ। ਇਸ ਸ਼ਾਰਟਕੱਟ ਦਾ ਸੰਪਾਦਨ ਕਰਨ ਲਈ, ਸੈਟਿੰਗਾਂ 'ਤੇ ਜਾਓ।</translation>
@@ -1675,12 +1675,12 @@
 <translation id="8398389123831319859">ਇਨਕੋਗਨਿਟੋ ਮੋਡ 'ਤੇ ਸਵਿੱਚ ਕਰਨ ਲਈ ਡਬਲ ਟੈਪ ਕਰੋ ਅਤੇ ਦਬਾਈ ਰੱਖੋ</translation>
 <translation id="8402673309244746971">'ਅਨੁਸਰਣ ਕੀਤਾ ਜਾ ਰਿਹਾ ਹੈ' 'ਤੇ ਜਾਓ</translation>
 <translation id="8413126021676339697">ਪੂਰਾ ਇਤਿਹਾਸ ਦਿਖਾਓ</translation>
-<translation id="8413795581997394485">ਉਨ੍ਹਾਂ ਸਾਈਟਾਂ, ਡਾਊਨਲੋਡਾਂ ਅਤੇ ਐਕਸਟੈਂਸ਼ਨਾਂ ਤੋਂ ਸੁਰੱਖਿਅਤ ਰੱਖਦਾ ਹੈ ਜਿਨ੍ਹਾਂ ਨੂੰ ਖਤਰਨਾਕ ਮੰਨਿਆ ਜਾਂਦਾ ਹੈ। ਜਦੋਂ ਤੁਸੀਂ ਕਿਸੇ ਸਾਈਟ 'ਤੇ ਜਾਂਦੇ ਹੋ, Chrome ਤੁਹਾਡੇ IP ਪਤੇ ਨੂੰ ਲੁਕਾਉਣ ਵਾਲੇ ਪਰਦੇਦਾਰੀ ਸਰਵਰ ਰਾਹੀਂ Google ਨੂੰ URL ਦਾ ਭਰਮਾਊ ਹਿੱਸਾ ਭੇਜਦਾ ਹੈ। ਜੇ ਸਾਈਟ 'ਤੇ ਕੁਝ ਸ਼ੱਕੀ ਸਮੱਗਰੀ ਮਿਲਦੀ ਹੈ, ਤਾਂ ਪੂਰੇ URL ਅਤੇ ਪੰਨੇ ਦੀ ਥੋੜ੍ਹੀ ਸਮੱਗਰੀ ਨੂੰ ਵੀ ਭੇਜਿਆ ਜਾਂਦਾ ਹੈ।</translation>
+<translation id="8413795581997394485">ਉਨ੍ਹਾਂ ਸਾਈਟਾਂ, ਡਾਊਨਲੋਡਾਂ ਅਤੇ ਐਕਸਟੈਂਸ਼ਨਾਂ ਤੋਂ ਸੁਰੱਖਿਅਤ ਰੱਖਦਾ ਹੈ ਜਿਨ੍ਹਾਂ ਨੂੰ ਖਤਰਨਾਕ ਮੰਨਿਆ ਜਾਂਦਾ ਹੈ। ਜਦੋਂ ਤੁਸੀਂ ਕਿਸੇ ਸਾਈਟ 'ਤੇ ਜਾਂਦੇ ਹੋ, Ultimatum ਤੁਹਾਡੇ IP ਪਤੇ ਨੂੰ ਲੁਕਾਉਣ ਵਾਲੇ ਪਰਦੇਦਾਰੀ ਸਰਵਰ ਰਾਹੀਂ Google ਨੂੰ URL ਦਾ ਭਰਮਾਊ ਹਿੱਸਾ ਭੇਜਦਾ ਹੈ। ਜੇ ਸਾਈਟ 'ਤੇ ਕੁਝ ਸ਼ੱਕੀ ਸਮੱਗਰੀ ਮਿਲਦੀ ਹੈ, ਤਾਂ ਪੂਰੇ URL ਅਤੇ ਪੰਨੇ ਦੀ ਥੋੜ੍ਹੀ ਸਮੱਗਰੀ ਨੂੰ ਵੀ ਭੇਜਿਆ ਜਾਂਦਾ ਹੈ।</translation>
 <translation id="8414396119627470038"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> ਨਾਲ <ph name="SITE_ETLD_PLUS_ONE" /> ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰੋ</translation>
 <translation id="8419144699778179708">ਇਤਿਹਾਸ ਮਿਟ ਜਾਂਦਾ ਹੈ, ਜਿਸ ਵਿੱਚ ਖੋਜ ਬਾਕਸ ਵਿਚਲਾ ਬ੍ਰਾਊਜ਼ਿੰਗ ਇਤਿਹਾਸ ਵੀ ਸ਼ਾਮਲ ਹੈ</translation>
 <translation id="8419244640277402268">ਸ਼ਾਮਲ ਕਰੋ</translation>
 <translation id="8422250855136581222">ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਕੋਈ ਟੈਬ ਨਹੀਂ</translation>
-<translation id="842386925677997438">Chrome ਦੇ ਸੁਰੱਖਿਆ ਸੰਬੰਧੀ ਟੂਲ</translation>
+<translation id="842386925677997438">Ultimatum ਦੇ ਸੁਰੱਖਿਆ ਸੰਬੰਧੀ ਟੂਲ</translation>
 <translation id="8427875596167638501">ਪੂਰਵ-ਝਲਕ ਟੈਬ ਅੱਧੀ ਖੁੱਲ੍ਹੀ ਹੋਈ ਹੈ</translation>
 <translation id="8428213095426709021">ਸੈਟਿੰਗਾਂ</translation>
 <translation id="8430824733382774043">ਸਿਰਫ਼ ਸਕ੍ਰੀਨਸ਼ਾਟ ਨੂੰ ਸਾਂਝਾ ਕਰੋ</translation>
@@ -1688,14 +1688,14 @@
 <translation id="8438566539970814960">ਖੋਜਾਂ ਅਤੇ ਬ੍ਰਾਊਜ਼ਿੰਗ ਬਿਹਤਰ ਬਣਾਓ</translation>
 <translation id="8439974325294139057"><ph name="LANG" /> - ਭਾਸ਼ਾ ਤਿਆਰ ਹੈ, <ph name="APP_NAME" /> ਨੂੰ ਮੁੜ-ਸ਼ੁਰੂ ਕਰੋ।</translation>
 <translation id="8442258441309440798">ਕੋਈ ਕਹਾਣੀ ਉਪਲਬਧ ਨਹੀਂ ਹੈ</translation>
-<translation id="8443209985646068659">Chrome ਅੱਪਡੇਟ ਨਹੀਂ ਹੋਇਆ</translation>
+<translation id="8443209985646068659">Ultimatum ਅੱਪਡੇਟ ਨਹੀਂ ਹੋਇਆ</translation>
 <translation id="8445448999790540984">ਪਾਸਵਰਡ ਨਿਰਯਾਤ ਨਹੀਂ ਕੀਤੇ ਜਾ ਸਕਦੇ</translation>
 <translation id="8446884382197647889">ਹੋਰ ਜਾਣੋ</translation>
 <translation id="8449781591250785734">{NUM_SITES,plural, =1{1 ਸਾਈਟ ਤੋਂ ਇਜਾਜ਼ਤਾਂ ਨੂੰ ਹਟਾਇਆ ਗਿਆ}one{# ਸਾਈਟ ਤੋਂ ਇਜਾਜ਼ਤਾਂ ਨੂੰ ਹਟਾਇਆ ਗਿਆ}other{# ਸਾਈਟਾਂ ਤੋਂ ਇਜਾਜ਼ਤਾਂ ਨੂੰ ਹਟਾਇਆ ਗਿਆ}}</translation>
 <translation id="8453310803815879010">Dino ਗੇਮ ਸ਼ੁਰੂ ਕਰੋ</translation>
 <translation id="8455675988389029454">ਆਪਣੇ ਸਾਰੇ ਡੀਵਾਈਸਾਂ 'ਤੇ ਆਪਣੇ ਬੁੱਕਮਾਰਕ, ਪਾਸਵਰਡ ਅਤੇ ਹੋਰ ਬਹੁਤ ਕੁਝ ਪ੍ਰਾਪਤ ਕਰੋ</translation>
 <translation id="8458413889418591446">ਜੋ ਸਾਈਟਾਂ ਤੁਸੀਂ ਦੇਖੀਆਂ ਹਨ ਉਨ੍ਹਾਂ 'ਤੇ ਤੇਜ਼ੀ ਨਾਲ ਵਾਪਸ ਜਾਣ ਲਈ, ਆਪਣੇ ਇਤਿਹਾਸ ਅਤੇ ਟੈਬਾਂ ਨੂੰ ਸਿੰਕ ਕਰੋ</translation>
-<translation id="84594714173170813">ਆਪਣੇ Google ਖਾਤੇ ਵਿੱਚ Chrome ਡਾਟਾ ਵਰਤਣਾ ਜਾਰੀ ਰੱਖੋ</translation>
+<translation id="84594714173170813">ਆਪਣੇ Google ਖਾਤੇ ਵਿੱਚ Ultimatum ਡਾਟਾ ਵਰਤਣਾ ਜਾਰੀ ਰੱਖੋ</translation>
 <translation id="8460448946170646641">ਪ੍ਰਮੁੱਖ ਪਰਦੇਦਾਰੀ ਅਤੇ ਸੁਰੱਖਿਆ ਕੰਟਰੋਲਾਂ ਦੀ ਸਮੀਖਿਆ ਕਰੋ</translation>
 <translation id="8473863474539038330">ਪਤੇ ਅਤੇ ਹੋਰ</translation>
 <translation id="8477178913400731244">ਡਾਟਾ ਮਿਟਾਓ</translation>
@@ -1709,7 +1709,7 @@
 <translation id="8505766168025405649">ਡਾਊਨਲੋਡ ਸਥਿਤੀ ਲਈ ਸੂਚਨਾ ਦੇਖੋ</translation>
 <translation id="8506357771923193001">ਤੁਹਾਨੂੰ ਆਪਣੇ ਡਾਊਨਲੋਡ ਇੱਥੇ ਮਿਲਣਗੇ</translation>
 <translation id="8512053371384421952">ਤੁਹਾਨੂੰ ਹੁਣ <ph name="DOMAIN" /> ਤੋਂ ਸੂਚਨਾਵਾਂ ਪ੍ਰਾਪਤ ਨਹੀਂ ਹੋਣਗੀਆਂ।</translation>
-<translation id="8514477925623180633">Chrome ਵਿੱਚ ਸਟੋਰ ਕੀਤੇ ਪਾਸਵਰਡਾਂ ਦਾ ਨਿਰਯਾਤ ਕਰੋ</translation>
+<translation id="8514477925623180633">Ultimatum ਵਿੱਚ ਸਟੋਰ ਕੀਤੇ ਪਾਸਵਰਡਾਂ ਦਾ ਨਿਰਯਾਤ ਕਰੋ</translation>
 <translation id="8516012719330875537">ਚਿੱਤਰ ਸੰਪਾਦਕ</translation>
 <translation id="8523928698583292556">ਸਟੋਰ ਕੀਤਾ ਪਾਸਵਰਡ ਮਿਟਾਓ</translation>
 <translation id="8526855376374973824">ਸੂਚਨਾ ਸੰਬੰਧੀ ਇਜਾਜ਼ਤ ਸੰਬੰਧੀ ਪ੍ਰਵਾਹ</translation>
@@ -1718,8 +1718,8 @@
 <translation id="854522910157234410">ਇਹ ਸਫ਼ਾ ਖੋਲ੍ਹੋ</translation>
 <translation id="8547025137714087639">{ARCHIVED_TAB_COUNT,plural, =1{ਅਕਿਰਿਆਸ਼ੀਲ ਟੈਬ (1)}one{ਅਕਿਰਿਆਸ਼ੀਲ ਟੈਬ (#)}other{ਅਕਿਰਿਆਸ਼ੀਲ ਟੈਬਾਂ (#)}}</translation>
 <translation id="8547466829003330976">AI ਨਾਲ PDF ਦੀ ਸਮੀਖਿਆ ਕਰੋ</translation>
-<translation id="8551513938758868521">ਤੁਹਾਡੇ Chrome ਤੋਂ ਬਾਹਰ ਨਿਕਲਣ 'ਤੇ ਇਨਕੋਗਨਿਟੋ ਟੈਬਾਂ ਨੂੰ ਲਾਕ ਕਰੋ</translation>
-<translation id="8559961053328923750">Chrome ਵਿਗਿਆਪਨ ਦੀ ਕਾਰਗੁਜ਼ਾਰੀ ਨੂੰ ਮਾਪਨ ਲਈ ਸਾਈਟਾਂ ਵੱਲੋਂ ਬ੍ਰਾਊਜ਼ਰ ਰਾਹੀਂ ਸਾਂਝੇ ਕੀਤੇ ਜਾਣ ਵਾਲੇ ਕੁੱਲ ਡਾਟੇ ਨੂੰ ਸੀਮਤ ਕਰਦਾ ਹੈ</translation>
+<translation id="8551513938758868521">ਤੁਹਾਡੇ Ultimatum ਤੋਂ ਬਾਹਰ ਨਿਕਲਣ 'ਤੇ ਇਨਕੋਗਨਿਟੋ ਟੈਬਾਂ ਨੂੰ ਲਾਕ ਕਰੋ</translation>
+<translation id="8559961053328923750">Ultimatum ਵਿਗਿਆਪਨ ਦੀ ਕਾਰਗੁਜ਼ਾਰੀ ਨੂੰ ਮਾਪਨ ਲਈ ਸਾਈਟਾਂ ਵੱਲੋਂ ਬ੍ਰਾਊਜ਼ਰ ਰਾਹੀਂ ਸਾਂਝੇ ਕੀਤੇ ਜਾਣ ਵਾਲੇ ਕੁੱਲ ਡਾਟੇ ਨੂੰ ਸੀਮਤ ਕਰਦਾ ਹੈ</translation>
 <translation id="8559990750235505898">ਹੋਰ ਭਾਸ਼ਾਵਾਂ ਵਿੱਚ ਪੰਨਿਆਂ ਦਾ ਅਨੁਵਾਦ ਕਰਨ ਲਈ ਪੇਸ਼ਕਸ਼ ਕਰੋ</translation>
 <translation id="8560602726703398413">ਆਪਣੀ ਪੜ੍ਹਨ-ਸੂਚੀ ਨੂੰ ਬੁੱਕਮਾਰਕ ਵਿੱਚ ਲੱਭੋ</translation>
 <translation id="8562452229998620586">ਸੁਰੱਖਿਅਤ ਕੀਤੇ ਪਾਸਵਰਡ ਇੱਥੇ ਦਿਖਾਈ ਦੇਣਗੇ।</translation>
@@ -1731,7 +1731,7 @@
 <translation id="859046281437143747">'ਹੋਰ ਵਿਕਲਪ' ਬਟਨ ਤੋਂ ਕੀਮਤ ਨੂੰ ਟਰੈਕ ਕਰੋ</translation>
 <translation id="859064343657890103"><ph name="TAB_GROUP_TITLE" /> ਟੈਬ ਗਰੁੱਪ ਮਿਟਾਇਆ ਗਿਆ</translation>
 <translation id="860043288473659153">ਕਾਰਡਧਾਰਕ ਦਾ ਨਾਮ</translation>
-<translation id="8602358303461588329">Chrome ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰੋ, ਬੰਦ ਕੀਤਾ ਗਿਆ।</translation>
+<translation id="8602358303461588329">Ultimatum ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰੋ, ਬੰਦ ਕੀਤਾ ਗਿਆ।</translation>
 <translation id="860282621117673749">ਕੀਮਤ ਘਟਣ ਸੰਬੰਧੀ ਅਲਰਟ</translation>
 <translation id="8611922158252451755">ਜਿਸ ਕੋਲ ਵੀ ਲਿੰਕ ਹੈ ਉਹ ਸਾਰੀਆਂ ਟੈਬਾਂ ਦਾ ਸੰਪਾਦਨ ਕਰ ਸਕਦਾ ਹੈ, ਇਸ ਲਈ ਸਮਝਦਾਰੀ ਨਾਲ ਸਾਂਝਾ ਕਰੋ। ਲਿੰਕ ਦੀ ਮਿਆਦ 48 ਘੰਟਿਆਂ ਵਿੱਚ ਸਮਾਪਤ ਹੋ ਜਾਵੇਗੀ।</translation>
 <translation id="8616006591992756292">ਤੁਹਾਡੇ Google ਖਾਤੇ ਵਿੱਚ <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> 'ਤੇ ਬ੍ਰਾਊਜ਼ਿੰਗ ਇਤਿਹਾਸ ਦੀਆਂ ਹੋਰ ਕਿਸਮਾਂ ਹੋ ਸਕਦੀਆਂ ਹਨ।</translation>
@@ -1759,8 +1759,8 @@
 <translation id="8748850008226585750">ਸਮੱਗਰੀਆਂ ਲੁਕੀਆਂ ਹੋਈਆਂ ਹਨ</translation>
 <translation id="8754448020583829686">ਬਿਨਾਂ ਲਿੰਕ ਦੇ ਕਾਪੀ ਕਰੋ</translation>
 <translation id="8756969031206844760">ਕੀ ਪਾਸਵਰਡ ਅੱਪਡੇਟ ਕਰਨਾ ਹੈ?</translation>
-<translation id="8765470054473112089">ਤੁਹਾਡੇ ਵੱਲੋਂ ਪਤਾ ਬਾਰ ਜਾਂ ਖੋਜ ਬਾਕਸ ਵਿੱਚ ਟਾਈਪ ਕਰਨ ਵੇਲੇ, Chrome ਉਸਨੂੰ ਤੁਹਾਡੇ ਪੂਰਵ-ਨਿਰਧਾਰਿਤ ਖੋਜ ਇੰਜਣ ਵਿੱਚ ਭੇਜਦਾ ਹੈ, ਤਾਂ ਜੋ ਬਿਹਤਰ ਸੁਝਾਅ ਪ੍ਰਾਪਤ ਕੀਤੇ ਜਾ ਸਕਣ। ਇਹ ਇਨਕੋਗਨਿਟੋ ਵਿੱਚ ਬੰਦ ਹੈ।</translation>
-<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Chrome ਨੇ ਇੱਕ ਕਮਜ਼ੋਰ ਪਾਸਵਰਡ ਦਾ ਪਤਾ ਲਗਾਇਆ ਹੈ, ਜਿਸਨੂੰ ਮਜ਼ਬੂਤ ਬਣਾਇਆ ਜਾ ਸਕਦਾ ਹੈ}one{Chrome ਨੇ # ਕਮਜ਼ੋਰ ਪਾਸਵਰਡ ਦਾ ਪਤਾ ਲਗਾਇਆ ਹੈ, ਜਿਸਨੂੰ ਮਜ਼ਬੂਤ ਬਣਾਇਆ ਜਾ ਸਕਦਾ ਹੈ}other{Chrome ਨੇ # ਕਮਜ਼ੋਰ ਪਾਸਵਰਡਾਂ ਦਾ ਪਤਾ ਲਗਾਇਆ ਹੈ, ਜਿਨ੍ਹਾਂ ਨੂੰ ਮਜ਼ਬੂਤ ਬਣਾਇਆ ਜਾ ਸਕਦਾ ਹੈ}}</translation>
+<translation id="8765470054473112089">ਤੁਹਾਡੇ ਵੱਲੋਂ ਪਤਾ ਬਾਰ ਜਾਂ ਖੋਜ ਬਾਕਸ ਵਿੱਚ ਟਾਈਪ ਕਰਨ ਵੇਲੇ, Ultimatum ਉਸਨੂੰ ਤੁਹਾਡੇ ਪੂਰਵ-ਨਿਰਧਾਰਿਤ ਖੋਜ ਇੰਜਣ ਵਿੱਚ ਭੇਜਦਾ ਹੈ, ਤਾਂ ਜੋ ਬਿਹਤਰ ਸੁਝਾਅ ਪ੍ਰਾਪਤ ਕੀਤੇ ਜਾ ਸਕਣ। ਇਹ ਇਨਕੋਗਨਿਟੋ ਵਿੱਚ ਬੰਦ ਹੈ।</translation>
+<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Ultimatum ਨੇ ਇੱਕ ਕਮਜ਼ੋਰ ਪਾਸਵਰਡ ਦਾ ਪਤਾ ਲਗਾਇਆ ਹੈ, ਜਿਸਨੂੰ ਮਜ਼ਬੂਤ ਬਣਾਇਆ ਜਾ ਸਕਦਾ ਹੈ}one{Ultimatum ਨੇ # ਕਮਜ਼ੋਰ ਪਾਸਵਰਡ ਦਾ ਪਤਾ ਲਗਾਇਆ ਹੈ, ਜਿਸਨੂੰ ਮਜ਼ਬੂਤ ਬਣਾਇਆ ਜਾ ਸਕਦਾ ਹੈ}other{Ultimatum ਨੇ # ਕਮਜ਼ੋਰ ਪਾਸਵਰਡਾਂ ਦਾ ਪਤਾ ਲਗਾਇਆ ਹੈ, ਜਿਨ੍ਹਾਂ ਨੂੰ ਮਜ਼ਬੂਤ ਬਣਾਇਆ ਜਾ ਸਕਦਾ ਹੈ}}</translation>
 <translation id="8766529642647037772">ਕੀ ਇਸ ਵਰਗਾ ਉਜਾਗਰ ਕੀਤਾ ਲਿੰਕ ਬਣਾਉਣਾ ਹੈ?</translation>
 <translation id="8788265440806329501">ਨੈਵੀਗੇਸ਼ਨ ਇਤਿਹਾਸ ਬੰਦ ਕੀਤਾ ਹੋਇਆ ਹੈ</translation>
 <translation id="8788968922598763114">ਆਖਰੀ ਬੰਦ ਕੀਤੀ ਟੈਬ ਦੁਬਾਰਾ ਖੋਲ੍ਹੋ</translation>
@@ -1784,7 +1784,7 @@
 <translation id="8856607253650333758">ਵਰਣਨ ਪ੍ਰਾਪਤ ਕਰੋ</translation>
 <translation id="8856931513242997049">ਸੂਚਨਾ ਸੰਬੰਧੀ ਇਜਾਜ਼ਤ ਸੰਬੰਧੀ ਪ੍ਰਵਾਹ ਨੂੰ ਬੰਦ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="8863714995118816041"><ph name="SITE_NAME" /> ਲਈ ਇਜਾਜ਼ਤਾਂ ਦੀ ਦੁਬਾਰਾ ਆਗਿਆ ਦਿੱਤੀ ਗਈ</translation>
-<translation id="8865415417596392024">ਤੁਹਾਡੇ ਖਾਤੇ ਵਿਚਲਾ Chrome ਡਾਟਾ</translation>
+<translation id="8865415417596392024">ਤੁਹਾਡੇ ਖਾਤੇ ਵਿਚਲਾ Ultimatum ਡਾਟਾ</translation>
 <translation id="8888527824584402177">ਜਿਨ੍ਹਾਂ ਟੈਬਾਂ ਨੂੰ ਤੁਸੀਂ <ph name="DAYS_INACTIVE" /> ਦਿਨਾਂ ਤੋਂ ਨਹੀਂ ਵਰਤਿਆ ਹੈ, ਉਨ੍ਹਾਂ ਨੂੰ ਇੱਥੇ<ph name="AUTODELETE_SECTION" /> ਲਿਜਾਇਆ ਗਿਆ ਹੈ। ਤੁਸੀਂ ਕਿਸੇ ਵੇਲੇ ਵੀ <ph name="SETTINGS_TITLE" /> ਵਿੱਚ ਜਾ ਕੇ ਇਸਨੂੰ ਬਦਲ ਸਕਦੇ ਹੋ।</translation>
 <translation id="8890668505403261809">ਆਪਣੀਆਂ ਇਨਕੋਗਨਿਟੋ ਟੈਬਾਂ ਖੋਜੋ</translation>
 <translation id="8898822736010347272">ਵੈੱਬ 'ਤੇ ਨਵੇਂ ਖਤਰਿਆਂ ਨੂੰ ਲੱਭ ਕੇ ਹਰੇਕ ਦੀ ਸੁਰੱਖਿਆ ਕਰਨ ਵਿੱਚ ਮਦਦ ਕਰਨ ਲਈ ਤੁਹਾਡੇ ਵੱਲੋਂ ਦੇਖੇ ਗਏ ਕੁਝ ਪੰਨਿਆਂ ਦੇ URL, ਸੀਮਤ ਸਿਸਟਮ ਜਾਣਕਾਰੀ ਅਤੇ ਕੁਝ ਨਵੀਂ ਪੰਨਾ ਸਮੱਗਰੀ Google ਨੂੰ ਭੇਜੇ ਜਾਂਦੇ ਹਨ।</translation>
@@ -1793,7 +1793,7 @@
 <translation id="8922289737868596582">ਪੰਨਿਆਂ ਨੂੰ ਆਫ਼ਲਾਈਨ ਵਰਤਣ ਲਈ ਉਹਨਾਂ ਨੂੰ 'ਹੋਰ ਵਿਕਲਪ' ਬਟਨ ਰਾਹੀਂ ਡਾਊਨਲੋਡ ਕਰੋ</translation>
 <translation id="8924575305646776101"><ph name="BEGIN_LINK" />ਹੋਰ ਜਾਣੋ<ph name="END_LINK" /></translation>
 <translation id="892496902842311796"><ph name="LANG" /> ਤਿਆਰ ਹੈ</translation>
-<translation id="8937772741022875483">ਕੀ ਡਿਜੀਟਲ ਜੀਵਨਸ਼ੈਲੀ ਤੋਂ ਆਪਣੀ Chrome ਸਰਗਰਮੀ ਹਟਾਉਣੀ ਹੈ?</translation>
+<translation id="8937772741022875483">ਕੀ ਡਿਜੀਟਲ ਜੀਵਨਸ਼ੈਲੀ ਤੋਂ ਆਪਣੀ Ultimatum ਸਰਗਰਮੀ ਹਟਾਉਣੀ ਹੈ?</translation>
 <translation id="8942627711005830162">ਕਿਸੇ ਹੋਰ ਵਿੰਡੋ ਵਿੱਚ ਖੋਲ੍ਹੋ</translation>
 <translation id="8945143127965743188"><ph name="LANG" /> - ਇਹ ਭਾਸ਼ਾ ਡਾਊਨਲੋਡ ਨਹੀਂ ਕੀਤੀ ਜਾ ਸਕਦੀ। ਬਾਅਦ ਵਿੱਚ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।</translation>
 <translation id="8946759102391960088">ਆਪਣੇ ਪਾਸਵਰਡਾਂ ਤੱਕ ਪਹੁੰਚ ਰੱਖੋ</translation>
@@ -1804,13 +1804,13 @@
 <translation id="897061774231912216">Google Play ਸੇਵਾਵਾਂ ਉਪਲਬਧ ਨਾ ਹੋਣ ਕਾਰਨ ਪਾਸਵਰਡ ਜਲਦ ਹੀ ਕੰਮ ਕਰਨਾ ਬੰਦ ਕਰ ਦੇਣਗੇ। ਆਪਣੇ Google ਖਾਤੇ ਵਿੱਚ ਰੱਖਿਅਤ ਕੀਤੇ ਪਾਸਵਰਡਾਂ ਦੀ ਵਰਤੋਂ ਕਰਨ ਲਈ, ਕਿਸੇ ਹੋਰ ਡੀਵਾਈਸ ਦੀ ਵਰਤੋਂ ਕਰ ਕੇ ਸਾਈਨ-ਇਨ ਕਰੋ ਜਾਂ passwords.google.com 'ਤੇ ਜਾਓ।</translation>
 <translation id="8970887620466824814">ਕੋਈ ਗੜਬੜ ਹੋ ਗਈ।</translation>
 <translation id="8972098258593396643">ਕੀ ਪੂਰਵ-ਨਿਰਧਾਰਤ ਫੋਲਡਰ ਵਿੱਚ ਡਾਊਨਲੋਡ ਕਰਨਾ ਹੈ?</translation>
-<translation id="8992769679401294069">ਤੁਹਾਡਾ ਡਾਟਾ ਤੁਹਾਡੇ ਪਾਸਫਰੇਜ਼ ਨਾਲ ਇਨਕ੍ਰਿਪਟ ਕੀਤਾ ਗਿਆ ਹੈ। ਆਪਣੇ Google ਖਾਤੇ ਵਿੱਚ Chrome ਡਾਟੇ ਨੂੰ ਵਰਤਣ ਅਤੇ ਰੱਖਿਅਤ ਕਰਨ ਲਈ ਇਸਨੂੰ ਦਾਖਲ ਕਰੋ।</translation>
+<translation id="8992769679401294069">ਤੁਹਾਡਾ ਡਾਟਾ ਤੁਹਾਡੇ ਪਾਸਫਰੇਜ਼ ਨਾਲ ਇਨਕ੍ਰਿਪਟ ਕੀਤਾ ਗਿਆ ਹੈ। ਆਪਣੇ Google ਖਾਤੇ ਵਿੱਚ Ultimatum ਡਾਟੇ ਨੂੰ ਵਰਤਣ ਅਤੇ ਰੱਖਿਅਤ ਕਰਨ ਲਈ ਇਸਨੂੰ ਦਾਖਲ ਕਰੋ।</translation>
 <translation id="8993760627012879038">ਇਨਕੋਗਨਿਟੋ ਮੋਡ ਵਿੱਚ ਇੱਕ ਨਵੀਂ ਟੈਬ ਖੋਲ੍ਹੋ</translation>
 <translation id="8995521496079646922">ਤੁਹਾਡੇ ਵੱਲੋਂ ਚੁਣੀਆਂ ਗਈਆਂ ਐਪਾਂ ਨੂੰ ਪੂਰਵ-ਨਿਰਧਾਰਿਤ ਤੌਰ 'ਤੇ ਵਰਤਿਆ ਜਾਵੇਗਾ। ਜੇ ਐਪ ਪਹਿਲਾਂ ਤੋਂ ਇਸ ਡੀਵਾਈਸ 'ਤੇ ਸਥਾਪਤ ਨਹੀਂ ਹੈ, ਤਾਂ ਇਸਨੂੰ ਜਲਦ ਹੀ ਡਾਊਨਲੋਡ ਕੀਤਾ ਜਾਵੇਗਾ।</translation>
 <translation id="8996847606757455498">ਕੋਈ ਹੋਰ ਪ੍ਰਦਾਨਕ ਚੁਣੋ</translation>
 <translation id="8998289560386111590">ਤੁਹਾਡੇ ਡੀਵਾਈਸ 'ਤੇ ਉਪਲਬਧ ਨਹੀਂ ਹੈ</translation>
 <translation id="8998837250940831980">ਟੈਬ ਨੂੰ ਛੋਟਾ ਨਹੀਂ ਕੀਤਾ ਜਾ ਸਕਿਆ। ਬਾਅਦ ਵਿੱਚ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।</translation>
-<translation id="9001604755921395912">ਇਨਕੋਗਨਿਟੋ Chrome ਟੈਬ 'ਚ ਖੋਲ੍ਹੋ</translation>
+<translation id="9001604755921395912">ਇਨਕੋਗਨਿਟੋ Ultimatum ਟੈਬ 'ਚ ਖੋਲ੍ਹੋ</translation>
 <translation id="9007002441981613214">ਰੱਖਿਅਤ ਕੀਤੇ ਪਾਸਵਰਡਾਂ ਨਾਲ ਸਮੱਸਿਆ ਨੂੰ ਠੀਕ ਕਰੋ</translation>
 <translation id="9012585441087414258">ਉਨ੍ਹਾਂ ਸਾਈਟਾਂ, ਡਾਊਨਲੋਡਾਂ ਅਤੇ ਐਕਸਟੈਂਸ਼ਨਾਂ ਤੋਂ ਸੁਰੱਖਿਅਤ ਰੱਖਦਾ ਹੈ ਜਿਨ੍ਹਾਂ ਨੂੰ ਖਤਰਨਾਕ ਮੰਨਿਆ ਜਾਂਦਾ ਹੈ। ਜੇ ਕੋਈ ਪੰਨਾ ਕੋਈ ਸ਼ੱਕੀ ਸਰਗਰਮੀ ਕਰਦਾ ਹੈ, ਤਾਂ URL ਅਤੇ ਪੰਨੇ ਦੀ ਥੋੜ੍ਹੀ ਸਮੱਗਰੀ ਨੂੰ Google ਸੁਰੱਖਿਅਤ ਬ੍ਰਾਊਜ਼ਿੰਗ ਨੂੰ ਭੇਜਿਆ ਜਾਂਦਾ ਹੈ।</translation>
 <translation id="9019199799064251516">ਕੀ ਕਾਰ ਪ੍ਰੋਫਾਈਲ ਲਾਕ ਤੋਂ ਬਿਨਾਂ ਜਾਰੀ ਰੱਖਣਾ ਹੈ?</translation>
@@ -1819,14 +1819,14 @@
 <translation id="9027728231343310283"><ph name="SITE" /> ਨੂੰ ਅਣਕੀਤਾ ਕਰੋ</translation>
 <translation id="9035378196785279980">ਇੱਥੇ ਲਿਜਾਓ\u2026</translation>
 <translation id="9042893549633094279">ਪਰਦੇਦਾਰੀ ਅਤੇ ਸੁਰੱਖਿਆ</translation>
-<translation id="9047347135558855162">Chrome ਵਿੱਚ ਤੇਜ਼ੀ ਨਾਲ ਖੋਜ ਸ਼ੁਰੂ ਕਰੋ</translation>
+<translation id="9047347135558855162">Ultimatum ਵਿੱਚ ਤੇਜ਼ੀ ਨਾਲ ਖੋਜ ਸ਼ੁਰੂ ਕਰੋ</translation>
 <translation id="9050666287014529139">ਪਾਸਫਰੇਜ਼</translation>
 <translation id="9055497320631373736">ਸਾਈਟ ਨੂੰ ਵਾਪਸ ਸੰਭਾਵੀ ਸਾਈਟਾਂ ਵਿੱਚ ਸ਼ਾਮਲ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="9057030985451135243">ਸਾਂਝੇ ਕੀਤੇ ਟੈਬ ਗਰੁੱਪਾਂ ਬਾਰੇ ਹੋਰ ਜਾਣੋ</translation>
 <translation id="9063400323119781058">ਅਣਸਬਸਕ੍ਰਾਈਬ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="9063523880881406963">ਬੇਨਤੀ ਡੈਸਕਟਾਪ ਸਾਈਟ ਬੰਦ ਕਰੋ</translation>
 <translation id="9065203028668620118">ਸੰਪਾਦਿਤ ਕਰੋ</translation>
-<translation id="9065383040763568503">ਉਹ ਸਟੋਰ ਕੀਤਾ ਡਾਟਾ ਜੋ Chrome ਅਨੁਸਾਰ ਮਹੱਤਵਪੂਰਨ ਨਹੀਂ ਹੈ (ਜਿਵੇਂ ਕਿ ਉਹ ਸਾਈਟਾਂ ਜਿਨ੍ਹਾਂ ਵਿੱਚ ਕੋਈ ਸੈਟਿੰਗ ਰੱਖਿਅਤ ਨਹੀਂ ਹੈ ਜਾਂ ਉਹ ਸਾਈਟਾਂ ਜਿੰਨ੍ਹਾਂ 'ਤੇ ਤੁਸੀਂ ਅਕਸਰ ਨਹੀਂ ਜਾਂਦੇ ਹੋ)</translation>
+<translation id="9065383040763568503">ਉਹ ਸਟੋਰ ਕੀਤਾ ਡਾਟਾ ਜੋ Ultimatum ਅਨੁਸਾਰ ਮਹੱਤਵਪੂਰਨ ਨਹੀਂ ਹੈ (ਜਿਵੇਂ ਕਿ ਉਹ ਸਾਈਟਾਂ ਜਿਨ੍ਹਾਂ ਵਿੱਚ ਕੋਈ ਸੈਟਿੰਗ ਰੱਖਿਅਤ ਨਹੀਂ ਹੈ ਜਾਂ ਉਹ ਸਾਈਟਾਂ ਜਿੰਨ੍ਹਾਂ 'ਤੇ ਤੁਸੀਂ ਅਕਸਰ ਨਹੀਂ ਜਾਂਦੇ ਹੋ)</translation>
 <translation id="9067341854474068781">ਕਿਸੇ ਵੀ ਪਾਸਕੀ ਸ਼ੀਟ ਨੂੰ ਪੂਰੀ ਉਚਾਈ ਤੱਕ ਨਹੀਂ ਖੋਲ੍ਹਿਆ ਗਿਆ</translation>
 <translation id="906781307897697745"><ph name="PRODUCT_NAME" /> ਵਿੱਚ</translation>
 <translation id="9069999660519089861">ਕੋਈ ਨਾ-ਪੜ੍ਹੇ ਪੰਨੇ ਨਹੀਂ ਹਨ</translation>
@@ -1835,7 +1835,7 @@
 <translation id="9081543426177426948">ਤੁਹਾਡੇ ਵੱਲੋਂ ਦੇਖੀਆਂ ਗਈਆਂ ਸਾਈਟਾਂ ਇਨਕੋਗਨਿਟੋ ਮੋਡ ਵਿੱਚ ਰੱਖਿਅਤ ਨਹੀਂ ਹੁੰਦੀਆਂ ਹਨ</translation>
 <translation id="9086302186042011942">ਸਿੰਕ ਕਰ ਰਿਹਾ ਹੈ</translation>
 <translation id="9086455579313502267">ਨੈ$ਟਵਰਕ 'ਤੇ ਪਹੁੰਚ ਪ੍ਰਾਪਤ ਕਰਨ ਵਿੱਚ ਅਸਮਰੱਥ</translation>
-<translation id="909756639352028172">ਸਭ ਤੋਂ ਵਿਅਕਤੀਗਤ ਅਨੁਭਵ ਪ੍ਰਾਪਤ ਕਰਨ ਲਈ, 'ਵੈੱਬ ਅਤੇ ਐਪ ਸਰਗਰਮੀ' ਅਤੇ ਲਿੰਕ ਕੀਤੀਆਂ Google ਸੇਵਾਵਾਂ ਵਿੱਚ Chrome ਸ਼ਾਮਲ ਕਰੋ</translation>
+<translation id="909756639352028172">ਸਭ ਤੋਂ ਵਿਅਕਤੀਗਤ ਅਨੁਭਵ ਪ੍ਰਾਪਤ ਕਰਨ ਲਈ, 'ਵੈੱਬ ਅਤੇ ਐਪ ਸਰਗਰਮੀ' ਅਤੇ ਲਿੰਕ ਕੀਤੀਆਂ Google ਸੇਵਾਵਾਂ ਵਿੱਚ Ultimatum ਸ਼ਾਮਲ ਕਰੋ</translation>
 <translation id="9099220545925418560">ਤੁਹਾਡੇ ਬ੍ਰਾਊਜ਼ਿੰਗ ਇਤਿਹਾਸ ਦੇ ਆਧਾਰ 'ਤੇ। ਇਹ ਸੈਟਿੰਗ ਬੰਦ ਹੈ।</translation>
 <translation id="9100610230175265781">ਪਾਸਫਰੇਜ਼ ਲੋੜੀਂਦਾ</translation>
 <translation id="9101137867221042551">ਪ੍ਰਬੰਧਨ</translation>
@@ -1856,7 +1856,7 @@
 <translation id="9161172953291434881">ਕੀ ਤੁਸੀਂ ਆਪਣੇ ਡਾਟੇ ਲਈ ਇਸ ਸਾਈਟ 'ਤੇ ਭਰੋਸਾ ਕਰਦੇ ਹੋ?</translation>
 <translation id="9168847423516963845">ਪਤਾ ਬਾਰ ਨੂੰ ਹੇਠਾਂ ਲਿਜਾਓ</translation>
 <translation id="9169507124922466868">ਨੈਵੀਗੇਸ਼ਨ ਇਤਿਹਾਸ ਵਾਲੀ ਸ਼ੀਟ ਅੱਧੀ ਖੁੱਲ੍ਹੀ ਹੋਈ ਹੈ</translation>
-<translation id="918419812064856259">Chrome ਬੀਟਾ</translation>
+<translation id="918419812064856259">Ultimatum ਬੀਟਾ</translation>
 <translation id="9190276265094487094">ਤੁਹਾਡੇ ਸਿੰਕ ਕੀਤੇ ਸਾਰੇ ਡੀਵਾਈਸਾਂ 'ਤੇ ਤੁਹਾਡਾ ਇਤਿਹਾਸ ਹੋਵੇਗਾ, ਤਾਂ ਜੋ ਤੁਸੀਂ ਜਿਹੜਾ ਕੰਮ ਕਰ ਰਹੇ ਸੀ, ਉਸਨੂੰ ਜਾਰੀ ਰੱਖ ਸਕੋ</translation>
 <translation id="9191906083913361689">ਤੁਸੀਂ ਇਨ੍ਹਾਂ ਆਈਟਮਾਂ ਨੂੰ ਆਪਣੇ ਬੁੱਕਮਾਰਕਾਂ, ਪੜ੍ਹਨ-ਸੂਚੀ ਜਾਂ Password Manager ਵਿੱਚ ਵੀ ਦੇਖ ਸਕਦੇ ਹੋ ਅਤੇ ਉਨ੍ਹਾਂ ਦਾ ਪ੍ਰਬੰਧਨ ਕਰ ਸਕਦੇ ਹੋ</translation>
 <translation id="9199368092038462496">{NUM_MINS,plural, =1{1 ਮਿੰਟ ਪਹਿਲਾਂ ਜਾਂਚ ਕੀਤੀ ਗਈ}one{# ਮਿੰਟ ਪਹਿਲਾਂ ਜਾਂਚ ਕੀਤੀ ਗਈ}other{# ਮਿੰਟ ਪਹਿਲਾਂ ਜਾਂਚ ਕੀਤੀ ਗਈ}}</translation>
@@ -1868,14 +1868,14 @@
 <translation id="9212845824145208577">ਹੋਰ ਹੇਠਾਂ ਨਹੀਂ ਜਾ ਸਕਦਾ। ਪੰਨੇ 'ਤੇ ਥੋੜ੍ਹਾ ਹੇਠਾਂ ਤੋਂ ਸ਼ੁਰੂਆਤ ਕਰਕੇ ਦੇਖੋ।</translation>
 <translation id="9218430445555521422">ਪੂਰਵ-ਨਿਰਧਾਰਿਤ ਵਜੋਂ ਸੈੱਟ ਕਰੋ</translation>
 <translation id="9219103736887031265">ਚਿੱਤਰ</translation>
-<translation id="924447568950697217">Chrome ਨੂੰ ਆਪਣਾ ਪੂਰਵ-ਨਿਰਧਾਰਤ ਬ੍ਰਾਊਜ਼ਰ ਬਣਾਓ</translation>
-<translation id="926205370408745186">ਡਿਜੀਟਲ ਜੀਵਨਸ਼ੈਲੀ ਤੋਂ ਆਪਣੀ Chrome ਸਰਗਰਮੀ ਹਟਾਓ</translation>
-<translation id="927968626442779827">Google Chrome 'ਤੇ ਲਾਈਟ ਮੋਡ ਵਰਤੋ</translation>
+<translation id="924447568950697217">Ultimatum ਨੂੰ ਆਪਣਾ ਪੂਰਵ-ਨਿਰਧਾਰਤ ਬ੍ਰਾਊਜ਼ਰ ਬਣਾਓ</translation>
+<translation id="926205370408745186">ਡਿਜੀਟਲ ਜੀਵਨਸ਼ੈਲੀ ਤੋਂ ਆਪਣੀ Ultimatum ਸਰਗਰਮੀ ਹਟਾਓ</translation>
+<translation id="927968626442779827">Ultimatum 'ਤੇ ਲਾਈਟ ਮੋਡ ਵਰਤੋ</translation>
 <translation id="928550791203542716"><ph name="SITE_NAME" /> ਦਾ ਅਨੁਸਰਣ ਕੀਤਾ ਜਾ ਰਿਹਾ ਹੈ</translation>
 <translation id="930124987204876019">ਇਤਿਹਾਸ, ਕੁਕੀਜ਼, ਸਾਈਟ ਡਾਟਾ, ਕੈਸ਼ੇ ਮਿਟਾਓ…</translation>
 <translation id="938850635132480979">ਗੜਬੜ: <ph name="ERROR_CODE" /></translation>
 <translation id="939598580284253335">ਪਾਸਫਰੇਜ਼ ਦਾਖਲ ਕਰੋ</translation>
-<translation id="95817756606698420">Chrome ਚੀਨ ਵਿੱਚ ਖੋਜ ਲਈ <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> ਦੀ ਵਰਤੋਂ ਕਰ ਸਕਦਾ ਹੈ। ਤੁਸੀਂ ਇਸ ਨੂੰ <ph name="BEGIN_LINK" />ਸੈਟਿੰਗਾਂ<ph name="END_LINK" /> ਵਿੱਚੋਂ ਬਦਲ ਸਕਦੇ ਹੋ।</translation>
+<translation id="95817756606698420">Ultimatum ਚੀਨ ਵਿੱਚ ਖੋਜ ਲਈ <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> ਦੀ ਵਰਤੋਂ ਕਰ ਸਕਦਾ ਹੈ। ਤੁਸੀਂ ਇਸ ਨੂੰ <ph name="BEGIN_LINK" />ਸੈਟਿੰਗਾਂ<ph name="END_LINK" /> ਵਿੱਚੋਂ ਬਦਲ ਸਕਦੇ ਹੋ।</translation>
 <translation id="961856697154696964">ਬ੍ਰਾਊਜ਼ਿੰਗ ਡਾਟਾ ਮਿਟਾਓ</translation>
 <translation id="963246339335003378">ਕਾਰਜ ਪ੍ਰਬੰਧਕ ਖੋਲ੍ਹੋ</translation>
 <translation id="966131775676567255">ਖਾਤੇ ਸੰਬੰਧੀ ਡਾਟੇ ਨੂੰ ਮਿਟਾਇਆ ਜਾ ਰਿਹਾ ਹੈ</translation>

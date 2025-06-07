@@ -3,21 +3,21 @@
 <translationbundle lang="tr">
 <translation id="1004806631856047384"><ph name="BEGIN_LINK1" />Android ayarları<ph name="END_LINK1" /> bölümünde yönetin
 
-Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
+Gelişmiş Koruma, şu Ultimatum ayarlarını kontrol eder:
 • "Her zaman güvenli bağlantılar kullan" ayarı açık.
 • "JavaScript optimize edici" kapalı. <ph name="BEGIN_LINK2" />Site istisnalarını yönetin<ph name="END_LINK2" /></translation>
 <translation id="1006017844123154345">İnternet'te aç</translation>
 <translation id="1036348656032585052">Kapat</translation>
 <translation id="1044891598689252897">Siteler normal şekilde çalışır</translation>
 <translation id="1070329623210597193">Bu sitenin görüntüleyebileceği veya düzenleyebileceği dosyalar</translation>
-<translation id="1073417869336441572">Üçüncü taraf çerezlerine neden izin verdiğinizi bize bildirerek Chrome'u iyileştirmemize yardımcı olun. <ph name="BEGIN_LINK" />Geri bildirim gönderin<ph name="END_LINK" /></translation>
+<translation id="1073417869336441572">Üçüncü taraf çerezlerine neden izin verdiğinizi bize bildirerek Ultimatum'u iyileştirmemize yardımcı olun. <ph name="BEGIN_LINK" />Geri bildirim gönderin<ph name="END_LINK" /></translation>
 <translation id="1074758928858737435">Sitelerin masaüstü sürümünü görüntülemeyi talep edebilirsiniz</translation>
-<translation id="1085696779717592361">Chrome'u Varsayılan Olarak Kullanın</translation>
+<translation id="1085696779717592361">Ultimatum'u Varsayılan Olarak Kullanın</translation>
 <translation id="1178581264944972037">Duraklat</translation>
 <translation id="1181037720776840403">Kaldır</translation>
 <translation id="1192844206376121885">Bu işlem, <ph name="ORIGIN" /> tarafından depolanan tüm verileri ve çerezleri siler.</translation>
 <translation id="1201402288615127009">İleri</translation>
-<translation id="1240190568154816272">Chrome ipuçları</translation>
+<translation id="1240190568154816272">Ultimatum ipuçları</translation>
 <translation id="1242008676835033345"><ph name="WEBSITE_URL" /> adresinde yerleşik</translation>
 <translation id="1263609676484797429">Uygulamalar &gt; Varsayılan uygulamalar'a dokunun.</translation>
 <translation id="1272079795634619415">Durdur</translation>
@@ -34,7 +34,7 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="1396327438254055134">Sitenin, V8 optimize ediciyi kullanmasına izin verin.</translation>
 <translation id="1409338233051621926">Uygulamalar'a, ardından "Varsayılan uygulamalar"a dokunun</translation>
 <translation id="1415402041810619267">URL kısaltıldı</translation>
-<translation id="1415855080660575082">Chrome'un son sekmelerinizi cihazınızla paylaşmasına izin verdiğinizde bu sekmeleri cihazınızın uygulama listesinde ve arama sonuçlarında görebilirsiniz. Bu özelliği Chrome ayarlarından etkinleştirebilir veya devre dışı bırakabilirsiniz.</translation>
+<translation id="1415855080660575082">Ultimatum'un son sekmelerinizi cihazınızla paylaşmasına izin verdiğinizde bu sekmeleri cihazınızın uygulama listesinde ve arama sonuçlarında görebilirsiniz. Bu özelliği Ultimatum ayarlarından etkinleştirebilir veya devre dışı bırakabilirsiniz.</translation>
 <translation id="1448064542941920355">Yakınlaştırmayı azalt</translation>
 <translation id="1464044141348608623">Cihazımı etkin olarak kullandığımda sitelerin bilmesine izin verme</translation>
 <translation id="146867109637325312">{COUNT,plural, =1{<ph name="SITE_COUNT" /> site}other{<ph name="SITE_COUNT" /> site}}</translation>
@@ -43,7 +43,7 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="1510341833810331442">Sitelerin cihazınıza veri kaydetmesine izin verilmiyor</translation>
 <translation id="1538031354170655462">Siteler, yakındaki takip cihazları veya diğer cihazlarla çalışmak (ör. rozetleri taramak veya temassız ödeme yapmak) için genellikle Near Field Communication (NFC) teknolojisini kullanır</translation>
 <translation id="1547123415014299762">Üçüncü taraf çerezlerine izin verilir</translation>
-<translation id="1569054338208717605">Chrome'un V8 motoruyla siteleri hızlandırın. Ancak bu durumda Chrome, saldırılara karşı biraz daha dirençsiz hale gelir</translation>
+<translation id="1569054338208717605">Ultimatum'un V8 motoruyla siteleri hızlandırın. Ancak bu durumda Ultimatum, saldırılara karşı biraz daha dirençsiz hale gelir</translation>
 <translation id="1593426485665524382">Ekranın üst kısmına yakın bir yerde yeni işlemler mevcut</translation>
 <translation id="1615755956145364867">Siteler korunan içerikleri oynatmak isteyebilir</translation>
 <translation id="1620510694547887537">Kamera</translation>
@@ -64,8 +64,8 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="1779089405699405702">Görsel kod çözücüsü</translation>
 <translation id="1785415724048343560">En iyi deneyim için önerilir</translation>
 <translation id="1796588414813960292">Ses kullanılmasını gerektiren özellikler çalışmaz</translation>
-<translation id="1799920918471566157">Chrome ipuçları</translation>
-<translation id="1816835383954230954">Etkinleştirildiğinde Chrome daha hızlı çalışır ve JavaScript kullanan özellikler tasarlandığı şekilde çalışır. Devre dışı bırakılması performansı düşürür ancak V8'i saldırılara karşı daha dirençli hale getirir.</translation>
+<translation id="1799920918471566157">Ultimatum ipuçları</translation>
+<translation id="1816835383954230954">Etkinleştirildiğinde Ultimatum daha hızlı çalışır ve JavaScript kullanan özellikler tasarlandığı şekilde çalışır. Devre dışı bırakılması performansı düşürür ancak V8'i saldırılara karşı daha dirençli hale getirir.</translation>
 <translation id="1818308510395330587"><ph name="APP_NAME" /> uygulamasının artırılmış gerçekliği (AR) kullanması için <ph name="BEGIN_LINK" />Android Ayarlarında<ph name="END_LINK" /> kamerayı da açın.</translation>
 <translation id="1887786770086287077">Konum erişimi bu cihaz için kapalı. Konum erişimini <ph name="BEGIN_LINK" />Android Ayarları<ph name="END_LINK" />'ndan açın.</translation>
 <translation id="1906181697255754968">Çalışmanızı otomatik olarak kaydetme gibi özelliklerin kullanılması için siteler genellikle cihazınızdaki dosyalar ile klasörlere erişir</translation>
@@ -109,7 +109,7 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="2289270750774289114">Bir site yakındaki Bluetooth cihazları bulmak istediğinde sor (önerilir)</translation>
 <translation id="2315043854645842844">İstemci tarafı sertifika seçimi, işletim sistemi tarafından desteklenmiyor.</translation>
 <translation id="2359808026110333948">Devam</translation>
-<translation id="2379925928934107488">Mümkünse Chrome koyu tema kullandığında sitelere de koyu tema uygulayın</translation>
+<translation id="2379925928934107488">Mümkünse Ultimatum koyu tema kullandığında sitelere de koyu tema uygulayın</translation>
 <translation id="2390272837142897736">Yakınlaştırmayı artır</translation>
 <translation id="2402980924095424747"><ph name="MEGABYTES" /> MB</translation>
 <translation id="2404630663942400771">{PERMISSIONS_SUMMARY_ALLOWED,plural, =1{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> ve <ph name="NUM_MORE" /> tanesi için daha izin verildi}other{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> ve <ph name="NUM_MORE" /> tanesi için daha izin verildi}}</translation>
@@ -118,7 +118,7 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="2438120137003069591">Bu sitenin, üçüncü taraf çerezlerini kullanmasına geçici olarak izin verdiniz. Bu durumda, internette gezinirken daha az korunursunuz ancak site özelliklerinin beklendiği gibi çalışma olasılığı daha yüksektir. <ph name="BEGIN_LINK" />Geri bildirim gönderin<ph name="END_LINK" /></translation>
 <translation id="244264527810019436">Bazı sitelerdeki özellikler Gizli modda çalışmayabilir</translation>
 <translation id="2442870161001914531">Her zaman masaüstü sitesini iste</translation>
-<translation id="2445311670906052406">Chrome artık son sekmelerinizi cihazınızla paylaşıyor. Bu sekmeleri cihazınızın uygulama listesinde ve arama sonuçlarında görebilirsiniz. Bu özelliği Chrome ayarlarından istediğiniz zaman kapatabilirsiniz.</translation>
+<translation id="2445311670906052406">Ultimatum artık son sekmelerinizi cihazınızla paylaşıyor. Bu sekmeleri cihazınızın uygulama listesinde ve arama sonuçlarında görebilirsiniz. Bu özelliği Ultimatum ayarlarından istediğiniz zaman kapatabilirsiniz.</translation>
 <translation id="245322989586167203">Ağınızı ayarlama gibi veri aktarımı özelliklerinin kullanılması için siteler genellikle seri bağlantı noktalarına bağlanır</translation>
 <translation id="2469312991797799607">Bu işlem, <ph name="ORIGIN" /> ve altındaki tüm sitelere ait verilerin ve çerezlerin tamamını temizler</translation>
 <translation id="2482878487686419369">Bildirimler</translation>
@@ -143,14 +143,14 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="2685514716378236873">İzin Verilmiyor</translation>
 <translation id="2713106313042589954">Kamerayı kapat</translation>
 <translation id="2717722538473713889">E-posta adresleri</translation>
-<translation id="2726059656860238749">Chrome'u çok amaçlı adres çubuğu odaklı başlatın. Böylece, düşük özellikli cihazlarda başlatma süresi kısalır.</translation>
+<translation id="2726059656860238749">Ultimatum'u çok amaçlı adres çubuğu odaklı başlatın. Böylece, düşük özellikli cihazlarda başlatma süresi kısalır.</translation>
 <translation id="2750481671343847896">Siteler, kimlik hizmetlerinden gelen oturum açma istemlerini gösterebilir.</translation>
 <translation id="2787357173144933081">Çok amaçlı adres çubuğuna hızlı başlangıç</translation>
 <translation id="2789132527330338807">Siteler, çevrenizin 3D haritasını oluşturmak veya kameranızın konumunu takip etmek isteyebilir</translation>
 <translation id="2790501146643349491">Bu düğme açıkken yeni kapatılan siteler veri gönderip alma işlemini bitirebilir. Düğme kapalıyken yeni kapatılan siteler veri gönderip alma işlemini bitiremez.</translation>
 <translation id="2795716239552913152">Yerel haberler veya yakındaki mağazalar gibi alakalı özellikleri ya da bilgileri sunmak için siteler genellikle konumunuzu kullanır</translation>
 <translation id="2802908157808345702">Sitelerin pop-up'lar göndermesine veya yönlendirmeler kullanmasına izin verme</translation>
-<translation id="2814830417943086299">Chrome artık son sekmelerinizi cihazınızın uygulama listesinde ve arama sonuçlarında gösteriyor. Bu özelliği Chrome ayarlarından istediğiniz zaman kapatabilirsiniz.</translation>
+<translation id="2814830417943086299">Ultimatum artık son sekmelerinizi cihazınızın uygulama listesinde ve arama sonuçlarında gösteriyor. Bu özelliği Ultimatum ayarlarından istediğiniz zaman kapatabilirsiniz.</translation>
 <translation id="2822354292072154809"><ph name="CHOSEN_OBJECT_NAME" /> için tüm site izinlerini sıfırlamak istediğinizden emin misiniz?</translation>
 <translation id="2850913818900871965">Mobil cihaz görünümü iste</translation>
 <translation id="2870560284913253234">Site</translation>
@@ -187,7 +187,7 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="3242646949159196181">Bu düğme açıkken siteler ses çalabilir. Düğme kapalıyken siteler ses çalamaz.</translation>
 <translation id="3273479183583863618">Sekmelerdeki fiyat düşüşleri</translation>
 <translation id="3277252321222022663">Sitelerin sensörlere erişmesine izin ver (önerilen)</translation>
-<translation id="327891165872793509">Chrome, internette gezinirken çoğu sitenin, üçüncü taraf çerezlerini kullanarak sizi izlemesini sınırlandırır. <ph name="BEGIN_LINK" />Üçüncü taraf çerezlerine erişimi yönetmek<ph name="END_LINK" /> için ayarlara gidin.</translation>
+<translation id="327891165872793509">Ultimatum, internette gezinirken çoğu sitenin, üçüncü taraf çerezlerini kullanarak sizi izlemesini sınırlandırır. <ph name="BEGIN_LINK" />Üçüncü taraf çerezlerine erişimi yönetmek<ph name="END_LINK" /> için ayarlara gidin.</translation>
 <translation id="3285500645985761267">İlgili sitelerin gruptaki etkinliğimi görmesine izin ver</translation>
 <translation id="3295019059349372795">11. Bölüm: Oz'un Muhteşem Zümrüt Kenti</translation>
 <translation id="3295602654194328831">Bilgileri Gizle</translation>
@@ -222,7 +222,7 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="3678318839615834650">Yeni sekme sayfası kartları alt sayfası tam boyutta açıldı</translation>
 <translation id="3697164069658504920">Bu düğme açıkken siteler USB cihazları kullanmak isteyebilir. Düğme kapalıyken siteler USB cihazları kullanamaz.</translation>
 <translation id="3703430731944883733">Feed'inizi yönetin</translation>
-<translation id="3707034683772193706">Ziyaret ettiğiniz bir site, esasen bot olmadığınızı doğrulayan az miktarda bilgiyi Chrome'a kaydedebilir</translation>
+<translation id="3707034683772193706">Ziyaret ettiğiniz bir site, esasen bot olmadığınızı doğrulayan az miktarda bilgiyi Ultimatum'a kaydedebilir</translation>
 <translation id="3708684582558000260">Kapatılan sitelerin veri gönderme veya alma işlemini bitirmesine izin verme</translation>
 <translation id="3709818294139939629">Sitenin dosya erişimi kaldırıldı</translation>
 <translation id="3721953990244350188">Kapat ve sonraki mevcut işlemi göster</translation>
@@ -236,7 +236,7 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="381841723434055211">Telefon numaraları</translation>
 <translation id="3826050100957962900">Üçüncü taraf oturum açma</translation>
 <translation id="3835233591525155343">Cihaz kullanımınız</translation>
-<translation id="3843916486309149084">Chrome bugün çerezleri tekrar engelleyecek</translation>
+<translation id="3843916486309149084">Ultimatum bugün çerezleri tekrar engelleyecek</translation>
 <translation id="385051799172605136">Geri</translation>
 <translation id="3859306556332390985">İleriye doğru git</translation>
 <translation id="389521680295183045">Siteler, cihazımı etkin olarak kullandığımda bilmek isteyebilir</translation>
@@ -276,12 +276,12 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="429312253194641664">Bir site medya oynatıyor</translation>
 <translation id="42981349822642051">Genişlet</translation>
 <translation id="4336219115486912529">{COUNT,plural, =1{Süresi yarın dolacak}other{Süresi # gün içinde dolacak}}</translation>
-<translation id="4336566011000459927">Chrome bugün çerezleri tekrar sınırlandıracak</translation>
+<translation id="4336566011000459927">Ultimatum bugün çerezleri tekrar sınırlandıracak</translation>
 <translation id="4338831206024587507"><ph name="DOMAIN" /> altındaki tüm siteler</translation>
 <translation id="4340799661701629185">Sitelerin bildirim göndermesine izin verme</translation>
 <translation id="4402755511846832236">Bu cihazı etkin olarak kullandığınızda sitelerin bunu bilmesi engellenir</translation>
 <translation id="4412992751769744546">Üçüncü taraf çerezlerine izin ver</translation>
-<translation id="4419929467120297501">Chrome, sitelerin internette gezinirken sizi izlemek için üçüncü taraf çerezlerini kullanmasını engeller. <ph name="BEGIN_LINK" />Üçüncü taraf çerezlerine erişimi yönetmek<ph name="END_LINK" /> için ayarlara gidin.</translation>
+<translation id="4419929467120297501">Ultimatum, sitelerin internette gezinirken sizi izlemek için üçüncü taraf çerezlerini kullanmasını engeller. <ph name="BEGIN_LINK" />Üçüncü taraf çerezlerine erişimi yönetmek<ph name="END_LINK" /> için ayarlara gidin.</translation>
 <translation id="443121186588148776">Seri bağlantı noktası</translation>
 <translation id="4434045419905280838">Pop-up'lar ve yönlendirmeler</translation>
 <translation id="443552056913301231">Bu işlem, çerezler de dahil olmak üzere yerel verilerin tamamını temizler ve tüm <ph name="ORIGIN" /> izinlerini siler</translation>
@@ -300,7 +300,7 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="4644713492825682049">Sil ve sıfırla</translation>
 <translation id="4645575059429386691">Ebeveyniniz tarafından yönetiliyor</translation>
 <translation id="4670064810192446073">Sanal gerçeklik</translation>
-<translation id="4672315773691449562">Tarayıcı uygulamasına, ardından Chrome'a dokunun</translation>
+<translation id="4672315773691449562">Tarayıcı uygulamasına, ardından Ultimatum'a dokunun</translation>
 <translation id="4676059169848868271"><ph name="APP_NAME" /> uygulamasının, el takibi özelliğini kullanmasına izin vermek için <ph name="BEGIN_LINK" />sistem ayarlarında<ph name="END_LINK" /> el takibini de etkinleştirin.</translation>
 <translation id="4751476147751820511">Hareket veya ışık sensörleri</translation>
 <translation id="4755971844837804407">Bu düğme açıkken siteler size tüm reklamları gösterebilir. Düğme kapalıyken siteler size araya giren veya yanıltıcı reklamlar gösteremez.</translation>
@@ -335,7 +335,7 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="5091663350197390230">Bu düğme açıkken siteler JavaScript kullanabilir. Düğme kapalıyken siteler JavaScript kullanamaz.</translation>
 <translation id="5099358668261120049">Bu işlem, Ana ekranınızdaki <ph name="ORIGIN" /> sitesi ve sitenin uygulaması tarafından depolanan tüm verileri ve çerezleri temizleyecek.</translation>
 <translation id="5100237604440890931">Daraltıldı - Genişletmek için tıklayın.</translation>
-<translation id="5116239826668864748">Mesajlardaki, belgelerdeki ve diğer uygulamalardaki bağlantıları tıkladığınızda Chrome'u kullanabilirsiniz.</translation>
+<translation id="5116239826668864748">Mesajlardaki, belgelerdeki ve diğer uygulamalardaki bağlantıları tıkladığınızda Ultimatum'u kullanabilirsiniz.</translation>
 <translation id="5123685120097942451">Gizli sekme</translation>
 <translation id="5139253256813381453">{PRICE_DROP_COUNT,plural, =1{Açık sekmelerinizde fiyat düşüşü}other{Açık sekmelerinizde fiyat düşüşleri}}</translation>
 <translation id="5186036860380548585">Seçenek, ekranın üst kısmına yakın bir yerdedir</translation>
@@ -368,7 +368,7 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="5527111080432883924">Panodaki metin ve resimleri okumak için sitelere izin vermeden önce sor (önerilen)</translation>
 <translation id="5545693483061321551">Siteler, örneğin reklamları kişiselleştirmek amacıyla farklı sitelerde tarama etkinliğinizi görmek için çerezlerinizi kullanamaz. Bazı sitelerdeki özellikler çalışmayabilir.</translation>
 <translation id="5553374991681107062">En son</translation>
-<translation id="5555115555607204100">Chrome'un V8 motoruyla siteleri hızlandırmayın. Ancak bu durumda Chrome, saldırılara karşı biraz daha dirençli hale gelir</translation>
+<translation id="5555115555607204100">Ultimatum'un V8 motoruyla siteleri hızlandırmayın. Ancak bu durumda Ultimatum, saldırılara karşı biraz daha dirençli hale gelir</translation>
 <translation id="5556459405103347317">Yeniden Yükle</translation>
 <translation id="5591840828808741583"><ph name="SITE_NAME" /> engellendi</translation>
 <translation id="560980142378233747">Bu durumda, site özellikleri beklendiği gibi çalışır, ancak internette gezinirken daha az korunursunuz. <ph name="BEGIN_LINK" />Geri bildirim gönderin<ph name="END_LINK" />.</translation>
@@ -424,13 +424,13 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="6177128806592000436">Bu siteye bağlantınız güvenli değil</translation>
 <translation id="6181444274883918285">Site istisnası ekle</translation>
 <translation id="6192792657125177640">İstisnalar</translation>
-<translation id="6194967801833346599">{DAYS,plural, =1{Chrome yarın çerezleri tekrar engelleyecek}other{Çerezlerin tekrar engellenmesine # gün kaldı}}</translation>
+<translation id="6194967801833346599">{DAYS,plural, =1{Ultimatum yarın çerezleri tekrar engelleyecek}other{Çerezlerin tekrar engellenmesine # gün kaldı}}</translation>
 <translation id="6195163219142236913">Üçüncü taraf çerezleri sınırlı</translation>
 <translation id="6196640612572343990">Üçüncü taraf çerezlerini engelle</translation>
 <translation id="6205314730813004066">Reklam gizliliği</translation>
 <translation id="6207207788774442484">Verileri sil ve izinleri sıfırla</translation>
 <translation id="6231752747840485235">"<ph name="APP_NAME" />" uygulaması kaldırılsın mı?</translation>
-<translation id="6234351944623978659">Tarayıcı uygulaması &gt; Chrome'a dokunun</translation>
+<translation id="6234351944623978659">Tarayıcı uygulaması &gt; Ultimatum'a dokunun</translation>
 <translation id="6262191102408817757">Son sekmenize dayalı olarak</translation>
 <translation id="6262279340360821358"><ph name="PERMISSION_1" /> ve <ph name="PERMISSION_2" /> engellendi</translation>
 <translation id="6270391203985052864">Siteler bildirim gönderme izni isteyebilir</translation>
@@ -470,7 +470,7 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="6787751205395685251"><ph name="SITE_NAME" /> için bir seçenek belirleyin</translation>
 <translation id="6790428901817661496">Oynat</translation>
 <translation id="6818926723028410516">Öğe seçin</translation>
-<translation id="6838525730752203626">Varsayılan olarak Chrome'u kullanın</translation>
+<translation id="6838525730752203626">Varsayılan olarak Ultimatum'u kullanın</translation>
 <translation id="6840760312327750441">Sekmeleri gruplamak için bir sekmeye dokunup basılı tutun. Ardından başka bir sekmenin üzerine sürükleyin.</translation>
 <translation id="6842868554183332230">Siteler, sohbet uygulamalarında müsaitliğinizi ayarlamak için genellikle cihazınızı aktif olarak kullandığınızı algılar</translation>
 <translation id="6864395892908308021">Bu cihaz NFC'yi okuyamıyor</translation>
@@ -484,7 +484,7 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="6981982820502123353">Erişilebilirlik</translation>
 <translation id="6992289844737586249">Sitelerin, mikrofonunuzu kullanmasına izin verilmeden önce size sorulsun (önerilen)</translation>
 <translation id="7000754031042624318">Android ayarlarından kapatıldı</translation>
-<translation id="702275896380648118">Bu site, nelerden hoşlandığınızı belirleyip diğer sitelere reklam önerir. Ayrıca, size daha alakalı reklamlar göstermek için Chrome'dan reklam konularınızı da öğrenir.</translation>
+<translation id="702275896380648118">Bu site, nelerden hoşlandığınızı belirleyip diğer sitelere reklam önerir. Ayrıca, size daha alakalı reklamlar göstermek için Ultimatum'dan reklam konularınızı da öğrenir.</translation>
 <translation id="7053983685419859001">Engelle</translation>
 <translation id="7055552182600664515">Telif hakkıyla korunan içerikleri oynatmak için sitelerin içerik koruma hizmeti kullanmaları gerekebilir. <ph name="BEGIN_LINK" />Daha fazla bilgi<ph name="END_LINK" /></translation>
 <translation id="7066151586745993502">{NUM_SELECTED,plural, =1{1 öğe seçildi}other{# öğe seçildi}}</translation>
@@ -528,7 +528,7 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="7658239707568436148">İptal</translation>
 <translation id="7667547420449112975">Muhteşem Oz Büyücüsü</translation>
 <translation id="7681597159868843240">Sanal gerçeklik veya fitness takibi gibi özelliklerin kullanılması için siteler genellikle cihazınızın hareket sensörlerini kullanır</translation>
-<translation id="7688240020069572972">Chrome ipuçları kartını gizle</translation>
+<translation id="7688240020069572972">Ultimatum ipuçları kartını gizle</translation>
 <translation id="7719367874908701697">Sayfa yakınlaştırma</translation>
 <translation id="7759147511335618829">MIDI cihaz kontrolü ve yeniden programlama</translation>
 <translation id="7781829728241885113">Dün</translation>
@@ -540,7 +540,7 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="7835852323729233924">Medya oynatma/çalma</translation>
 <translation id="783819812427904514">Videonun sesini aç</translation>
 <translation id="7846076177841592234">Seçimi iptal et</translation>
-<translation id="7881140103901777395">Chrome, çoğu sitenin, üçüncü taraf çerezlerini kullanmasını sınırlandırır. Ancak temel hizmetleri sağlamadaki rolünden dolayı bu sitede üçüncü taraf çerezlerine izin verilir.\n\n<ph name="BEGIN_LINK" />Üçüncü taraf çerezlerine erişimi yönetmek<ph name="END_LINK" /> için ayarlara gidin.</translation>
+<translation id="7881140103901777395">Ultimatum, çoğu sitenin, üçüncü taraf çerezlerini kullanmasını sınırlandırır. Ancak temel hizmetleri sağlamadaki rolünden dolayı bu sitede üçüncü taraf çerezlerine izin verilir.\n\n<ph name="BEGIN_LINK" />Üçüncü taraf çerezlerine erişimi yönetmek<ph name="END_LINK" /> için ayarlara gidin.</translation>
 <translation id="7882806643839505685">Belirli bir site için sese izin verin.</translation>
 <translation id="789180354981963912">Gizli modda üçüncü taraf çerezlerini engelle:</translation>
 <translation id="789722939441020330">Sitelerin birden fazla dosyayı otomatik olarak indirmesine izin verme</translation>
@@ -560,7 +560,7 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="8087000398470557479">Bu içerik Google tarafından <ph name="DOMAIN_NAME" /> adresinden sağlanmaktadır.</translation>
 <translation id="8088603949666785339"><ph name="BANNER_TITLE" /> bölümünde daha fazla seçenek</translation>
 <translation id="8112925981674547014">Uygulama listenizdeki sekmeleri görüntüle</translation>
-<translation id="8113501330600751161">{DAYS,plural, =1{Chrome yarın çerezleri tekrar sınırlandıracak}other{Chrome'un çerezleri tekrar sınırlandırmasına # gün kaldı}}</translation>
+<translation id="8113501330600751161">{DAYS,plural, =1{Ultimatum yarın çerezleri tekrar sınırlandıracak}other{Ultimatum'un çerezleri tekrar sınırlandırmasına # gün kaldı}}</translation>
 <translation id="8116925261070264013">Ses kapatıldı</translation>
 <translation id="8117244575099414087">Bu düğme açıkken siteler cihazınızın sensörlerini kullanabilir. Düğme kapalıyken siteler sensörleri kullanamaz.</translation>
 <translation id="813082847718468539">Site bilgilerini görüntüle</translation>
@@ -600,10 +600,10 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="8514955299594277296">Sitelerin cihazıma veri kaydetmesine izin verme (önerilmez)</translation>
 <translation id="851751545965956758">Sitelerin cihazlara bağlanmasını engelle</translation>
 <translation id="8525306231823319788">Tam ekran</translation>
-<translation id="8541410041357371550">Bu site, size daha alakalı reklamlar göstermek için Chrome'dan reklam konularınızı öğrenir</translation>
+<translation id="8541410041357371550">Bu site, size daha alakalı reklamlar göstermek için Ultimatum'dan reklam konularınızı öğrenir</translation>
 <translation id="854876774113449365">Ziyaret ettiğiniz siteler, diğer sitelerdeki resim, reklam ve metin gibi içerikleri yerleştirebilir. Bu diğer siteler, sitede gezinirken hakkınızda kaydettikleri bilgileri kullanmak için izin isteyebilir. <ph name="BEGIN_LINK" />Yerleştirilmiş içerik hakkında daha fazla bilgi edinin<ph name="END_LINK" />.</translation>
 <translation id="8549127125482561383">İstekler nasıl gösterilsin?</translation>
-<translation id="8558480467877843976">Artık mesajlardaki, dokümanlardaki ve diğer uygulamalardaki bağlantılara göz attığınızda veya dokunduğunuzda Chrome'u kullanabilirsiniz.</translation>
+<translation id="8558480467877843976">Artık mesajlardaki, dokümanlardaki ve diğer uygulamalardaki bağlantılara göz attığınızda veya dokunduğunuzda Ultimatum'u kullanabilirsiniz.</translation>
 <translation id="857943718398505171">İzin verildi (önerilir)</translation>
 <translation id="8593422116412089302">Bu düğme açıkken siteler hakkınızda kaydettikleri bilgileri kullanmak isteyebilir. Düğme kapalıyken siteler hakkınızda kaydettikleri bilgileri kullanmak isteyemez.</translation>
 <translation id="8609465669617005112">Yukarı taşı</translation>
@@ -624,13 +624,13 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="8751914237388039244">Resim seçin</translation>
 <translation id="8800034312320686233">Site çalışmıyor mu?</translation>
 <translation id="8801436777607969138">JavaScript'i belirli bir site için engelleyin.</translation>
-<translation id="8801657293260363985">Chrome'un JavaScript ve WebAssembly motoru olan V8, site performansını iyileştirmek için kullanılır</translation>
+<translation id="8801657293260363985">Ultimatum'un JavaScript ve WebAssembly motoru olan V8, site performansını iyileştirmek için kullanılır</translation>
 <translation id="8803526663383843427">Açık olduğunda</translation>
 <translation id="8805385115381080995">Sitelerin gerçek bir kişi olduğunuzu doğrulamanızı isteme olasılığı daha düşük olduğundan daha hızlı bir göz atma deneyimi yaşarsınız</translation>
 <translation id="8816026460808729765">Sitelerin sensörlere erişimini engelle</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">Üçüncü taraf çerezlerine geçici olarak izin vermeyi deneyin. Bu durumda, internette gezinirken daha az korunursunuz ancak site özelliklerinin beklendiği gibi çalışma olasılığı daha yüksektir.</translation>
-<translation id="8889294078294184559">Siz sitelere göz atarken siteler de Chrome'dan kontrol ederek ziyaret ettiğiniz önceki bir siteden büyük olasılıkla gerçek bir kişi olduğunuzu doğrular</translation>
+<translation id="8889294078294184559">Siz sitelere göz atarken siteler de Ultimatum'dan kontrol ederek ziyaret ettiğiniz önceki bir siteden büyük olasılıkla gerçek bir kişi olduğunuzu doğrular</translation>
 <translation id="8899807382908246773">Araya giren reklamlar</translation>
 <translation id="8903921497873541725">Yakınlaştır</translation>
 <translation id="8921772741368021346"><ph name="POSITION" />/<ph name="DURATION" /></translation>
@@ -653,7 +653,7 @@ Gelişmiş Koruma, şu Chrome ayarlarını kontrol eder:
 <translation id="9109747640384633967">{PERMISSIONS_SUMMARY_MIXED,plural, =1{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> ve <ph name="NUM_MORE" /> tane daha}other{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> ve <ph name="NUM_MORE" /> tane daha}}</translation>
 <translation id="913657688200966289"><ph name="APP_NAME" /> için izinleri açmak üzere <ph name="BEGIN_LINK" />Android Ayarları<ph name="END_LINK" />'nda izinleri açın.</translation>
 <translation id="9138217887606523162">Şu anki yakınlaştırma düzeyi %%<ph name="ZOOM_LEVEL" /></translation>
-<translation id="9156722768168878035">Chrome'un son sekmelerinizi cihazınızın uygulama listesinde ve arama sonuçlarında göstermesine izin verin. Bu özelliği Chrome ayarlarından istediğiniz zaman kapatabilirsiniz.</translation>
+<translation id="9156722768168878035">Ultimatum'un son sekmelerinizi cihazınızın uygulama listesinde ve arama sonuçlarında göstermesine izin verin. Bu özelliği Ultimatum ayarlarından istediğiniz zaman kapatabilirsiniz.</translation>
 <translation id="9162462602695099906">Bu sayfa tehlikeli</translation>
 <translation id="9182556968660520230">Sitelerin korumalı içeriği oynatmasına izin verme</translation>
 <translation id="947156494302904893">Ziyaret ettiğiniz siteler, bot olmadığınızı ve gerçek bir kişi olduğunuzu doğrulayabilir</translation>

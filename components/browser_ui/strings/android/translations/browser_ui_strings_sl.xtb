@@ -3,21 +3,21 @@
 <translationbundle lang="sl">
 <translation id="1004806631856047384">Upravljanje v <ph name="BEGIN_LINK1" />nastavitvah za Android<ph name="END_LINK1" />
 
-Dodatna zaščita upravlja te nastavitve za Chrome:
+Dodatna zaščita upravlja te nastavitve za Ultimatum:
 • Možnost »Vedno dovoli varne povezave« je vklopljena.
 • Možnost »Optimiziranje Javascripta« je izklopljena. <ph name="BEGIN_LINK2" />Upravljanje izjem za spletna mesta<ph name="END_LINK2" /></translation>
 <translation id="1006017844123154345">Odpri v spletu</translation>
 <translation id="1036348656032585052">Izklop</translation>
 <translation id="1044891598689252897">Spletna mesta bodo delovala normalno</translation>
 <translation id="1070329623210597193">Datoteke, ki si jih to spletno mesto lahko ogleda ali jih uredi</translation>
-<translation id="1073417869336441572">Pomagajte nam izboljšati Chrome, tako da nam poveste, zakaj ste dovolili piškotke tretjih oseb. <ph name="BEGIN_LINK" />Pošiljanje povratnih informacij<ph name="END_LINK" /></translation>
+<translation id="1073417869336441572">Pomagajte nam izboljšati Ultimatum, tako da nam poveste, zakaj ste dovolili piškotke tretjih oseb. <ph name="BEGIN_LINK" />Pošiljanje povratnih informacij<ph name="END_LINK" /></translation>
 <translation id="1074758928858737435">Zahtevate lahko namizno različico spletnih mest</translation>
-<translation id="1085696779717592361">Privzeto uporabljajte Chrome</translation>
+<translation id="1085696779717592361">Privzeto uporabljajte Ultimatum</translation>
 <translation id="1178581264944972037">Prekini</translation>
 <translation id="1181037720776840403">Odstrani</translation>
 <translation id="1192844206376121885">S tem boste izbrisali vse podatke in piškotke, ki jih je shranilo spletno mesto <ph name="ORIGIN" />.</translation>
 <translation id="1201402288615127009">Naprej</translation>
-<translation id="1240190568154816272">Nasveti za Chrome</translation>
+<translation id="1240190568154816272">Nasveti za Ultimatum</translation>
 <translation id="1242008676835033345">Vdelano v <ph name="WEBSITE_URL" /></translation>
 <translation id="1263609676484797429">Dotaknite se Aplikacije &gt; Privzete aplikacije</translation>
 <translation id="1272079795634619415">Ustavi</translation>
@@ -34,7 +34,7 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="1396327438254055134">Spletnemu mestu dovolite uporabo orodja za optimiziranje mehanizma V8.</translation>
 <translation id="1409338233051621926">Dotaknite se možnosti Aplikacije in nato možnosti Privzete aplikacije</translation>
 <translation id="1415402041810619267">URL je skrajšan</translation>
-<translation id="1415855080660575082">Chrome naj deli vaše nedavne zavihke z napravo, da si jih boste lahko ogledali na seznamu aplikacij in v rezultatih iskanja naprave. To lahko kadar koli vklopite ali izklopite v nastavitvah Chroma.</translation>
+<translation id="1415855080660575082">Ultimatum naj deli vaše nedavne zavihke z napravo, da si jih boste lahko ogledali na seznamu aplikacij in v rezultatih iskanja naprave. To lahko kadar koli vklopite ali izklopite v nastavitvah Chroma.</translation>
 <translation id="1448064542941920355">Zmanjšanje povečave/pomanjšave</translation>
 <translation id="1464044141348608623">Spletnim mestom ni dovoljeno vedeti, kdaj aktivno uporabljate napravo</translation>
 <translation id="146867109637325312">{COUNT,plural, =1{<ph name="SITE_COUNT" /> spletnem mestu}one{<ph name="SITE_COUNT" /> spletnem mestu}two{<ph name="SITE_COUNT" /> spletnih mestih}few{<ph name="SITE_COUNT" /> spletnih mestih}other{<ph name="SITE_COUNT" /> spletnih mestih}}</translation>
@@ -43,7 +43,7 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="1510341833810331442">Spletna mesta ne smejo shranjevati podatkov v napravi.</translation>
 <translation id="1538031354170655462">Spletna mesta običajno uporabljajo tehnologijo NFC za delovanje z oznakami ali napravami v bližini, na primer pri optičnem branju značk ali brezstičnem plačevanju</translation>
 <translation id="1547123415014299762">Piškotki tretjih oseb so dovoljeni.</translation>
-<translation id="1569054338208717605">S Chromovim mehanizmom V8 pospešite delovanje spletnih mest, vendar je Chrome zato nekoliko manj odporen proti napadom</translation>
+<translation id="1569054338208717605">S Chromovim mehanizmom V8 pospešite delovanje spletnih mest, vendar je Ultimatum zato nekoliko manj odporen proti napadom</translation>
 <translation id="1593426485665524382">Nova dejanja so na voljo pri vrhu zaslona.</translation>
 <translation id="1615755956145364867">Spletna mesta lahko zahtevajo predvajanje zaščitene vsebine.</translation>
 <translation id="1620510694547887537">Kamera</translation>
@@ -64,8 +64,8 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="1779089405699405702">Slikovni dekodirnik</translation>
 <translation id="1785415724048343560">Priporočljivo za najboljšo izkušnjo</translation>
 <translation id="1796588414813960292">Funkcije, ki potrebujejo zvok, ne bodo delovale.</translation>
-<translation id="1799920918471566157">Nasveti za Chrome</translation>
-<translation id="1816835383954230954">Če je vklopljeno, Chrome deluje hitreje, funkcije, ki uporabljajo JavaScript, pa bi morale delovati, kot je predvideno. Če je izklopljeno, se zmanjša učinkovitost delovanja, vendar je mehanizem V8 odpornejši proti napadom.</translation>
+<translation id="1799920918471566157">Nasveti za Ultimatum</translation>
+<translation id="1816835383954230954">Če je vklopljeno, Ultimatum deluje hitreje, funkcije, ki uporabljajo JavaScript, pa bi morale delovati, kot je predvideno. Če je izklopljeno, se zmanjša učinkovitost delovanja, vendar je mehanizem V8 odpornejši proti napadom.</translation>
 <translation id="1818308510395330587">Če želite aplikaciji <ph name="APP_NAME" /> dovoliti uporabo razširjene resničnosti, prav tako vklopite fotoaparat v <ph name="BEGIN_LINK" />nastavitvah za Android<ph name="END_LINK" />.</translation>
 <translation id="1887786770086287077">Dostop do lokacije je izklopljen za to napravo. Vklopite ga lahko v <ph name="BEGIN_LINK" />nastavitvah za Android<ph name="END_LINK" />.</translation>
 <translation id="1906181697255754968">Spletna mesta običajno dostopajo do datotek in map v vaši napravi zaradi funkcij, kot je samodejno shranjevanje vašega dela.</translation>
@@ -109,7 +109,7 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="2289270750774289114">Vprašaj, ko želi spletno mesto odkrivati naprave Bluetooth v bližini (priporočljivo)</translation>
 <translation id="2315043854645842844">Operacijski sistem ne podpira izbire potrdila pri odjemalcu.</translation>
 <translation id="2359808026110333948">Naprej</translation>
-<translation id="2379925928934107488">Uporaba temne teme (ko je to mogoče) na spletnih mestih, če Chrome uporablja temno temo.</translation>
+<translation id="2379925928934107488">Uporaba temne teme (ko je to mogoče) na spletnih mestih, če Ultimatum uporablja temno temo.</translation>
 <translation id="2390272837142897736">Povečanje povečave/pomanjšave</translation>
 <translation id="2402980924095424747"><ph name="MEGABYTES" /> MB</translation>
 <translation id="2404630663942400771">{PERMISSIONS_SUMMARY_ALLOWED,plural, =1{Dovoljeno: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> in še <ph name="NUM_MORE" />}one{Dovoljeno: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> in še <ph name="NUM_MORE" />}two{Dovoljeno: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> in še <ph name="NUM_MORE" />}few{Dovoljeno: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> in še <ph name="NUM_MORE" />}other{Dovoljeno: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> in še <ph name="NUM_MORE" />}}</translation>
@@ -118,7 +118,7 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="2438120137003069591">Temu spletnemu mestu ste začasno dovolili uporabo piškotkov tretjih oseb, kar pomeni manj zaščite brskanja, vendar je verjetneje, da bodo funkcije spletnega mesta delovale po pričakovanjih. <ph name="BEGIN_LINK" />Pošiljanje povratnih informacij<ph name="END_LINK" /></translation>
 <translation id="244264527810019436">Funkcije na nekaterih spletnih mestih morda ne bodo delovale v anonimnem načinu</translation>
 <translation id="2442870161001914531">Vedno zahtevaj spletno mesto za namizne računalnike</translation>
-<translation id="2445311670906052406">Chrome zdaj deli nedavne zavihke z napravo. Prikazani bodo na seznamu aplikacij in v rezultatih iskanja naprave. To lahko kadar koli izklopite v nastavitvah Chroma.</translation>
+<translation id="2445311670906052406">Ultimatum zdaj deli nedavne zavihke z napravo. Prikazani bodo na seznamu aplikacij in v rezultatih iskanja naprave. To lahko kadar koli izklopite v nastavitvah Chroma.</translation>
 <translation id="245322989586167203">Spletna mesta običajno vzpostavijo povezavo s serijskimi vrati zaradi funkcij prenosa podatkov, kot je nastavitev omrežja.</translation>
 <translation id="2469312991797799607">To dejanje bo izbrisalo vse podatke in piškotke za spletno mesto <ph name="ORIGIN" /> ter vsa njegova podrejena spletna mesta.</translation>
 <translation id="2482878487686419369">Obvestila</translation>
@@ -143,14 +143,14 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="2685514716378236873">Ni dovoljeno</translation>
 <translation id="2713106313042589954">Izklopi kamero</translation>
 <translation id="2717722538473713889">E-poštni naslovi</translation>
-<translation id="2726059656860238749">Zaženite Chrome z aktivno naslovno vrstico, da skrajšate čas zagona v napravah nižjega cenovnega razreda.</translation>
+<translation id="2726059656860238749">Zaženite Ultimatum z aktivno naslovno vrstico, da skrajšate čas zagona v napravah nižjega cenovnega razreda.</translation>
 <translation id="2750481671343847896">Spletna mesta lahko prikazujejo pozive za prijavo zunanjih ponudnikov.</translation>
 <translation id="2787357173144933081">Hiter začetek z naslovno vrstico</translation>
 <translation id="2789132527330338807">Spletna mesta lahko zahtevajo ustvarjanje 3D-zemljevida vaše okolice ali spremljanje položaja fotoaparata</translation>
 <translation id="2790501146643349491">Če je ta možnost vklopljena, nedavno zaprta spletna mesta lahko dokončajo pošiljanje in prejemanje podatkov. Če je ta možnost izklopljena, nedavno zaprta spletna mesta ne smejo dokončati pošiljanja ali prejemanja podatkov.</translation>
 <translation id="2795716239552913152">Spletna mesta običajno uporabljajo vašo lokacijo zaradi ustreznih funkcij ali informacij, kot so lokalne novice ali trgovine v bližini.</translation>
 <translation id="2802908157808345702">Spletnim mestom ni dovoljeno pošiljati pojavnih oken in uporabljati preusmeritev</translation>
-<translation id="2814830417943086299">Chrome zdaj prikazuje nedavne zavihke na seznamu aplikacij in v rezultatih iskanja naprave. To lahko kadar koli izklopite v nastavitvah Chroma.</translation>
+<translation id="2814830417943086299">Ultimatum zdaj prikazuje nedavne zavihke na seznamu aplikacij in v rezultatih iskanja naprave. To lahko kadar koli izklopite v nastavitvah Chroma.</translation>
 <translation id="2822354292072154809">Ali ste prepričani, da želite ponastaviti vsa dovoljenja za spletna mesta za <ph name="CHOSEN_OBJECT_NAME" />?</translation>
 <translation id="2850913818900871965">Zahtevanje pogleda za mobilno napravo</translation>
 <translation id="2870560284913253234">Spletno mesto</translation>
@@ -187,7 +187,7 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="3242646949159196181">Če je ta možnost vklopljena, spletna mesta lahko predvajajo zvok. Če je ta možnost izklopljena, spletna mesta ne smejo predvajati zvoka.</translation>
 <translation id="3273479183583863618">Znižanja cen na zavihkih</translation>
 <translation id="3277252321222022663">Spletnim mestom dovoli dostop do tipal (priporočeno)</translation>
-<translation id="327891165872793509">Chrome večini spletnih mest omejuje uporabo piškotkov tretjih oseb za vaše sledenje med brskanjem. Obiščite nastavitve, če želite <ph name="BEGIN_LINK" />upravljati dostop do piškotkov tretjih oseb<ph name="END_LINK" />.</translation>
+<translation id="327891165872793509">Ultimatum večini spletnih mest omejuje uporabo piškotkov tretjih oseb za vaše sledenje med brskanjem. Obiščite nastavitve, če želite <ph name="BEGIN_LINK" />upravljati dostop do piškotkov tretjih oseb<ph name="END_LINK" />.</translation>
 <translation id="3285500645985761267">Sorodnim spletnim mestom dovolite ogled vaše dejavnosti v skupini</translation>
 <translation id="3295019059349372795">11. poglavje: Čudovito Smaragdno mesto</translation>
 <translation id="3295602654194328831">Skrij informacije</translation>
@@ -236,7 +236,7 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="381841723434055211">Telefonske številke</translation>
 <translation id="3826050100957962900">Prijava prek zunanjih ponudnikov</translation>
 <translation id="3835233591525155343">Uporaba naprave</translation>
-<translation id="3843916486309149084">Chrome bo znova blokiral piškotke danes</translation>
+<translation id="3843916486309149084">Ultimatum bo znova blokiral piškotke danes</translation>
 <translation id="385051799172605136">Nazaj</translation>
 <translation id="3859306556332390985">Išči naprej</translation>
 <translation id="389521680295183045">Spletna mesta lahko zahtevajo, da izvejo, kdaj aktivno uporabljate napravo</translation>
@@ -276,12 +276,12 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="429312253194641664">Spletno mesto predvaja predstavnost</translation>
 <translation id="42981349822642051">Razširi</translation>
 <translation id="4336219115486912529">{COUNT,plural, =1{Poteče jutri}one{Poteče čez # dan}two{Poteče čez # dneva}few{Poteče čez # dni}other{Poteče čez # dni}}</translation>
-<translation id="4336566011000459927">Chrome bo danes znova omejil piškotke</translation>
+<translation id="4336566011000459927">Ultimatum bo danes znova omejil piškotke</translation>
 <translation id="4338831206024587507">Vsa spletna mesta v domeni <ph name="DOMAIN" />.</translation>
 <translation id="4340799661701629185">Spletnim mestom ni dovoljeno pošiljati obvestil.</translation>
 <translation id="4402755511846832236">Preprečevanje, da bi spletna mesta vedela, kdaj aktivno uporabljate to napravo.</translation>
 <translation id="4412992751769744546">Omogočanje piškotkov tretjih oseb</translation>
-<translation id="4419929467120297501">Chrome spletnim mestom onemogoči uporabo piškotkov tretjih oseb, da bi vam sledila med brskanjem. Obiščite nastavitve, če želite <ph name="BEGIN_LINK" />upravljati dostop do piškotkov tretjih oseb<ph name="END_LINK" />.</translation>
+<translation id="4419929467120297501">Ultimatum spletnim mestom onemogoči uporabo piškotkov tretjih oseb, da bi vam sledila med brskanjem. Obiščite nastavitve, če želite <ph name="BEGIN_LINK" />upravljati dostop do piškotkov tretjih oseb<ph name="END_LINK" />.</translation>
 <translation id="443121186588148776">Serijska vrata</translation>
 <translation id="4434045419905280838">Pojavna okna in preusmeritve</translation>
 <translation id="443552056913301231">To dejanje bo izbrisalo vse lokalne podatke, vključno s piškotki, in ponastavilo vsa dovoljenja za <ph name="ORIGIN" /></translation>
@@ -300,7 +300,7 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="4644713492825682049">Izbriši in ponastavi</translation>
 <translation id="4645575059429386691">Upravlja starš</translation>
 <translation id="4670064810192446073">Navidezna resničnost</translation>
-<translation id="4672315773691449562">Dotaknite se aplikacije brskalnika in nato Chrome</translation>
+<translation id="4672315773691449562">Dotaknite se aplikacije brskalnika in nato Ultimatum</translation>
 <translation id="4676059169848868271">Če želite aplikaciji <ph name="APP_NAME" /> dovoliti uporabo sledenja potezam dlani, sledenje potezam dlani vklopite tudi v <ph name="BEGIN_LINK" />sistemskih nastavitvah<ph name="END_LINK" />.</translation>
 <translation id="4751476147751820511">Tipala za gibanje in svetlobo</translation>
 <translation id="4755971844837804407">Če je ta možnost vklopljena, vam spletna mesta lahko prikazujejo kateri koli oglas. Če je ta možnost izklopljena, spletna mesta ne smejo prikazovati vsiljivih ali zavajajočih oglasov.</translation>
@@ -335,7 +335,7 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="5091663350197390230">Če je ta možnost vklopljena, spletna mesta lahko uporabljajo JavaScript. Če je ta možnost izklopljena, spletna mesta ne smejo uporabljati JavaScripta.</translation>
 <translation id="5099358668261120049">S tem boste izbrisali vse podatke in piškotke, ki jih je shranilo spletno mesto <ph name="ORIGIN" /> ali njegova aplikacija na vašem začetnem zaslonu.</translation>
 <translation id="5100237604440890931">Strnjeno – kliknite, če želite razširiti.</translation>
-<translation id="5116239826668864748">Chrome lahko uporabljate, kadar koli se dotaknete povezav v sporočilih, dokumentih in drugih aplikacijah</translation>
+<translation id="5116239826668864748">Ultimatum lahko uporabljate, kadar koli se dotaknete povezav v sporočilih, dokumentih in drugih aplikacijah</translation>
 <translation id="5123685120097942451">Anonimni zavihek</translation>
 <translation id="5139253256813381453">{PRICE_DROP_COUNT,plural, =1{Znižanje cene na odprtih zavihkih}one{Znižanja cen na odprtih zavihkih}two{Znižanja cen na odprtih zavihkih}few{Znižanja cen na odprtih zavihkih}other{Znižanja cen na odprtih zavihkih}}</translation>
 <translation id="5186036860380548585">Možnosti so na voljo blizu vrha zaslona</translation>
@@ -368,7 +368,7 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="5527111080432883924">Prikaži poziv, preden se spletnim mestom dovoli branje besedila in slik v odložišču (priporočeno)</translation>
 <translation id="5545693483061321551">Spletna mesta ne morejo uporabljati vaših piškotkov za ogled dejavnosti brskanja na različnih spletnih mestih, na primer za osebno prilagajanje oglasov. Funkcije na nekaterih spletnih mestih morda ne bodo delovale.</translation>
 <translation id="5553374991681107062">Najnovejše</translation>
-<translation id="5555115555607204100">Ne pospešite delovanja spletnih mest s Chromovim mehanizmom V8, vendar je Chrome zato nekoliko odpornejši proti napadom</translation>
+<translation id="5555115555607204100">Ne pospešite delovanja spletnih mest s Chromovim mehanizmom V8, vendar je Ultimatum zato nekoliko odpornejši proti napadom</translation>
 <translation id="5556459405103347317">Znova naloži</translation>
 <translation id="5591840828808741583">Blokirano: <ph name="SITE_NAME" /></translation>
 <translation id="560980142378233747">To pomeni, da bi funkcije spletnega mesta morale delovati po pričakovanjih, vendar boste morda deležni manj zaščite pri brskanju. <ph name="BEGIN_LINK" />Pošljite povratne informacije<ph name="END_LINK" /></translation>
@@ -424,13 +424,13 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="6177128806592000436">Povezava s tem spletnim mestom ni varna</translation>
 <translation id="6181444274883918285">Dodaj izjemo za spletno mesto</translation>
 <translation id="6192792657125177640">Izjeme</translation>
-<translation id="6194967801833346599">{DAYS,plural, =1{Chrome bo znova blokiral piškotke jutri}one{Še # dan in piškotki bodo znova blokirani}two{Še # dneva in piškotki bodo znova blokirani}few{Še # dni in piškotki bodo znova blokirani}other{Še # dni in piškotki bodo znova blokirani}}</translation>
+<translation id="6194967801833346599">{DAYS,plural, =1{Ultimatum bo znova blokiral piškotke jutri}one{Še # dan in piškotki bodo znova blokirani}two{Še # dneva in piškotki bodo znova blokirani}few{Še # dni in piškotki bodo znova blokirani}other{Še # dni in piškotki bodo znova blokirani}}</translation>
 <translation id="6195163219142236913">Piškotki tretjih oseb so omejeni</translation>
 <translation id="6196640612572343990">Blokiraj piškotke tretjih oseb</translation>
 <translation id="6205314730813004066">Zasebnost pri oglaševanju</translation>
 <translation id="6207207788774442484">Izbriši podatke in ponastavi dovoljenja</translation>
 <translation id="6231752747840485235">Želite odmestiti aplikacijo »<ph name="APP_NAME" />«?</translation>
-<translation id="6234351944623978659">Dotaknite se Brskalnik &gt; Chrome</translation>
+<translation id="6234351944623978659">Dotaknite se Brskalnik &gt; Ultimatum</translation>
 <translation id="6262191102408817757">Na podlagi vašega zadnjega zavihka</translation>
 <translation id="6262279340360821358">Blokirano: <ph name="PERMISSION_1" /> in <ph name="PERMISSION_2" /></translation>
 <translation id="6270391203985052864">Spletna mesta vas lahko vprašajo, ali želite, da vam pošiljajo obvestila</translation>
@@ -470,7 +470,7 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="6787751205395685251">Izberite možnost za spletno mesto <ph name="SITE_NAME" /></translation>
 <translation id="6790428901817661496">Predvajanje</translation>
 <translation id="6818926723028410516">Izberite elemente</translation>
-<translation id="6838525730752203626">Privzeto uporabljajte Chrome</translation>
+<translation id="6838525730752203626">Privzeto uporabljajte Ultimatum</translation>
 <translation id="6840760312327750441">Če želite združiti zavihke v skupino, pridržite zavihek. Nato ga povlecite na drug zavihek.</translation>
 <translation id="6842868554183332230">Spletna mesta zaradi nastavitve vaše razpoložljivosti v aplikacijah za klepet običajno zaznajo, kdaj aktivno uporabljate napravo.</translation>
 <translation id="6864395892908308021">Ta naprava ne podpira NFC-ja</translation>
@@ -528,7 +528,7 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="7658239707568436148">Prekliči</translation>
 <translation id="7667547420449112975">Čudoviti čarovnik iz Oza</translation>
 <translation id="7681597159868843240">Spletna mesta običajno uporabljajo tipala gibanja v napravi zaradi funkcij, kot sta navidezna resničnost ali spremljanje telesne pripravljenosti.</translation>
-<translation id="7688240020069572972">Skrivanje kartice z nasveti za Chrome</translation>
+<translation id="7688240020069572972">Skrivanje kartice z nasveti za Ultimatum</translation>
 <translation id="7719367874908701697">Povečava/pomanjšava strani</translation>
 <translation id="7759147511335618829">Upravljanje in reprogramiranje naprav MIDI</translation>
 <translation id="7781829728241885113">Včeraj</translation>
@@ -540,7 +540,7 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="7835852323729233924">Predvajanje predstavnosti</translation>
 <translation id="783819812427904514">Vklop videa</translation>
 <translation id="7846076177841592234">Prekliči izbor</translation>
-<translation id="7881140103901777395">Chrome večini spletnih mest omejuje uporabo piškotkov tretjih oseb. Vendar so piškotki tretjih oseb dovoljeni na tem spletnem mestu, ker z njimi zagotavlja osnovne storitve.\n\nObiščite nastavitve, če želite <ph name="BEGIN_LINK" />upravljati dostop do piškotkov tretjih oseb<ph name="END_LINK" />.</translation>
+<translation id="7881140103901777395">Ultimatum večini spletnih mest omejuje uporabo piškotkov tretjih oseb. Vendar so piškotki tretjih oseb dovoljeni na tem spletnem mestu, ker z njimi zagotavlja osnovne storitve.\n\nObiščite nastavitve, če želite <ph name="BEGIN_LINK" />upravljati dostop do piškotkov tretjih oseb<ph name="END_LINK" />.</translation>
 <translation id="7882806643839505685">Dovolitev zvoka za določeno spletno mesto.</translation>
 <translation id="789180354981963912">Blokiranje piškotkov tretjih oseb v anonimnem načinu:</translation>
 <translation id="789722939441020330">Spletnim mestom ni dovoljeno samodejno prenašanje več datotek.</translation>
@@ -560,7 +560,7 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="8087000398470557479">Ta vsebina je iz domene <ph name="DOMAIN_NAME" /> in jo prikazuje Google.</translation>
 <translation id="8088603949666785339">Več možnosti v pasici <ph name="BANNER_TITLE" /></translation>
 <translation id="8112925981674547014">Ogled zavihkov na seznamu aplikacij</translation>
-<translation id="8113501330600751161">{DAYS,plural, =1{Chrome bo jutri znova omejil piškotke}one{Še # dan in Chrome bo znova omejil piškotke}two{Še # dneva in Chrome bo znova omejil piškotke}few{Še # dni in Chrome bo znova omejil piškotke}other{Še # dni in Chrome bo znova omejil piškotke}}</translation>
+<translation id="8113501330600751161">{DAYS,plural, =1{Ultimatum bo jutri znova omejil piškotke}one{Še # dan in Ultimatum bo znova omejil piškotke}two{Še # dneva in Ultimatum bo znova omejil piškotke}few{Še # dni in Ultimatum bo znova omejil piškotke}other{Še # dni in Ultimatum bo znova omejil piškotke}}</translation>
 <translation id="8116925261070264013">Prezrto</translation>
 <translation id="8117244575099414087">Če je ta možnost vklopljena, spletna mesta lahko uporabljajo tipala naprave. Če je ta možnost izklopljena, spletna mesta ne smejo uporabljati tipal.</translation>
 <translation id="813082847718468539">Ogled podatkov o mestu</translation>
@@ -603,7 +603,7 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="8541410041357371550">To spletno mesto pridobi vaše teme oglasov iz Chroma, da vam prikaže ustreznejše oglase.</translation>
 <translation id="854876774113449365">Spletna mesta, ki jih obiščete, lahko vdelajo vsebino z drugih spletnih mest, na primer slike, oglase in besedilo. Ta druga spletna mesta lahko zahtevajo dovoljenje za uporabo podatkov, ki so jih shranila o vas med brskanjem po spletnem mestu. <ph name="BEGIN_LINK" />Preberite več o vdelani vsebini<ph name="END_LINK" /></translation>
 <translation id="8549127125482561383">Kako prikazati zahteve</translation>
-<translation id="8558480467877843976">Zdaj lahko uporabljate Chrome, kadar koli brskate po povezavah ali se jih dotaknete v sporočilih, dokumentih in drugih aplikacijah.</translation>
+<translation id="8558480467877843976">Zdaj lahko uporabljate Ultimatum, kadar koli brskate po povezavah ali se jih dotaknete v sporočilih, dokumentih in drugih aplikacijah.</translation>
 <translation id="857943718398505171">Dovoljeno (priporočeno)</translation>
 <translation id="8593422116412089302">Če je ta možnost vklopljena, spletna mesta lahko zahtevajo, da dovolite uporabo podatkov, ki so jih shranila o vas. Če je ta možnost izklopljena, spletna mesta ne smejo zahtevati, da dovolite uporabo podatkov, ki so jih shranila o vas.</translation>
 <translation id="8609465669617005112">Premakni navzgor</translation>
@@ -624,13 +624,13 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="8751914237388039244">Izberite sliko</translation>
 <translation id="8800034312320686233">Ali spletno mesto ne deluje?</translation>
 <translation id="8801436777607969138">Preprečevanje JavaScripta za določeno spletno mesto.</translation>
-<translation id="8801657293260363985">V8 je mehanizem za JavaScript in WebAssembly za Chrome, ki se uporablja za izboljšanje učinkovitosti delovanja spletnih mest</translation>
+<translation id="8801657293260363985">V8 je mehanizem za JavaScript in WebAssembly za Ultimatum, ki se uporablja za izboljšanje učinkovitosti delovanja spletnih mest</translation>
 <translation id="8803526663383843427">Če je to vklopljeno</translation>
 <translation id="8805385115381080995">Brskanje je hitrejše, ker je manj verjetno, da vas bo spletno mesto pozvalo, da potrdite, da ste resnična oseba.</translation>
 <translation id="8816026460808729765">Preprečevanje spletnim mestom dostopa do tipal</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">Poskusite začasno omogočiti piškotke tretjih oseb, kar pomeni manj zaščite brskanja, vendar je bolj verjetno, da bodo funkcije spletnega mesta delovale po pričakovanjih.</translation>
-<translation id="8889294078294184559">Med brskanjem se lahko spletna mesta obrnejo na Chrome in pri prejšnjem spletnem mestu, ki ste ga obiskali, potrdijo, da ste verjetno resnična oseba.</translation>
+<translation id="8889294078294184559">Med brskanjem se lahko spletna mesta obrnejo na Ultimatum in pri prejšnjem spletnem mestu, ki ste ga obiskali, potrdijo, da ste verjetno resnična oseba.</translation>
 <translation id="8899807382908246773">Vsiljivi oglasi</translation>
 <translation id="8903921497873541725">Povečaj</translation>
 <translation id="8921772741368021346"><ph name="POSITION" />/<ph name="DURATION" /></translation>
@@ -653,7 +653,7 @@ Dodatna zaščita upravlja te nastavitve za Chrome:
 <translation id="9109747640384633967">{PERMISSIONS_SUMMARY_MIXED,plural, =1{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> in še <ph name="NUM_MORE" />}one{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> in še <ph name="NUM_MORE" />}two{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> in še <ph name="NUM_MORE" />}few{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> in še <ph name="NUM_MORE" />}other{<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> in še <ph name="NUM_MORE" />}}</translation>
 <translation id="913657688200966289">V <ph name="BEGIN_LINK" />nastavitvah za Android<ph name="END_LINK" /> vklopite dovoljenja za aplikacijo <ph name="APP_NAME" />.</translation>
 <translation id="9138217887606523162">Trenutna povečava/pomanjšava je <ph name="ZOOM_LEVEL" /> %%.</translation>
-<translation id="9156722768168878035">Chrome naj prikaže vaše nedavne zavihke na seznamu aplikacij in v rezultatih iskanja naprave. To lahko kadar koli izklopite v nastavitvah Chroma.</translation>
+<translation id="9156722768168878035">Ultimatum naj prikaže vaše nedavne zavihke na seznamu aplikacij in v rezultatih iskanja naprave. To lahko kadar koli izklopite v nastavitvah Chroma.</translation>
 <translation id="9162462602695099906">Ta stran je nevarna.</translation>
 <translation id="9182556968660520230">Spletnim mestom ni dovoljeno predvajanje zaščitene vsebine.</translation>
 <translation id="947156494302904893">Spletna mesta, ki jih obiščete, lahko preverijo, ali ste resnična oseba in ne bot</translation>

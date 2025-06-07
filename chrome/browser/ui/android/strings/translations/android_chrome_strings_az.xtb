@@ -6,7 +6,7 @@
 <translation id="1011749477052068769">Bura köçürün</translation>
 <translation id="1014147525163127655">Bu cihazda <ph name="ORIGIN" /> üçün giriş açarı yoxdur</translation>
 <translation id="1016498331642356377">Səsinizlə sürətlə axtarın. Bu qısayolu redaktə etmək üçün toxunub saxlayın.</translation>
-<translation id="1024113959924243553">Chrome Dev</translation>
+<translation id="1024113959924243553">Ultimatum Dev</translation>
 <translation id="1028699632127661925"><ph name="DEVICE_NAME" /> cihazına göndərilir...</translation>
 <translation id="103269572468856066">Həmçinin bu saytlar və tətbiqlərdən data silinsin?</translation>
 <translation id="1034259925032978114">Pəncərə açıqdır</translation>
@@ -25,7 +25,7 @@
 <translation id="1094555143448724771">Digər cihazlardakı tablara baxmaq üçün tab və tarixçəni sinxronlaşdırın</translation>
 <translation id="1095761715416917775">Sinxronlaşdırma datasına həmişə girişinizin olduğuna əmin olun</translation>
 <translation id="1100066534610197918">Qrupda yeni tabda açın</translation>
-<translation id="1103142993930332957">Chrome'un təkmilləşdirilməsinə kömək edirsiniz?</translation>
+<translation id="1103142993930332957">Ultimatum'un təkmilləşdirilməsinə kömək edirsiniz?</translation>
 <translation id="1105960400813249514">Ekranın Ani Çəkimi</translation>
 <translation id="1108214977745280468">Səhifə statistikasına baxın</translation>
 <translation id="1108938384783527433">Tarixçə sinxronizasiyası</translation>
@@ -37,12 +37,12 @@
 <translation id="1140317858355046628">Silsəniz, hər kəs "<ph name="GROUP_NAME" />" tab qrupuna girişi dərhal itirəcək və o, bütün cihazlardan silinəcək.</translation>
 <translation id="1142732900304639782">Bu saytların tərcümə edilməsini təklif etməyin</translation>
 <translation id="1145536944570833626">Mövcud datanı silin.</translation>
-<translation id="1150263420752757504"><ph name="APP_NAME" /> Chrome'da açılacaq. Davam etməklə, <ph name="BEGIN_LINK1" />Google Xidmət Şərtləri<ph name="END_LINK1" /> və <ph name="BEGIN_LINK2" />Google Chrome və ChromeOS Əlavə Xidmət Şərtləri<ph name="END_LINK2" /> ilə razılaşırsınız.</translation>
+<translation id="1150263420752757504"><ph name="APP_NAME" /> Ultimatum'da açılacaq. Davam etməklə, <ph name="BEGIN_LINK1" />Google Xidmət Şərtləri<ph name="END_LINK1" /> və <ph name="BEGIN_LINK2" />Ultimatum və UltimatumOS Əlavə Xidmət Şərtləri<ph name="END_LINK2" /> ilə razılaşırsınız.</translation>
 <translation id="1154555449933432029">Google Parol Menecerində saxlanılan parollarınız yoxdur.</translation>
 <translation id="115483310321669804">Parol istifadə edin: <ph name="PASSWORD" /></translation>
 <translation id="1173894706177603556">Adını dəyişin</translation>
-<translation id="1174479719160874822">Ekran dar olduqda Chrome mobil sayt tələb edəcək</translation>
-<translation id="1175241315203286684">Administrator profil və brauzerinizə uzaqdan dəyişikliklər edə, hesabat vasitəsilə brauzer haqqında məlumatları təhlil edə və digər zəruri tapşırıqları yerinə yetirə bilər. Bu cihazdakı fəaliyyət Chrome-dan kənarda da idarə edilə bilər.</translation>
+<translation id="1174479719160874822">Ekran dar olduqda Ultimatum mobil sayt tələb edəcək</translation>
+<translation id="1175241315203286684">Administrator profil və brauzerinizə uzaqdan dəyişikliklər edə, hesabat vasitəsilə brauzer haqqında məlumatları təhlil edə və digər zəruri tapşırıqları yerinə yetirə bilər. Bu cihazdakı fəaliyyət Ultimatum-dan kənarda da idarə edilə bilər.</translation>
 <translation id="1177863135347784049">İxtiyari</translation>
 <translation id="1181037720776840403">Silin</translation>
 <translation id="1183189057400844278">Google Hesabında parollardan hər zaman istifadə edə bilmək üçün kimliyinizi doğrulayın</translation>
@@ -78,8 +78,8 @@
 <translation id="1318262688555255786">Veb-səhifəyə (<ph name="PAGE_TITLE" />) yönləndirən keçid paylaşın. Mənbə: <ph name="PAGE_URL" /></translation>
 <translation id="1320912611264252795">Əlfəcin saxlama prosesi qovluqları tam hündürlükdə açılıb</translation>
 <translation id="1327257854815634930">Naviqasiya tarixçəsi açıqdır</translation>
-<translation id="1331212799747679585">Chrome güncəllənmədi. Digər seçimlər</translation>
-<translation id="1332501820983677155">Google Chrome funksiya qısayolları</translation>
+<translation id="1331212799747679585">Ultimatum güncəllənmədi. Digər seçimlər</translation>
+<translation id="1332501820983677155">Ultimatum funksiya qısayolları</translation>
 <translation id="1333491156693005331">Bu yaxınlarda yoxlayıb</translation>
 <translation id="1336996151357442890"><ph name="SITE_NAME" /> abunəliyindən çıxdınız. Növbəti dəfə daxil olduqda yenidən soruşulacaq.</translation>
 <translation id="1340839264183302272">Qrupdan çıxın</translation>
@@ -96,28 +96,28 @@
 <translation id="1383876407941801731">Axtar</translation>
 <translation id="1384704387250346179">Google Linza ilə şəkli tərcümə edin <ph name="BEGIN_NEW" />Yeni<ph name="END_NEW" /></translation>
 <translation id="1386674309198842382"><ph name="LAST_UPDATED" /> gün əvvəl aktiv olub</translation>
-<translation id="1390418506739274310">Chrome-da keçidləri açan digər tətbiqlərin tarixçəsinə baxa bilərsiniz. <ph name="BEGIN_LINK" />history.google.com<ph name="END_LINK" /> ünvanında Google Hesabının başqa brauzer tarixçəsi formaları ola bilər.</translation>
+<translation id="1390418506739274310">Ultimatum-da keçidləri açan digər tətbiqlərin tarixçəsinə baxa bilərsiniz. <ph name="BEGIN_LINK" />history.google.com<ph name="END_LINK" /> ünvanında Google Hesabının başqa brauzer tarixçəsi formaları ola bilər.</translation>
 <translation id="139752016751285248">Qiymət statistikası üzrə aşağı vərəq tam boyda açıldı</translation>
 <translation id="1397811292916898096"><ph name="PRODUCT_NAME" /> ilə axtarın</translation>
-<translation id="1398057416966591719">Google Hesabında <ph name="BEGIN_LINK1" />yadda saxlanan Chrome datasını idarə edə bilərsiniz<ph name="END_LINK1" />.
+<translation id="1398057416966591719">Google Hesabında <ph name="BEGIN_LINK1" />yadda saxlanan Ultimatum datasını idarə edə bilərsiniz<ph name="END_LINK1" />.
 
-Chrome təcrübənizi təkmilləşdirmək məqsədilə datadan istifadə edən daha çox ayar üçün <ph name="BEGIN_LINK2" />Google Xidmətlərinə<ph name="END_LINK2" /> keçin.</translation>
+Ultimatum təcrübənizi təkmilləşdirmək məqsədilə datadan istifadə edən daha çox ayar üçün <ph name="BEGIN_LINK2" />Google Xidmətlərinə<ph name="END_LINK2" /> keçin.</translation>
 <translation id="1407069428457324124">Tünd tema</translation>
 <translation id="1407135791313364759">Hamısını açın</translation>
 <translation id="1409879593029778104"><ph name="FILE_NAME" /> fayl yüklənilmədi, çünki artıq mövcuddur.</translation>
 <translation id="1413446866325418126">Datanı Google Hesabınızda yadda saxlayın</translation>
 <translation id="1416550906796893042">Tətbiq versiyası</translation>
-<translation id="1419753403124156396">Chrome yenidən başladılsın?</translation>
+<translation id="1419753403124156396">Ultimatum yenidən başladılsın?</translation>
 <translation id="1428770807407000502">Sinxronlaşdırma deaktiv edilsin?</translation>
 <translation id="1430915738399379752">Çap edin</translation>
 <translation id="1435593198351412143">PDF-ləri avtomatik açın</translation>
 <translation id="1437543266176261764"><ph name="APP_NAME" /> tətbiqində işləyir</translation>
 <translation id="1448440926884431741">Əlfəcinlərdə izlədiyiniz məhsulları təşkil edin</translation>
 <translation id="1460751212339734034">Vaxta qənaət edin, az yazın</translation>
-<translation id="1466383950273130737">Chrome dilini seçin</translation>
+<translation id="1466383950273130737">Ultimatum dilini seçin</translation>
 <translation id="1477626028522505441"><ph name="FILE_NAME" /> faylının endirilməsi server problemləri səbəbindən alınmadı.</translation>
 <translation id="147982357559798527">Dəyişdirildi</translation>
-<translation id="1480287803138246127">Tarixçənin bir hissəsi burada görünməyə bilər. Bütün Chrome tarixçənizi görmək üçün tam Chrome tarixçəsini açın.</translation>
+<translation id="1480287803138246127">Tarixçənin bir hissəsi burada görünməyə bilər. Bütün Ultimatum tarixçənizi görmək üçün tam Ultimatum tarixçəsini açın.</translation>
 <translation id="1492417797159476138">Hazırda bu istifadəçi adını bu sayt üçün yadda saxlamısınız</translation>
 <translation id="1493287004536771723"><ph name="SITE_NAME" /> saytını izləyirsiniz</translation>
 <translation id="1496514951988037011">istifadəçi adı</translation>
@@ -128,15 +128,15 @@ Chrome təcrübənizi təkmilləşdirmək məqsədilə datadan istifadə edən d
 <translation id="1513858653616922153">Parolu silin</translation>
 <translation id="1515901671075971249">Tab naviqasiyası qısayolları</translation>
 <translation id="1521774566618522728">Bu gün aktivdir</translation>
-<translation id="153446405401665083">Chrome-un yeni versiyası əlçatandır</translation>
+<translation id="153446405401665083">Ultimatum-un yeni versiyası əlçatandır</translation>
 <translation id="1540012742443808215">Ünvan paneli yuxarıdadır</translation>
 <translation id="1543379346429265919">{BOOKMARKS_COUNT,plural, =1{1 əlfəcin yalnız bu cihazda yadda saxlanıldı. Onu digər cihazlarda istifadə etmək üçün Google Hesabınızda (<ph name="ACCOUNT_EMAIL" />) yadda saxlayın.}other{# əlfəcin yalnız bu cihazda yadda saxlanıldı. Digər cihazlarda istifadə etmək üçün onları Google Hesabınızda (<ph name="ACCOUNT_EMAIL" />) yadda saxlayın.}}</translation>
-<translation id="1544084554881119930">Ödəniş metodu və ünvanlar şifrələnməyəcək. Chrome-dan baxış tarixçəsi sinxronlaşdırılmayacaq.
-Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Google parol ifadəsini əldə etmir və ya saxlamır. Parol ifadəsini unutsanız, yaxud bu ayarı dəyişmək istəsəniz, <ph name="BEGIN_LINK" />hesabda Chrome datasını silin<ph name="END_LINK" />.</translation>
+<translation id="1544084554881119930">Ödəniş metodu və ünvanlar şifrələnməyəcək. Ultimatum-dan baxış tarixçəsi sinxronlaşdırılmayacaq.
+Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Google parol ifadəsini əldə etmir və ya saxlamır. Parol ifadəsini unutsanız, yaxud bu ayarı dəyişmək istəsəniz, <ph name="BEGIN_LINK" />hesabda Ultimatum datasını silin<ph name="END_LINK" />.</translation>
 <translation id="1544826120773021464">Google hesabınızı idarə etmək üçün "Hesabı idarə edin" düyməsinə toxunun</translation>
 <translation id="1549000191223877751">Başqa pəncərəyə keçin</translation>
-<translation id="1553358976309200471">Chrome'u güncəlləşdirin</translation>
-<translation id="1554532453982918912">Chrome'u sizin kimi istifadə edən insanlar üçün təkmilləşdirməyə kömək edin</translation>
+<translation id="1553358976309200471">Ultimatum'u güncəlləşdirin</translation>
+<translation id="1554532453982918912">Ultimatum'u sizin kimi istifadə edən insanlar üçün təkmilləşdirməyə kömək edin</translation>
 <translation id="1568636008098739136">Bu səhifəni dinləyin. Bu qısayolu redaktə etmək üçün toxunub saxlayın.</translation>
 <translation id="1571041387761170095">Zəif və ya təkrar işlənən parol yoxdur</translation>
 <translation id="1571304935088121812">İstifadəçi adını kopyalayın</translation>
@@ -161,7 +161,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="1702907158640575240">İdarə edilən brauzer</translation>
 <translation id="1718835860248848330">Son saat</translation>
 <translation id="1724977129262658800">Parolunuzu redaktə etmək üçün kiliddən çıxarın</translation>
-<translation id="1726477445370128854">Chrome ziyarət edə biləcəyinizi düşündüyü səhifələri əvvəlcədən yüklədikdə daha sürətli gözdən keçirə və axtarış edə bilərsiniz</translation>
+<translation id="1726477445370128854">Ultimatum ziyarət edə biləcəyinizi düşündüyü səhifələri əvvəlcədən yüklədikdə daha sürətli gözdən keçirə və axtarış edə bilərsiniz</translation>
 <translation id="1728803206919861584">Giriş açarı Anonim rejimdən kənarda yadda saxlansın?</translation>
 <translation id="1732514748744806741">Parollarınız oğurlansa, sizə xəbər verəcəyik</translation>
 <translation id="1747593111377567311">{NUM_SITES,plural, =1{1 sayt bu yaxınlarda çoxlu bildiriş göndərib}other{# sayt bu yaxınlarda çoxlu bildiriş göndərib}}</translation>
@@ -171,7 +171,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="1755203724116202818">Reklam performansını (məsələn, sayta daxil olduqdan sonra alış edib-etməməyiniz) ölçmək üçün məhdud növ data saytlar arasında paylaşılır.</translation>
 <translation id="1757620656501361327">Google Parol Meneceri bildirişi</translation>
 <translation id="1760873718737761808">{FILE_COUNT,plural, =1{Səhifələr, siyahıda 1 səhifə}other{Səhifələr, siyahıda # səhifə}}</translation>
-<translation id="1771929606532798550">Chrome istifadəsi haqqında məlumat Google-a göndərilir, lakin sizinlə əlaqələndirilmir\n\nChrome-da xəta olsa, xəta ilə bağlı detallara bəzi şəxsi məlumatlar daxil ola bilər\n\nTarixçəni Google Hesabına sinxronlaşdırsanız, göstəricilərə daxil olduğunuz URL-lər haqqında məlumat da daxil ola bilər</translation>
+<translation id="1771929606532798550">Ultimatum istifadəsi haqqında məlumat Google-a göndərilir, lakin sizinlə əlaqələndirilmir\n\nUltimatum-da xəta olsa, xəta ilə bağlı detallara bəzi şəxsi məlumatlar daxil ola bilər\n\nTarixçəni Google Hesabına sinxronlaşdırsanız, göstəricilərə daxil olduğunuz URL-lər haqqında məlumat da daxil ola bilər</translation>
 <translation id="1778457539567749232">Oxunmamış kimi qeyd edin</translation>
 <translation id="1779766957982586368">Pəncərəni qapadın</translation>
 <translation id="1780023393214832643">Parollar <ph name="USERNAME" /> hesabında yadda saxlandı</translation>
@@ -183,13 +183,13 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="1810845389119482123">İlkin sinxronizasiya ayarlanması tamamlanmayıb</translation>
 <translation id="1812027881030482584"><ph name="SITE_ETLD_PLUS_ONE" /> <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> istifadəsinə davam edə bilməz</translation>
 <translation id="1820408774134375111">Giriş üzrə aşağıdakı vərəq</translation>
-<translation id="1825772852827001597">Google Pay-dən ödəniş metodu və ünvanlar şifrələnməyəcək. Chrome-dan baxış tarixçəsi sinxronlaşdırılmayacaq.
-Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Google parol ifadəsini əldə etmir və ya saxlamır. Parol ifadəsini unutsanız, yaxud bu ayarı dəyişmək istəsəniz, <ph name="BEGIN_LINK" />hesabda Chrome datasını silin<ph name="END_LINK" />.</translation>
+<translation id="1825772852827001597">Google Pay-dən ödəniş metodu və ünvanlar şifrələnməyəcək. Ultimatum-dan baxış tarixçəsi sinxronlaşdırılmayacaq.
+Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Google parol ifadəsini əldə etmir və ya saxlamır. Parol ifadəsini unutsanız, yaxud bu ayarı dəyişmək istəsəniz, <ph name="BEGIN_LINK" />hesabda Ultimatum datasını silin<ph name="END_LINK" />.</translation>
 <translation id="1829244130665387512">Səhifədə tapın</translation>
 <translation id="1832459821645506983">Bəli, varam</translation>
-<translation id="1845958458910716240">Datanı qorumaq üçün Chrome-un son vaxtlar daxil olmadığınız saytlardan icazələri silməsinə icazə verin</translation>
-<translation id="1871098866036088250">Chrome brauzerində açın</translation>
-<translation id="1877026089748256423">Chrome'un vaxtı keçib</translation>
+<translation id="1845958458910716240">Datanı qorumaq üçün Ultimatum-un son vaxtlar daxil olmadığınız saytlardan icazələri silməsinə icazə verin</translation>
+<translation id="1871098866036088250">Ultimatum brauzerində açın</translation>
+<translation id="1877026089748256423">Ultimatum'un vaxtı keçib</translation>
 <translation id="1877073879466606884">Daxil olduğunuz profil idarə olunan profildir. Administrator profil ayarlarına uzaqdan dəyişiklik edə, hesabat vasitəsilə brauzer haqqında məlumatları təhlil edə və digər zəruri tapşırıqları yerinə yetirə bilər.</translation>
 <translation id="1879904908408734349">Giriş üzrə aşağıdakı vərəq bağlanıb</translation>
 <translation id="1883903952484604915">Fayllarım</translation>
@@ -200,7 +200,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="1910950723001426294">Paylaşım seçimlərinin siyahısı bağlıdır.</translation>
 <translation id="191726024256261717">İcazələri nəzərdən keçirin</translation>
 <translation id="1917766536967060661">"<ph name="GROUP_NAME" />" tab qrupuna girişi dərhal itirəcəksiniz və <ph name="BLOCKED_MEMBER_FULL_NAME" /> (<ph name="BLOCKED_MEMBER_EMAIL" />) daha Google xidmətlərində sizinlə əlaqə saxlaya bilməyəcək.</translation>
-<translation id="1919130412786645364">Chrome girişinə icazə verin</translation>
+<translation id="1919130412786645364">Ultimatum girişinə icazə verin</translation>
 <translation id="1922362554271624559">Təklif edilən dillər</translation>
 <translation id="1924255092154549435">Tab genişləndirildi</translation>
 <translation id="1925021887439448749">Fərdi veb ünvanı daxil edin</translation>
@@ -212,11 +212,11 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="1944535645109964458">Əlçatan giriş açarı yoxdur</translation>
 <translation id="1957557050935255529">PDF yüklənir…</translation>
 <translation id="1959679933317802873">Məzmun gözlənilir</translation>
-<translation id="1960290143419248813">Chrome güncəlləmələri artıq bu Android versiyasında dəstəklənmir</translation>
+<translation id="1960290143419248813">Ultimatum güncəlləmələri artıq bu Android versiyasında dəstəklənmir</translation>
 <translation id="1963056249988316027">Kimlik Yoxlaması aktivdir və kimliyinizi doğrulaya bilmir</translation>
 <translation id="1963976881984600709">Standart qoruma</translation>
 <translation id="1966710179511230534">Hesaba giriş detallarınızı güncəlləşdirin.</translation>
-<translation id="1969037871259811890">Baxış datasını sildikdə Google Hesabından çıxmırsınız. Bunun üçün <ph name="BEGIN_LINK1" />Chrome-dan çıxın<ph name="END_LINK1" />.</translation>
+<translation id="1969037871259811890">Baxış datasını sildikdə Google Hesabından çıxmırsınız. Bunun üçün <ph name="BEGIN_LINK1" />Ultimatum-dan çıxın<ph name="END_LINK1" />.</translation>
 <translation id="197288927597451399">Saxlayın</translation>
 <translation id="1973912524893600642">Datanı saxlayın</translation>
 <translation id="1974060860693918893">Qabaqcıl</translation>
@@ -226,7 +226,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="200114059308480249">Google axtarışlarına ətrafdakı mətn daxil edilsin?</translation>
 <translation id="2021896219286479412">Tam ekran sayt nəzarətləri</translation>
 <translation id="2038563949887743358">Əsas Versiya Sorğusunu aktiv edin</translation>
-<translation id="204321170514947529">Həmçinin, <ph name="APP_NAME" /> tətbiqinin Chrome'da datası var</translation>
+<translation id="204321170514947529">Həmçinin, <ph name="APP_NAME" /> tətbiqinin Ultimatum'da datası var</translation>
 <translation id="2047378580182589770">Anonim rejimdən çıxmaq üçün toxunub saxlayın</translation>
 <translation id="2049574241039454490"><ph name="FILE_SIZE_OF_TOTAL" /> <ph name="SEPARATOR" /> <ph name="DESCRIPTION" /></translation>
 <translation id="2051669996101374349">Mümkün olduqda HTTPS istifadə edin və onu dəstəkləməyən saytları yükləməzdən əvvəl xəbərdarlıq alın. Qabaqcıl Qoruma aktivləşdirildiyi üçün bu ayarı dəyişə bilməzsiniz.</translation>
@@ -236,7 +236,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="2067805253194386918">mətn</translation>
 <translation id="2079545284768500474">Geri qaytarın</translation>
 <translation id="2082238445998314030"><ph name="TOTAL_RESULTS" /> nəticədən <ph name="RESULT_NUMBER" /></translation>
-<translation id="2088833076121753253">Avto-doldurmanı quraşdırmağı tamamlamaq üçün Chrome-u indi yenidən başladın. Tablar avtomatik olaraq yenidən açılacaq.</translation>
+<translation id="2088833076121753253">Avto-doldurmanı quraşdırmağı tamamlamaq üçün Ultimatum-u indi yenidən başladın. Tablar avtomatik olaraq yenidən açılacaq.</translation>
 <translation id="2091863218454846791">Kompakt görünüş göstərilir</translation>
 <translation id="2093731487903423814">son 15 dəqiqə</translation>
 <translation id="2100273922101894616">Hesaba avtomatik giriş</translation>
@@ -246,10 +246,10 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="2122601567107267586">Tətbiqi açmaq alınmadı</translation>
 <translation id="213279576345780926"><ph name="TAB_TITLE" /> qapadıldı</translation>
 <translation id="2141396931810938595">İstifadənizə əsasən</translation>
-<translation id="2145315049852051678">Chrome brauzerin ən təhlükəsiz ayarlara malik olub-olmadığını müntəzəm yoxlayır. Nəzərdən keçirilməli məqam olsa, sizə bildirəcəyik.</translation>
+<translation id="2145315049852051678">Ultimatum brauzerin ən təhlükəsiz ayarlara malik olub-olmadığını müntəzəm yoxlayır. Nəzərdən keçirilməli məqam olsa, sizə bildirəcəyik.</translation>
 <translation id="2149973817440762519">Əlfəcinə düzəliş edin</translation>
-<translation id="2158408438301413340">Chrome bütün parolları yoxlaya bilmədi</translation>
-<translation id="2163089732491971196">Google Hesabında Chrome datasını istifadə etmək və yadda saxlamaq üçün parol ifadəsi daxil edin</translation>
+<translation id="2158408438301413340">Ultimatum bütün parolları yoxlaya bilmədi</translation>
+<translation id="2163089732491971196">Google Hesabında Ultimatum datasını istifadə etmək və yadda saxlamaq üçün parol ifadəsi daxil edin</translation>
 <translation id="2166228530126694506">Versiya <ph name="VERSION_NUMBER" /></translation>
 <translation id="2172688499998841696">Şəkil təsvirləri deaktivdir</translation>
 <translation id="2172905120685242547">Pəncərə bağlansın?</translation>
@@ -261,7 +261,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="219283042927675668">Qrupdakı tablar</translation>
 <translation id="2194856509914051091">Nəzərə alınmalı amillər</translation>
 <translation id="22091350895006575">İstifadəçi adı əlavə edin</translation>
-<translation id="221494669172414749">Chrome-u profil kilidi olmadan açdıqda yadda saxlanmış parol və ödəniş metodları avtomobildən silinəcək. Profil kilidindən istifadə bu datanı qoruyur.</translation>
+<translation id="221494669172414749">Ultimatum-u profil kilidi olmadan açdıqda yadda saxlanmış parol və ödəniş metodları avtomobildən silinəcək. Profil kilidindən istifadə bu datanı qoruyur.</translation>
 <translation id="2227444325776770048"><ph name="USER_FULL_NAME" /> kimi davam edin</translation>
 <translation id="2230777942707397948">Boş pəncərə</translation>
 <translation id="223356358902285214">Veb və Tətbiq Fəaliyyəti</translation>
@@ -287,7 +287,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="2332515770639153015">Qabaqcıl Güvənli Baxış aktivdir</translation>
 <translation id="233375395665273385">Silin və çıxın</translation>
 <translation id="2341410551640223969"><ph name="WEBAPK_NAME" /> tətbiqini quraşdırmaq mümkün olmadı.</translation>
-<translation id="2349710944427398404">Hesablar, əlfəcinlər və yadda saxlanılan ayarlar daxil olmaqla, Chrome tərəfindən istifadə olunmuş ümumi data</translation>
+<translation id="2349710944427398404">Hesablar, əlfəcinlər və yadda saxlanılan ayarlar daxil olmaqla, Ultimatum tərəfindən istifadə olunmuş ümumi data</translation>
 <translation id="2349954856814571872">Əlfəcin panelinin düymə ikonası</translation>
 <translation id="235789365079050412">Google Məxfilik Siyasəti</translation>
 <translation id="2359808026110333948">Davam edin</translation>
@@ -307,7 +307,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="2433507940547922241">Görünüş</translation>
 <translation id="2435457462613246316">Parol görünsün</translation>
 <translation id="2439153523196674349"><ph name="SITE_NAME" /> Önizləmə</translation>
-<translation id="2449931042095204989">Google saytı və ya tətbiqi öz səhifəsindəki keçidləri məxfi olaraq əvvəlcədən yükləməyi tələb etdikdə Chrome kukilər olmadan Google serverləri vasitəsilə səhifələri şifrələyir və əvvəlcədən yükləyir. Bu, kimliyinizi əvvəlcədən yüklənmiş saytdan gizlədir.</translation>
+<translation id="2449931042095204989">Google saytı və ya tətbiqi öz səhifəsindəki keçidləri məxfi olaraq əvvəlcədən yükləməyi tələb etdikdə Ultimatum kukilər olmadan Google serverləri vasitəsilə səhifələri şifrələyir və əvvəlcədən yükləyir. Bu, kimliyinizi əvvəlcədən yüklənmiş saytdan gizlədir.</translation>
 <translation id="2450083983707403292"><ph name="FILE_NAME" /> faylını yenidən endirmək istəyirsiniz?</translation>
 <translation id="2451607499823206582">İzləmə</translation>
 <translation id="2453860139492968684">Son</translation>
@@ -315,17 +315,17 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="2461822463642141190">Cari</translation>
 <translation id="2463770278804271243">SƏHİFƏ</translation>
 <translation id="2468444275314013497">Brauzer təhlükəsiz görünür</translation>
-<translation id="2472163211318554013">Chrome'dan maksimum yararlanmaq üçün daxil olun</translation>
+<translation id="2472163211318554013">Ultimatum'dan maksimum yararlanmaq üçün daxil olun</translation>
 <translation id="247737702124049222">Şəkil təsvirləri aktivdir</translation>
 <translation id="2479148705183875116">Ayarlara keçin</translation>
 <translation id="2482878487686419369">Bildirişlər</translation>
 <translation id="2496180316473517155">Brauzer tarixçəsi</translation>
 <translation id="2497852260688568942">Sinxronizasiya administratorunuz tərəfindən deaktiv edilib</translation>
-<translation id="250020030759455918">Chrome'da <ph name="SITE_NAME" /> üçün giriş statusu, baxış datası və sayt datanızı görəcəksiniz</translation>
+<translation id="250020030759455918">Ultimatum'da <ph name="SITE_NAME" /> üçün giriş statusu, baxış datası və sayt datanızı görəcəksiniz</translation>
 <translation id="2510106555128151389"><ph name="WEBAPK_NAME" /> quraşdırılır...</translation>
 <translation id="2512234228327349533">Alış seçimlərini axtarın</translation>
 <translation id="2513403576141822879">Məxfilik, təhlükəsizlik və data toplanması ilə bağlı daha çox ayarlar üçün <ph name="BEGIN_LINK" />Sinxronizasiya və Google xidmətləri<ph name="END_LINK" /> səhifəsinə daxil olun</translation>
-<translation id="2515921719039583189">Chrome datası bu cihazdan silinsin?</translation>
+<translation id="2515921719039583189">Ultimatum datası bu cihazdan silinsin?</translation>
 <translation id="2517113738956581680">Tam ölçülü vərəq</translation>
 <translation id="2523184218357549926">Daxil olduğunuz səhifələrin linkləri Google'a göndərilir</translation>
 <translation id="2524132927880411790">Google tətbiqi Səsli axtarışa keçin</translation>
@@ -343,10 +343,10 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="2569733278091928697">Media nizamlayıcılarını, Anonim sessiyaları, endirmələri və s. asanlıqla idarə edə biləcəksiniz</translation>
 <translation id="2571711316400087311">Başqa dillərdə olan səhifələrin Google Tərcüməyə göndərilməsini təklif edin</translation>
 <translation id="2571834852878229351">Fərdi parol yaradıram</translation>
-<translation id="2574249610672786438">Chrome istifadə etdiyiniz hər yerdən tabları görmək üçün bütün cihazlarda daxil olun</translation>
+<translation id="2574249610672786438">Ultimatum istifadə etdiyiniz hər yerdən tabları görmək üçün bütün cihazlarda daxil olun</translation>
 <translation id="2577981599306533385"><ph name="MEMBER_FULL_NAME" /> (<ph name="EMAIL" />) "<ph name="GROUP_NAME" />" dərhal tab qrupuna girişini itirəcək və daha Google xidmətlərində sizinlə əlaqə saxlaya bilməyəcək.</translation>
 <translation id="2579297619530305344">Bütün cihazlarınızda parollar tam hündürlükdə açıldı</translation>
-<translation id="2581165646603367611">Bu, Chrome'un vacib hesab etmədiyi kukilər, keş və digər sayt datalarını siləcək.</translation>
+<translation id="2581165646603367611">Bu, Ultimatum'un vacib hesab etmədiyi kukilər, keş və digər sayt datalarını siləcək.</translation>
 <translation id="2587052924345400782">Ən yeni versiya əlçatandır</translation>
 <translation id="2593272815202181319">Monospace</translation>
 <translation id="260403163289591229">İzlənilir</translation>
@@ -386,7 +386,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="2779651927720337254">alınmadı</translation>
 <translation id="2781151931089541271">1 saniyə qaldı</translation>
 <translation id="2789486458103222910">Oldu</translation>
-<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Chrome təkmilləşdirə biləcəyiniz təkrar işlənən parol aşkarladı}other{Chrome təkmilləşdirə biləcəyiniz # təkrar işlənən parol aşkarladı}}</translation>
+<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Ultimatum təkmilləşdirə biləcəyiniz təkrar işlənən parol aşkarladı}other{Ultimatum təkmilləşdirə biləcəyiniz # təkrar işlənən parol aşkarladı}}</translation>
 <translation id="2800066122460699237"><ph name="TAB_TITLE" /> tabı bağlanacaq</translation>
 <translation id="2805756323405976993">Tətbiq</translation>
 <translation id="281504910091592009"><ph name="BEGIN_LINK" />Google Hesabınızda<ph name="END_LINK" /> yadda saxlanılmış parollara baxın və idarə edin</translation>
@@ -402,14 +402,14 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="2842985007712546952">Ana qovluq</translation>
 <translation id="2854916915045135148">Anonim rejimə keçmək üçün toxunub saxlayın</translation>
 <translation id="2860954141821109167">Telefon tətbiqinin bu cihazda aktiv edildiyinə əmin olun</translation>
-<translation id="2861923151411510142">Bəzi Chrome funksiyaları daha əlçatan olmayacaq</translation>
+<translation id="2861923151411510142">Bəzi Ultimatum funksiyaları daha əlçatan olmayacaq</translation>
 <translation id="2869430948265924908">Avtomobildə həssas kontenti qorumaq üçün avtomobil profil kilidi yaratmalısınız.  Bunu PIN, kod və ya parol ilə edə bilərsiniz.</translation>
 <translation id="2870560284913253234">Sayt</translation>
 <translation id="2871733351037274014">Səhifələri əvvəlcədən yükləyin</translation>
 <translation id="2876136027428473467"><ph name="CHILD_NAME" /> bu vebsaytı təsdiq etməyinizi istəyir:</translation>
-<translation id="2876628302275096482"><ph name="BEGIN_LINK" />Chrome-un datanı məxfi saxlaması<ph name="END_LINK" /> haqqında ətraflı</translation>
+<translation id="2876628302275096482"><ph name="BEGIN_LINK" />Ultimatum-un datanı məxfi saxlaması<ph name="END_LINK" /> haqqında ətraflı</translation>
 <translation id="2883644600102358131">Tezliklə parollar bu cihazda işləməyəcək. Parollardan istifadəyə davam etmək üçün Google Play xidmətlərini yeniləyin.</translation>
-<translation id="2888126860611144412">Chrome haqqında</translation>
+<translation id="2888126860611144412">Ultimatum haqqında</translation>
 <translation id="2891154217021530873">Səhifə yükləməsini dayandırın</translation>
 <translation id="2894821468041866720">Brauzer və ya cihazı çox yavaşlatmır.</translation>
 <translation id="2895521649038438824">Bu səhifəni dinləyə bilərsiniz</translation>
@@ -424,14 +424,14 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="2923908459366352541">Ad yanlışdır</translation>
 <translation id="2932150158123903946">Google <ph name="APP_NAME" /> yaddaşı</translation>
 <translation id="2932222164150889403">Klaviatura dəyişməyəcək</translation>
-<translation id="2936980480904111527">Chrome bildirişləri işləri asanlaşdırır</translation>
+<translation id="2936980480904111527">Ultimatum bildirişləri işləri asanlaşdırır</translation>
 <translation id="2940075786175545812">Vebsaytı təsdiqləmək və ya təsdiqləməmək seçimi</translation>
 <translation id="2942036813789421260">Önbaxış tabı bağlıdır</translation>
 <translation id="2951071800649516099">Sonra üçün oxu siyahınıza səhifələr əlavə edin</translation>
 <translation id="2954586176076923855">Ünvan panelini yuxarıya köçürün</translation>
 <translation id="2961208450284224863">{READING_LIST_UNREAD_PAGE_COUNT,plural, =1{<ph name="READING_LIST_UNREAD_PAGE_COUNT_ONE" /> oxunmamış səhifə}other{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> oxunmamış səhifə}}</translation>
 <translation id="2972109037780336501">İcazələri avtomatik silin</translation>
-<translation id="2976550651269220761">Müəyyən Chrome datanız hələ Google Hesabında yadda saxlanılmayıb.\nÇıxmazdan əvvəl bir neçə dəqiqə gözləyin. İndi çıxsanız, bu data silinəcək.</translation>
+<translation id="2976550651269220761">Müəyyən Ultimatum datanız hələ Google Hesabında yadda saxlanılmayıb.\nÇıxmazdan əvvəl bir neçə dəqiqə gözləyin. İndi çıxsanız, bu data silinəcək.</translation>
 <translation id="2977350910003566746">Sonuncu açılan əsasında çeşidlənir</translation>
 <translation id="297771753501244313">Çeşidləyin: Son açılan</translation>
 <translation id="2979639724566107830">Yeni pəncərədə açın</translation>
@@ -451,14 +451,14 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="3029704984691124060">Parollar uyğun gəlmir</translation>
 <translation id="3036750288708366620"><ph name="BEGIN_LINK" />Yardım alın<ph name="END_LINK" /></translation>
 <translation id="3037177537145227281">Qiymət izlənilir</translation>
-<translation id="3037517125981011456">Chrome'a giriş tələblərini göstərir</translation>
+<translation id="3037517125981011456">Ultimatum'a giriş tələblərini göstərir</translation>
 <translation id="3038272154009688107">Bütün saytlara baxın</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> əlfəcin}other{<ph name="BOOKMARKS_COUNT_MANY" /> əlfəcin}}</translation>
-<translation id="3062802207422175757">Chrome'da maraqlarınıza dair məqalələr</translation>
+<translation id="3062802207422175757">Ultimatum'da maraqlarınıza dair məqalələr</translation>
 <translation id="3066573403916685335">Aşağıya</translation>
 <translation id="3067505415088964188">Qiymət aşağıdır</translation>
 <translation id="3070005020161560471">Avtomatik tərcümə edin</translation>
-<translation id="3072980200212375806"><ph name="APP_NAME" /> Chrome'da açılacaq. Davam etməklə, <ph name="BEGIN_LINK1" />Google Xidmət Şərtləri<ph name="END_LINK1" /> və <ph name="BEGIN_LINK2" />Google Chrome və ChromeOS Əlavə Xidmət Şərtləri<ph name="END_LINK2" /> ilə razılaşırsınız. <ph name="BEGIN_LINK3" />Məxfilik Siyasəti<ph name="END_LINK3" /> də tətbiq edilir.</translation>
+<translation id="3072980200212375806"><ph name="APP_NAME" /> Ultimatum'da açılacaq. Davam etməklə, <ph name="BEGIN_LINK1" />Google Xidmət Şərtləri<ph name="END_LINK1" /> və <ph name="BEGIN_LINK2" />Ultimatum və UltimatumOS Əlavə Xidmət Şərtləri<ph name="END_LINK2" /> ilə razılaşırsınız. <ph name="BEGIN_LINK3" />Məxfilik Siyasəti<ph name="END_LINK3" /> də tətbiq edilir.</translation>
 <translation id="3080525922482950719">Sonra və ya oflayn oxumaq üçün səhifələri yadda saxlaya bilərsiniz</translation>
 <translation id="3087734570205094154">Alt</translation>
 <translation id="3091010850649238832">Mübadilə buferindəki kontenti göstərin</translation>
@@ -467,12 +467,12 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="3122883569442693641">Ətraflı məlumat</translation>
 <translation id="3123734510202723619">Elanlar</translation>
 <translation id="3148237711805373460">Keçin</translation>
-<translation id="314939179385989105">Chrome’un əsas səhifəsi</translation>
+<translation id="314939179385989105">Ultimatum’un əsas səhifəsi</translation>
 <translation id="3158667104057012316">Manual sıra ilə çeşidlənir</translation>
 <translation id="3159335509547415276">Bloklanmış hesablar haqqında məlumat əldə edin</translation>
 <translation id="3161699713309727585"><ph name="BUTTON_TEXT" />, yeni tabda açılır</translation>
 <translation id="3166827708714933426">Panel və pəncərə qısayolları</translation>
-<translation id="316694332262407393">Chrome artıq burada işləyir.</translation>
+<translation id="316694332262407393">Ultimatum artıq burada işləyir.</translation>
 <translation id="3167258285411721858"><ph name="HOST_NAME" /> üçün mobil sayt tələb edə bilərsiniz</translation>
 <translation id="3169472444629675720">Discover</translation>
 <translation id="3172472771272043251">{PASSWORDS_COUNT,plural, =1{1 parol və digər elementlər yalnız bu cihazda yadda saxlanılır. Onları digər cihazlarda istifadə etmək üçün Google Hesabında (<ph name="ACCOUNT_EMAIL" />) yadda saxlayın.}other{# parol və digər elementlər yalnız bu cihazda yadda saxlanılır. Onları digər cihazlarda istifadə etmək üçün Google Hesabında (<ph name="ACCOUNT_EMAIL" />) yadda saxlayın.}}</translation>
@@ -488,7 +488,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="3236059992281584593">1 dəqiqə qaldı</translation>
 <translation id="3237087289225714896">Standart əvvəlcədən yükləmə:</translation>
 <translation id="3244271242291266297">MM</translation>
-<translation id="3245429137663807393">Chrome istifadə hesabatlarını da paylaşırsınızsa, bu hesabatlara ziyarət etdiyiniz keçidlər daxil olacaq</translation>
+<translation id="3245429137663807393">Ultimatum istifadə hesabatlarını da paylaşırsınızsa, bu hesabatlara ziyarət etdiyiniz keçidlər daxil olacaq</translation>
 <translation id="3250563604907490871">Wi-Fi'a qoşulduğunuz zaman şəkil təsvirləri davam edəcək</translation>
 <translation id="3254409185687681395">Bu səhifəni əlfəcinləyin</translation>
 <translation id="3259831549858767975">Səhifədəki hər şeyi kiçildin</translation>
@@ -496,7 +496,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="3269093882174072735">Şəkli yükləyin</translation>
 <translation id="327204079441056603">Parolların bu cihazda yadda saxlanma qaydasını dəyişdik</translation>
 <translation id="3280562213547448728">Səsli axtarış</translation>
-<translation id="3282568296779691940">Chrome'a daxil olun</translation>
+<translation id="3282568296779691940">Ultimatum'a daxil olun</translation>
 <translation id="3285065882678541460">{TAB_COUNT,plural, =1{<ph name="TAB_GROUPS_PART" />, <ph name="TAB_COUNT_ONE" /> tab}other{<ph name="TAB_GROUPS_PART" />, <ph name="TAB_COUNT_MANY" /> tab}}</translation>
 <translation id="3293181007446299124">Baxış tarixçəniz cihazınızda məxfi saxlanılır və şəxsiyyətinizi qorumaq üçün hesabatlar gecikmə ilə göndərilir</translation>
 <translation id="3301936297336370235">Parol təklifinin təsdiqi</translation>
@@ -513,7 +513,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="3351165113450806415">Çəkməyin yeni üsulu</translation>
 <translation id="3359667936385849800">Cari xidmət təminatçınızı istifadə edin</translation>
 <translation id="3373701465337594448">Aktiv olduqda, maraqlarınızı təxmin edən ziyarət etdiyiniz saytların siyahısı burada görünür</translation>
-<translation id="3374023511497244703">Əlfəcin, tarixçə, parol və digər Chrome datası artıq Google Hesabınıza sinxronizasiya edilməyəcək</translation>
+<translation id="3374023511497244703">Əlfəcin, tarixçə, parol və digər Ultimatum datası artıq Google Hesabınıza sinxronizasiya edilməyəcək</translation>
 <translation id="3384347053049321195">Şəkli paylaşın</translation>
 <translation id="3387650086002190359">Fayl sistem xətaları səbəbindən <ph name="FILE_NAME" /> faylı endirilmədi.</translation>
 <translation id="3398320232533725830">Əlfəcin menecerini açın</translation>
@@ -528,19 +528,19 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="3443221991560634068">Cari səhifəni yenidən yükləyin</translation>
 <translation id="3444179773590444986">Saytlar üçün tünd tema barədə rəy paylaşılsın?</translation>
 <translation id="3448874648066942074">Səhifəni AI ilə icmallaşdırın</translation>
-<translation id="3452832259067974318">Chrome məxfiliyi qorumaq üçün parolu bu sahədə avtomatik doldurmayacaq.</translation>
+<translation id="3452832259067974318">Ultimatum məxfiliyi qorumaq üçün parolu bu sahədə avtomatik doldurmayacaq.</translation>
 <translation id="3467081767799433066">Reklam dəyərləndirməsi ilə reklam performansını (məsələn, sayta daxil olduqdan sonra alış edib-etməməyiniz) ölçmək üçün saytlar arasında məhdud növ data paylaşılır.</translation>
 <translation id="3474624961160222204"><ph name="NAME" /> olaraq davam edin</translation>
 <translation id="3478363558367712427">Axtarış maşınını seçə bilərsiniz</translation>
 <translation id="3479552764303398839">İndi yox</translation>
 <translation id="3482805106082349287">Klaviatura, səs, Anonim rejim və ya kameradan istifadə edərək axtarın</translation>
-<translation id="3487903178221457900">Eksport edilmiş fayl tətbiqlər də daxil olmaqla digərləri üçün əlçatan ola bilər. Eksport etdikdən sonra parollarınız Chrome-dan silinir.</translation>
+<translation id="3487903178221457900">Eksport edilmiş fayl tətbiqlər də daxil olmaqla digərləri üçün əlçatan ola bilər. Eksport etdikdən sonra parollarınız Ultimatum-dan silinir.</translation>
 <translation id="3488199663160411179">ad</translation>
 <translation id="3493531032208478708">Təklif məzmunu haqqında <ph name="BEGIN_LINK" />daha ətraflı<ph name="END_LINK" /></translation>
 <translation id="3499246418971111862">chrome_qrcode_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="350276055892098337">Ən köhnə üzrə sıralayın</translation>
 <translation id="3507132249039706973">Standart Qoruma aktivdir</translation>
-<translation id="3509330069915219067">Oflayn. Chrome güncəlləmələri yoxlaya bilmir.</translation>
+<translation id="3509330069915219067">Oflayn. Ultimatum güncəlləmələri yoxlaya bilmir.</translation>
 <translation id="3513019849832307207">Qoşulun və açın</translation>
 <translation id="3513704683820682405">Artırılmış Reallıq</translation>
 <translation id="3516053221628030540">Google Play-ə keçin</translation>
@@ -573,10 +573,10 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="3627893290277153986">Səhifəni yadda saxlamaq üçün seçimləri açın</translation>
 <translation id="3631987586758005671"><ph name="DEVICE_NAME" /> ilə paylaşılır</translation>
 <translation id="363484704507524488">Oğurluqdan qoruma ayarlarında Kimlik Yoxlamasını idarə edə bilərsiniz. <ph name="BEGIN_LINK" />Ayarlara keçin<ph name="END_LINK" /></translation>
-<translation id="3635073343384702370">Chrome yadda saxlanan parolları yoxlaya bilər</translation>
+<translation id="3635073343384702370">Ultimatum yadda saxlanan parolları yoxlaya bilər</translation>
 <translation id="363596933471559332">Saxlanmış kredensialları istifadə edərək vebsaytlara avtomatik daxil olun. Funksiya deaktiv olanda sayta hər dəfə girdiyinizdə doğrulama tələb olunacaq.</translation>
 <translation id="3636940436873918441">Tərcih etdiyiniz dillər</translation>
-<translation id="3637744895182738742">Parol ifadəsini unutsanız, yaxud bu ayarı dəyişmək istəsəniz, <ph name="BEGIN_LINK" />hesabda Chrome datasını silin<ph name="END_LINK" />.</translation>
+<translation id="3637744895182738742">Parol ifadəsini unutsanız, yaxud bu ayarı dəyişmək istəsəniz, <ph name="BEGIN_LINK" />hesabda Ultimatum datasını silin<ph name="END_LINK" />.</translation>
 <translation id="3653111872753786013"><ph name="WEBSITE_TITLE" />: <ph name="WEBSITE_URL" /></translation>
 <translation id="3674208116086565128">Google tətbiqi Home-a keçin</translation>
 <translation id="368329460027487650">Çıxılıb. Giriş seçimlərini açır.</translation>
@@ -592,7 +592,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="3710501561113687889">Davam etmək üçün <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> <ph name="FIELDS_STRING" /> kimi məlumatlarınızı bu sayt ilə paylaşacaq.</translation>
 <translation id="3710560693796335511">Əməkdaşlıq</translation>
 <translation id="3714981814255182093">Tapma Barını açın</translation>
-<translation id="3718765429352682176">Chrome-da keçidləri açan digər tətbiqlərin tarixçəsinə baxa bilərsiniz.</translation>
+<translation id="3718765429352682176">Ultimatum-da keçidləri açan digər tətbiqlərin tarixçəsinə baxa bilərsiniz.</translation>
 <translation id="3721119614952978349">Siz və Google</translation>
 <translation id="3737319253362202215">Tərcümə ayarları</translation>
 <translation id="3738139272394829648">Axtarmaq üçün toxunun</translation>
@@ -640,8 +640,8 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="3950820424414687140">Giriş</translation>
 <translation id="395377504920307820">Hesab olmadan istifadə edin</translation>
 <translation id="3955219620682768253">Tarixçədə əvvəlki səhifəyə keçin</translation>
-<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Chrome səhifəni cihaz onlayn olduqda yükləyəcək}other{Chrome səhifələri cihaz onlayn olduqda yükləyəcək}}</translation>
-<translation id="3969142555815019568">Chrome parollarınızı yoxlaya bilmir</translation>
+<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Ultimatum səhifəni cihaz onlayn olduqda yükləyəcək}other{Ultimatum səhifələri cihaz onlayn olduqda yükləyəcək}}</translation>
+<translation id="3969142555815019568">Ultimatum parollarınızı yoxlaya bilmir</translation>
 <translation id="3969863827134279083">Yuxarı Köçürün</translation>
 <translation id="397105322502079400">Hesablanır...</translation>
 <translation id="397583555483684758">Sinxronizasiya işləmir</translation>
@@ -678,7 +678,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="4132137475637520539">Keçidi olan hər kəs qoşulsun</translation>
 <translation id="4135200667068010335">Tabı paylaşa biləcəyiniz cihazların siyahısı bağlıdır.</translation>
 <translation id="4137746084635924146">Cari cihaz dili</translation>
-<translation id="4139654229316918773">Chrome Canary</translation>
+<translation id="4139654229316918773">Ultimatum Canary</translation>
 <translation id="414128724510021958">Defolt olaraq tələb olunan masaüstü saytlar</translation>
 <translation id="4162867837470729563">Paylaşım seçimlərinin siyahısı tam yüksəklikdədir.</translation>
 <translation id="4170011742729630528">Xidmət əlçatmazdır. Yenidən cəhd edin.</translation>
@@ -691,14 +691,14 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="4197828496439691735">{NUM_TABS,plural, =1{Bu cihazda 1 tab}other{Bu cihazda # tab}}</translation>
 <translation id="4198423547019359126">Əlçatan endirmə məkanı yoxdur</translation>
 <translation id="4209029522667123437"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> • Bu saytda istifadə etdiniz</translation>
-<translation id="4214315110991671325">Kukilərə icazə versəniz, Chrome onları əvvəlcədən yükləmək üçün istifadə edə bilər.</translation>
+<translation id="4214315110991671325">Kukilərə icazə versəniz, Ultimatum onları əvvəlcədən yükləmək üçün istifadə edə bilər.</translation>
 <translation id="4216511743389425832">Bu səhifəni dinləyin</translation>
 <translation id="4225725533026049334">İzlənilir</translation>
 <translation id="4225895483398857530">Alətlər paneli qısayolu</translation>
 <translation id="4232376164796433044">Parollar və avto-doldurma</translation>
 <translation id="4242533952199664413">Ayarları açın</translation>
 <translation id="4248098802131000011">Data pozuntuları və digər güvənlik məsələlərinə qarşı parollarınızı qoruyun</translation>
-<translation id="424864128008805179">Chrome'dan çıxılsın?</translation>
+<translation id="424864128008805179">Ultimatum'dan çıxılsın?</translation>
 <translation id="4249955472157341256">Ən sonuncular üzrə sıalayın</translation>
 <translation id="4255841059940367080">Google-a göndərilən axtarış datasına əsasən təhlükəli sayt, endirmə və artırmalardan real zamanda Sİ dəstəkli qorunma</translation>
 <translation id="4256782883801055595">Açıq mənbə lisenziyaları</translation>
@@ -707,7 +707,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="4270730597186910506">Məhsulu izləyin və ya izləməyin.</translation>
 <translation id="4277529130885813215">Digər cihazdan istifadə edin</translation>
 <translation id="427987768447457592">Yeni tab qrupu</translation>
-<translation id="4282440837784183472">Təşkilat (<ph name="MANAGED_DOMAIN" />) daxil olduğunuz hesabı və Chrome-dan istifadə qaydasını idarə edir. Administrator müəyyən funksiyaları ayarlaya və ya məhdudlaşdıra bilər.</translation>
+<translation id="4282440837784183472">Təşkilat (<ph name="MANAGED_DOMAIN" />) daxil olduğunuz hesabı və Ultimatum-dan istifadə qaydasını idarə edir. Administrator müəyyən funksiyaları ayarlaya və ya məhdudlaşdıra bilər.</translation>
 <translation id="4285498937028063278">Çıxarın</translation>
 <translation id="4285846616383034558">Kukilər, keş və digər sayt datası</translation>
 <translation id="4291407919474070700"><ph name="BEGIN_LINK" />Android ayarlarında ekran kilidini aktiv edin<ph name="END_LINK" /></translation>
@@ -717,7 +717,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="4307992518367153382">Əsaslar</translation>
 <translation id="4311652497846705514">PDF açılsın?</translation>
 <translation id="4320177379694898372">İnternet bağlantısı yoxdur</translation>
-<translation id="4326079409704643112">Google Hesabında Chrome datasını istifadə etmək və yadda saxlamaq üçün kimliyinizi doğrulayın</translation>
+<translation id="4326079409704643112">Google Hesabında Ultimatum datasını istifadə etmək və yadda saxlamaq üçün kimliyinizi doğrulayın</translation>
 <translation id="433213510553688132">İzlənilir...</translation>
 <translation id="4335835283689002019">Təhlükəsiz Baxış deaktivdir</translation>
 <translation id="4351244548802238354">Dialoqu qapadın</translation>
@@ -745,15 +745,15 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="4452548195519783679"><ph name="FOLDER_NAME" /> qovluğuna əlfəcinləndi</translation>
 <translation id="4460861538906892109">{ITEMS_COUNT,plural, =1{1 əlfəcin}other{# əlfəcin}}</translation>
 <translation id="4478161224666880173">Bu saytda <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> hesabını istifadə edə bilərsiniz. Davam etmək üçün <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> hesabına daxil olun.</translation>
-<translation id="4479972344484327217">Chrome üçün <ph name="MODULE" /> quraşdırılır…</translation>
+<translation id="4479972344484327217">Ultimatum üçün <ph name="MODULE" /> quraşdırılır…</translation>
 <translation id="4484496141267039529">Bağlantı yoxdur. Sonra cəhd edin.</translation>
-<translation id="4487967297491345095">Bütün Chrome tətbiq datası həmişəlik silinəcək. Bura fayllar, ayarlar, hesablar, data bazası və s. daxildir.</translation>
+<translation id="4487967297491345095">Bütün Ultimatum tətbiq datası həmişəlik silinəcək. Bura fayllar, ayarlar, hesablar, data bazası və s. daxildir.</translation>
 <translation id="4494806687727322324">Parolun yadda saxlanılması administratorunuz tərəfindən aktiv edildi</translation>
 <translation id="4508528996305412043">Təchizat kartı menyusu açıqdır</translation>
 <translation id="4509741852167209430">Reklam performansını (məsələn, sayta daxil olduqdan sonra alış edib-etməməyiniz) ölçmək üçün saytlar arasında məhdud növ data paylaşılır</translation>
 <translation id="4513387527876475750">{DAYS,plural, =1{# gün öncə}other{# gün öncə}}</translation>
 <translation id="451872707440238414">Əlfəcin axtarın</translation>
-<translation id="4521489764227272523">Seçilmiş data Chrome və sinxronizasiya olunmuş cihazınızdan silindi. 
+<translation id="4521489764227272523">Seçilmiş data Ultimatum və sinxronizasiya olunmuş cihazınızdan silindi. 
 
 <ph name="BEGIN_LINK" />history.google.com<ph name="END_LINK" /> linkində Google hesabınızın digər Google xidmətlərində axtarış və fəaliyyət kimi başqa formalı axtarış tarixçəsi ola bilər.</translation>
 <translation id="4523326818319942067">son saat</translation>
@@ -772,10 +772,10 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="4594952190837476234">Bu səhifə <ph name="CREATION_TIME" /> tarixində yaradılıb və onlayn versiyadan fərqli ola bilər.</translation>
 <translation id="4595805675102978678">Google Hesabı xətası</translation>
 <translation id="4601095002996233687">Şübhəli endirmələr üçün hərtərəfli skanlama.</translation>
-<translation id="4606559747793337066">Sayt və ya tətbiq öz səhifəsindəki keçidləri məxfi olaraq əvvəlcədən yükləməyi tələb etdikdə Chrome kukilər olmadan Google serverləri vasitəsilə səhifələri şifrələyir və əvvəlcədən yükləyir. Bu, kimliyinizi əvvəlcədən yüklənmiş saytdan gizlədir.</translation>
+<translation id="4606559747793337066">Sayt və ya tətbiq öz səhifəsindəki keçidləri məxfi olaraq əvvəlcədən yükləməyi tələb etdikdə Ultimatum kukilər olmadan Google serverləri vasitəsilə səhifələri şifrələyir və əvvəlcədən yükləyir. Bu, kimliyinizi əvvəlcədən yüklənmiş saytdan gizlədir.</translation>
 <translation id="4616150815774728855">Açın: <ph name="WEBAPK_NAME" /></translation>
 <translation id="4619564267100705184">Kimliyinizi doğrulayın</translation>
-<translation id="4624065194742029982">Chrome Anonim</translation>
+<translation id="4624065194742029982">Ultimatum Anonim</translation>
 <translation id="4634124774493850572">Parol istifadə edin</translation>
 <translation id="4640331037679501949">{NUM_PASSWORDS,plural, =1{1 oğurlanmış parol}other{# oğurlanmış parol}}</translation>
 <translation id="4642472735733036929">Qiymət izlənilməsi dayandı</translation>
@@ -786,7 +786,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="4663756553811254707"><ph name="NUMBER_OF_BOOKMARKS" /> əlfəcin silindi</translation>
 <translation id="4668279686271488041">Reklam ölçmə datası cihazınızdan müntəzəm olaraq silinir</translation>
 <translation id="4668347365065281350">Kukilər və digər yerli yadda saxlanmış data daxil olmaqla, saytların saxladığı bütün dütü</translation>
-<translation id="4678082183394354975">Saytlar üçün tünd tema Chrome'da aktivdir</translation>
+<translation id="4678082183394354975">Saytlar üçün tünd tema Ultimatum'da aktivdir</translation>
 <translation id="4684427112815847243">Hər şeyi sinxronlaşdırın</translation>
 <translation id="4685741273709472646">Aşağı açılan siyahıdan seçin</translation>
 <translation id="4687718960473379118">Saytın təklif etdiyi reklamlar</translation>
@@ -807,7 +807,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="4738836084190194332">Sonuncu dəfə sinxronizasiya olunub: <ph name="WHEN" /></translation>
 <translation id="474121291218385686">Tətbiq üzrə filtrləyin</translation>
 <translation id="4741753828624614066">Ünvan panelində təkmilləşdirilmiş təkliflər alacaqsınız</translation>
-<translation id="4742795653798179840">Chrome datası silindi</translation>
+<translation id="4742795653798179840">Ultimatum datası silindi</translation>
 <translation id="4742970037960872810">Vurğulamanı silin</translation>
 <translation id="4749960740855309258">Yeni panel açın</translation>
 <translation id="4753600213727157212"><ph name="USER_NAME" /> kimi daxil olunub. <ph name="USER_EMAIL" />. Google Hesabı xətası. Ayarları açır.</translation>
@@ -816,7 +816,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="4763480195061959176">video</translation>
 <translation id="4766313118839197559">Parollar bu cihazda Parol Menecerində saxlanılır</translation>
 <translation id="4766678251456904326">Cihaza hesab əlavə edin</translation>
-<translation id="4767947714785277816">"Reklam dəyərləndirməsi" adlı yeni reklam məxfiliyi funksiyasını işə salırıq. Reklam performansını dəyərləndirmək üçün Chrome reklamın göstərildiyi vaxt kimi məhdud məlumatları sayt və tətbiqlər arasında paylaşır.</translation>
+<translation id="4767947714785277816">"Reklam dəyərləndirməsi" adlı yeni reklam məxfiliyi funksiyasını işə salırıq. Reklam performansını dəyərləndirmək üçün Ultimatum reklamın göstərildiyi vaxt kimi məhdud məlumatları sayt və tətbiqlər arasında paylaşır.</translation>
 <translation id="4769095993849849966">Yeni fayl adı</translation>
 <translation id="4769632191812288342">Standart qoruma var</translation>
 <translation id="4773122030389014189">"<ph name="GROUP_NAME" />" tab qrupunu paylaşın</translation>
@@ -826,13 +826,13 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="4782929588435725897"><ph name="SEARCH_ENGINE" /> defolt axtarış mexanizminizdir</translation>
 <translation id="4784349455504343791"><ph name="WEBSITE_ORIGIN" /> rəqəmsal pulqabınızdakı şəxsi məlumatlardan istifadə etmək istəyir.</translation>
 <translation id="4787736314074622408"><ph name="ITEM_TITLE" /> faylını silmək istəyirsiniz?</translation>
-<translation id="4793679854893018356">Chrome-un təhlükəsizlik təminatı haqqında</translation>
+<translation id="4793679854893018356">Ultimatum-un təhlükəsizlik təminatı haqqında</translation>
 <translation id="4794291718671962615">(<ph name="MEGABYTES" />) <ph name="URL" /></translation>
 <translation id="4807098396393229769">Kart Adı</translation>
 <translation id="480990236307250886">Əsas səhifəni açın</translation>
 <translation id="4822710610088666676"><ph name="TAB_GROUP_TITLE" /> tab qrupu bağlandı və yadda saxlandı</translation>
 <translation id="4834250788637067901">Google Pay istifadə edən ödəniş metodları, təkliflər və ünvanlar</translation>
-<translation id="4835385943915508971">Chrome'un sorğulanan mənbəyə girişi yoxdur.</translation>
+<translation id="4835385943915508971">Ultimatum'un sorğulanan mənbəyə girişi yoxdur.</translation>
 <translation id="483742037940503070">{TAB_COUNT,plural, =1{<ph name="COLOR_NAME" /> rəngli, <ph name="TAB_COUNT_ONE" /> tabdan ibarət tab qrupunu yeni arxa fon tab qrupu olaraq bərpa edin.}other{<ph name="COLOR_NAME" /> rəngli, <ph name="TAB_COUNT_MANY" /> tabdan ibarət tab qrupunu yeni arxa fon tab qrupu olaraq bərpa edin.}}</translation>
 <translation id="4837753911714442426">Səhifəni çap etmək üçün seçimləri açın</translation>
 <translation id="4844633725025837809">Təhlükəsizliyi artırmaq üçün Google Parol Menecerində saxlanmazdan əvvəl cihazınızda parolları şifrələyin</translation>
@@ -841,7 +841,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="4852014461738377247">Giriş edilir\u2026</translation>
 <translation id="4860895144060829044">Zəng</translation>
 <translation id="4864369630010738180">Daxil olunur...</translation>
-<translation id="4866368707455379617">Chrome üçün <ph name="MODULE" /> quraşdırmaq mümkün deyil</translation>
+<translation id="4866368707455379617">Ultimatum üçün <ph name="MODULE" /> quraşdırmaq mümkün deyil</translation>
 <translation id="4871568871368204250">Sinxronizasiyanı deaktiv edin</translation>
 <translation id="4875775213178255010">Kontent Təklifləri</translation>
 <translation id="4877678010818027629">Anonim rejimə daxil olun</translation>
@@ -849,7 +849,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="4880127995492972015">Tərcümə edin...</translation>
 <translation id="4881695831933465202">Açın</translation>
 <translation id="488187801263602086">Faylın adını dəyişin</translation>
-<translation id="4885273946141277891">Dəstəklənməyən Chrome nümunələrinin sayı.</translation>
+<translation id="4885273946141277891">Dəstəklənməyən Ultimatum nümunələrinin sayı.</translation>
 <translation id="4890973535105146893">Google Hesabınızda yadda saxlanılmış parol yoxdur</translation>
 <translation id="4905823827770127520">Səhifəyə keçid daxil edin</translation>
 <translation id="4908869848243824489">Google Təkliflər</translation>
@@ -858,15 +858,15 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="4913169188695071480">Yeniləməni dayandırın</translation>
 <translation id="4925120120285606924">Skrinşot <ph name="CURRENT_DATE_ISO" /></translation>
 <translation id="4926901776383726965">Oflayn baxmaq və ya digər tətbiqlərdə paylaşmaq üçün şəkil və faylları yadda saxlaya bilərsiniz</translation>
-<translation id="4932247056774066048"><ph name="DOMAIN_NAME" /> tərəfindən idarə edilən hesabdan çıxdığınıza görə Chrome datanız bu cihazdan silinəcək. Bu, Google Hesabında qalacaq.</translation>
+<translation id="4932247056774066048"><ph name="DOMAIN_NAME" /> tərəfindən idarə edilən hesabdan çıxdığınıza görə Ultimatum datanız bu cihazdan silinəcək. Bu, Google Hesabında qalacaq.</translation>
 <translation id="4943703118917034429">Virtual Reallıq</translation>
 <translation id="4943872375798546930">Nəticə yoxdur</translation>
 <translation id="4957722034734105353">Ətraflı məlumat...</translation>
 <translation id="4959115606310463263">Giriş üzrə aşağıdakı vərəq yarı hündürlükdə açılıb</translation>
 <translation id="4961107849584082341">Bu səhifəni istədiyiniz dilə tərcümə edin</translation>
-<translation id="4964614743143953889">Chrome təhlükəli sayt və endirmələr haqqında xəbərdarlıq edir</translation>
+<translation id="4964614743143953889">Ultimatum təhlükəli sayt və endirmələr haqqında xəbərdarlıq edir</translation>
 <translation id="496607651705915226">Google Hesabınızda yeni parolları yaddaşda saxlamaq və istifadə etmək üçün Google Play xidmətlərini yeniləyin</translation>
-<translation id="4971753085054504448">Başqa nəsə axtarmağa cəhd edin və ya daha çox nəticə görmək üçün tam Chrome tarixçəsini açın.</translation>
+<translation id="4971753085054504448">Başqa nəsə axtarmağa cəhd edin və ya daha çox nəticə görmək üçün tam Ultimatum tarixçəsini açın.</translation>
 <translation id="497421865427891073">İrəli</translation>
 <translation id="498624032394115435">Keçidi olan hər kəs bütün tablara düzəliş edə bilər.</translation>
 <translation id="4987271110129728827">Həmin səhifəni tapmaq mümkün deyil. Orfoqrafiyanı yoxlayın və ya vebdə axtarış edin.</translation>
@@ -890,7 +890,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="506254248375231072">Tab yoxdur</translation>
 <translation id="5062960805900435602">Parol birləşdirmə bildirişi bağlandı</translation>
 <translation id="5075939510584558547">Şifrələmədən yadda saxlayın</translation>
-<translation id="5085038751173179818">Əlfəcin və digərlərini bütün cihazlarda əldə etmək üçün bu sayta və Chrome-a daxil olun</translation>
+<translation id="5085038751173179818">Əlfəcin və digərlərini bütün cihazlarda əldə etmək üçün bu sayta və Ultimatum-a daxil olun</translation>
 <translation id="5091199029769593641">Tezliklə yeni tab açdığınız zaman <ph name="SITE_NAME" /> saytından hekayələri görəcəksiniz. İzlədiyiniz saytlar Google hesabınızda saxlanılır. Onları Təkliflər ayarlarında idarə edə bilərsiniz.</translation>
 <translation id="509429900233858213">Xəta baş verdi.</translation>
 <translation id="5096775069898886423">Güvənli bağlantıları dəstəkləməyən saytlarda sayta daxil olmamışdan əvvəl xəbərdarlıq alın</translation>
@@ -898,7 +898,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="510275257476243843">1 saat qaldı</translation>
 <translation id="5114895953710637392">Tətbiq filtri vərəqi bağlıdır.</translation>
 <translation id="5115811374190515607"><ph name="PRODUCT_NAME" /> məkanına</translation>
-<translation id="5116239826668864748">İstənilən vaxt mesaj, sənəd və digər tətbiqlərdə keçidlərə toxunduqda Chrome istifadə edə bilərsiniz</translation>
+<translation id="5116239826668864748">İstənilən vaxt mesaj, sənəd və digər tətbiqlərdə keçidlərə toxunduqda Ultimatum istifadə edə bilərsiniz</translation>
 <translation id="5118713593561876160">Maraqlar</translation>
 <translation id="5122378528687922675">Köməyə ehtiyacınız varsa, valideyninizə müraciət edin (<ph name="PARENT_NAME_1" /> və ya <ph name="PARENT_NAME_2" />)</translation>
 <translation id="5123685120097942451">Anonim tab</translation>
@@ -922,7 +922,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="5210286577605176222">Əvvəlki panelə keçin</translation>
 <translation id="5210365745912300556">Paneli qapadın</translation>
 <translation id="5215957675041756913">Data və hesabı idarə edin</translation>
-<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> və s. <ph name="SEPARATOR" /> Bu yaxınlarda daxil olmadığınız üçün Chrome bu icazələri sildi</translation>
+<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> və s. <ph name="SEPARATOR" /> Bu yaxınlarda daxil olmadığınız üçün Ultimatum bu icazələri sildi</translation>
 <translation id="5222676887888702881">Hesabdan çıxın</translation>
 <translation id="5226378907213531272">Avtomobildən hər istifadədə ekranı kiliddən çıxaracaqsınız</translation>
 <translation id="5227554086496586518">Axtarış nəticələrini görmək üçün toxunun</translation>
@@ -940,7 +940,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="5308380583665731573">Qoşun</translation>
 <translation id="5316947901395241499">Parolun yadda saxlanılması administratorunuz tərəfindən deaktiv edildi</translation>
 <translation id="5317780077021120954">Yadda saxlayın</translation>
-<translation id="5319359161174645648">Google, Chrome'u tövsiyə edir</translation>
+<translation id="5319359161174645648">Google, Ultimatum'u tövsiyə edir</translation>
 <translation id="5326246328175179736">Bu hesab vasitəsilə daxil ola bilməzsiniz</translation>
 <translation id="5327248766486351172">Ad</translation>
 <translation id="5328542107300944283"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> ilə istifadə edin</translation>
@@ -952,7 +952,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="5375577065097716013">Google Linza ilə şəkil axtarın <ph name="BEGIN_NEW" />Yeni<ph name="END_NEW" /></translation>
 <translation id="5390367025924544771"><ph name="WEBSITE_ORIGIN" /> rəqəmsal pulqabınızdakı şəxsi məlumatlardan istifadə etmək istəyir. Bu sayta etibar etdiyiniz halda, davam edin. Təhlükəli saytlar hüquqi adınızı və ya ID nömrənizi bildirməyiniz üçün sizi aldada bilər.</translation>
 <translation id="5394331612381306435">Anonim rejimdən çıxın</translation>
-<translation id="5395376160638294582">Google Hesabında hər zaman Chrome datasından istifadə edə biləcəyinizdən əmin olun</translation>
+<translation id="5395376160638294582">Google Hesabında hər zaman Ultimatum datasından istifadə edə biləcəyinizdən əmin olun</translation>
 <translation id="539881862970320163">Güclü parol təklif edildi. Klaviatura gizlədildi.</translation>
 <translation id="5409881200985013443"><ph name="CLIENT_NAME" /> tətbiqində <ph name="ONE_TIME_CODE" /> təqdim edilsin?</translation>
 <translation id="5410300144953132176"><ph name="OWNER_FULL_NAME" /> (<ph name="OWNER_EMAIL" />) tab qrupuna qoşulmağınızı istəyir. Keçidi olan hər kəs bütün tablara düzəliş edə bilər, ona görə də qoşularkən diqqətli olun. Keçidin müddəti 48 saat ərzində bitir.</translation>
@@ -966,7 +966,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="5433691172869980887">İstifadəçi adı kopyalandı</translation>
 <translation id="5436928407363358055">Qaldığınız yerdən asanlıqla davam etmək üçün tarixçə və tablarınızı sinxronlaşdırın</translation>
 <translation id="5438292632479953702">Yenidən endirin</translation>
-<translation id="5439191312780166229">Standart qoruma ilə müqayisədə saytlardan daha çox data təhlil edərək təhlükəli, hətta Google-un bilmədiyi saytlar haqqında xəbərdar edir. Chrome xəbərdarlıqlarını ötürə bilərsiniz.</translation>
+<translation id="5439191312780166229">Standart qoruma ilə müqayisədə saytlardan daha çox data təhlil edərək təhlükəli, hətta Google-un bilmədiyi saytlar haqqında xəbərdar edir. Ultimatum xəbərdarlıqlarını ötürə bilərsiniz.</translation>
 <translation id="5441137934526263133">Sayt işləmir? Üçüncü tərəf kukiləri bloklanıb</translation>
 <translation id="5441466871879044658">Bu dilə tərcümə edin</translation>
 <translation id="5441522332038954058">Ünvan barına keçin</translation>
@@ -986,7 +986,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="5517326820028369152">Son fəaliyyət üzrə aşağıdakı vərəq</translation>
 <translation id="5526281268548144413">Bir neçə pəncərədə bağlana bilməz</translation>
 <translation id="5548606607480005320">Təhlükəsizlik yoxlanışı</translation>
-<translation id="5554520618550346933">İstifadə edilən parol onlayn yayımlanıbsa, Chrome xəbərdarlıq edir. Parol və istifadəçi adları şifrələnir və hətta Google-a da görünmür.</translation>
+<translation id="5554520618550346933">İstifadə edilən parol onlayn yayımlanıbsa, Ultimatum xəbərdarlıq edir. Parol və istifadəçi adları şifrələnir və hətta Google-a da görünmür.</translation>
 <translation id="5555525474779371165">Təhlükəsiz Baxış ilə qorunmanı seçin</translation>
 <translation id="5556459405103347317">Yenidən yükləyin</translation>
 <translation id="555671485580955310">Tarixçə və tabları sinxronlaşdırın</translation>
@@ -998,7 +998,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="5578795271662203820">Bu şəkil üçün <ph name="SEARCH_ENGINE" /> axtarın</translation>
 <translation id="5596627076506792578">Əlavə seçimlər</translation>
 <translation id="5599455543593328020">Anonim rejim</translation>
-<translation id="5601180634394228718">Chrome təcrübənizi təkmilləşdirmək məqsədilə datadan istifadə edən daha çox ayar üçün <ph name="BEGIN_LINK" />Google Xidmətlərinə<ph name="END_LINK" /> keçin.</translation>
+<translation id="5601180634394228718">Ultimatum təcrübənizi təkmilləşdirmək məqsədilə datadan istifadə edən daha çox ayar üçün <ph name="BEGIN_LINK" />Google Xidmətlərinə<ph name="END_LINK" /> keçin.</translation>
 <translation id="5611398002774823980">Hesabda yadda saxlayın</translation>
 <translation id="5614625640221885312">Daxil olaraq bütün cihazlarda əlfəcin, parol və s. əldə edin</translation>
 <translation id="5619633276517849615">Təşkilat Güvənli Baxışı yandırıb</translation>
@@ -1014,23 +1014,23 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="5657871969392618475">Məlumatlar profil kilidi ilə qorunur</translation>
 <translation id="5659593005791499971">E-poçt</translation>
 <translation id="5665379678064389456"><ph name="APP_NAME" /> tətbiqində tədbir yaradın</translation>
-<translation id="5683547024293500885">Chrome güncəlləmələri yoxlaya bilmir</translation>
+<translation id="5683547024293500885">Ultimatum güncəlləmələri yoxlaya bilmir</translation>
 <translation id="5683916195767086779">Tab qrupu</translation>
 <translation id="5686790454216892815">Fayl adı çox uzundur</translation>
-<translation id="5687606994963670306">Chrome 30 gündən əvvələ aid saytları avtomatik silir. Yenidən daxil olduğunuz sayt siyahıda təkrar görünə bilər. Saytın reklam təklif etməsini bloklaya bilərsiniz. <ph name="BEGIN_LINK" />Chrome-da reklam məxfiliyinin idarə edilməsi<ph name="END_LINK" /> haqqında ətraflı.</translation>
+<translation id="5687606994963670306">Ultimatum 30 gündən əvvələ aid saytları avtomatik silir. Yenidən daxil olduğunuz sayt siyahıda təkrar görünə bilər. Saytın reklam təklif etməsini bloklaya bilərsiniz. <ph name="BEGIN_LINK" />Ultimatum-da reklam məxfiliyinin idarə edilməsi<ph name="END_LINK" /> haqqında ətraflı.</translation>
 <translation id="569536719314091526">Əlavə seçimlər düyməsində bu səhifəni istədiyiniz dilə tərcümə edin</translation>
-<translation id="5696597120588531049">Chrome sizi data pozuntuları, güvənli olmayan vebsaytlar və digər güvənlik məsələlərindən qoruya bilər</translation>
+<translation id="5696597120588531049">Ultimatum sizi data pozuntuları, güvənli olmayan vebsaytlar və digər güvənlik məsələlərindən qoruya bilər</translation>
 <translation id="5698878456427040674">Seçilmiş hesabın dəstəklənib-dəstəklənmədiyini yoxlayın.</translation>
 <translation id="570347048394355941">Taba keçin</translation>
 <translation id="5709213329446699338"><ph name="SITE" /> silsilə porta qoşulmaq istəyir</translation>
 <translation id="5715150588940290235">Yadda saxlanmış təhlükəsizlik kodları silinsin?</translation>
-<translation id="571930967925877633">Əlfəcin, tarixçə və digər Chrome datası Google Hesabına sinxronlaşdırılmayacaq</translation>
+<translation id="571930967925877633">Əlfəcin, tarixçə və digər Ultimatum datası Google Hesabına sinxronlaşdırılmayacaq</translation>
 <translation id="572328651809341494">Son panellər</translation>
 <translation id="5726692708398506830">Səhifədəki hər şeyi böyüdün</translation>
 <translation id="5728072125198221967">Əlaqələndirilmiş Google xidmətləri</translation>
 <translation id="5744751019568455640">Veb-səhifələri oxutmaq üçün seçə biləcəyiniz səslər. Bu səsi bəyənirsinizsə və ondan istifadəyə davam etməyimi istəyirsinizsə, səsin adına toxunun.</translation>
 <translation id="574845902699630049"><ph name="OWNER_FULL_NAME" /> olaraq paylaşın</translation>
-<translation id="5749068826913805084">Faylları endirmək üçün Chrome yaddaşa giriş tələb edir.</translation>
+<translation id="5749068826913805084">Faylları endirmək üçün Ultimatum yaddaşa giriş tələb edir.</translation>
 <translation id="5749237766298580851">Deaktiv <ph name="SEPARATOR" /> Tövsiyə edilmir</translation>
 <translation id="5752232708629533680">Yalnız GIF paylaşın</translation>
 <translation id="5754350196967618083">Təklifləri yeniləmək olmur</translation>
@@ -1047,11 +1047,11 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="5809361687334836369">{HOURS,plural, =1{# saat öncə}other{# saat öncə}}</translation>
 <translation id="5810288467834065221">Müəllif hüquqları <ph name="YEAR" /> Google MMC. Bütün hüquqlar qorunur.</translation>
 <translation id="5814749351757353073">Sevdiyiniz saytlardan xəbərdar olun</translation>
-<translation id="5828921839638612740">Chrome ayarlarında datanı silə bilərsiniz</translation>
+<translation id="5828921839638612740">Ultimatum ayarlarında datanı silə bilərsiniz</translation>
 <translation id="5829586821381540080"><ph name="FOLDER_NAME" /> qovluğunda yadda saxlandı</translation>
 <translation id="583281660410589416">Naməlum</translation>
 <translation id="5833984609253377421">Linki paylaşın</translation>
-<translation id="5839058148541733625">Chrome Dinozavr</translation>
+<translation id="5839058148541733625">Ultimatum Dinozavr</translation>
 <translation id="5848257610304005265">PDF <ph name="APP_NAME" /> ilə açılsın?</translation>
 <translation id="5849288995120328556">Paylaşım dayandırılsın?</translation>
 <translation id="5853623416121554550">dayandırıldı</translation>
@@ -1063,9 +1063,9 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="5864419784173784555">Başqa endirmə gözlənilir…</translation>
 <translation id="5865733239029070421">İstifadə statistikası və qəza raportlarını avtomatik Google'a göndərir</translation>
 <translation id="5869522115854928033">Saxlanılmış parollar</translation>
-<translation id="587735546353481577">Bir saytı izləmək üçün sayta keçin, Chrome menyusunu açın və İzlə seçiminə toxunun.</translation>
+<translation id="587735546353481577">Bir saytı izləmək üçün sayta keçin, Ultimatum menyusunu açın və İzlə seçiminə toxunun.</translation>
 <translation id="5883855034004058011">Biometrik göstəricilər dəfələrlə uğursuz olub. Yenidən cəhd etmək üçün cihazı kilidləyin və kilidini açın.</translation>
-<translation id="5885378508678660271">Bildirişlər <ph name="SEPARATOR" /> Bu sayt təhlükəli olduğu üçün Chrome bu icazələri sildi</translation>
+<translation id="5885378508678660271">Bildirişlər <ph name="SEPARATOR" /> Bu sayt təhlükəli olduğu üçün Ultimatum bu icazələri sildi</translation>
 <translation id="5895834791314695851">Bu cihazda parollar tezliklə işləməyə bilər. Parollardan istifadəyə davam etmək üçün Google Play xidmətlərini yeniləyin. <ph name="BEGIN_LINK" />Ətraflı məlumat<ph name="END_LINK" /></translation>
 <translation id="5899667542927581604">Bağlanmış giriş açarı vərəqi yoxdur</translation>
 <translation id="5907542076239273525">Əlfəcin <ph name="FOLDER_NAME" /> qovluğunda yadda saxlanıldı</translation>
@@ -1076,7 +1076,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="5942872142862698679">Axtarış üçün Google istifadə edilir</translation>
 <translation id="5945035219773565305">Cari tövsiyə: <ph name="RECOMMENDATION" /></translation>
 <translation id="5951119116059277034">Canlı səhifəyə baxılır</translation>
-<translation id="5956665950594638604">Chrome Yardım Mərkəzini yeni paneldə açın</translation>
+<translation id="5956665950594638604">Ultimatum Yardım Mərkəzini yeni paneldə açın</translation>
 <translation id="59577092665511740">Hesab seçin.</translation>
 <translation id="5958275228015807058">Fayl və səhifələri Endirilənlər bölməsində tapın</translation>
 <translation id="5958994127112619898">Səhifəni sadələşdirin</translation>
@@ -1085,13 +1085,13 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="5977976211062815271">Bu cihazda</translation>
 <translation id="5978661847409534366">{ITEMS_COUNT,plural, =1{Oxu siyahısında 1 səhifə}other{Oxu siyahısında # səhifə}}</translation>
 <translation id="5979084224081478209">Parolları yoxlayın</translation>
-<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Bu yaxınlarda daxil olmadığınız üçün Chrome bu icazələri sildi</translation>
+<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Bu yaxınlarda daxil olmadığınız üçün Ultimatum bu icazələri sildi</translation>
 <translation id="5995726099713306770">Səhifə yenidən endirilsin?</translation>
 <translation id="6000066717592683814">Google'u saxlayın</translation>
 <translation id="6000203700195075278">Yenidən izləyin</translation>
 <translation id="6011308810877101166">Axtarış təkliflərini təkmilləşdirin</translation>
 <translation id="6013305291643746595">Ən köhnə əsasında çeşidlənir</translation>
-<translation id="6022659036123304283">Chrome'u özünüzküləşdirin</translation>
+<translation id="6022659036123304283">Ultimatum'u özünüzküləşdirin</translation>
 <translation id="6026538407078977628">Tam ekrana genişləndirin</translation>
 <translation id="6030719887161080597">Reklam performansını ölçmək üçün saytların istifadə etdiyi məlumatları idarə edin</translation>
 <translation id="6039379616847168523">Növbəti panelə keşin</translation>
@@ -1125,17 +1125,17 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="6146563240635539929">Videolar</translation>
 <translation id="614890671148262506">Həmişə bu saytdan bildirişlərə icazə verin</translation>
 <translation id="6150320133806434356">Əlfəcin yadda saxlanıldı</translation>
-<translation id="6150706324143004339">Google Hesabında Chrome datasını istifadə etmək və yadda saxlamaq üçün Chrome-u güncəlləyin</translation>
+<translation id="6150706324143004339">Google Hesabında Ultimatum datasını istifadə etmək və yadda saxlamaq üçün Ultimatum-u güncəlləyin</translation>
 <translation id="6154478581116148741">Bu cihazdan parolları eksport etmək üçün Ayarlarda ekran kilidini aktiv edin</translation>
 <translation id="6156323911414505561">Əlfəcin panelini göstərin</translation>
-<translation id="6162892189396105610">Chrome'un ziyarət edə biləcəyinizi düşündüyü səhifələri əvvəlcədən yükləyir.</translation>
+<translation id="6162892189396105610">Ultimatum'un ziyarət edə biləcəyinizi düşündüyü səhifələri əvvəlcədən yükləyir.</translation>
 <translation id="6170675927290506430">Bildiriş ayarlarına keçin</translation>
 <translation id="6186394685773237175">Oğurlanmış parol tapılmadı</translation>
 <translation id="6192907950379606605">Şəkil təsvirləri əldə edin</translation>
 <translation id="6193448654517602979">Tablar seçin</translation>
 <translation id="6196315980958524839">Parollar bu cihazda Google Parol Menecerində saxlanılır</translation>
 <translation id="6202812185118613467">Sinxronizasiyanı başlatmaq üçün yenidən daxil olun</translation>
-<translation id="6204781143409202534">Chrome <ph name="DOMAIN" /> domenindən mümkün spam aşkarladı.</translation>
+<translation id="6204781143409202534">Ultimatum <ph name="DOMAIN" /> domenindən mümkün spam aşkarladı.</translation>
 <translation id="6205314730813004066">Reklam məxfiliyi</translation>
 <translation id="6210748933810148297"><ph name="EMAIL" /> deyil?</translation>
 <translation id="6211386937064921208">Bu səhifə önizlənir</translation>
@@ -1144,10 +1144,10 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="6225572914528673855">Ünvan paneli</translation>
 <translation id="6232535412751077445">İzlənilməyin qadağan edilməsi o deməkdir ki, sorğu brauzer trafikinizə daxil ediləcək. İstənilən effekt saytın sorğuya cavab verməsindən və sorğunun necə anlaşılmasından asılıdır.  Məsələn, bəzi saytlar bu sorğuya ziyarət etdiyiniz saytlarda olmayan reklamları göstərməklə cavab verə bilər. Bir çox saytlar hələ də brauzinq datanızı toplayacaq və istifadə edəcək. Məqsədləri güvənliyin artırılması, kontent, xidmət, reklam, tövsiyə təqdim edilməsi və raport statistikasının yaradılması ola bilər.</translation>
 <translation id="6247557882553405851">Google Parol Meneceri</translation>
-<translation id="6251449557817521191">Chrome tarixçənizə burada baxın</translation>
+<translation id="6251449557817521191">Ultimatum tarixçənizə burada baxın</translation>
 <translation id="6253680439349691381">{ITEMS_COUNT,plural, =1{1 element yalnız bu cihazda yadda saxlanılır. Onu digər cihazlarda istifadə etmək üçün Google Hesabında (<ph name="ACCOUNT_EMAIL" />) yadda saxlayın.}other{# element yalnız bu cihazda yadda saxlanılır. Onları digər cihazlarda istifadə etmək üçün Google Hesabında (<ph name="ACCOUNT_EMAIL" />) yadda saxlayın.}}</translation>
 <translation id="6254139308321626268">PDF faylına baxırsınız</translation>
-<translation id="6255809143828972562">Chrome alətləri ilə təhlükəsiz nəzər sala və nəzarət edə bilərsiniz</translation>
+<translation id="6255809143828972562">Ultimatum alətləri ilə təhlükəsiz nəzər sala və nəzarət edə bilərsiniz</translation>
 <translation id="6264376385120300461">Hər bir halda endirin</translation>
 <translation id="6264485186158353794">Güvənliyə qayıdın</translation>
 <translation id="6277522088822131679">Səhifə çap olunarkən problem oldu. Yenidən cəhd edin.</translation>
@@ -1177,14 +1177,14 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="6356893102071098867">Düzgün hesabı seçib-seçmədiyinizi yoxlayın</translation>
 <translation id="6363990818884053551">Sinxronizasiyaya başlamaq üçün kimliyinizi doğrulayın</translation>
 <translation id="6364438453358674297">Təklif tarixçədən silinsin?</translation>
-<translation id="6380100320871303656">Chrome'un ziyarət edəcəyinizi düşündüyü səhifələr daha çox əvvəlcədən yüklənir. Bu ayar data istifadəsinin artması ilə nəticələnə bilər.</translation>
+<translation id="6380100320871303656">Ultimatum'un ziyarət edəcəyinizi düşündüyü səhifələr daha çox əvvəlcədən yüklənir. Bu ayar data istifadəsinin artması ilə nəticələnə bilər.</translation>
 <translation id="6382848304055775421">Eksport edilir</translation>
 <translation id="6388152137132427505">Paylaşarkən diqqətli olun. Keçidlərin müddəti 48 saat sonra bitir.</translation>
 <translation id="6394791151443660613">Axtarış: <ph name="SEARCH_QUERY" /></translation>
 <translation id="6395288395575013217">LİNK</translation>
 <translation id="6397616442223433927">Bağlantı bərpa edildi</translation>
 <translation id="6399363707848566877">İndi burada tabları asanlıqla qruplara əlavə edə bilərsiniz</translation>
-<translation id="6401458660421980302">Bu tabı başqa cihaza göndərmək üçün orada Chrome'a daxil olun</translation>
+<translation id="6401458660421980302">Bu tabı başqa cihaza göndərmək üçün orada Ultimatum'a daxil olun</translation>
 <translation id="6404511346730675251">Əlfəcinə düzəliş edin</translation>
 <translation id="6406506848690869874">Sinx</translation>
 <translation id="6410883413783534063">Müxtəlif səhifələrə eyni vaxtda daxil olmaq üçün tabları açın</translation>
@@ -1200,22 +1200,22 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="6452534462676960500">Yeni fəaliyyət</translation>
 <translation id="6459045781120991510">Sorğular</translation>
 <translation id="6461962085415701688">Fayl açılmır</translation>
-<translation id="6464977750820128603">Chrome'da girdiyiniz saytlara baxa və onlar üçün taymer ayarlaya bilərsiniz.\n\nGoogle taymer ayarladığınız saytları və onlara hansı müddətdən bir girdiyiniz haqda məlumat əldə edir. Bu məlumat Digital Sağlamlığı təkmilləşdirmək üçün istifadə olunur.</translation>
+<translation id="6464977750820128603">Ultimatum'da girdiyiniz saytlara baxa və onlar üçün taymer ayarlaya bilərsiniz.\n\nGoogle taymer ayarladığınız saytları və onlara hansı müddətdən bir girdiyiniz haqda məlumat əldə edir. Bu məlumat Digital Sağlamlığı təkmilləşdirmək üçün istifadə olunur.</translation>
 <translation id="6468703991511753953">Ünvan paneli aşağıdadır</translation>
-<translation id="6470181189905173055"><ph name="APP_LABEL" /> istifadə edərkən Chrome-da açılan səhifələr burada göstəriləcək.</translation>
+<translation id="6470181189905173055"><ph name="APP_LABEL" /> istifadə edərkən Ultimatum-da açılan səhifələr burada göstəriləcək.</translation>
 <translation id="6473086018775716761">Paylaşım seçimlərinin siyahısı yarım yüksəklikdə açılıb.</translation>
 <translation id="6475951671322991020">Videonu endirin</translation>
 <translation id="6477928892249167417">Bu saytlar sizə vacib görünür:</translation>
-<translation id="6481963882741794338">Fərdiləşdirmə və digər məqsədlər üçün Chrome və digər Google xidmətlərini əlaqələndirin</translation>
+<translation id="6481963882741794338">Fərdiləşdirmə və digər məqsədlər üçün Ultimatum və digər Google xidmətlərini əlaqələndirin</translation>
 <translation id="6482749332252372425">Yadda az olduğu üçün <ph name="FILE_NAME" /> endirilə bilmədi.</translation>
 <translation id="6486420406192123355">Bu PDF faylı güvənsiz bağlantı istifadə edən saytdandır</translation>
 <translation id="650224091954855786">{FILE_COUNT,plural, =1{Fayl endirildi}other{# endirmə tamamlandı}}</translation>
-<translation id="6508722015517270189">Chrome'u yenidən başladın</translation>
+<translation id="6508722015517270189">Ultimatum'u yenidən başladın</translation>
 <translation id="6513924416597632811">Bu sorğu üçün axtarış nəticələri səhifəsinə yönləndirən keçidi kopiyalayın: <ph name="SEARCH_QUERY" />. Mənbə: <ph name="PAGE_URL" /></translation>
 <translation id="6518133107902771759">Doğrulayın</translation>
 <translation id="6527303717912515753">Paylaşın</translation>
-<translation id="652948702951888897">Chrome tarixçəsi</translation>
-<translation id="6532866250404780454">Chrome'da girdiyiniz saytlar göstərilməyəcək. Bütün sayt taymerləri silinəcək.</translation>
+<translation id="652948702951888897">Ultimatum tarixçəsi</translation>
+<translation id="6532866250404780454">Ultimatum'da girdiyiniz saytlar göstərilməyəcək. Bütün sayt taymerləri silinəcək.</translation>
 <translation id="6539092367496845964">Xəta baş verdi. Sonra cəhd edin.</translation>
 <translation id="6541983376925655882">{NUM_HOURS,plural, =1{1 saat əvvəl yoxlanılıb}other{# saat əvvəl yoxlanılıb}}</translation>
 <translation id="6545017243486555795">Bütün Datanı Silin</translation>
@@ -1224,12 +1224,12 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="6556542240154580383">{TAB_COUNT,plural, =1{<ph name="TAB_TITLE" /> və digər <ph name="TAB_COUNT_ONE" /> tab bağlanacaq}other{<ph name="TAB_TITLE" /> və digər <ph name="TAB_COUNT_MANY" /> tab bağlanacaq}}</translation>
 <translation id="6560414384669816528">Sogou ilə axtarış</translation>
 <translation id="656065428026159829">Daha çoxuna baxın</translation>
-<translation id="6564820424018738527">Android cihazında oxşar ayar ola bilər. Reklamın ölçülməsi Chrome və Android cihazınızda aktivdirsə, şirkət daxil olduğunuz saytlar və istifadə etdiyiniz tətbiqlərdə reklamın effektivliyini ölçə bilər.</translation>
+<translation id="6564820424018738527">Android cihazında oxşar ayar ola bilər. Reklamın ölçülməsi Ultimatum və Android cihazınızda aktivdirsə, şirkət daxil olduğunuz saytlar və istifadə etdiyiniz tətbiqlərdə reklamın effektivliyini ölçə bilər.</translation>
 <translation id="6565959834589222080">Wi-Fi əlçatan olduqda istifadə edilir</translation>
 <translation id="6569373978618239158">İndi yeni tab açdığınız zaman <ph name="SITE_NAME" /> saytından hekayələri görəcəksiniz. İzlədiyiniz saytlar Google hesabınızda saxlanılır. Onları Təkliflər ayarlarında idarə edə bilərsiniz.</translation>
 <translation id="657177046675873214">Əlfəcinlərinizi bütün cihazlarda əldə etmək üçün ayarlarda "Əlfəcinləri" aktiv edin</translation>
 <translation id="6573096386450695060">Həmişə icazə verin</translation>
-<translation id="6573431926118603307">Başqa cihaz ilə Chrome'da açdığınız panellər burada görünəcək.</translation>
+<translation id="6573431926118603307">Başqa cihaz ilə Ultimatum'da açdığınız panellər burada görünəcək.</translation>
 <translation id="6583199322650523874">Cari səhifəni əlfəcin olaraq qeyd edin</translation>
 <translation id="6588043302623806746">Güvənli DNS yoxdur</translation>
 <translation id="6590471736817333463">60%-ədək dataya qənaət edin</translation>
@@ -1237,13 +1237,13 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="6593061639179217415">Masaüstü saytı</translation>
 <translation id="6594347733515723558">Sıra və baxış seçimləri</translation>
 <translation id="6595046016124923392">Sizin üçün təsvirləri yaxşılaşdırmaq üçün şəkillər Google'a göndərilir.</translation>
-<translation id="6604931690954120417">Chrome-a daxil olduqda yadda saxladığınız parollar Google Hesabında qeyd olunacaq. Söndürmək üçün <ph name="BEGIN_LINK" />ayarlara keçin<ph name="END_LINK" />.</translation>
+<translation id="6604931690954120417">Ultimatum-a daxil olduqda yadda saxladığınız parollar Google Hesabında qeyd olunacaq. Söndürmək üçün <ph name="BEGIN_LINK" />ayarlara keçin<ph name="END_LINK" />.</translation>
 <translation id="661266467055912436">Siz və vebdəki hər kəs üçün təhlükəsizliyi artırır.</translation>
-<translation id="6621391692573306628">Bu tabı başqa cihaza göndərmək üçün hər iki cihazda Chrome'a daxil olun</translation>
+<translation id="6621391692573306628">Bu tabı başqa cihaza göndərmək üçün hər iki cihazda Ultimatum'a daxil olun</translation>
 <translation id="6627583120233659107">Qovluğa düzəliş edin</translation>
 <translation id="6633067410344541938">Anonim rejimi kiliddən çıxarın</translation>
 <translation id="6636623428211296678">Aşağıda digər ayarları araşdırın və ya indi bitirin</translation>
-<translation id="6637100877383020115">Tətbiqi təkmilləşdirməyə kömək etmək üçün Chrome istifadə və qəza datasını Google'a göndərir. <ph name="BEGIN_UMA_LINK" />İdarə edin<ph name="END_UMA_LINK" /></translation>
+<translation id="6637100877383020115">Tətbiqi təkmilləşdirməyə kömək etmək üçün Ultimatum istifadə və qəza datasını Google'a göndərir. <ph name="BEGIN_UMA_LINK" />İdarə edin<ph name="END_UMA_LINK" /></translation>
 <translation id="6640207029842583248">Həmişə bloklayın</translation>
 <translation id="6641780377503683465"><ph name="INTEREST" /> silin</translation>
 <translation id="6647441008198474441">Ziyarət etdiyiniz keçidlər növbəti dəfə hansı saytlara daxil ola biləcəyinizi proqnozlaşdırmaq üçün Google'a göndərilir</translation>
@@ -1255,8 +1255,8 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="6672697278890207089">Parol ifadəsi daxil edin</translation>
 <translation id="6672917148207387131"><ph name="DOMAIN" /> əlavə edin</translation>
 <translation id="6674571176963658787">Sinxronizasiyanı başlatmaq üçün parol ifadənizi daxil edin</translation>
-<translation id="6676927815633975364">Bu sayta və Chrome'a daxil olun</translation>
-<translation id="6684809838922667136">Chrome'u yaxşılaşdırın</translation>
+<translation id="6676927815633975364">Bu sayta və Ultimatum'a daxil olun</translation>
+<translation id="6684809838922667136">Ultimatum'u yaxşılaşdırın</translation>
 <translation id="6700279777779583398">Seçimlər yadda saxlandı</translation>
 <translation id="6704048624334633734">Parolları eksport edin və silin</translation>
 <translation id="670498945988402717">Dünən yoxlanılıb</translation>
@@ -1267,7 +1267,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="6723740634201835758">Google Hesabında</translation>
 <translation id="6734310707649923383">Daxil olduğunuz səhifələri görə və ya tarixçədən silə bilərsiniz</translation>
 <translation id="6738867403308150051">Endirilir...</translation>
-<translation id="674388916582496364">Ziyarət etdiyiniz saytların təcrübənizi fərdiləşdirmək üçün maraqlarınızı xatırlaması normaldır. Saytlar həmçinin maraqlarınız haqqında Chrome ilə məlumat saxlaya bilər.</translation>
+<translation id="674388916582496364">Ziyarət etdiyiniz saytların təcrübənizi fərdiləşdirmək üçün maraqlarınızı xatırlaması normaldır. Saytlar həmçinin maraqlarınız haqqında Ultimatum ilə məlumat saxlaya bilər.</translation>
 <translation id="6746338529702829275">Hesab datasını nəzərdən keçirin</translation>
 <translation id="6751521182688001123">Cəld yeni tab açın. Bu qısayolu redaktə etmək üçün toxunub saxlayın.</translation>
 <translation id="6756507620369789050">Rəy paylaşın</translation>
@@ -1275,15 +1275,15 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="676305334223455055">Maraqlarınıza uyğun kontentlər əldə etmək üçün daxil olun</translation>
 <translation id="6764137532716892442">Yeni fəaliyyət olan <ph name="GROUP_TITLE" /> tab qrupu paylaşıldı</translation>
 <translation id="6767294960381293877">Yarı hündürlükdə açılan tabı paylaşa biləcəyiniz cihazların siyahısı.</translation>
-<translation id="6785476624617658922">Chrome və ChromeOS Əlavə Xidmət Şərtləri</translation>
+<translation id="6785476624617658922">Ultimatum və UltimatumOS Əlavə Xidmət Şərtləri</translation>
 <translation id="6795633245022906657">Cəld yeni tab açın. Bu qısayolu redaktə etmək üçün Ayarlara keçin.</translation>
-<translation id="679588508577699489">Chrome-u defolt edin</translation>
+<translation id="679588508577699489">Ultimatum-u defolt edin</translation>
 <translation id="679956319013005046">Avto-doldurma üçün tərcih etdiyiniz xidməti ayarlamaq üçün əvvəlcə <ph name="BEGIN_LINK" />Android Ayarlarında<ph name="END_LINK" />xidməti əlavə edin.</translation>
 <translation id="6802555630140434547">Bu pəncərə bağlanacaq</translation>
 <translation id="6803791793483522764">Bildirişləri nəzərdən keçirin</translation>
 <translation id="6811034713472274749">Səhifəyə baxa bilərsiniz</translation>
 <translation id="6813359536773993594">{FILE_COUNT,plural, =1{Şəkillər, siyahıda 1 şəkil}other{Şəkillər, siyahıda # şəkil}}</translation>
-<translation id="6813446258015311409">Chrome'a giriş açılıb.</translation>
+<translation id="6813446258015311409">Ultimatum'a giriş açılıb.</translation>
 <translation id="6817747507826986771">Bu səhifəni cəld paylaşın. Bu qısayolu redaktə etmək üçün toxunub saxlayın.</translation>
 <translation id="6820686453637990663">CVC</translation>
 <translation id="6820942662346226299">Google Parol Meneceri güncəllənməsi bağlandı</translation>
@@ -1315,7 +1315,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="688738109438487280">Mövcud datanı <ph name="TO_ACCOUNT" /> hesabına əlavə edin.</translation>
 <translation id="6891726759199484455">Parolu kopyalamaq üçün kiliddən çıxarın</translation>
 <translation id="6896758677409633944">Kopyalayın</translation>
-<translation id="6898797562238201317">Google Hesabındakı bütün Chrome datasını şifrələmək üçün öz parol ifadələrinizdən istifadə edin</translation>
+<translation id="6898797562238201317">Google Hesabındakı bütün Ultimatum datasını şifrələmək üçün öz parol ifadələrinizdən istifadə edin</translation>
 <translation id="6900532703269623216">Təkmil qoruma</translation>
 <translation id="6903907808598579934">Sinxronizasiyanı akitv edin</translation>
 <translation id="6906448540340261898">Google Hesabında hər zaman parollardan istifadə edə biləcəyinizdən əmin olun</translation>
@@ -1324,7 +1324,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="6909589135458168665">Səhifələri Əvvəlcədən Yükləyin</translation>
 <translation id="6910211073230771657">Silinib</translation>
 <translation id="6918398787259831832">Bu problem davam etsə, <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> tərəfindən <ph name="BEGIN_LINK" />ətraflı məlumat əldə edin<ph name="END_LINK" />.</translation>
-<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Bu yaxınlarda daxil olmadığınız üçün Chrome bu icazələri sildi</translation>
+<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Bu yaxınlarda daxil olmadığınız üçün Ultimatum bu icazələri sildi</translation>
 <translation id="6927821422725196292">{TABS_COUNT,plural, =1{1 tab}other{<ph name="NUMBER_OF_TABS" /> tab}}</translation>
 <translation id="6929224077895306814">Cihaz və Google Hesabında yadda saxlanan güvənlik kodları silinəcək</translation>
 <translation id="6937524809504266803">Fərdiləşdirmə və əlaqələndirmə</translation>
@@ -1345,7 +1345,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="6979737339423435258">Hər zaman</translation>
 <translation id="6983306615164277634">Mövqeni dəyişmək üçün ünvan panelinə toxunub saxlaya bilərsiniz.</translation>
 <translation id="6987047470128880212">Anonim bu cihazda əlçatan deyil</translation>
-<translation id="6991701761229081516">Parollar CSV faylı kimi endiriləcək. Tətbiqlər daxil olmaqla fayla daxil ola bilən hər kəs onları görəcək. Eksport edilmiş parollar Chrome-dan silinəcək.</translation>
+<translation id="6991701761229081516">Parollar CSV faylı kimi endiriləcək. Tətbiqlər daxil olmaqla fayla daxil ola bilən hər kəs onları görəcək. Eksport edilmiş parollar Ultimatum-dan silinəcək.</translation>
 <translation id="6996145122199359148">Bu səhifəni endirin</translation>
 <translation id="7013762323294215682">Bu giriş açarı parol menecerində yadda saxlanacaq. Giriş imkanı olan hər kəs ondan istifadə edə biləcək.</translation>
 <translation id="7020741890149022655">Oxu siyahısına əlavə edin <ph name="BEGIN_NEW" />Yeni<ph name="END_NEW" /></translation>
@@ -1354,16 +1354,16 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="7053256416619638731">Bu cihazda parollarınızı gücləndirin</translation>
 <translation id="7053983685419859001">Bloklayın</translation>
 <translation id="7054588988317389591">Şəkil təsvirləri əldə edilsin?</translation>
-<translation id="7057969023583258980">Tam Chrome tarixçəsini açın</translation>
+<translation id="7057969023583258980">Tam Ultimatum tarixçəsini açın</translation>
 <translation id="7063006564040364415">Sinxronizasiya serverinə qoşula bilmədi.</translation>
 <translation id="7071521146534760487">Hesabı idarə edin</translation>
 <translation id="707155805709242880">Nəyi sinxronizasiya edəcəyinizi aşağıda seçin</translation>
 <translation id="7077143737582773186">SD Kart</translation>
-<translation id="7078916049958741685">Həmçinin Chrome datanızı bu cihazdan silin</translation>
-<translation id="7085332316435785646">Google xidmətlərində daha çox fərdiləşdirilmiş təcrübə üçün Chrome tarixçəsinin daxil edilib-edilməməsini seçin</translation>
-<translation id="7088681679121566888">Chrome güncəldir</translation>
+<translation id="7078916049958741685">Həmçinin Ultimatum datanızı bu cihazdan silin</translation>
+<translation id="7085332316435785646">Google xidmətlərində daha çox fərdiləşdirilmiş təcrübə üçün Ultimatum tarixçəsinin daxil edilib-edilməməsini seçin</translation>
+<translation id="7088681679121566888">Ultimatum güncəldir</translation>
 <translation id="7106762743910369165">Təşkilatınız brauzerinizi idarə edir</translation>
-<translation id="7111394291981742152">Chrome gördüyünüz reklamlar üzərində daha çox nəzarət imkanı verir və fərdiləşdirilmiş reklamlar göstərərkən saytların haqqınızda öyrəndiyi məlumatları məhdudlaşdırır.</translation>
+<translation id="7111394291981742152">Ultimatum gördüyünüz reklamlar üzərində daha çox nəzarət imkanı verir və fərdiləşdirilmiş reklamlar göstərərkən saytların haqqınızda öyrəndiyi məlumatları məhdudlaşdırır.</translation>
 <translation id="7117485132243600300">İzlədiyiniz kontenti, təklif olunan mövzuları və axtarışları idarə edin</translation>
 <translation id="7136902389402789299">{NUM_SITES,plural, =1{1 sayt üçün icazələr nəzərdən keçirilib}other{# sayt üçün icazələr nəzərdən keçirilib}}</translation>
 <translation id="7138678301420049075">Digər</translation>
@@ -1373,7 +1373,7 @@ Yalnız parol ifadəsini bilən şəxs şifrələnmiş datanı oxuya bilər. Goo
 <translation id="7149893636342594995">Son 24 saat</translation>
 <translation id="71503698506017927">Parol ifadəsi şifrələməsinə Google Pay-dən ödəniş metodu və ünvanlar daxil deyil.
 
-Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını silin<ph name="END_LINK" />.</translation>
+Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Ultimatum datasını silin<ph name="END_LINK" />.</translation>
 <translation id="7168323970702333693"><ph name="USER_NAME" /> olaraq daxil olunub. Ayarları açır.</translation>
 <translation id="7173114856073700355">Ayarları Açın</translation>
 <translation id="7173338713290252554">Vebdə qiymət tarixçəsi</translation>
@@ -1388,28 +1388,28 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="7192397795254933433">{NUM_PASSWORDS,plural, =1{Bunu indi dəyişməlisiniz}other{Bunları indi dəyişməlisiniz}}</translation>
 <translation id="7196215469483532480">Məxfilik bələdçisi izahı tam hündürlükdə açılıb</translation>
 <translation id="7207760545532569765"><ph name="TAB_COUNT" /> tabı yeni arxa fon tabları olaraq bərpa edin.</translation>
-<translation id="7217781228893594884">Chrome'dan çıxdığınız zaman anonim tablar kilidlənəcək</translation>
+<translation id="7217781228893594884">Ultimatum'dan çıxdığınız zaman anonim tablar kilidlənəcək</translation>
 <translation id="7221869452894271364">Bu səhifəni yenidən yükləyin</translation>
-<translation id="7224097611345298931">Chrome və <ph name="CHROME_CHANNEL" /> üçün yalnız bu cihazda yadda saxlanan bütün parollar birləşdirildi. Hər iki tətbiqdə yadda saxlanmış bütün parolları avtomatik doldura bilərsiniz.</translation>
+<translation id="7224097611345298931">Ultimatum və <ph name="CHROME_CHANNEL" /> üçün yalnız bu cihazda yadda saxlanan bütün parollar birləşdirildi. Hər iki tətbiqdə yadda saxlanmış bütün parolları avtomatik doldura bilərsiniz.</translation>
 <translation id="7227218174981371415">{FILE_COUNT,plural, =1{1 endirmə gözlənilir}other{# endirmə gözlənilir}}</translation>
 <translation id="7230064152164845085">Anonim rejimə keçin</translation>
 <translation id="7236515828900885295">Axtarışa keçin</translation>
 <translation id="7237724030342645845">Google Parol Meneceri dayandı</translation>
 <translation id="72415438529550637">Parol təklifi bağlandı.</translation>
 <translation id="7248671827512403053">Tətbiq</translation>
-<translation id="7260367682327802201">Android cihazınızda oxşar ayar ola bilər. Reklamın ölçülməsi Chrome və Android cihazınızda aktivdirsə, şirkət ziyarət etdiyiniz saytlar və istifadə etdiyiniz tətbiqlərdə reklamın effektivliyini ölçə bilər.</translation>
+<translation id="7260367682327802201">Android cihazınızda oxşar ayar ola bilər. Reklamın ölçülməsi Ultimatum və Android cihazınızda aktivdirsə, şirkət ziyarət etdiyiniz saytlar və istifadə etdiyiniz tətbiqlərdə reklamın effektivliyini ölçə bilər.</translation>
 <translation id="727288900855680735"><ph name="ONE_TIME_CODE" /> kodu <ph name="ORIGIN" /> ünvanına göndərilsin?</translation>
 <translation id="7274013316676448362">Blok edilmiş sayt</translation>
 <translation id="7276868533747677875">Daha öncə parolları eksport etmisinizsə, cihazınızda CSV faylı axtarın və onları seçdiyiniz parol menecerinə import edin.</translation>
-<translation id="7289049772085228972">Chrome-un ən güclü təhlükəsizlik sistemi tətbiq edilir</translation>
+<translation id="7289049772085228972">Ultimatum-un ən güclü təhlükəsizlik sistemi tətbiq edilir</translation>
 <translation id="7289303553784750393">Onlayn olduğunuz halda bu problem davam etsə, <ph name="SITE_ETLD_PLUS_ONE" /> saytında davam etmək üçün başqa yolları sınaya bilərsiniz.</translation>
 <translation id="7290209999329137901">Adı dəyişmək mümkün deyil</translation>
 <translation id="7291910923717764901">Bu səhifə üçün şəkil təsvirləri əlavə edildi</translation>
 <translation id="7293429513719260019">Dil seçin</translation>
 <translation id="729975465115245577">Cihazda parollar faylını saxlamaq üçün tətbiq yoxdur.</translation>
-<translation id="7304072650267745798">Android cihazında oxşar ayar ola bilər. Bu ayar Chrome və Android cihazında aktivdirsə, şirkət daxil olduğunuz veb-sayt və istifadə etdiyiniz tətbiqlər üzrə reklamın effektivliyini ölçə bilər.</translation>
+<translation id="7304072650267745798">Android cihazında oxşar ayar ola bilər. Bu ayar Ultimatum və Android cihazında aktivdirsə, şirkət daxil olduğunuz veb-sayt və istifadə etdiyiniz tətbiqlər üzrə reklamın effektivliyini ölçə bilər.</translation>
 <translation id="7304806746406660416">{PASSWORDS_COUNT,plural, =1{1 parol yalnız bu cihazda yadda saxlanılır. Onu digər cihazlarda istifadə etmək üçün Google Hesabında (<ph name="ACCOUNT_EMAIL" />) yadda saxlayın.}other{# parol yalnız bu cihazda yadda saxlanılır. Onları digər cihazlarda istifadə etmək üçün Google Hesabında (<ph name="ACCOUNT_EMAIL" />) yadda saxlayın.}}</translation>
-<translation id="7304873321153398381">Oflayn. Chrome parollarınızı yoxlaya bilmir.</translation>
+<translation id="7304873321153398381">Oflayn. Ultimatum parollarınızı yoxlaya bilmir.</translation>
 <translation id="7313188324932846546">Sinxronlaşdırmanı ayarlamaq üçün toxunun</translation>
 <translation id="7314734791127433392">Parolları yoxlamaq olmur</translation>
 <translation id="7324354302972299151">"Do Not Track" sorğusu göndərin</translation>
@@ -1431,13 +1431,13 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="7388615499319468910">Saytlar və reklamçılar reklamların necə işlədiyini başa düşə bilər. Bu ayar deaktivdir.</translation>
 <translation id="7400003506822844357">{FILE_COUNT,plural, =1{Digər, siyahıda 1 fayl}other{Digər, siyahıda # fayl}}</translation>
 <translation id="7400418766976504921">URL</translation>
-<translation id="7403691278183511381">İlkin Chrome Təcrübəsi</translation>
+<translation id="7403691278183511381">İlkin Ultimatum Təcrübəsi</translation>
 <translation id="7411224099004328643">Google Hesabı istifadəçisi</translation>
 <translation id="7419565702166471774">Həmişə güvənli bağlantılardan istifadə edin</translation>
 <translation id="7421293530411019405">Tab qrupundan çıxırsınız?</translation>
 <translation id="7431991332293347422">Axtarış tarixçəsinin Axtarış və sairəni necə fərdiləşdirdiyinə nəzarət edin</translation>
 <translation id="7435356471928173109">Administratorunuz tərəfindən deaktiv edilib</translation>
-<translation id="7437998757836447326">Chrome'dan çıxın</translation>
+<translation id="7437998757836447326">Ultimatum'dan çıxın</translation>
 <translation id="7439467816829380878">Tabı qrupa köçürün</translation>
 <translation id="7453810262525006706">Yan görünüşə yığcamlaşdırın</translation>
 <translation id="7454641608352164238">Yetərincə yer yoxdur</translation>
@@ -1468,7 +1468,7 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="7525248386620136756"><ph name="TAB_GROUPS_AND_TABS_PART" /> bağlandı və yadda saxlandı</translation>
 <translation id="752731652852882757">Anonim rejimdə bloklayın</translation>
 <translation id="7545347190366646170">Girişi olan şəxslər</translation>
-<translation id="7554643625247105821">Chrome versiyasını yoxlamaq mümkün deyil</translation>
+<translation id="7554643625247105821">Ultimatum versiyasını yoxlamaq mümkün deyil</translation>
 <translation id="7557508262441527045">Çıxılıb</translation>
 <translation id="7561260660702735877">Saytdakı keçid haqqında ətraflı məlumat</translation>
 <translation id="7573665567024262965">Defolt tətbiqlər seçin</translation>
@@ -1478,7 +1478,7 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="7583262514280211622">Oxu siyahısını burada tapa bilərsiniz</translation>
 <translation id="758603037873046260">Bu səhifəni yadda saxlamaq üçün daxil olun</translation>
 <translation id="7588219262685291874">Enerjiyə Qənaət rejimi aktiv olduqda tünd temanı aktiv edin</translation>
-<translation id="7592322927044331376">Əvvəlcə parolları Chrome-dan eksport edin və silin</translation>
+<translation id="7592322927044331376">Əvvəlcə parolları Ultimatum-dan eksport edin və silin</translation>
 <translation id="7594687499944811403"><ph name="TOP_ORIGIN" /> üçün <ph name="EMBEDDED_ORIGIN" /> tərəfindən kimliyinizin doğrulanmasına icazə verin</translation>
 <translation id="7596558890252710462">Əməliyyat sistemi</translation>
 <translation id="7597601275223325603">{NUMBER_OF_TABS,plural, =1{<ph name="TABS_COUNT_ONE" /> standart tab}other{<ph name="TABS_COUNT_MANY" /> standart tab}}</translation>
@@ -1488,7 +1488,7 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="7612989789287281429">Daxil olursunuz…</translation>
 <translation id="7619072057915878432">Şəbəkə problemi səbəbi ilə <ph name="FILE_NAME" /> faylının yüklənməsi uğursuz oldu.</translation>
 <translation id="762537095495606755">Parollar bu cihazda işləməyəcək</translation>
-<translation id="7626032353295482388">Chrome'a xoş gəlmisiniz</translation>
+<translation id="7626032353295482388">Ultimatum'a xoş gəlmisiniz</translation>
 <translation id="7628417132421583481">Parol Menecerinə keçin</translation>
 <translation id="7630202231528827509">Provayder URL-i</translation>
 <translation id="7638584964844754484">Yanlış parol</translation>
@@ -1503,7 +1503,7 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="7666185984446444960"><ph name="TAB_GROUPS_AND_TABS_PART" /> bağlanıb</translation>
 <translation id="7682724950699840886">Aşağıdakıları sınayın: cihazda kifayət qədər yer olduğuna əmin olun və eksport etməyə cəhd edin.</translation>
 <translation id="7686086654630106285">Saytın təklif etdiyi reklamlar haqqında ətraflı</translation>
-<translation id="7690596512217303514">Cihaz Chrome-u aça bilmədi. Tətbiq mağazasından son Chrome güncəllənməsini endirin.</translation>
+<translation id="7690596512217303514">Cihaz Ultimatum-u aça bilmədi. Tətbiq mağazasından son Ultimatum güncəllənməsini endirin.</translation>
 <translation id="7691043218961417207">İzləmək üçün kontentləri araşdırın</translation>
 <translation id="7692761875510935111">Sürətlə brauzerdə açın. Bu qısayolu redaktə etmək üçün toxunub saxlayın.</translation>
 <translation id="7697383401610880082">Dəstəyi çəkin</translation>
@@ -1545,7 +1545,7 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="7866213166286285359">Səhifələri burada tərcümə edin</translation>
 <translation id="7875915731392087153">E-poçt yaradın</translation>
 <translation id="7876243839304621966">Hamısını silin</translation>
-<translation id="7886917304091689118">Chrome'da istifadə edilir</translation>
+<translation id="7886917304091689118">Ultimatum'da istifadə edilir</translation>
 <translation id="7887174313503389866">Əsas məxfilik və təhlükəsizlik nəzarətlərinə bələdçi ilə baxış keçirin. Digər seçimlər üçün fərdi ayarlara keçin.</translation>
 <translation id="7907478394153853634">Lorem Ipsum</translation>
 <translation id="7913993612870913335">{FILE_COUNT,plural, =1{1 endirmə təşkilatınız tərəfindən bloklanıb}other{# endirmə təşkilatınız tərəfindən bloklanıb}}</translation>
@@ -1554,7 +1554,7 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="7919123827536834358">Bu dilləri avtomatik tərcümə edin</translation>
 <translation id="7921782882718083488">Bu səhifəni icmallaşdırın</translation>
 <translation id="7926975587469166629">Kart ləqəbi</translation>
-<translation id="7929587383660661825">Chrome bildirişlərdən sui-istifadə edən və ya son günlərdə daxil olmadığınız saytların icazələrini avtomatik silir</translation>
+<translation id="7929587383660661825">Ultimatum bildirişlərdən sui-istifadə edən və ya son günlərdə daxil olmadığınız saytların icazələrini avtomatik silir</translation>
 <translation id="7929962904089429003">Menyunu açın</translation>
 <translation id="7934668619883965330">Faylı endirmək olmur. Fayl formatı dəstəklənmir.</translation>
 <translation id="7942131818088350342"><ph name="PRODUCT_NAME" /> köhnədir.</translation>
@@ -1571,7 +1571,7 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="7975379999046275268">Önizləmə səhifəsi <ph name="BEGIN_NEW" />Yeni<ph name="END_NEW" /></translation>
 <translation id="7977451675950311423">Verilənlərin pozulması nəticəsində ifşa olunan parol istifadə etdikdə xəbərdarlıq edir.</translation>
 <translation id="7986497153528221272">Parollara baxmaq üçün öncə cihazınızda ekran kilidi ayarlayın</translation>
-<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Bu yaxınlarda daxil olmadığınız üçün Chrome bu icazələri sildi</translation>
+<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Bu yaxınlarda daxil olmadığınız üçün Ultimatum bu icazələri sildi</translation>
 <translation id="7995059495660416932">Kontent əlçatan olduqda onu görəcəksiniz</translation>
 <translation id="799576009106109668">Cari veb səhifə ziyarətinizə əsasən məzmun proaktiv şəkildə yükləndiyinə görə daha sürətli gözdən keçirəcəksiniz</translation>
 <translation id="8001245658307297681">Lokal fayla baxırsınız</translation>
@@ -1588,7 +1588,7 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="804335162455518893">SD kart tapılmadı</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> anonim tab}other{<ph name="TAB_COUNT_NORMAL" /> anonim tab}}</translation>
 <translation id="8051695050440594747"><ph name="MEGABYTES" /> MB əlçatandır</translation>
-<translation id="8058746566562539958">Yeni Chrome tabında açın</translation>
+<translation id="8058746566562539958">Yeni Ultimatum tabında açın</translation>
 <translation id="8062594758852531064">Artırılmış əvvəlcədən yükləmə:</translation>
 <translation id="8063895661287329888">Əlfəcin əlavə etmək alınmadı.</translation>
 <translation id="8066816452984416180">Səhifəni sürətlə əlfəcinləyin. Qısayolu redaktə etmək üçün toxunub saxlayın.</translation>
@@ -1599,16 +1599,16 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="8078348702936632821">Bu qısayolu bərkidin</translation>
 <translation id="8084114998886531721">Yadda saxlanmış parol</translation>
 <translation id="8084285576995584326">Google Hesab datanıza nəzarət edin</translation>
-<translation id="8084864785646838999">Tarixçənin bir hissəsi burada görünməyə bilər. Bütün Chrome tarixçənizi görmək üçün tam Chrome tarixçəsini açın. <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> ünvanında Google Hesabınızın başqa brauzer tarixçəsi formaları ola bilər.</translation>
+<translation id="8084864785646838999">Tarixçənin bir hissəsi burada görünməyə bilər. Bütün Ultimatum tarixçənizi görmək üçün tam Ultimatum tarixçəsini açın. <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> ünvanında Google Hesabınızın başqa brauzer tarixçəsi formaları ola bilər.</translation>
 <translation id="8088176524274673045">Yaxınlıqdakı insanlarla paylaşmaq üçün onlara bu QR kodu skanlamaq icazəsi verin</translation>
 <translation id="8090732854597034573">Köməyə ehtiyacınız varsa, valideyninizə müraciət edin</translation>
 <translation id="8101414242770404289"><ph name="TIME_PERIOD" /> üzrə tab yoxdur</translation>
 <translation id="8103578431304235997">Gizli Panel</translation>
-<translation id="8105613260829665809">Davam etməklə, <ph name="BEGIN_TOS_LINK" /> Xidmət Şərtləri<ph name="END_TOS_LINK" /> ilə razılaşırsınız.\nTətbiqi təkmilləşdirməyə kömək etmək üçün Chrome istifadə və qəza datasını Google'a göndərir. <ph name="BEGIN_UMA_LINK" />İdarə edin<ph name="END_UMA_LINK" /></translation>
+<translation id="8105613260829665809">Davam etməklə, <ph name="BEGIN_TOS_LINK" /> Xidmət Şərtləri<ph name="END_TOS_LINK" /> ilə razılaşırsınız.\nTətbiqi təkmilləşdirməyə kömək etmək üçün Ultimatum istifadə və qəza datasını Google'a göndərir. <ph name="BEGIN_UMA_LINK" />İdarə edin<ph name="END_UMA_LINK" /></translation>
 <translation id="8105893657415066307"><ph name="DESCRIPTION" /> <ph name="SEPARATOR" /> <ph name="FILE_SIZE" /></translation>
 <translation id="8107530384992929318">Çeşidləmə seçimlərini bağlayın</translation>
-<translation id="8110024788458304985">Chrome funksiyalarını və performansını təkmilləşdirməyə yardım edin</translation>
-<translation id="8110087112193408731">Digital Sağlamlıqda Chrome fəaliyyəti göstərilsin?</translation>
+<translation id="8110024788458304985">Ultimatum funksiyalarını və performansını təkmilləşdirməyə yardım edin</translation>
+<translation id="8110087112193408731">Digital Sağlamlıqda Ultimatum fəaliyyəti göstərilsin?</translation>
 <translation id="8118117428362942925">Köməyə ehtiyacınız varsa, valideyninizə müraciət edin (<ph name="PARENT_NAME" />)</translation>
 <translation id="8120286190326371840">Bu cihazda oğurlanmış parol yoxdur</translation>
 <translation id="8122623268651408616">Ən yeni əsasında çeşidlənir</translation>
@@ -1631,7 +1631,7 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="8211101263765532799">Bəzi parollar tezliklə işləməyəcək</translation>
 <translation id="8215740705341534369">Yan vərəq</translation>
 <translation id="8218622182176210845">Hesabınızı idarə edin</translation>
-<translation id="8221401890884589479">İstəmədiyiniz saytları bloklaya bilərsiniz. Chrome 30 gündən əvvələ aid saytları siyahıdan avtomatik silir. <ph name="BEGIN_LINK" />Ətraflı məlumat<ph name="END_LINK" /></translation>
+<translation id="8221401890884589479">İstəmədiyiniz saytları bloklaya bilərsiniz. Ultimatum 30 gündən əvvələ aid saytları siyahıdan avtomatik silir. <ph name="BEGIN_LINK" />Ətraflı məlumat<ph name="END_LINK" /></translation>
 <translation id="8221985041778490865">Baxış datası silinir</translation>
 <translation id="8223642481677794647">Lent kartı menyusu</translation>
 <translation id="82296173028782770">Axtarış sorğusunu redaktə edin: <ph name="SEARCH_QUERY" /></translation>
@@ -1641,7 +1641,7 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="8244387390464017490">Yeni tab səhifəsini fərdiləşdirin</translation>
 <translation id="8250920743982581267">Sənədlər</translation>
 <translation id="8255617931166444521">Saytlar yalnız öz saytlarında axtarış fəaliyyətinizi görmək üçün kukilərinizdən istifadə edə bilər</translation>
-<translation id="8256087213273124136">Chrome sizi bildirişlərə abunəlikdən çıxardı</translation>
+<translation id="8256087213273124136">Ultimatum sizi bildirişlərə abunəlikdən çıxardı</translation>
 <translation id="8258999165172757081">Əlavə edilib</translation>
 <translation id="8259179246279078674">Əvvəlcədən yüklənmiş səhifələr şifrələndiyinə görə Google əvvəlcədən yüklənmiş səhifə məzmunu haqqında heç nə öyrənməyəcək. Google serverləri hansı saytların məxfi olaraq əvvəlcədən yükləndiyini öyrənəcək. Bu məlumat yalnız səhifələri əvvəlcədən yükləmək üçün istifadə olunur və Google Hesabınızdakı digər məlumatlarla əlaqələndirilmir.</translation>
 <translation id="8260126382462817229">Yenidən daxil olmağa cəhd edin</translation>
@@ -1659,7 +1659,7 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="831192587911042850">Cari veb saytı izlədiyiniz veb saytların siyahısına əlavə edir.</translation>
 <translation id="8320212361750431956">Son fəaliyyət</translation>
 <translation id="832514020744584629"><ph name="PREF_TITLE" />  <ph name="BEGIN_NEW" />Yenilik<ph name="END_NEW" /></translation>
-<translation id="8342727528718219152">Chrome həddən artıq bildiriş göndərə biləcək saytlar haqqında sizə məlumat verəcək</translation>
+<translation id="8342727528718219152">Ultimatum həddən artıq bildiriş göndərə biləcək saytlar haqqında sizə məlumat verəcək</translation>
 <translation id="834313815369870491">Saytları heç vaxt tərcümə etməyin</translation>
 <translation id="8348430946834215779">Mümkün olduqda HTTPS istifadə edin və onu dəstəkləməyən saytları yükləməzdən əvvəl xəbərdarlıq alın</translation>
 <translation id="8354977102499939946">Səsinizlə sürətlə axtarın. Bu qısayolu redaktə etmək üçün Ayarlara keçin.</translation>
@@ -1673,12 +1673,12 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="8398389123831319859">Anonim rejimə keçmək üçün iki dəfə toxunub saxlayın</translation>
 <translation id="8402673309244746971">İzlənənlərə keçin</translation>
 <translation id="8413126021676339697">Tam tarixçəni göstərin</translation>
-<translation id="8413795581997394485">Təhlükəli sayt, endirmə və artırmalardan qoruyur. Sayta daxil olduqda Chrome IP ünvanını gizlədən məxfilik serveri vasitəsilə URL-in qarışıq bir hissəsini Google-a göndərir. Sayt şübhəli nəsə edərsə, tam URL və kiçik səhifə kontenti nümunələri də göndərilir.</translation>
+<translation id="8413795581997394485">Təhlükəli sayt, endirmə və artırmalardan qoruyur. Sayta daxil olduqda Ultimatum IP ünvanını gizlədən məxfilik serveri vasitəsilə URL-in qarışıq bir hissəsini Google-a göndərir. Sayt şübhəli nəsə edərsə, tam URL və kiçik səhifə kontenti nümunələri də göndərilir.</translation>
 <translation id="8414396119627470038"><ph name="SITE_ETLD_PLUS_ONE" /> saytına <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> ilə daxil olun</translation>
 <translation id="8419144699778179708">Axtarış xanasındakılar daxil olmaqla tarixçəni silir</translation>
 <translation id="8419244640277402268">Daxil edin</translation>
 <translation id="8422250855136581222">Bu cihazda tab yoxdur</translation>
-<translation id="842386925677997438">Chrome-un güvənlik alətləri</translation>
+<translation id="842386925677997438">Ultimatum-un güvənlik alətləri</translation>
 <translation id="8427875596167638501">Önbaxış tabının yarısı açılıb</translation>
 <translation id="8428213095426709021">Ayarlar</translation>
 <translation id="8430824733382774043">Yalnız skrinşot paylaşın</translation>
@@ -1686,14 +1686,14 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="8438566539970814960">Axtarış və brauzer fəaliyyətini təkmilləşdirin</translation>
 <translation id="8439974325294139057"><ph name="LANG" /> - Dil hazırdır, <ph name="APP_NAME" /> tətbiqini yenidən başladın.</translation>
 <translation id="8442258441309440798">Əlçatan hekayə yoxdur</translation>
-<translation id="8443209985646068659">Chrome güncəllənmir</translation>
+<translation id="8443209985646068659">Ultimatum güncəllənmir</translation>
 <translation id="8445448999790540984">Parolları eksport etmək alınmadı</translation>
 <translation id="8446884382197647889">Ətraflı Məlumat</translation>
 <translation id="8449781591250785734">{NUM_SITES,plural, =1{1 saytdan icazələr silindi}other{# saytdan icazələr silindi}}</translation>
 <translation id="8453310803815879010">Dinozavr oyununu başladın</translation>
 <translation id="8455675988389029454">Əlfəcin, parol və s. məlumatları bütün cihazlarda əldə edin</translation>
 <translation id="8458413889418591446">Daxil olduğunuz saytlara tez qayıtmaq üçün tarixçə və tablarınızı sinxronlaşdırın</translation>
-<translation id="84594714173170813">Google Hesabında Chrome datasından istifadəyə davam edin</translation>
+<translation id="84594714173170813">Google Hesabında Ultimatum datasından istifadəyə davam edin</translation>
 <translation id="8460448946170646641">Əsas məxfilik və təhlükəsizlik nəzarətlərini nəzərdən keçirin</translation>
 <translation id="8473863474539038330">Ünvanlar və s.</translation>
 <translation id="8477178913400731244">Datanı silin</translation>
@@ -1707,7 +1707,7 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="8505766168025405649">Endirmə statusu üçün bildirişə baxın</translation>
 <translation id="8506357771923193001">Endirmələr burada olacaq</translation>
 <translation id="8512053371384421952"><ph name="DOMAIN" /> ünvanından bildiriş almayacaqsınız.</translation>
-<translation id="8514477925623180633">Chrome'da saxlanılan parolları eksport edin</translation>
+<translation id="8514477925623180633">Ultimatum'da saxlanılan parolları eksport edin</translation>
 <translation id="8516012719330875537">Şəkil Redaktoru</translation>
 <translation id="8523928698583292556">Yadda saxlanmış parolu silin</translation>
 <translation id="8526855376374973824">Bildiriş icazəsi prosesi</translation>
@@ -1716,8 +1716,8 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="854522910157234410">Bu səhifəni açın</translation>
 <translation id="8547025137714087639">{ARCHIVED_TAB_COUNT,plural, =1{Deaktiv tab (1)}other{Deaktiv tab (#)}}</translation>
 <translation id="8547466829003330976">PDF-i AI ilə nəzərdən keçirin</translation>
-<translation id="8551513938758868521">Chrome-dan çıxdıqda Incognito tablarını kilidləyin</translation>
-<translation id="8559961053328923750">Chrome reklam performansını ölçmək üçün saytların brauzer vasitəsilə paylaşa biləcəyi ümumi data miqdarını məhdudlaşdırır</translation>
+<translation id="8551513938758868521">Ultimatum-dan çıxdıqda Incognito tablarını kilidləyin</translation>
+<translation id="8559961053328923750">Ultimatum reklam performansını ölçmək üçün saytların brauzer vasitəsilə paylaşa biləcəyi ümumi data miqdarını məhdudlaşdırır</translation>
 <translation id="8559990750235505898">Digər dillərdə səhifələrin tərcümə edilməsini təklif edin</translation>
 <translation id="8560602726703398413">Əlfəcinlərdə oxuma siyahınızı tapın</translation>
 <translation id="8562452229998620586">Saxlanmış parollar burada görünəcək.</translation>
@@ -1729,7 +1729,7 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="859046281437143747">"Digər seçimlər" düyməsi ilə qiyməti izləyin</translation>
 <translation id="859064343657890103"><ph name="TAB_GROUP_TITLE" /> tab qrupu silinib</translation>
 <translation id="860043288473659153">Kart sahibinin adı</translation>
-<translation id="8602358303461588329">Chrome'a giriş bağlıdır.</translation>
+<translation id="8602358303461588329">Ultimatum'a giriş bağlıdır.</translation>
 <translation id="860282621117673749">Qiymət endirimi siqnalları</translation>
 <translation id="8611922158252451755">Keçidi olan hər kəs bütün tabları redaktə edə bilər, ona görə də paylaşarkən diqqətli olun. Keçidin müddəti 48 saat ərzində bitir.</translation>
 <translation id="8616006591992756292"><ph name="BEGIN_LINK" />history.google.com<ph name="END_LINK" /> linkində Google Hesabına məxsus axtarış tarixçəsinin başqa formaları ola bilər.</translation>
@@ -1757,8 +1757,8 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="8748850008226585750">Məzmun gizlidir</translation>
 <translation id="8754448020583829686">Keçidsiz kopyalayın</translation>
 <translation id="8756969031206844760">Parol yenilənsin?</translation>
-<translation id="8765470054473112089">Ünvan panelinə və ya axtarış xanasına mətn daxil etdiyiniz zaman Chrome sizə daha yaxşı təkliflər təqdim etmək üçün yazdıqlarınızı defolt axtarış sisteminizə göndərir. Bu, Anonim rejimdə deaktivdir.</translation>
-<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Chrome təkmilləşdirə biləcəyiniz zəif parol aşkarladı}other{Chrome təkmilləşdirə biləcəyiniz # zəif parol aşkarladı}}</translation>
+<translation id="8765470054473112089">Ünvan panelinə və ya axtarış xanasına mətn daxil etdiyiniz zaman Ultimatum sizə daha yaxşı təkliflər təqdim etmək üçün yazdıqlarınızı defolt axtarış sisteminizə göndərir. Bu, Anonim rejimdə deaktivdir.</translation>
+<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Ultimatum təkmilləşdirə biləcəyiniz zəif parol aşkarladı}other{Ultimatum təkmilləşdirə biləcəyiniz # zəif parol aşkarladı}}</translation>
 <translation id="8766529642647037772">Bunun kimi vurgulanmış keçid yaradılsın?</translation>
 <translation id="8788265440806329501">Naviqasiya tarixçəsi bağlıdır</translation>
 <translation id="8788968922598763114">Sonuncu bağlanan paneli yenidən açın</translation>
@@ -1782,7 +1782,7 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="8856607253650333758">Təsvirləri əldə edin</translation>
 <translation id="8856931513242997049">Bildiriş icazəsi prosesi bağlanıb</translation>
 <translation id="8863714995118816041"><ph name="SITE_NAME" /> üçün icazələr yenidən verildi</translation>
-<translation id="8865415417596392024">Hesabdakı Chrome datası</translation>
+<translation id="8865415417596392024">Hesabdakı Ultimatum datası</translation>
 <translation id="8888527824584402177"><ph name="DAYS_INACTIVE" /> gün istifadə etmədiyiniz tablar bura köçürüldü<ph name="AUTODELETE_SECTION" />. Bunu istənilən vaxt <ph name="SETTINGS_TITLE" /> bölməsində dəyişə bilərsiniz.</translation>
 <translation id="8890668505403261809">Anonim tablarınızı axtarın</translation>
 <translation id="8898822736010347272">Yeni təhlükələri aşkarlamaq və vebdə hər kəsi qorumağa yardım etmək üçün daxil olduğunuz bəzi səhifələrin URL'lərini, məhdud sistem məlumatlarını və bəzi səhifə məzmunlarını Google'a göndərin.</translation>
@@ -1791,7 +1791,7 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="8922289737868596582">Oflayn istifadə etmək üçün səhifələri Digər seçimlər düyməsindən endirin</translation>
 <translation id="8924575305646776101"><ph name="BEGIN_LINK" />Ətraflı Məlumat<ph name="END_LINK" /></translation>
 <translation id="892496902842311796"><ph name="LANG" /> hazırdır</translation>
-<translation id="8937772741022875483">Chrome fəaliyyəti Rəqəmsal Sağlamlıqdan silinsin?</translation>
+<translation id="8937772741022875483">Ultimatum fəaliyyəti Rəqəmsal Sağlamlıqdan silinsin?</translation>
 <translation id="8942627711005830162">Başqa pəncərədə açın</translation>
 <translation id="8945143127965743188"><ph name="LANG" /> - Bu dili endirmək mümkün olmadı. Sonra cəhd edin.</translation>
 <translation id="8946759102391960088">Parollarınıza girişi saxlayın</translation>
@@ -1802,13 +1802,13 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="897061774231912216">Google Play xidmətləri əlçatan olmadığı üçün parollar tezliklə işləməyəcək. Google Hesabında yadda saxlanmış parollardan istifadə etmək üçün başqa cihazla daxil olun və ya passwords.google.com saytına keçin.</translation>
 <translation id="8970887620466824814">Xəta baş verdi.</translation>
 <translation id="8972098258593396643">Defolt qovluğa endirilsin?</translation>
-<translation id="8992769679401294069">Data parol ifadəsi ilə şifrələnib. Google Hesabında Chrome datasını istifadə etmək və yadda saxlamaq üçün onu daxil edin.</translation>
+<translation id="8992769679401294069">Data parol ifadəsi ilə şifrələnib. Google Hesabında Ultimatum datasını istifadə etmək və yadda saxlamaq üçün onu daxil edin.</translation>
 <translation id="8993760627012879038">Incognito rejimində yeni panel açın</translation>
 <translation id="8995521496079646922">Seçdiyiniz tətbiqlər defolt olaraq istifadə olunacaq. Tətbiq bu cihazda yoxdursa, tezliklə endiriləcək.</translation>
 <translation id="8996847606757455498">Başqa provayder seçin</translation>
 <translation id="8998289560386111590">Cihazınızda əlçatan deyil</translation>
 <translation id="8998837250940831980">Tab kiçildilmədi. Sonra cəhd edin.</translation>
-<translation id="9001604755921395912">Anonim Chrome tabında açın</translation>
+<translation id="9001604755921395912">Anonim Ultimatum tabında açın</translation>
 <translation id="9007002441981613214">Yadda saxlanan parollarla bağlı problemi həll edin</translation>
 <translation id="9012585441087414258">Təhlükəli sayt, endirmə və artırmalardan qoruyur. Səhifədə şübhəli fəaliyyət olarsa, URL və səhifə kontentinin bir hissəsi Google Güvənli Axtarışa göndərilir.</translation>
 <translation id="9019199799064251516">Avtomobil profil kilidi olmadan davam edilsin?</translation>
@@ -1817,14 +1817,14 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="9027728231343310283"><ph name="SITE" /> üçün geri qaytarın</translation>
 <translation id="9035378196785279980">Bura köçürün\u2026</translation>
 <translation id="9042893549633094279">Məxfilik və təhlükəsizlik</translation>
-<translation id="9047347135558855162">Chrome-da axtarışa tez başlayın</translation>
+<translation id="9047347135558855162">Ultimatum-da axtarışa tez başlayın</translation>
 <translation id="9050666287014529139">Parol ifadəsi</translation>
 <translation id="9055497320631373736">Sayt yenidən potensial saytlara əlavə edilib</translation>
 <translation id="9057030985451135243">Ortaq tab qrupları haqqında məlumat əldə edin</translation>
 <translation id="9063400323119781058">Abunəlikdən çıxdınız</translation>
 <translation id="9063523880881406963">Əsas Versiya Sorğusunu deaktiv edin</translation>
 <translation id="9065203028668620118">Düzəliş edin</translation>
-<translation id="9065383040763568503">Chrome'un vacib olduğunu düşünmədiyi saxlanmış data (məs. yadda saxlanmayan ayarlar ilə olan və ya tez-tez daxil olmadığınız saytlar)</translation>
+<translation id="9065383040763568503">Ultimatum'un vacib olduğunu düşünmədiyi saxlanmış data (məs. yadda saxlanmayan ayarlar ilə olan və ya tez-tez daxil olmadığınız saytlar)</translation>
 <translation id="9067341854474068781">Tam açılmış giriş açarı vərəqi yoxdur</translation>
 <translation id="906781307897697745"><ph name="PRODUCT_NAME" /> ərazisində</translation>
 <translation id="9069999660519089861">Oxunmamış səhifə yoxdur</translation>
@@ -1833,7 +1833,7 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="9081543426177426948">Anonim rejimdə daxil olduğunuz saytlar yadda saxlanılmır</translation>
 <translation id="9086302186042011942">Sinxronizasiya edilir</translation>
 <translation id="9086455579313502267">Şəbəkəyə qoşulmaq olmur</translation>
-<translation id="909756639352028172">Fərdi təcrübə üçün Chrome-u Veb və Tətbiq fəaliyyətinə, habelə əlaqələndirilmiş Google xidmətlərinə daxil edin</translation>
+<translation id="909756639352028172">Fərdi təcrübə üçün Ultimatum-u Veb və Tətbiq fəaliyyətinə, habelə əlaqələndirilmiş Google xidmətlərinə daxil edin</translation>
 <translation id="9099220545925418560">Axtarış tarixçənizə əsaslanır. Bu ayar deaktivdir.</translation>
 <translation id="9100610230175265781">Parol tələb olunur</translation>
 <translation id="9101137867221042551">İdarəetmə</translation>
@@ -1854,7 +1854,7 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="9161172953291434881">Datanızı bu sayta etibar edirsiniz?</translation>
 <translation id="9168847423516963845">Ünvan panelini aşağıya köçürün</translation>
 <translation id="9169507124922466868">Naviqasiya tarixçəsi yarı açıqdır</translation>
-<translation id="918419812064856259">Chrome Beta</translation>
+<translation id="918419812064856259">Ultimatum Beta</translation>
 <translation id="9190276265094487094">Bütün sinxronlaşdırılmış cihazlarınızda tarixçəniz olacaq, beləliklə, gördüyünüz işə davam edə bilərsiniz</translation>
 <translation id="9191906083913361689">Əlfəcinlər, oxu siyahısı və ya parol menecerində bu elementlərə baxa və onları idarə edə bilərsiniz</translation>
 <translation id="9199368092038462496">{NUM_MINS,plural, =1{1 dəqiqə əvvəl yoxlanılıb}other{# dəqiqə əvvəl yoxlanılıb}}</translation>
@@ -1866,14 +1866,14 @@ Bu ayarı dəyişmək üçün <ph name="BEGIN_LINK" />hesabda Chrome datasını 
 <translation id="9212845824145208577">Aşağıya keçmək olmur. Səhifənin aşağısından başlamağı sınayın.</translation>
 <translation id="9218430445555521422">Defolt olaraq ayarlansın</translation>
 <translation id="9219103736887031265">Şəkillər</translation>
-<translation id="924447568950697217">Chrome'u defolt brazueriniz edin</translation>
-<translation id="926205370408745186">Digital Sağlamlıqdan Chrome fəaliyyətini silin</translation>
-<translation id="927968626442779827">Google Chrome'da Lite rejimindən istifadə edin</translation>
+<translation id="924447568950697217">Ultimatum'u defolt brazueriniz edin</translation>
+<translation id="926205370408745186">Digital Sağlamlıqdan Ultimatum fəaliyyətini silin</translation>
+<translation id="927968626442779827">Ultimatum'da Lite rejimindən istifadə edin</translation>
 <translation id="928550791203542716"><ph name="SITE_NAME" /> izlənilir</translation>
 <translation id="930124987204876019">Tarixçə, kuki, sayt datası və keşi silin…</translation>
 <translation id="938850635132480979">Xəta: <ph name="ERROR_CODE" /></translation>
 <translation id="939598580284253335">Parol daxil edin</translation>
-<translation id="95817756606698420">Chrome, Çində axtarış üçün <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> istifadə edə bilər. Bunu <ph name="BEGIN_LINK" />Ayarlar<ph name="END_LINK" /> bölməsindən dəyişə bilərsiniz.</translation>
+<translation id="95817756606698420">Ultimatum, Çində axtarış üçün <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> istifadə edə bilər. Bunu <ph name="BEGIN_LINK" />Ayarlar<ph name="END_LINK" /> bölməsindən dəyişə bilərsiniz.</translation>
 <translation id="961856697154696964">Baxış datasını silin</translation>
 <translation id="963246339335003378">Tapşırıq Menecerini açın</translation>
 <translation id="966131775676567255">Hesab datası silinir</translation>
