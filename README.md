@@ -1,19 +1,22 @@
-# ![Logo](chrome/app/theme/chromium/product_logo_64.png) Ultimatum
+# ![Logo](../chrome/app/theme/chromium/product_logo_64.png) Ultimatum
 
-This is my attempt to port webextensions system on android. Something is already working, something still in progress. Desktop related readme you can find [here](https://github.com/gonzazoid/Ultimatum/tree/ultimatum_132.0.6834.46)
+This is my attempt to port webextensions system on android. Something is already working, something still in progress.
 
 ### Tested extensions
 
-- [Browsec VPN](https://chromewebstore.google.com/detail/browsec-vpn-%D0%B1%D0%B5%D1%81%D0%BF%D0%BB%D0%B0%D1%82%D0%BD%D1%8B%D0%B9-%D0%B2%D0%BF/omghfjlpggmjjaagoclmmobgdodcjboh)
+- [uBlock Origin](https://addons.opera.com/en/extensions/details/ublock/)
 - [uBlock Origin Lite](https://chromewebstore.google.com/detail/ublock-origin-lite/ddkjiahejlhfcafbddmgiahcphecmpfh)
+- [Tampermonkey](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
+- [Browsec VPN](https://chromewebstore.google.com/detail/browsec-vpn-%D0%B1%D0%B5%D1%81%D0%BF%D0%BB%D0%B0%D1%82%D0%BD%D1%8B%D0%B9-%D0%B2%D0%BF/omghfjlpggmjjaagoclmmobgdodcjboh)
+- [MetaMask](https://chromewebstore.google.com/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn)
 
 If you find some extension working - let me know, I'll add it to the list.
 
 ### How to install webextensions?
 
-Pretty much the same as you do on desktops. [Here](docs/ultimatum/webext_install/install.md) you can find instruction with pictures.
+Pretty much the same as you do on desktops. [Here](docs/ultimatum/webext_install/install.md) you can find instructions with pictures.
 
-### How to build.
+### How to build?
 
 Basicaly the same way you build chromium but there is a couple tricks. First of all, before you do ``gn gen out/Default`` create ``out/Default`` manually (like ``mkdir out/Default``) and put this ``args.gn`` there:
 
@@ -44,14 +47,15 @@ You can learn how to play with apk [here](https://chromium.googlesource.com/chro
 
 ### So, what's working?
 
-Installation (webextensions) from opera and google stores, also you can install an extension from any site that gives the crx file with proper header (``"Content-Type": "application/x-chrome-extension"``). Installation for unpacked extensions ~~doesn't work yet but it's on the list~~ works as well.
+Installation (webextensions) from opera and google stores, also you can install an extension from any site that gives the crx file with proper header (``"Content-Type": "application/x-chrome-extension"``). Installation for unpacked extensions ~~doesn't work yet but it's on the list~~ works as well. Installation fron .crx and .zip files is coming soon.
 
 You can install, delete, turn off/on extensions, just like on desktops (doesn't mean that all of them will work properly).
+
+Installation from Google Webstore is silent, if extension is downloaded from any other site there is notification about it and user can agree or cancel installation.
 
 #### flaws
 
 - there is no modal window when an extension tries to increase permissions (like Ublock lite). If you have installed extensions from one of the stores - it's ok. But be careful when installing them from other sites.
-
 
 Below you can see list of apis and their statuses.
 
@@ -62,9 +66,9 @@ Below you can see list of apis and their statuses.
 ### full support
 
 - ✅ chrome.cookies
-- ✅ chrome.scripting (not tested fully yet)
 - ✅ chrome.proxy
 - ✅ chrome.storage
+- ✅ chrome.webRequest
 
 #### private apis (are used in chromium underhood)
 
@@ -93,8 +97,8 @@ Below you can see list of apis and their statuses.
 - ✅ getCurrent
 - ❌ getZoom
 - ❌ getZoomSettings
-- ❌ goBack (coming soon)
-- ❌ goForward (coming soon)
+- ✅ goBack
+- ✅ goForward
 - ✅ group
 - ❌ highlight (coming soon)
 - ❌ move (coming soon)
@@ -106,6 +110,8 @@ Below you can see list of apis and their statuses.
 - ❌ setZoomSettings
 - ✅ ungroup
 - ❌ update
+- ❌ insertCSS
+- ❌ removeCSS
 
 ##### events
 
@@ -117,7 +123,7 @@ Below you can see list of apis and their statuses.
 - ✅ onMoved
 - ✅ onRemoved
 - ❌ onReplaced
-- ❌ onUpdated
+- ✅ onUpdated
 - ❌ onZoomChange
 
 #### chrome.windows api
@@ -152,19 +158,19 @@ Completely present and completely useless for now (I'm gonna change this)
 
 #### added but not tested yet
 
+- chrome.history
+- chrome.scripting
 - chrome.declarativeNetRequest
 - chrome.i18n
 - chrome.idle
 - chrome.metricsPrivate
 - chrome.management
 - chrome.offscreen
-- chrome.runtime (messaging working though)
-- chrome.webRequest
-- chrome.scripting
+- chrome.runtime (messaging works though)
 
 Enjoy!
 
-#### Ultimatum
+#### Ultimatum - desktop
 
 Ultimatum is a fork of the chromium browser with content addressing support. It aims to be a testing ground for experiments to build web3.0. In discussions about what web3.0 should be, the focus tends to shift to what the network should be like and little attention is paid to what the client should be like. This project (which I hope will eventually become part of another, larger project) attempts to fill the gap.
 
