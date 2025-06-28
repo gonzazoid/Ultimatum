@@ -4,6 +4,8 @@
 
 package org.chromium.chrome.browser.contextmenu;
 
+import org.chromium.base.Log;
+
 import static org.chromium.chrome.browser.contextmenu.ContextMenuItemWithIconButtonProperties.BUTTON_CLICK_LISTENER;
 import static org.chromium.chrome.browser.contextmenu.ContextMenuItemWithIconButtonProperties.BUTTON_MENU_ID;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.ENABLED;
@@ -369,6 +371,19 @@ public class ContextMenuCoordinator implements ContextMenuUi {
         mListView.setOnItemClickListener(
                 (p, v, pos, id) -> {
                     assert id != INVALID_ITEM_ID;
+                    Log.i("ULTIMATUM", "POSITION!!! " + String.valueOf(pos));
+                    if (id == 0) {
+                      // may be extensions context menu
+                      ListItem contextItem = getItem(pos);
+                      contextItem.model.set(MENU_ITEM_ID, 9999);
+                      clickItem(
+                            9999,
+                            activity,
+                            onItemClicked,
+                            contextItem.model.get(ENABLED));
+                      return;
+                    }
+                    // if we have item's position - why brootforce?
                     ListItem item = findItem((int) id);
                     clickItem(
                             (int) id,

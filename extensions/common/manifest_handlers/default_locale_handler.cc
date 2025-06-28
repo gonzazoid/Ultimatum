@@ -89,6 +89,7 @@ bool DefaultLocaleHandler::Validate(
 
   base::FilePath locale_path;
   while (!(locale_path = locales.Next()).empty()) {
+    // we need this commented only when installing unpacked extension
     // if (extension_l10n_util::ShouldSkipValidation(path, locale_path,
     //                                               all_locales))
     //   continue;

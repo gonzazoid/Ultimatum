@@ -4,10 +4,13 @@
 
 package org.chromium.chrome.browser.contextmenu;
 
+import org.chromium.base.Log;
+
 import static org.chromium.chrome.browser.contextmenu.ContextMenuItemWithIconButtonProperties.BUTTON_CONTENT_DESC;
 import static org.chromium.chrome.browser.contextmenu.ContextMenuItemWithIconButtonProperties.BUTTON_IMAGE;
 import static org.chromium.chrome.browser.contextmenu.ContextMenuItemWithIconButtonProperties.BUTTON_MENU_ID;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.ENABLED;
+import static org.chromium.ui.listmenu.ListMenuItemProperties.CLICK_LISTENER;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.HOVER_LISTENER;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.MENU_ITEM_ID;
 import static org.chromium.ui.listmenu.ListMenuItemProperties.TITLE;
@@ -105,6 +108,9 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
     private static final String LENS_SUPPORT_STATUS_HISTOGRAM_NAME =
             "ContextMenu.LensSupportStatus";
     private final boolean mIsDownloadRestrictedByPolicy;
+
+    private List<ListItem> mExtensionsMenu;
+
     // Custom listener to set hover state so that the background color updates when user hovers or
     // exits hover on the list item.
     // This is normally handled by the View API if the view is clickable. However, the text views
@@ -367,6 +373,12 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
     }
 
     @Override
+    public void setExtensionsMenu(List<ListItem> extensionsMenu) {
+      Log.i("ULTIMATUM", "setExtensionsMenu in ChromeContextMenuPopulator.java");
+      mExtensionsMenu = extensionsMenu;
+    }
+
+    @Override
     public List<Pair<Integer, ModelList>> buildContextMenu() {
         mShowEphemeralTabNewLabel = null;
 
@@ -389,16 +401,18 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
         if (mParams.isAnchor()) {
             ModelList linkGroup = new ModelList();
 
-            final PropertyModel model =
-                new PropertyModel.Builder(MENU_ITEM_ID, TITLE, ENABLED)
-                        .with(MENU_ITEM_ID, 9999)
-                        .with(
-                                TITLE,
-                                "Test!!!")
-                        .with(ENABLED, true)
-                        .build();
-            ListItem testListItem = new ListItem(ListItemType.CONTEXT_MENU_ITEM, model);
-            linkGroup.add(testListItem);
+            // CharSequence title = "Test!!!";
+            // final PropertyModel model =
+            //     new PropertyModel.Builder(/* MENU_ITEM_ID, */TITLE, ENABLED, HOVER_LISTENER)
+            //             // .with(MENU_ITEM_ID, R.string.contextmenu_save_video)
+            //             .with(
+            //                     TITLE,
+            //                     title)
+            //             .with(ENABLED, true)
+            //             .with(HOVER_LISTENER, mItemOnHoverListener)
+            //             .build();
+            // ListItem testListItem = new ListItem(ListItemType.CONTEXT_MENU_ITEM, model);
+            // linkGroup.add(testListItem);
 
             if (FirstRunStatus.getFirstRunFlowComplete()
                     && !isEmptyUrl(mParams.getUrl())
@@ -548,6 +562,50 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
                 imageGroup.add(createShareListItem(Item.SHARE_IMAGE, Item.DIRECT_SHARE_IMAGE));
             }
 
+
+        if (mExtensionsMenu != null) {
+          Log.i("ULTIMATUM", "create context menu for extensions!!!");
+          // final View.OnHoverListener mItemOnHoverListener = (v, e) -> true;
+
+          // CharSequence title = "testTitle";
+          // final PropertyModel model =
+          //     new PropertyModel.Builder(ContextMenuItemWithIconButtonProperties.ALL_KEYS)
+          //             .with(MENU_ITEM_ID, R.string.contextmenu_save_video)
+          //             .with(
+          //                     TITLE,
+          //                     title)
+          //             .with(ENABLED, true)
+          //             .with(HOVER_LISTENER, mItemOnHoverListener)
+          //             .build();
+          // ListItem listItem = new ListItem(ListItemType.CONTEXT_MENU_ITEM, model);
+          // ModelList extGroup = new ModelList();
+          // imageGroup.add(listItem);
+          // int c = 0;
+          for (ListItem item : mExtensionsMenu) {
+            // final int d = c;
+            // View.OnClickListener clickListener = v -> {
+            //   Log.i("ULTIMATUM", "CLICK!!! " + String.valueOf(d));
+            // };
+            // c++;
+            // item.model.set(CLICK_LISTENER, clickListener);
+            imageGroup.add(item);
+            // final PropertyModel modelTmp =
+            //   new PropertyModel.Builder(ContextMenuItemWithIconButtonProperties.ALL_KEYS)
+            //           .with(MENU_ITEM_ID, R.string.contextmenu_save_video)
+            //           .with(
+            //                   TITLE,
+            //                   "tmp")
+            //           .with(ENABLED, true)
+            //           .with(HOVER_LISTENER, mItemOnHoverListener)
+            //           .build();
+            //   ListItem listItemTmp = new ListItem(ListItemType.CONTEXT_MENU_ITEM, modelTmp);
+            //   imageGroup.add(listItemTmp);
+          }
+          // groupedItems.add(new Pair<>(null, extGroup));
+        } else {
+          Log.i("ULTIMATUM", "context menu for extensions is empty!!!");
+        }
+
             groupedItems.add(new Pair<>(R.string.contextmenu_image_title, imageGroup));
         }
 
@@ -617,6 +675,9 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
             developerGroup.add(createListItem(Item.INSPECT_ELEMENT));
             groupedItems.add(new Pair<>(R.string.contextmenu_developer_title, developerGroup));
         }
+
+
+
         return groupedItems;
     }
 
@@ -897,6 +958,16 @@ public class ChromeContextMenuPopulator implements ContextMenuPopulator {
             recordContextMenuSelection(ContextMenuUma.Action.SHOW_INTEREST_IN_ELEMENT);
             WebContents webContents = mItemDelegate.getWebContents();
             webContents.showInterestInElement(mParams.getInterestTargetNodeID());
+        } else if (itemId == 9999) {
+            Log.i("ULTIMATUM", String.valueOf(itemId));
+            for (ListItem item : mExtensionsMenu) {
+              if (item.model.get(MENU_ITEM_ID) == 9999) {
+                item.model.set(MENU_ITEM_ID, 0);
+                View.OnClickListener listener = item.model.get(CLICK_LISTENER);
+                listener.onClick(null);
+                break;
+              }
+            }
         } else {
             assert false;
         }

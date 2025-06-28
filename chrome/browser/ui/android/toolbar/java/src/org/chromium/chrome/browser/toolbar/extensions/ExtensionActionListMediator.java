@@ -163,7 +163,11 @@ class ExtensionActionListMediator implements Destroyable {
             case ShowAction.NONE:
                 break;
             case ShowAction.SHOW_POPUP:
-                openPopup(buttonView, actionId);
+                if (mCurrentPopup == null) {
+                  openPopup(buttonView, actionId);
+                } else {
+                  closePopup();
+                }
                 break;
             case ShowAction.TOGGLE_SIDE_PANEL:
                 Log.e(TAG, "Extension side panels are not implemented yet");
@@ -174,6 +178,7 @@ class ExtensionActionListMediator implements Destroyable {
     private void openPopup(View buttonView, String actionId) {
         // TODO(crbug.com/385987224): Do not open a popup again when the user clicks the action
         // button while its popup is open.
+        // or we can just close popup if the user clicks the extension icon again
         closePopup();
 
         if (mProfile == null || mCurrentTab == null) {

@@ -54,11 +54,14 @@ ExtensionFunction::ResponseAction ContextMenusCreateFunction::Run() {
   }
 
   std::string error;
+  LOG(INFO) << "BEFORE context_menu_helpers::CreateMenuItem";
   if (!context_menu_helpers::CreateMenuItem(params->create_properties,
                                             browser_context(), extension(), id,
                                             &error)) {
+    LOG(INFO) << "RespondNow(Error(std::move(error)))";
     return RespondNow(Error(std::move(error)));
   }
+  LOG(INFO) << "RespondNow(NoArguments())";
   return RespondNow(NoArguments());
 }
 

@@ -4,6 +4,8 @@
 
 package org.chromium.chrome.browser.contextmenu;
 
+import org.chromium.base.Log;
+
 import android.util.Pair;
 import android.view.View;
 
@@ -11,6 +13,13 @@ import org.jni_zero.CalledByNative;
 import org.jni_zero.NativeMethods;
 
 import org.chromium.chrome.R;
+
+import static org.chromium.ui.listmenu.ListMenuItemProperties.ENABLED;
+import static org.chromium.ui.listmenu.ListMenuItemProperties.HOVER_LISTENER;
+import static org.chromium.ui.listmenu.ListMenuItemProperties.MENU_ITEM_ID;
+import static org.chromium.ui.listmenu.ListMenuItemProperties.TITLE;
+import org.chromium.ui.modelutil.PropertyModel;
+import org.chromium.ui.listmenu.ListItemType;
 
 import org.chromium.base.Callback;
 import org.chromium.base.ResettersForTesting;
@@ -81,7 +90,9 @@ public class ContextMenuHelper {
 
     @CalledByNative
     private void setExtensionsMenu(List<ListItem> list) {
+      Log.i("ULTIMATUM", "setExtensionsMenu in ContextMenuHelper.java");
       mExtensionsMenu = list;
+      // mCurrentPopulator.setExtensionsMenu(list);
     }
 
     /**
@@ -177,14 +188,18 @@ public class ContextMenuHelper {
     }
 
     private void displayContextMenu(float topContentOffsetPx) {
-        List<Pair<Integer, ModelList>> items = mCurrentPopulator.buildContextMenu();
         if (mExtensionsMenu != null) {
-          ModelList extGroup = new ModelList();
-          for (ListItem item : mExtensionsMenu) {
-            extGroup.add(item);
+          Log.i("ULTIMATUM", "displayContextMenu in ContextMenuHelper.java");
+          if (mCurrentPopulator != null) {
+            Log.i("ULTIMATUM", "mCurrentPopulator.setExtensionsMenu in ContextMenuHelper.java");
+            mCurrentPopulator.setExtensionsMenu(mExtensionsMenu);
+          } else {
+            Log.i("ULTIMATUM", "mCurrentPopulator is null in ContextMenuHelper.java");
           }
-          items.add(new Pair<>(R.string.contextmenu_page_title, extGroup));
+        } else {
+          Log.i("ULTIMATUM", "extensions menu is empty");
         }
+        List<Pair<Integer, ModelList>> items = mCurrentPopulator.buildContextMenu();
         if (items.isEmpty()) {
             PostTask.postTask(TaskTraits.UI_DEFAULT, mOnMenuClosed);
             // Only call if no items are populated. Otherwise call in mOnMenuShown callback.

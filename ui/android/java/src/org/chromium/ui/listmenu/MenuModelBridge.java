@@ -5,6 +5,7 @@
 package org.chromium.ui.listmenu;
 
 import android.graphics.Bitmap;
+import android.view.View;
 
 import org.jni_zero.CalledByNative;
 import org.jni_zero.JNINamespace;
@@ -58,12 +59,14 @@ public class MenuModelBridge {
             @JniType("SkBitmap") final @Nullable Bitmap bitmap,
             final boolean isEnabled,
             final Runnable callback) {
+        // final View.OnHoverListener mItemOnHoverListener = (v, e) -> true;
         PropertyModel.Builder modelBuilder =
                 new PropertyModel.Builder(ListMenuItemProperties.ALL_KEYS)
                         .with(ListMenuItemProperties.TITLE, label)
                         .with(ListMenuItemProperties.START_ICON_BITMAP, bitmap)
                         .with(ListMenuItemProperties.ENABLED, isEnabled)
                         .with(ListMenuItemProperties.CLICK_LISTENER, (view) -> callback.run());
+                        // .with(ListMenuItemProperties.HOVER_LISTENER, mItemOnHoverListener);
         mItems.add(new ListItem(ListItemType.CONTEXT_MENU_ITEM, modelBuilder.build()));
     }
 

@@ -258,7 +258,7 @@ base::Value::Dict MenuItem::ToValue() const {
   base::Value::Dict value;
   // Should only be called for extensions with event pages, which only have
   // string IDs for items.
-  DCHECK_EQ(0, id_.uid);
+  // DCHECK_EQ(0, id_.uid);
   value.Set(kStringUIDKey, id_.string_uid);
   value.Set(kMenuManagerIncognitoKey, id_.incognito);
   value.Set(kMenuManagerTypeKey, type_);
@@ -885,8 +885,10 @@ bool MenuManager::ItemUpdated(const MenuItem::Id& id) {
 
 void MenuManager::WriteToStorage(const Extension* extension,
                                  const MenuItem::ExtensionKey& extension_key) {
+  LOG(INFO) << "MenuManager::WriteToStorage";
   // <webview> menu items are transient and not stored in storage.
   if (extension_key.webview_instance_id != kInstanceIDNone) {
+    LOG(INFO) << "extension_key.webview_instance_id != kInstanceIDNone";
     return;
   }
 
@@ -895,9 +897,11 @@ void MenuManager::WriteToStorage(const Extension* extension,
   // be null in the case that |webview_instance_id| is valid.
   DCHECK(extension);
   if (!BackgroundInfo::HasLazyContext(extension)) {
-    return;
+    LOG(INFO) << "!BackgroundInfo::HasLazyContext(extension)";
+    // return;
   }
 
+  LOG(INFO) << "WE ARE ABOUT TO CREATE TASK!!!";
   // Schedule a task to write to storage since there could be many calls in a
   // short span of time. See crbug.com/1476858.
   write_tasks_[extension_key].Start(
@@ -908,6 +912,7 @@ void MenuManager::WriteToStorage(const Extension* extension,
 
 void MenuManager::WriteToStorageInternal(
     const MenuItem::ExtensionKey& extension_key) {
+  LOG(INFO) << "MenuManager::WriteToStorageInternal";
   write_tasks_.erase(extension_key);
   const MenuItem::OwnedList* top_items = MenuItems(extension_key);
   MenuItem::List all_items;
@@ -917,14 +922,19 @@ void MenuManager::WriteToStorageInternal(
       (*i)->GetFlattenedSubtree(&all_items);
     }
   }
+  LOG(INFO) << "MenuManager::WriteToStorageInternal all_items length " << all_items.size();
 
   for (TestObserver& observer : observers_)
     observer.WillWriteToStorage(extension_key.extension_id);
 
+  LOG(INFO) << "MenuManager::WriteToStorageInternal " << extension_key.extension_id;
   if (store_) {
+    LOG(INFO) << "WE ARE ABOUT store_->SetExtensionValue";
     store_->SetExtensionValue(
         extension_key.extension_id, kContextMenusKey,
         base::Value(base::ToValueList(all_items, &MenuItem::ToValue)));
+  } else {
+    LOG(INFO) << "store_ is null";
   }
 }
 

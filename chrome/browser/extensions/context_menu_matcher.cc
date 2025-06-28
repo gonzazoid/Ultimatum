@@ -76,11 +76,14 @@ void ContextMenuMatcher::AppendExtensionItems(
   bool can_cross_incognito = false;
   if (!GetRelevantExtensionTopLevelItems(extension_key, extension,
                                          can_cross_incognito, &items)) {
+    LOG(INFO) << "!GetRelevantExtensionTopLevelItems";
     return;
   }
 
-  if (items.empty())
+  if (items.empty()) {
+    LOG(INFO) << "items.empty()";
     return;
+  }
 
   bool prepend_separator = false;
 

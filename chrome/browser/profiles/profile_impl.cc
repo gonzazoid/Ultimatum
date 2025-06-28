@@ -567,11 +567,6 @@ void ProfileImpl::TakePrefsFromStartupData() {
   profile_policy_connector_ = startup_data->TakeProfilePolicyConnector();
   pref_registry_ = startup_data->TakePrefRegistrySyncable();
 
-  // The extension prefs value store requires a profile, so it can't be created
-  // in StartupData.
-  prefs_->UpdateExtensionPrefStore(
-      CreateExtensionPrefStore(this, /*incognito_pref_store=*/false));
-
   ProfileKeyStartupAccessor::GetInstance()->Reset();
 
   mojo::PendingRemote<prefs::mojom::TrackedPreferenceValidationDelegate>
@@ -583,6 +578,11 @@ void ProfileImpl::TakePrefsFromStartupData() {
       std::move(pref_validation_delegate), GetIOTaskRunner(), key_.get(), path_,
       false, g_browser_process->os_crypt_async());
   key_->SetPrefs(prefs_.get());
+
+  // The extension prefs value store requires a profile, so it can't be created
+  // in StartupData.
+  prefs_->UpdateExtensionPrefStore(
+      CreateExtensionPrefStore(this, /*incognito_pref_store=*/false));
 
 }
 #endif

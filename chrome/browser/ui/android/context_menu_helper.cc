@@ -161,12 +161,22 @@ void ContextMenuHelper::ShowContextMenu(
   // let's check if we can get extensions contextMenus params
   content::BrowserContext* browser_context = render_frame_host.GetBrowserContext();
 
-  std::unique_ptr<ui::SimpleMenuModel> context_menu_model = std::make_unique<ui::SimpleMenuModel>(nullptr);
+#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+  auto extension_delegate = std::make_unique<extensions::ExtensionMenuDelegate>(
+      render_frame_host, params);
+  extension_delegate->PopulateModel();
+  // ui::MenuModel* model_ptr = extension_delegate->GetModel();
+#else
+  // ui::MenuModel* model_ptr = nullptr;
+#endif  // BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
+
+  ext_context_menu_delegate_ = std::move(extension_delegate);
+  ext_context_menu_model_ = std::make_unique<ui::SimpleMenuModel>(ext_context_menu_delegate_.get());
 
   extensions::ContextMenuMatcher extension_items(
     browser_context,
     nullptr,
-    context_menu_model.get(),
+    ext_context_menu_model_.get(),
     base::BindRepeating(MenuItemMatchesParams, params)
   );
 
@@ -199,6 +209,7 @@ void ContextMenuHelper::ShowContextMenu(
     }
   }
   if (sorted_menu_titles.empty()) {
+    LOG(INFO) << "sorted_menu_titles.empty()";
     return;
   }
 
@@ -221,26 +232,23 @@ void ContextMenuHelper::ShowContextMenu(
     }
   }
 
+  size_t item_count = ext_context_menu_model_->GetItemCount();
+  LOG(INFO) << "ext_context_menu_model_->GetItemCount() " << item_count;
+  for (size_t i = 0; i < item_count; i++) {
+    std::u16string title = ext_context_menu_model_->GetLabelAt(i);
+    LOG(INFO) << "LABEL!!! " << title << " TYPE!!! " << ext_context_menu_model_->GetTypeAt(i);
+  }
   // now lets convert it to java object
   LOG(INFO) << "BEFORE new ui::MenuModelBridge";
   ui::MenuModelBridge* bridge = new ui::MenuModelBridge();
   LOG(INFO) << "BEFORE bridge->AddExtensionItems";
-  bridge->AddExtensionItems(context_menu_model.get());
+  bridge->AddExtensionItems(ext_context_menu_model_.get());
   LOG(INFO) << "AFTER bridge->AddExtensionItems";
 
   // ==============================================
   JNIEnv* env = base::android::AttachCurrentThread();
   context_menu_params_ = params;
   gfx::NativeView view = GetWebContents().GetNativeView();
-
-#if BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
-  auto extension_delegate = std::make_unique<extensions::ExtensionMenuDelegate>(
-      render_frame_host, params);
-  extension_delegate->PopulateModel();
-  ui::MenuModel* model_ptr = extension_delegate->GetModel();
-#else
-  ui::MenuModel* model_ptr = nullptr;
-#endif  // BUILDFLAG(ENABLE_DESKTOP_ANDROID_EXTENSIONS)
 
   LOG(INFO) << "BEFORE Java_ContextMenuHelper_setExtensionsMenu";
   Java_ContextMenuHelper_setExtensionsMenu(env, java_obj_, bridge->GetListItems());
@@ -249,7 +257,7 @@ void ContextMenuHelper::ShowContextMenu(
   Java_ContextMenuHelper_showContextMenu(
       env, java_obj_,
       context_menu::BuildJavaContextMenuParams(
-          context_menu_params_, model_ptr,
+          context_menu_params_, ext_context_menu_model_.get() /* model_ptr */,
           render_frame_host.GetProcess()->GetDeprecatedID(),
           render_frame_host.GetFrameToken().value()),
       render_frame_host.GetJavaRenderFrameHost(), view->GetContainerView(),

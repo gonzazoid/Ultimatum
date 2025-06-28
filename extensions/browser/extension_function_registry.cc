@@ -44,8 +44,10 @@ scoped_refptr<ExtensionFunction> ExtensionFunctionRegistry::NewFunction(
 
   auto iter = factories_.find(name);
   if (iter == factories_.end()) {
+    LOG(INFO) << "NOT FOUND!!!";
     return nullptr;
   }
+  LOG(INFO) << "FOUND!!!";
   scoped_refptr<ExtensionFunction> function = iter->second.factory_();
   function->SetName(iter->second.function_name_);
   function->set_histogram_value(iter->second.histogram_value_);

@@ -601,6 +601,7 @@ public class TabbedAppMenuPropertiesDelegate extends AppMenuPropertiesDelegateIm
     private boolean shouldShowExtensionsItem() {
         // TODO(crbug.com/422307625): Remove this check once extensions are ready for dogfooding.
         return mExtensionService != null && mExtensionService.areExtensionsEnabled();
+        // return true;
     }
 
     private MVCListAdapter.ListItem buildExtensionsItem() {

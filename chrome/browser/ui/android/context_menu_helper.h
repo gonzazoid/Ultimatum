@@ -13,6 +13,9 @@
 #include "content/public/browser/web_contents_user_data.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 
+#include "ui/menus/simple_menu_model.h"
+#include "chrome/browser/extensions/extension_menu_delegate_android.h"
+
 namespace content {
 class WebContents;
 }
@@ -46,6 +49,8 @@ class ContextMenuHelper
   base::android::ScopedJavaGlobalRef<jobject> java_obj_;
 
   content::ContextMenuParams context_menu_params_;
+  std::unique_ptr<ui::SimpleMenuModel> ext_context_menu_model_;
+  std::unique_ptr<extensions::ExtensionMenuDelegate> ext_context_menu_delegate_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

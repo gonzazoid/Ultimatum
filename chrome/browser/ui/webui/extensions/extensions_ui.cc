@@ -541,13 +541,12 @@ ExtensionsUI::ExtensionsUI(content::WebUI* web_ui) : WebUIController(web_ui) {
   source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ObjectSrc, "object-src 'self';");
 
-  // content::URLDataSource::Add(
-  //     profile, std::make_unique<FaviconSource>(
-  //                  profile, chrome::FaviconUrlFormat::kFavicon2));
+  content::URLDataSource::Add(
+      profile, std::make_unique<FaviconSource>(
+                   profile, chrome::FaviconUrlFormat::kFavicon2));
 
   // Add a handler to provide pluralized strings.
   auto plural_string_handler = std::make_unique<PluralStringHandler>();
-  /*
   plural_string_handler->AddLocalizedString("safetyCheckTitle",
                                             IDS_EXTENSIONS_SC_TITLE);
   plural_string_handler->AddLocalizedString("safetyCheckDescription",
@@ -566,7 +565,6 @@ ExtensionsUI::ExtensionsUI(content::WebUI* web_ui) : WebUIController(web_ui) {
   plural_string_handler->AddLocalizedString(
       "mv2DeprecationPanelDisabledSubtitle",
       IDS_EXTENSIONS_MV2_DEPRECATION_PANEL_DISABLED_SUBTITLE);
-  */
   web_ui->AddMessageHandler(std::move(plural_string_handler));
 }
 

@@ -232,10 +232,13 @@ bool GetTabById(int tab_id,
                 int* tab_index,
                 std::string* error_message,
                 int* window_id = nullptr) {
+  LOG(INFO) << "GetTabById";
   if (ExtensionTabUtil::GetTabById(tab_id, context, include_incognito, window,
                                    contents, tab_index, window_id)) {
+    LOG(INFO) << "SUCCESS";
     return true;
   }
+  LOG(INFO) << "ExtensionTabUtil::GetTabById failed";
 
   if (error_message) {
     *error_message = ErrorUtils::FormatErrorMessage(
@@ -3437,12 +3440,13 @@ ScriptExecutor* ExecuteCodeInTabFunction::GetScriptExecutor(
   bool success = GetTabById(execute_tab_id_, browser_context(),
                             include_incognito_information(), &window, &contents,
                             nullptr, error) &&
-                 contents && window;
+                 contents; //  && window;
 
   if (!success) {
+    LOG(INFO) << "failed";
     return nullptr;
   }
-
+  LOG(INFO) << "BEFORE TabHelper::FromWebContents(contents)->script_executor()";
   return TabHelper::FromWebContents(contents)->script_executor();
 }
 
