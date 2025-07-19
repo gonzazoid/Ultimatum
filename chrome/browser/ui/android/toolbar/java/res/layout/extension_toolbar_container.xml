@@ -19,18 +19,4 @@ found in the LICENSE file.
         android:layout_height="match_parent"
         android:orientation="horizontal"/>
 
-    <org.chromium.ui.listmenu.ListMenuButton
-        android:id="@+id/extensions_menu_button"
-        android:visibility="gone"
-        style="@style/ToolbarHoverableButton"
-        android:src="@drawable/chrome_extension"
-        app:menuVerticalOverlapAnchor="false"
-        app:tint="@color/default_icon_color_tint_list"/>
-
-    <com.google.android.material.divider.MaterialDivider
-        android:id="@+id/extensions_divider"
-        android:layout_width="@dimen/toolbar_divider_width"
-        android:layout_height="@dimen/toolbar_divider_height"
-        android:visibility="gone"/>
-
 </LinearLayout>

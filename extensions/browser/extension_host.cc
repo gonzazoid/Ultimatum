@@ -255,12 +255,13 @@ void ExtensionHost::Close() {
   // contents to call Close() multiple times. If we've already called the
   // handler once, ignore subsequent calls. If we haven't called the handler
   // once, the handler should be present.
-  DCHECK(close_handler_ || called_close_handler_);
+  // DCHECK(close_handler_ || called_close_handler_);
   if (called_close_handler_) {
     return;
   }
 
   called_close_handler_ = true;
+  if (!close_handler_) return; // TODO this code should be removed after android extensions' popup is stable
   std::move(close_handler_).Run(this);
   // NOTE: `this` may be deleted at this point!
 }

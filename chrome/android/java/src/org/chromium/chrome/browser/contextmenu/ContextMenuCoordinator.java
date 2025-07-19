@@ -371,13 +371,12 @@ public class ContextMenuCoordinator implements ContextMenuUi {
         mListView.setOnItemClickListener(
                 (p, v, pos, id) -> {
                     assert id != INVALID_ITEM_ID;
-                    Log.i("ULTIMATUM", "POSITION!!! " + String.valueOf(pos));
                     if (id == 0) {
                       // may be extensions context menu
                       ListItem contextItem = getItem(pos);
-                      contextItem.model.set(MENU_ITEM_ID, 9999);
+                      contextItem.model.set(MENU_ITEM_ID, R.id.contextmenu_extensions_menu);
                       clickItem(
-                            9999,
+                            R.id.contextmenu_extensions_menu,
                             activity,
                             onItemClicked,
                             contextItem.model.get(ENABLED));

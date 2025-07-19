@@ -44,7 +44,6 @@ public class TabContextMenuPopulator implements ContextMenuPopulator {
 
     @Override
     public void setExtensionsMenu(List<ListItem> extensionsMenu) {
-      Log.i("ULTIMATUM", "setExtensionsMenu in TabContextMenuPopulator.java");
       mExtensionsMenu = extensionsMenu;
     }
 

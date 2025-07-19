@@ -67,13 +67,13 @@ public class ExtensionServiceImpl implements ExtensionService {
                         mProfileSupplier,
                         currentTabSupplier);
 
-        mExtensionsMenuButtonCoordinator =
-                new ExtensionsMenuButtonCoordinator(
-                        context,
-                        container.findViewById(R.id.extensions_menu_button),
-                        container.findViewById(R.id.extensions_divider),
-                        themeColorProvider,
-                        mProfileSupplier);
+        // mExtensionsMenuButtonCoordinator =
+        //         new ExtensionsMenuButtonCoordinator(
+        //                 context,
+        //                 container.findViewById(R.id.extensions_menu_button),
+        //                 container.findViewById(R.id.extensions_divider),
+        //                 themeColorProvider,
+        //                 mProfileSupplier);
     }
 
     @Override
