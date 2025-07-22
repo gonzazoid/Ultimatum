@@ -1,5 +1,8 @@
 # ![Logo](../chrome/app/theme/chromium/product_logo_64.png) Ultimatum
 
+A little help needed! I've abused my savings pretty much hard working on Ultimatum (it's temporary, I think) so if you like the project and want to help - here is my eth wallet [0x17E5DEB23d5a0ca1379d1d240cD9ba54EbEE4c63](https://etherscan.io/address/0x17E5DEB23d5a0ca1379d1d240cD9ba54EbEE4c63). Also I'm looking for short-term job, I'm good with chromium sources and webextensions, so if you can hook me up with that - it would be great help! Any help is much appreciated!
+
+
 This is my attempt to port webextensions system on android. Something is already working, something still in progress.
 
 ### Tested extensions
@@ -7,10 +10,26 @@ This is my attempt to port webextensions system on android. Something is already
 - [uBlock Origin](https://addons.opera.com/en/extensions/details/ublock/)
 - [uBlock Origin Lite](https://chromewebstore.google.com/detail/ublock-origin-lite/ddkjiahejlhfcafbddmgiahcphecmpfh)
 - [Tampermonkey](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
+- [Violentmonkey](https://chromewebstore.google.com/detail/violentmonkey/jinjaccalgkegednnccohejagnlnfdag)
 - [Browsec VPN](https://chromewebstore.google.com/detail/browsec-vpn-%D0%B1%D0%B5%D1%81%D0%BF%D0%BB%D0%B0%D1%82%D0%BD%D1%8B%D0%B9-%D0%B2%D0%BF/omghfjlpggmjjaagoclmmobgdodcjboh)
 - [MetaMask](https://chromewebstore.google.com/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn)
 
+- Reported by users:
+  - [shipwr3ckd](https://github.com/shipwr3ckd)
+    - [Midnight Lizard](https://chromewebstore.google.com/detail/midnight-lizard/pbnndmlekkboofhnbonilimejonapojg)
+    - [ClearURLs](https://chromewebstore.google.com/detail/clearurls/lckanjgmijmafbedllaakclkaicjfmnk)
+    - [BookmarkHub](https://chromewebstore.google.com/detail/bookmarkhub-%D1%81%D0%B8%D0%BD%D1%85%D1%80%D0%BE%D0%BD%D0%B8%D0%B7%D0%B0%D1%86%D0%B8%D1%8F/fohimdklhhcpcnpmmichieidclgfdmol)
+
 If you find some extension working - let me know, I'll add it to the list.
+
+Join us in telegram:
+- [ultimatumBrowser](https://t.me/ultimatumBrowser)
+- [ultimatumBrowserGroup](https://t.me/ultimatumBrowserGroup)
+
+Mentions:
+
+- (en) [popMODS](http://t.me/popMODS) popMODS is a Telegram channel dedicated to sharing open-source mobile and desktop applications, websites, and browser extensions, often hosting giveaways of paid apps. It also occasionnally shares memes, discussions, and ideas.
+- (ru) [Open Source](https://t.me/open_source_friend) Open Source - a collection of useful programs and scripts with open source code.
 
 ### How to install webextensions?
 
