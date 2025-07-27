@@ -423,6 +423,7 @@ content::WebUIDataSource* CreateAndAddExtensionsSource(Profile* profile,
 
   // Add localized generic strings that need '&' to be removed from them.
   webui::AddLocalizedString(source, "edit", IDS_EDIT);
+
   source->AddString("errorLinesNotShownSingular",
                     l10n_util::GetPluralStringFUTF16(
                         IDS_EXTENSIONS_ERROR_LINES_NOT_SHOWN, 1));
@@ -466,6 +467,7 @@ content::WebUIDataSource* CreateAndAddExtensionsSource(Profile* profile,
   source->AddBoolean(kShowActivityLogKey,
                      base::CommandLine::ForCurrentProcess()->HasSwitch(
                          ::switches::kEnableExtensionActivityLogging));
+
   source->AddString(kLoadTimeClassesKey, GetLoadTimeClasses(in_dev_mode));
 
   source->AddBoolean(kEnableEnhancedSiteControls,
@@ -519,8 +521,8 @@ ExtensionsUIConfig::CreateWebUIController(content::WebUI* web_ui,
                                           const GURL& url) {
   Profile* profile = Profile::FromWebUI(web_ui);
   if (profile->IsGuestSession()) {
-    // return std::make_unique<PageNotAvailableForGuestUI>(
-    //     web_ui, chrome::kChromeUIExtensionsHost);
+    return std::make_unique<PageNotAvailableForGuestUI>(
+        web_ui, chrome::kChromeUIExtensionsHost);
   }
   return std::make_unique<ExtensionsUI>(web_ui);
 }
