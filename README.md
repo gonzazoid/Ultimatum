@@ -66,7 +66,7 @@ You can learn how to play with apk [here](https://chromium.googlesource.com/chro
 
 ### So, what's working?
 
-Installation (webextensions) from opera and google stores, also you can install an extension from any site that gives the crx file with proper header (``"Content-Type": "application/x-chrome-extension"``). Installation for unpacked extensions ~~doesn't work yet but it's on the list~~ works as well. Installation fron .crx and .zip files is coming soon.
+Installation (webextensions) from opera and google stores, also you can install an extension from any site that gives the crx file with proper header (``"Content-Type": "application/x-chrome-extension"``). Installation for unpacked extensions ~~doesn't work yet but it's on the list~~ works as well. Installation from .crx and .zip files is coming soon.
 
 You can install, delete, turn off/on extensions, just like on desktops (doesn't mean that all of them will work properly).
 
