@@ -162,6 +162,34 @@ export class Service implements ServiceInterface {
         });
   }
 
+  /**
+   * @return A signal that loading finished, rejected if any error occurred.
+   */
+  private loadCRXHelper_(extraOptions?:
+                                  chrome.developerPrivate.LoadUnpackedOptions):
+      Promise<boolean> {
+    const options = Object.assign(
+        {
+          failQuietly: true,
+          populateError: true,
+        },
+        extraOptions);
+    return chrome.developerPrivate.loadCRX(options)
+        .then(loadError => {
+          if (loadError) {
+            throw loadError;
+          }
+          // The load was successful if there's no loadError.
+          return true;
+        })
+        .catch(error => {
+          if (error.message !== 'File selection was canceled.') {
+            throw error;
+          }
+          return false;
+        });
+  }
+
   deleteItem(id: string) {
     if (this.isDeleting_) {
       return;
@@ -322,6 +350,10 @@ export class Service implements ServiceInterface {
 
   loadUnpacked(): Promise<boolean> {
     return this.loadUnpackedHelper_();
+  }
+
+  loadCRX(): Promise<boolean> {
+    return this.loadCRXHelper_();
   }
 
   retryLoadUnpacked(retryGuid?: string): Promise<boolean> {

@@ -104,9 +104,9 @@ IncognitoResult ShouldOpenIncognitoWindow(Profile* profile,
                                           std::optional<bool> incognito,
                                           std::vector<GURL>* urls,
                                           std::string* error) {
-#if BUILDFLAG(IS_ANDROID)
-  return IncognitoResult::kError;
-#else
+// #if BUILDFLAG(IS_ANDROID)
+//   return IncognitoResult::kError;
+// #else
   const policy::IncognitoModeAvailability incognito_availability =
       IncognitoModePrefs::GetAvailability(profile->GetPrefs());
   bool incognito_result = false;
@@ -151,7 +151,7 @@ IncognitoResult ShouldOpenIncognitoWindow(Profile* profile,
   }
   return incognito_result ? IncognitoResult::kIncognito
                           : IncognitoResult::kRegular;
-#endif
+// #endif
 }
 // #endif  // !BUILDFLAG(IS_ANDROID)
 

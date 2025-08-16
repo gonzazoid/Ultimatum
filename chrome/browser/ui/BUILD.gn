@@ -979,6 +979,8 @@ static_library("ui") {
         "android/toolbar/extension_actions_bridge.h",
         "android/toolbar/extension_actions_bridge_factory.cc",
         "android/toolbar/extension_actions_bridge_factory.h",
+        "browser_navigator.cc",
+        "browser_navigator.h",
       ]
 
       deps += [ 

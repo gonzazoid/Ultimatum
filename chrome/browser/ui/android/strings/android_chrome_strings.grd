@@ -4447,6 +4447,9 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Ultimatu
       <message name="IDS_MENU_EXTENSIONS" desc="Menu item for opening the 'Extensions' page that allows the user to manage installed extensions. [CHAR_LIMIT=27]">
         Extensions
       </message>
+      <message name="IDS_MENU_DEV_TOOLS" desc="The text label of the Developer Tools menu item">
+        Developer tools
+      </message>
       <message name="IDS_MENU_TINKER_TANK" desc="Menu item for opening the tinker tank bottom sheet. [CHAR_LIMIT=27]" translateable="false">
         Tinker tank
       </message>

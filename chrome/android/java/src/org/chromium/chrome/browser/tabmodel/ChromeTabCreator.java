@@ -10,6 +10,8 @@ import android.app.Activity;
 import android.content.Intent;
 import android.text.TextUtils;
 
+import org.chromium.chrome.browser.toolbar.extensions.ExtensionActionsBridge;
+
 import org.chromium.base.IntentUtils;
 import org.chromium.base.SysUtils;
 import org.chromium.base.TraceEvent;
@@ -64,6 +66,7 @@ public class ChromeTabCreator extends TabCreator
     private final AsyncTabParamsManager mAsyncTabParamsManager;
     private final Supplier<TabModelSelector> mTabModelSelectorSupplier;
     private final Supplier<CompositorViewHolder> mCompositorViewHolderSupplier;
+    private ExtensionActionsBridge mExtensionActionsBridge;
 
     private TabModel mTabModel;
     private TabModelOrderController mOrderController;
@@ -451,6 +454,25 @@ public class ChromeTabCreator extends TabCreator
                 creationState = TabCreationState.LIVE_IN_BACKGROUND;
             }
             mTabModel.addTab(tab, position, type, creationState);
+
+            if (mIncognito && mTabModel.getCount() == 1) {
+              // from here we should send message to reload all manifest v2 extension which have access to incognito mode
+              Profile profile = ProfileProvider.getOrCreateProfile(mProfileProviderSupplier.get(), false); // not incognito profile
+              mExtensionActionsBridge = ExtensionActionsBridge.get(profile);
+              if (mExtensionActionsBridge != null && mExtensionActionsBridge.extensionsEnabled()) {
+                String[] actionIds = mExtensionActionsBridge.getActionIds();
+                for (String actionId : actionIds) {
+                  boolean isInIncognito = mExtensionActionsBridge.isInIncognito(actionId);
+                  if (isInIncognito) {
+                    if (mExtensionActionsBridge.getManifestVersion(actionId) != 2) continue;
+                    mExtensionActionsBridge.reloadExtension(actionId);
+                  }
+                }
+              } else {
+                // Log.i("ULTIMATUM", "failed to create bridge");
+              }
+            }
+
             return tab;
         }
     }

@@ -2018,6 +2018,7 @@ enum HistogramValue {
   LOCALSTORAGES_DELETEENTRY = 1955,
   LOCALSTORAGES_FLUSH = 1956,
   LOCALSTORAGES_PURGEMEMORY = 1957,
+  DEVELOPERPRIVATE_LOADCRX = 1958,
   // Last entry: Add new entries above, then run:
   // tools/metrics/histograms/update_extension_histograms.py
   ENUM_BOUNDARY

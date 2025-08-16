@@ -94,6 +94,21 @@ public class ExtensionActionsBridge {
                 .runAction(mNativeExtensionActionsBridge, actionId, webContents);
     }
 
+    public boolean isInIncognito(String actionId) {
+        return ExtensionActionsBridgeJni.get()
+                .isInIncognito(mNativeExtensionActionsBridge, actionId);
+    }
+
+    public void reloadExtension(String actionId) {
+        ExtensionActionsBridgeJni.get()
+                .reloadExtension(mNativeExtensionActionsBridge, actionId);
+    }
+
+    public int getManifestVersion(String actionId) {
+        return ExtensionActionsBridgeJni.get()
+                .getManifestVersion(mNativeExtensionActionsBridge, actionId);
+    }
+
     /**
      * Returns whether the extensions are disabled on the profile for Desktop Android. This is
      * temporary for until extensions are ready for dogfooding. TODO(crbug.com/422307625): Remove
@@ -208,5 +223,14 @@ public class ExtensionActionsBridge {
                 @JniType("content::WebContents*") WebContents webContents);
 
         boolean extensionsEnabled(long nativeExtensionActionsBridge);
+        boolean isInIncognito(
+                long nativeExtensionActionsBridge,
+                @JniType("std::string") String actionId);
+        void reloadExtension(
+                long nativeExtensionActionsBridge,
+                @JniType("std::string") String actionId);
+        int getManifestVersion(
+                long nativeExtensionActionsBridge,
+                @JniType("std::string") String actionId);
     }
 }

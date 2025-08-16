@@ -2628,7 +2628,7 @@ public abstract class ChromeActivity extends AsyncInitializationActivity
             return true;
         }
 
-        if (id == R.id.dev_tools && DeviceFormFactor.isDesktop()) {
+        if (id == R.id.dev_tools /* && DeviceFormFactor.isDesktop() */) {
             DevToolsWindowAndroid.openDevTools(currentTab.getWebContents());
             return true;
         }

@@ -5,14 +5,20 @@
 #include "chrome/browser/ui/android/toolbar/extension_actions_bridge.h"
 
 #include "base/android/jni_string.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/extensions/extension_action_runner.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/android/toolbar/extension_actions_bridge_factory.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/browser/extension_action.h"
 #include "extensions/browser/extension_action_manager.h"
+#include "extensions/browser/extension_registrar.h"
 #include "extensions/browser/extension_registry.h"
+#include "extensions/browser/extension_util.h"
+#include "chrome/browser/extensions/extension_util.h"
 #include "ui/gfx/android/java_bitmap.h"
+
+#include "chrome/browser/ui/layout_constants.h"
 
 // Must come after all headers that specialize FromJniType() / ToJniType().
 #include "chrome/browser/ui/android/toolbar/jni_headers/ExtensionAction_jni.h"
@@ -107,6 +113,8 @@ ScopedJavaLocalRef<jobject> ExtensionActionsBridge::GetActionIcon(
   }
 
   gfx::Image image = icon_observer->GetIcon(tab_id);
+  // int height = GetLayoutConstant(TOOLBAR_DIVIDER_HEIGHT);
+  // LOG(INFO) << "DIVIDER HEIGHT: " << height;
   return gfx::ConvertToJavaBitmap(*image.ToSkBitmap());
 }
 
@@ -138,6 +146,43 @@ bool ExtensionActionsBridge::ExtensionsEnabled(JNIEnv* env) {
   ExtensionManagement* extension_management =
       ExtensionManagementFactory::GetForBrowserContext(profile_);
   return extension_management->ExtensionsEnabledForDesktopAndroid();
+}
+
+bool ExtensionActionsBridge::IsInIncognito(
+    JNIEnv* env,
+    const ToolbarActionsModel::ActionId& action_id
+    ) {
+  return util::IsIncognitoEnabled(action_id, profile_);
+}
+
+void ExtensionActionsBridge::ReloadExtension(
+    JNIEnv* env,
+    const ToolbarActionsModel::ActionId& action_id
+    ) {
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE, base::BindOnce(&ExtensionActionsBridge::DoReloadExtension, base::Unretained(this), action_id),
+      base::Milliseconds(600));
+}
+
+int ExtensionActionsBridge::GetManifestVersion(
+    JNIEnv* env,
+    const ToolbarActionsModel::ActionId& action_id) {
+  ExtensionRegistry* registry = ExtensionRegistry::Get(profile_);
+  DCHECK(registry);
+
+  const Extension* extension =
+      registry->enabled_extensions().GetByID(action_id);
+  if (extension == nullptr) {
+    return -1;
+  }
+
+  return extension->manifest_version();
+}
+
+void ExtensionActionsBridge::DoReloadExtension(
+    const ToolbarActionsModel::ActionId& action_id
+    ) {
+  ExtensionRegistrar::Get(profile_)->ReloadExtension(action_id);
 }
 
 void ExtensionActionsBridge::OnToolbarActionAdded(

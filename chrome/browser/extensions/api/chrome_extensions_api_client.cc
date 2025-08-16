@@ -270,14 +270,14 @@ void ChromeExtensionsAPIClient::ClearActionCount(
 
   action->ClearDNRActionCountForAllTabs();
 
-  // std::vector<content::WebContents*> contents_to_notify =
-  //     ExtensionTabUtil::GetAllActiveWebContentsForContext(
-  //         context, /*include_incognito=*/true);
+  std::vector<content::WebContents*> contents_to_notify =
+      ExtensionTabUtil::GetAllActiveWebContentsForContext(
+          context, /*include_incognito=*/true);
 
-  // for (auto* active_contents : contents_to_notify) {
-  //   ExtensionActionDispatcher::Get(context)->NotifyChange(
-  //       action, active_contents, context);
-  // }
+  for (auto* active_contents : contents_to_notify) {
+    ExtensionActionDispatcher::Get(context)->NotifyChange(
+        action, active_contents, context);
+  }
 }
 
 #if BUILDFLAG(ENABLE_GUEST_VIEW)

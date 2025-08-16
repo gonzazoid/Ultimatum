@@ -2840,6 +2840,7 @@ Called by update_extension_histograms.py.-->
   <int value="1955" label="LOCALSTORAGES_DELETEENTRY"/>
   <int value="1956" label="LOCALSTORAGES_FLUSH"/>
   <int value="1957" label="LOCALSTORAGES_PURGEMEMORY"/>
+  <int value="1958" label="DEVELOPERPRIVATE_LOADCRX"/>
 </enum>
 
 <!-- LINT.ThenChange(//extensions/browser/extension_function_histogram_value.h:HistogramValue) -->

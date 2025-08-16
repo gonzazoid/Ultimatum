@@ -136,8 +136,8 @@ void ChromeMessagingDelegate::QueryIncognitoConnectability(
     const GURL& source_url,
     base::OnceCallback<void(bool)> callback) {
   DCHECK(context->IsOffTheRecord());
-  // IncognitoConnectability::Get(context)->Query(
-  //     target_extension, source_contents, source_url, std::move(callback));
+  IncognitoConnectability::Get(context)->Query(
+      target_extension, source_contents, source_url, std::move(callback));
 }
 
 }  // namespace extensions

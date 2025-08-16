@@ -470,8 +470,8 @@ ExtensionFunction::ResponseAction PermissionsRequestFunction::Run() {
     return did_respond() ? AlreadyResponded() : RespondLater();
   }
 
-  install_ui_ = std::make_unique<ExtensionInstallPrompt>(
-      Profile::FromBrowserContext(browser_context()), native_window);
+  // install_ui_ = std::make_unique<ExtensionInstallPrompt>(
+  //     Profile::FromBrowserContext(browser_context()), native_window);
   // install_ui_->ShowDialog(
   //     base::BindOnce(&PermissionsRequestFunction::OnInstallPromptDone, this),
   //     extension(), nullptr,
@@ -480,6 +480,16 @@ ExtensionFunction::ResponseAction PermissionsRequestFunction::Run() {
   //     std::move(total_new_permissions),
   //     ExtensionInstallPrompt::GetDefaultShowDialogCallback());
 
+  // auto accept =  
+  //   ExtensionInstallPrompt::DoneCallbackPayload(
+  //         ExtensionInstallPrompt::Result::ACCEPTED);
+
+  // base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+  //    FROM_HERE, base::BindOnce(&PermissionsRequestFunction::OnInstallPromptDone, base::Unretained(this), accept),
+  //    base::Milliseconds(100));
+
+  OnInstallPromptDone(ExtensionInstallPrompt::DoneCallbackPayload(
+        ExtensionInstallPrompt::Result::ACCEPTED));
   // ExtensionInstallPrompt::ShowDialog() can call the response synchronously.
   return did_respond() ? AlreadyResponded() : RespondLater();
 }

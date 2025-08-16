@@ -664,6 +664,12 @@ namespace developerPrivate {
         optional LoadUnpackedOptions options,
         optional LoadErrorCallback callback);
 
+    // Loads a user-selected crx item.
+    // |options| : Additional configuration parameters.
+    static void loadCRX(
+        optional LoadUnpackedOptions options,
+        optional LoadErrorCallback callback);
+
     // Installs the file that was dragged and dropped onto the associated
     // page.
     static void installDroppedFile(
