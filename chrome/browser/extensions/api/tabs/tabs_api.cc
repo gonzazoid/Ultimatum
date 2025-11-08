@@ -188,6 +188,9 @@ content::WebContents* GetTabsAPIDefaultWebContents(ExtensionFunction* function,
   } else {
 #if BUILDFLAG(IS_ANDROID)
   for (TabModel* model : TabModelList::models()) {
+    if (!function->include_incognito_information() && model->IsOffTheRecord()) {
+      continue;
+    }
     if (!model->IsActiveModel()) {
       continue;
     }
@@ -334,6 +337,9 @@ ExtensionFunction::ResponseAction WindowsGetLastFocusedFunction::Run() {
   BrowserExtensionWindowController::TypeFilter normal = 1 << base::to_underlying(api::windows::WindowType::kNormal);
   if (!filter || ((filter & normal) != 0)) {
     for (TabModel* model : TabModelList::models()) {
+      if (!include_incognito_information() && model->IsOffTheRecord()) {
+        continue;
+      }
       if (model->IsActiveModel()) {
         base::Value::Dict window = model->CreateWindowValueForExtension(
           extension(), populate_tab_behavior, source_context_type());
@@ -634,6 +640,9 @@ ExtensionFunction::ResponseAction TabsGetCurrentFunction::Run() {
 #if BUILDFLAG(IS_ANDROID)
   content::WebContents* contents = nullptr;
   for (TabModel* model : TabModelList::models()) {
+    if (!include_incognito_information() && model->IsOffTheRecord()) {
+      continue;
+    }
     if (model->IsActiveModel()) {
       contents = model->GetActiveWebContents();
       break;
@@ -882,6 +891,9 @@ ExtensionFunction::ResponseAction TabsQueryFunction::Run() {
       return RespondNow(WithArguments(std::move(result)));
 
    for (TabModel* model : TabModelList::models()) {
+     if (!include_incognito_information() && model->IsOffTheRecord()) {
+       continue;
+     }
      if (window_id != extension_misc::kUnknownWindowId && model->GetSessionId().id() != window_id)
        continue;
     if (window_id == extension_misc::kCurrentWindowId &&
