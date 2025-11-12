@@ -1514,7 +1514,7 @@ bool URLLoader::IsValidHashNetResponse() const {
 
     size_t hash_length = hash_checker_->GetHashLength();
     std::vector<uint8_t> hash = std::vector<uint8_t>(hash_length);
-    hash_checker_->Finish(base::span(hash.data(), hash_length));
+    hash_checker_->Finish(base::as_writable_byte_span(hash)); // .data(), hash_length));
     std::string calculated_hash = net::HexEncode(hash.data(), hash_length);
     bool is_valid = calculated_hash == url_request_->original_url().GetHash();
     if (!is_valid && !url_request_->HasNextHashNetAgent()) url_request_->SetLastBreath();
