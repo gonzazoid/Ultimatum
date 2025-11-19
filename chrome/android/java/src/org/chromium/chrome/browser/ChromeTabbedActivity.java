@@ -59,6 +59,7 @@ import org.chromium.base.Callback;
 import org.chromium.base.CallbackController;
 import org.chromium.base.CallbackUtils;
 import org.chromium.base.CommandLine;
+import org.chromium.base.ContextUtils;
 import org.chromium.base.DeviceInfo;
 import org.chromium.base.IntentUtils;
 import org.chromium.base.Log;
@@ -2280,8 +2281,10 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
                         ActivityRestoreState.NUM_ENTRIES);
             }
 
+            String PREF_CLOSE_TABS_ON_EXIT = "close_tabs_on_exit";
             boolean noRestoreState =
-                    CommandLine.getInstance().hasSwitch(ChromeSwitches.NO_RESTORE_STATE);
+                    CommandLine.getInstance().hasSwitch(ChromeSwitches.NO_RESTORE_STATE) ||
+                    ContextUtils.getAppSharedPreferences().getBoolean(PREF_CLOSE_TABS_ON_EXIT, false);
             boolean shouldShowNtpAsHomeSurfaceAtStartup = false;
             final AtomicBoolean isActiveUrlNtp = new AtomicBoolean(false);
             if (noRestoreState) {
@@ -2401,8 +2404,9 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
                 ReturnToChromeUtil.recordHomeSurfaceShownAtStartup();
                 ReturnToChromeUtil.recordHomeSurfaceShown();
             }
-
-            mTabModelOrchestrator.restoreTabs(activeTabBeingRestored);
+            if(!ContextUtils.getAppSharedPreferences().getBoolean(PREF_CLOSE_TABS_ON_EXIT, false)) {
+              mTabModelOrchestrator.restoreTabs(activeTabBeingRestored);
+            }
 
             // Only create an initial tab if no tabs were restored and no intent was handled.
             // Also, check whether the active tab was supposed to be restored and that the total

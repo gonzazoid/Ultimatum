@@ -28,6 +28,11 @@ found in the LICENSE file.
         android:key="privacy_sandbox"
         android:title="@string/ad_privacy_link_row_label"
         android:fragment="org.chromium.chrome.browser.privacy_sandbox.PrivacySandboxSettingsFragment" />
+    <org.chromium.components.browser_ui.settings.ChromeSwitchPreference
+        android:key="close_tabs_on_exit"
+        android:title="@string/close_tabs_on_exit_title"
+        android:summary="@string/close_tabs_on_exit_summary"
+        android:defaultValue="false" />
     <Preference
         android:key="do_not_track"
         android:title="@string/do_not_track_title"

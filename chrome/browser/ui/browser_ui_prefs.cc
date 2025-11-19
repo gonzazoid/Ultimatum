@@ -47,6 +47,10 @@ void RegisterBrowserPrefs(PrefRegistrySimple* registry) {
   registry->RegisterIntegerPref(prefs::kRelaunchFastIfOutdated, 0);
 #endif  // !BUILDFLAG(IS_ANDROID)
 
+registry->RegisterBooleanPref(
+      prefs::kCloseTabsOnExit, false,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+
 #if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
   registry->RegisterIntegerPref(
       installer_downloader::prefs::kInstallerDownloaderInfobarShowCount, 0);

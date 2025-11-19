@@ -999,6 +999,13 @@ For example, some websites may respond to this request by showing you ads that a
         Access payment methods
       </message>
 
+      <message name="IDS_CLOSE_TABS_ON_EXIT_TITLE" desc="Text for 'Close tabs on exit' settings-privacy option.">
+        Close all open tabs on exit
+      </message>
+      <message name="IDS_CLOSE_TABS_ON_EXIT_SUMMARY" desc="Summary text for 'Close tabs on exit' settings-privacy option.">
+        Don't persist tabs between browsing sessions
+      </message>
+
       <!-- Privacy Sandbox Settings. Used by //chrome/browser/privacy_sandbox. -->
       <message name="IDS_PRIVACY_SANDBOX_SNACKBAR_MESSAGE" desc="The text displayed in the snackbar, which gives the user an option to navigate to the Privacy Sandbox settings page. 'Privacy sandbox' has TC ID 5753235213964358658.">
         Learn about and control new technologies that aim to replace third-party cookies
