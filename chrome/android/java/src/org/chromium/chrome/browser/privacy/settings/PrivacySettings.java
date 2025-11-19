@@ -29,6 +29,8 @@ import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
+
+import org.chromium.base.ContextUtils;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.enterprise.util.ManagedBrowserUtils;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
@@ -105,6 +107,8 @@ public class PrivacySettings extends ChromeBaseSettingsFragment
     @VisibleForTesting
     static final String TRACKING_PROTECTIONS_OPENED_USER_ACTION =
             "Settings.TrackingProtections.OpenedFromPrivacyPage";
+
+    private static final String PREF_CLOSE_TABS_ON_EXIT = "close_tabs_on_exit";
 
     private IncognitoLockSettings mIncognitoLockSettings;
     private final ObservableSupplierImpl<String> mPageTitle = new ObservableSupplierImpl<>();
@@ -408,6 +412,10 @@ public class PrivacySettings extends ChromeBaseSettingsFragment
                     PreloadPagesSettingsFragment.getPreloadPagesSummaryString(
                             getContext(), getProfile()));
         }
+
+        ChromeSwitchPreference closeTabsOnExitPref =
+                (ChromeSwitchPreference) findPreference(PREF_CLOSE_TABS_ON_EXIT);
+        closeTabsOnExitPref.setOnPreferenceChangeListener(this);
 
         Preference secureDnsPref = findPreference(PREF_SECURE_DNS);
         if (secureDnsPref != null && secureDnsPref.isVisible()) {
