@@ -32,6 +32,8 @@ import org.chromium.base.supplier.ObservableSuppliers;
 import org.chromium.base.supplier.SettableMonotonicObservableSupplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
+
+import org.chromium.base.ContextUtils;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.enterprise.util.ManagedBrowserUtils;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
@@ -105,6 +107,8 @@ public class PrivacySettings extends ChromeBaseSettingsFragment
     @VisibleForTesting static final String PREF_DO_NOT_TRACK = "do_not_track";
     @VisibleForTesting static final String PREF_THIRD_PARTY_COOKIES = "third_party_cookies";
     private static final String PREF_ADVANCED_PROTECTION_INFO = "advanced_protection_info";
+
+    private static final String PREF_CLOSE_TABS_ON_EXIT = "close_tabs_on_exit";
 
     private IncognitoLockSettings mIncognitoLockSettings;
     private final SettableMonotonicObservableSupplier<String> mPageTitle =
@@ -429,6 +433,10 @@ public class PrivacySettings extends ChromeBaseSettingsFragment
                     PreloadPagesSettingsFragment.getPreloadPagesSummaryString(
                             getContext(), getProfile()));
         }
+
+        ChromeSwitchPreference closeTabsOnExitPref =
+                (ChromeSwitchPreference) findPreference(PREF_CLOSE_TABS_ON_EXIT);
+        closeTabsOnExitPref.setOnPreferenceChangeListener(this);
 
         Preference secureDnsPref = findPreference(PREF_SECURE_DNS);
         if (secureDnsPref != null && secureDnsPref.isVisible()) {

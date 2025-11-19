@@ -4,6 +4,7 @@
 
 package org.chromium.chrome.browser.tab_group_sync;
 
+import org.chromium.base.ContextUtils;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.chrome.browser.preferences.Pref;
@@ -74,6 +75,11 @@ public class StartupHelper {
      */
     public void initializeTabGroupSync() {
         LogUtils.log(TAG, "initializeTabGroupSync");
+        if (ContextUtils.getAppSharedPreferences().getBoolean("close_tabs_on_exit", false)) {
+            for (String tabGroupId : mTabGroupSyncService.getAllGroupIds()) {
+                mTabGroupSyncService.removeGroup(tabGroupId);
+            }
+        }
         // First close the groups that were deleted remotely when the activity was not running.
         closeDeletedGroupsFromTabModel();
 
