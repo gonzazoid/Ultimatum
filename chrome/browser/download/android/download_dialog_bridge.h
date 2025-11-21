@@ -49,6 +49,7 @@ class DownloadDialogBridge {
       net::NetworkChangeNotifier::ConnectionType connection_type,
       DownloadLocationDialogType dialog_type,
       const base::FilePath& suggested_path,
+      std::string download_url,
       Profile* profile,
       DialogCallback dialog_callback);
 

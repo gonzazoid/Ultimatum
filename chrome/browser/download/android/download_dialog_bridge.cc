@@ -47,6 +47,7 @@ void DownloadDialogBridge::ShowDialog(
     net::NetworkChangeNotifier::ConnectionType connection_type,
     DownloadLocationDialogType dialog_type,
     const base::FilePath& suggested_path,
+    std::string download_url,
     Profile* profile,
     DialogCallback dialog_callback) {
   if (!native_window)
@@ -77,7 +78,7 @@ void DownloadDialogBridge::ShowDialog(
   Java_DownloadDialogBridge_showDialog(
       env, java_obj_, native_window->GetJavaObject(),
       static_cast<long>(total_bytes), static_cast<int>(connection_type),
-      static_cast<int>(dialog_type), suggested_path.AsUTF8Unsafe(),
+      static_cast<int>(dialog_type), suggested_path.AsUTF8Unsafe(), download_url,
       profile->GetJavaObject());
 }
 
