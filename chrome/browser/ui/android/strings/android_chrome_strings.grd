@@ -2191,6 +2191,12 @@ Your Google account may have other forms of browsing history like searches and a
         Downloaded PDFs automatically open with <ph name="APP_NAME">%1$s<ex>Drive PDF Viewer</ex></ph>
       </message>
 
+      <message name="IDS_ENABLE_EXTERNAL_DOWNLOAD_MANAGER_TITLE" desc="Text for 'External download manager' option.">
+        External download manager
+      </message>
+      <message name="IDS_ENABLE_EXTERNAL_DOWNLOAD_MANAGER_SUMMARY" desc="">
+      </message>
+
       <!-- Download warning bypass dialog -->
       <message name="IDS_DOWNLOAD_WARNING_BYPASS_DIALOG_TEXT" desc="Text of the dialog for asking user to confirm that they want to bypass a download warning.">
         This file contains malware or comes from a suspicious site

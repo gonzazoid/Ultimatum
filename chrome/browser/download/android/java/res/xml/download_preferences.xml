@@ -19,6 +19,12 @@ found in the LICENSE file.
         android:summaryOff="@string/text_off" />
 
     <org.chromium.components.browser_ui.settings.ChromeSwitchPreference
+        android:key="enable_external_download_manager"
+        android:summaryOn="@string/enable_external_download_manager_summary"
+        android:summaryOff="@string/enable_external_download_manager_summary"
+        android:title="@string/enable_external_download_manager_title" />
+
+    <org.chromium.components.browser_ui.settings.ChromeSwitchPreference
         android:key="auto_open_pdf_enabled"
         android:title="@string/auto_open_pdf_enabled_title"
         android:summaryOff="@string/text_off"/>

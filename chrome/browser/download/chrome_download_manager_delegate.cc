@@ -645,12 +645,13 @@ void ChromeDownloadManagerDelegate::ShowDownloadDialog(
     int64_t total_bytes,
     DownloadLocationDialogType dialog_type,
     const base::FilePath& suggested_path,
+    std::string download_url,
     DownloadDialogBridge::DialogCallback callback) {
   DCHECK(download_dialog_bridge_);
   auto connection_type = net::NetworkChangeNotifier::GetConnectionType();
 
   download_dialog_bridge_->ShowDialog(
-      native_window, total_bytes, connection_type, dialog_type, suggested_path,
+      native_window, total_bytes, connection_type, dialog_type, suggested_path, download_url,
       profile_, std::move(callback));
 }
 
@@ -1491,7 +1492,7 @@ void ChromeDownloadManagerDelegate::RequestConfirmation(
         DownloadPathReservationTracker::UNIQUIFY,
         base::BindOnce(
             &ChromeDownloadManagerDelegate::GenerateUniqueFileNameDone,
-            weak_ptr_factory_.GetWeakPtr(), download->GetGuid(),
+            weak_ptr_factory_.GetWeakPtr(), download->GetGuid(), download->GetURL().spec(),
             std::move(callback)));
     return;
   }
@@ -1518,8 +1519,9 @@ void ChromeDownloadManagerDelegate::RequestConfirmation(
   }
 
     gfx::NativeWindow native_window = web_contents->GetTopLevelNativeWindow();
+    std::string download_url = download->GetURL().spec();
     ShowDownloadDialog(
-        native_window, download->GetTotalBytes(), dialog_type, suggested_path,
+        native_window, download->GetTotalBytes(), dialog_type, suggested_path, download_url,
         base::BindOnce(&OnDownloadDialogClosed, std::move(callback)));
     return;
 
@@ -1615,6 +1617,7 @@ void ChromeDownloadManagerDelegate::ShowFilePickerForDownload(
 #if BUILDFLAG(IS_ANDROID)
 void ChromeDownloadManagerDelegate::GenerateUniqueFileNameDone(
     const std::string& download_guid,
+    const std::string& download_url,
     DownloadTargetDeterminerDelegate::ConfirmationCallback callback,
     PathValidationResult result,
     const base::FilePath& target_path) {
@@ -1633,7 +1636,7 @@ void ChromeDownloadManagerDelegate::GenerateUniqueFileNameDone(
         // Null native window will be handled by ShowDownloadDialog().
         ShowDownloadDialog(
             native_window, 0 /* total_bytes */,
-            DownloadLocationDialogType::NAME_CONFLICT, target_path,
+            DownloadLocationDialogType::NAME_CONFLICT, target_path, download_url,
             base::BindOnce(&OnDownloadDialogClosed, std::move(callback)));
         return;
     }

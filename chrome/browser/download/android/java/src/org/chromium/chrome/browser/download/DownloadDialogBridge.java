@@ -32,6 +32,15 @@ import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.modaldialog.ModalDialogManagerHolder;
 
+import org.chromium.base.ContextUtils;
+import android.content.Intent;
+import android.net.Uri;
+import java.util.Locale;
+import java.io.File;
+import android.text.TextUtils;
+import android.content.ActivityNotFoundException;
+import org.chromium.base.Log;
+
 /** Glues download dialogs UI code and handles the communication to download native backend. */
 @NullMarked
 public class DownloadDialogBridge implements DownloadLocationDialogController {
@@ -72,6 +81,47 @@ public class DownloadDialogBridge implements DownloadLocationDialogController {
         mLocationDialog.destroy();
     }
 
+    private boolean downloadWithEDM(WindowAndroid windowAndroid, long totalBytes,
+           String suggestedPath, String downloadUrl) {
+        Activity activity = (Activity) windowAndroid.getActivity().get();
+        // If the activity has gone away, just clean up the native pointer.
+        if (activity == null) {
+            return false;
+        }
+        // String urlToDownload = "https://download.freebsd.org/releases/arm64/aarch64/ISO-IMAGES/14.3/FreeBSD-14.3-RELEASE-arm64-aarch64-PINE64-LTS.img.xz";
+        boolean useAdmIfPossible = ContextUtils.getAppSharedPreferences().getBoolean("enable_external_download_manager", false);
+        String activeDownloadManagerActivityName = ContextUtils.getAppSharedPreferences().getString("selected_external_download_manager_activity_name", "");
+        String activeDownloadManagerPackageName = ContextUtils.getAppSharedPreferences().getString("selected_external_download_manager_package_name", "");
+
+        if (useAdmIfPossible && !TextUtils.isEmpty(activeDownloadManagerPackageName) && !TextUtils.isEmpty(activeDownloadManagerActivityName) && activeDownloadManagerPackageName.equals("com.kiwibrowser.browser") != true
+         && !TextUtils.isEmpty(downloadUrl) && (downloadUrl.toLowerCase(Locale.ROOT).startsWith("http:") || downloadUrl.toLowerCase(Locale.ROOT).startsWith("https:") || downloadUrl.toLowerCase(Locale.ROOT).startsWith("magnet:") || downloadUrl.toLowerCase(Locale.ROOT).startsWith("ftp:"))) {
+            if (downloadUrl.toLowerCase(Locale.ROOT).contains(".googleusercontent.com/crx"))
+                return false;
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl));
+//            intent.addCategory("android.intent.category.BROWSABLE");
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            intent.setClassName(activeDownloadManagerPackageName, activeDownloadManagerActivityName);
+
+            intent.putExtra("android.intent.extra.TEXT", downloadUrl);
+
+            // ADM
+            intent.putExtra("com.android.extra.filename", new File(suggestedPath).getName());
+
+            // MXPlayer
+            intent.putExtra("title", new File(suggestedPath).getName());
+            intent.putExtra("filename", new File(suggestedPath).getName());
+
+            try {
+                Log.i("Kiwi", "[Download] Starting activity intent [" + activeDownloadManagerPackageName + "/" + activeDownloadManagerActivityName + "]");
+                activity.startActivity(intent);
+                return true;
+            } catch (ActivityNotFoundException exception) {
+                Log.i("Kiwi", "[Download] Starting activity intent: ActivityNotFoundException");
+            }
+        }
+        return false;
+    }
+
     @CalledByNative
     private void showDialog(
             WindowAndroid windowAndroid,
@@ -79,11 +129,17 @@ public class DownloadDialogBridge implements DownloadLocationDialogController {
             @ConnectionType int connectionType,
             @DownloadLocationDialogType int dialogType,
             @JniType("std::string") String suggestedPath,
+            @JniType("std::string") String downloadUrl,
             Profile profile) {
         mWindowAndroid = windowAndroid;
         mProfile = profile;
         Activity activity = windowAndroid.getActivity().get();
         if (!(activity instanceof ModalDialogManagerHolder)) {
+            onCancel();
+            return;
+        }
+
+        if (downloadWithEDM(windowAndroid, totalBytes, suggestedPath, downloadUrl)) {
             onCancel();
             return;
         }
