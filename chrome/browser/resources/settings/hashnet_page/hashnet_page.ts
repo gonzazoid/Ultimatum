@@ -4,12 +4,8 @@
 
 import '../icons.html.js';
 import '/shared/settings/prefs/prefs.js';
-// import 'chrome://resources/cr_components/settings_prefs/prefs.js';
-// <if expr="not chromeos_ash">
 import '../relaunch_confirmation_dialog.js';
-// </if>
 import '../settings_page/settings_section.js';
-import '../settings_page_styles.css.js';
 import '../settings_shared.css.js';
 import 'chrome://resources/cr_elements/cr_button/cr_button.js';
 import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
@@ -49,15 +45,6 @@ export class HashNetPageElement extends HashNetPageElementBase {
 
   static get properties() {
     return {
-      prefs: {
-        type: Object,
-        notify: true,
-      },
-      isManaged_: {
-        type: Boolean,
-        value: false,
-      },
-
       agentsList: String,
       oldAgentsList: String,
       agentsListChanged: String,
@@ -68,13 +55,13 @@ export class HashNetPageElement extends HashNetPageElementBase {
     };
   }
 
-  agentsList: string;
-  agentsListChanged: boolean;
-  oldAgentsList: string;
+  declare private agentsList: string;
+  declare private agentsListChanged: boolean;
+  declare private oldAgentsList: string;
 
-  privateKey: string;
-  privateKeyChangedAndValid: boolean;
-  oldPrivateKey: String;
+  declare private privateKey: string;
+  declare private privateKeyChangedAndValid: boolean;
+  declare private oldPrivateKey: String;
 
   override ready() {
     super.ready();
