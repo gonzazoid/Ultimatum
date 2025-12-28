@@ -4,11 +4,8 @@
 
 import '../icons.html.js';
 import '/shared/settings/prefs/prefs.js';
-// <if expr="not chromeos_ash">
 import '../relaunch_confirmation_dialog.js';
-// </if>
 import '../settings_page/settings_section.js';
-import '../settings_page_styles.css.js';
 import '../settings_shared.css.js';
 import 'chrome://resources/cr_elements/cr_button/cr_button.js';
 import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
@@ -45,15 +42,6 @@ export class ProfilePageElement extends ProfilePageElementBase {
 
   static get properties() {
     return {
-      prefs: {
-        type: Object,
-        notify: true,
-      },
-      isManaged_: {
-        type: Boolean,
-        value: false,
-      },
-
       userAgentSubstitution: {
         type: Object,
         value() {
@@ -96,25 +84,25 @@ export class ProfilePageElement extends ProfilePageElementBase {
     };
   }
 
-  private userAgentSubstitution: chrome.settingsPrivate.PrefObject<boolean>;
-  userAgent: string;
-  userAgentChangedAndValid: boolean;
-  oldUserAgent: String;
+  declare private userAgentSubstitution: chrome.settingsPrivate.PrefObject<boolean>;
+  declare userAgent: string;
+  declare userAgentChangedAndValid: boolean;
+  declare oldUserAgent: String;
 
-  private productSubSubstitution: chrome.settingsPrivate.PrefObject<boolean>;
-  productSub: string;
-  productSubChangedAndValid: boolean;
-  oldProductSub: String;
+  declare private productSubSubstitution: chrome.settingsPrivate.PrefObject<boolean>;
+  declare productSub: string;
+  declare productSubChangedAndValid: boolean;
+  declare oldProductSub: String;
 
-  private platformSubstitution: chrome.settingsPrivate.PrefObject<boolean>;
-  platform: string;
-  platformChangedAndValid: boolean;
-  oldPlatform: String;
+  declare private platformSubstitution: chrome.settingsPrivate.PrefObject<boolean>;
+  declare platform: string;
+  declare platformChangedAndValid: boolean;
+  declare oldPlatform: String;
 
-  private vendorSubstitution: chrome.settingsPrivate.PrefObject<boolean>;
-  vendor: string;
-  vendorChangedAndValid: boolean;
-  oldVendor: String;
+  declare private vendorSubstitution: chrome.settingsPrivate.PrefObject<boolean>;
+  declare vendor: string;
+  declare vendorChangedAndValid: boolean;
+  declare oldVendor: String;
 
   override ready() {
     super.ready();
