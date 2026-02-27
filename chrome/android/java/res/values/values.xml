@@ -25,4 +25,7 @@ found in the LICENSE file.
     <integer name="download_infobar_bar_start_offset">800</integer>
     <integer name="download_infobar_bar_fill_in_delay">400</integer>
     <integer name="download_infobar_bar_fill_out_delay">200</integer>
+
+    <string name="pull_to_refresh_on">Pull to refresh disabled</string>
+    <string name="pull_to_refresh_off">Pull to refresh enabled</string>
 </resources>

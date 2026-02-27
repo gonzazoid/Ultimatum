@@ -156,5 +156,10 @@ found in the LICENSE file.
         android:key="about_chrome"
         android:order="30"
         android:title="@string/prefs_about_chrome"/>
+    <Preference
+        android:fragment="org.chromium.chrome.browser.settings.GesturePreferences"
+        android:key="gesture"
+        android:order="31"
+        android:title="@string/prefs_gestures"/>
 
 </PreferenceScreen>

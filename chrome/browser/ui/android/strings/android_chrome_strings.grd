@@ -7793,6 +7793,11 @@ To change this setting, <ph name="BEGIN_LINK">BEGIN_LINK</ph>delete the Chrome d
       <message name="IDS_CHROME_FINDS_OPT_IN_BOTTOM_SHEET_FULL_HEIGHT_CONTENT_DESCRIPTION" desc="Content description of the Chrome Finds opt-in bottom sheet when opened at full height.">
         Chrome Finds opt-in opened at full height
       </message>
+
+      <!-- Gesture settings -->
+      <message name="IDS_PREFS_GESTURES" desc="Title of the Gesture Settings screen.">
+        Gesture settings
+      </message>
     </messages>
   </release>
 </grit>

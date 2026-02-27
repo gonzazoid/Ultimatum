@@ -17,6 +17,7 @@ import android.view.ViewGroup.LayoutParams;
 
 import androidx.annotation.ColorInt;
 
+import org.chromium.base.ContextUtils;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.TraceEvent;
 import org.chromium.base.metrics.RecordUserAction;
@@ -46,6 +47,7 @@ import org.chromium.ui.base.WindowAndroid;
 public class SwipeRefreshHandler extends TabWebContentsUserData
         implements OverscrollRefreshHandler {
 
+    String PREF_PULL_TO_REFRESH = "pull_to_refresh";
     /** Creates a {@link SwipeRefreshLayout} given a {@link Context}. */
     public interface SwipeRefreshLayoutCreator {
         /**
@@ -249,7 +251,8 @@ public class SwipeRefreshHandler extends TabWebContentsUserData
     public boolean start(
             @OverscrollAction int type, @BackGestureEventSwipeEdge int initiatingEdge) {
         mSwipeType = type;
-        if (type == OverscrollAction.PULL_TO_REFRESH) {
+        if (type == OverscrollAction.PULL_TO_REFRESH &&
+            !ContextUtils.getAppSharedPreferences().getBoolean(PREF_PULL_TO_REFRESH, false)) {
             if (mSwipeRefreshLayout == null) initSwipeRefreshLayout(mTab.getContext());
             assumeNonNull(mSwipeRefreshLayout);
             attachSwipeRefreshLayoutIfNecessary();

@@ -1040,6 +1040,7 @@ chrome_java_sources = [
   "java/src/org/chromium/chrome/browser/settings/SettingsIntentUtil.java",
   "java/src/org/chromium/chrome/browser/settings/SettingsNavigationImpl.java",
   "java/src/org/chromium/chrome/browser/settings/WideDisplayPadding.java",
+  "java/src/org/chromium/chrome/browser/settings/GesturePreferences.java",
   "java/src/org/chromium/chrome/browser/settings/search/EmptyFragment.java",
   "java/src/org/chromium/chrome/browser/settings/search/SearchIndexProviderRegistry.java",
   "java/src/org/chromium/chrome/browser/settings/search/SearchResultsPreferenceFragment.java",

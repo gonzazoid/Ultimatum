@@ -51,6 +51,13 @@ registry->RegisterBooleanPref(
       prefs::kCloseTabsOnExit, false,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
 
+#if BUILDFLAG(IS_ANDROID)
+// TODO
+registry->RegisterBooleanPref(
+      prefs::kPullToRefresh, false,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+#endif
+
 #if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
   registry->RegisterIntegerPref(
       installer_downloader::prefs::kInstallerDownloaderInfobarShowCount, 0);
