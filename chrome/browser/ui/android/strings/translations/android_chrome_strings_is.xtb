@@ -24,9 +24,9 @@
 <translation id="1089606299949659462">Yfirferð lokið!</translation>
 <translation id="1094555143448724771">Samstilltu flipana þína og ferilinn til að sjá flipa úr hinum tækjunum þínum</translation>
 <translation id="1095761715416917775">Vertu viss um að hafa alltaf aðgang að samtilltu gögnunum þínum</translation>
-<translation id="1096091316906284742">Blað neðst með val um að taka þátt í Chrome Finds</translation>
+<translation id="1096091316906284742">Blað neðst með val um að taka þátt í Ultimatum Finds</translation>
 <translation id="1100066534610197918">Opna á nýjum flipa í hópi</translation>
-<translation id="1103142993930332957">Viltu hjálpa við að bæta Chrome?</translation>
+<translation id="1103142993930332957">Viltu hjálpa við að bæta Ultimatum?</translation>
 <translation id="1105960400813249514">Skjámyndataka</translation>
 <translation id="1108214977745280468">Skoða upplýsingar um síðu</translation>
 <translation id="1108938384783527433">Samstilla feril</translation>
@@ -34,20 +34,20 @@
 <translation id="1123537484474186311"><ph name="TAB_TITLE" />, mynd-í-mynd-flipi</translation>
 <translation id="1126696498560056882">Stjórna reikningum í þessu tæki</translation>
 <translation id="1135018701024399762">Huliðsstilling felur vefskoðun þína fyrir öðrum sem nota tækið þitt</translation>
-<translation id="113752097246673894">Skráðu þig inn á Chrome sem <ph name="EMAIL" /> til að fá aðgang að bókamerkjum og fleiru í öllum tækjunum þínum</translation>
+<translation id="113752097246673894">Skráðu þig inn á Ultimatum sem <ph name="EMAIL" /> til að fá aðgang að bókamerkjum og fleiru í öllum tækjunum þínum</translation>
 <translation id="1138458427267715730">Fáðu tilkynningar ef verð lækkar á hvaða vefsvæði sem er</translation>
 <translation id="1140317858355046628">Ef þú eyðir honum munu allir notendur umsvifalaust missa aðgang að flipahópnum „<ph name="GROUP_NAME" />“ og honum verður eytt úr öllum tækjum.</translation>
 <translation id="1142732900304639782">Ekki bjóða upp á að þýða þessi vefsvæði</translation>
 <translation id="1143193470214071120">Lokaðu glugga eða stjórnaðu gluggum</translation>
 <translation id="1149725087019908252">Skannar <ph name="FILE_NAME" /></translation>
-<translation id="1150263420752757504"><ph name="APP_NAME" /> opnast í Chrome. Með því að halda áfram samþykkirðu <ph name="BEGIN_LINK1" />þjónustuskilmála Google<ph name="END_LINK1" /> og <ph name="BEGIN_LINK2" />viðbótarþjónustuskilmála Google Chrome og ChromeOS<ph name="END_LINK2" />.</translation>
+<translation id="1150263420752757504"><ph name="APP_NAME" /> opnast í Ultimatum. Með því að halda áfram samþykkirðu <ph name="BEGIN_LINK1" />þjónustuskilmála Google<ph name="END_LINK1" /> og <ph name="BEGIN_LINK2" />viðbótarþjónustuskilmála Ultimatum og UltimatumOS<ph name="END_LINK2" />.</translation>
 <translation id="1154555449933432029">Þú ert ekki með nein aðgangsorð vistuð í Google-aðgangsorðastjórnun.</translation>
 <translation id="115483310321669804">Nota aðgangsorð <ph name="PASSWORD" /></translation>
 <translation id="1161065531352634524">Samstilla flipa og feril</translation>
 <translation id="1165109137568919258">Taktu mynd eða bættu mynd úr myndasafninu við til að leita</translation>
 <translation id="1173894706177603556">Endurnefna</translation>
-<translation id="1174479719160874822">Chrome biður um snjallvefinn þegar skjárinn er þröngur</translation>
-<translation id="1175241315203286684">Stjórnandinn þinn getur breytt stillingum prófílsins og vafrans þíns í gegnum fjaraðgang, greint upplýsingar um vafrann þinn út frá skýrslum og framkvæmt aðrar nauðsynlegar aðgerðir. Einnig er hægt að stjórna virkni í þessu tæki utan Chrome.</translation>
+<translation id="1174479719160874822">Ultimatum biður um snjallvefinn þegar skjárinn er þröngur</translation>
+<translation id="1175241315203286684">Stjórnandinn þinn getur breytt stillingum prófílsins og vafrans þíns í gegnum fjaraðgang, greint upplýsingar um vafrann þinn út frá skýrslum og framkvæmt aðrar nauðsynlegar aðgerðir. Einnig er hægt að stjórna virkni í þessu tæki utan Ultimatum.</translation>
 <translation id="1177863135347784049">Sérsniðið</translation>
 <translation id="1181037720776840403">Fjarlægja</translation>
 <translation id="1183189057400844278">Staðfestu að þetta sért þú til að ganga úr skugga um að geta alltaf notað aðgangsorðin á Google-reikningnum þínum</translation>
@@ -85,13 +85,13 @@
 <translation id="1318262688555255786">Deila tengli á vefsíðuna: <ph name="PAGE_TITLE" />. Heimild: <ph name="PAGE_URL" /></translation>
 <translation id="1320912611264252795">Möppur vistunar bókamerkja opnaðar á öllum skjánum</translation>
 <translation id="1327257854815634930">Ferill er opinn</translation>
-<translation id="1331212799747679585">Ekki er hægt að uppfæra Chrome. Fleiri valkostir.</translation>
-<translation id="1332501820983677155">Flýtilyklar eiginleika Google Chrome</translation>
+<translation id="1331212799747679585">Ekki er hægt að uppfæra Ultimatum. Fleiri valkostir.</translation>
+<translation id="1332501820983677155">Flýtilyklar eiginleika Ultimatum</translation>
 <translation id="1333491156693005331">Athugað nýlega</translation>
 <translation id="1336996151357442890">Þú sagðir upp áskrift að <ph name="SITE_NAME" />. Þú verður spurð(ur) aftur næst þegar þú opnar vefsvæðið.</translation>
 <translation id="1340839264183302272">Yfirgefa hóp</translation>
 <translation id="1342886103232377846">Opnaðu Google-aðgangsorðastjórnun til að leita að aðgangsorðum í hættu</translation>
-<translation id="1343830902827845050">Skráðu þig inn á Chrome</translation>
+<translation id="1343830902827845050">Skráðu þig inn á Ultimatum</translation>
 <translation id="1344653310988386453">Taka með tengil í merktan texta</translation>
 <translation id="1355088659320425659">Ferill og flipar</translation>
 <translation id="1360432990279830238">Skrá út og slökkva á samstillingu?</translation>
@@ -105,12 +105,12 @@
 <translation id="1383876407941801731">Leita</translation>
 <translation id="1384704387250346179">Þýða mynd með Google linsu <ph name="BEGIN_NEW" />Nýtt<ph name="END_NEW" /></translation>
 <translation id="1386674309198842382">Virkt fyrir <ph name="LAST_UPDATED" /> dögum</translation>
-<translation id="1390418506739274310">Þú gætir séð feril annarra forrita sem opna tengla í Chrome. Google-reikningurinn þinn kann að vera með annars konar vafraferil á <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
+<translation id="1390418506739274310">Þú gætir séð feril annarra forrita sem opna tengla í Ultimatum. Google-reikningurinn þinn kann að vera með annars konar vafraferil á <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="139752016751285248">Blað neðst með verðinnsýn, opið til hálfs</translation>
 <translation id="1397811292916898096">Leita með <ph name="PRODUCT_NAME" /></translation>
-<translation id="1398057416966591719">Þú getur <ph name="BEGIN_LINK1" />stjórnað því hvaða Chrome-gögn eru vistuð<ph name="END_LINK1" /> á Google-reikningnum þínum.
+<translation id="1398057416966591719">Þú getur <ph name="BEGIN_LINK1" />stjórnað því hvaða Ultimatum-gögn eru vistuð<ph name="END_LINK1" /> á Google-reikningnum þínum.
 
-Til að skoða fleiri stillingar sem nota gögn til að bæta Chrome-upplifunina þína skaltu fara í <ph name="BEGIN_LINK2" />Google-þjónustur<ph name="END_LINK2" />.</translation>
+Til að skoða fleiri stillingar sem nota gögn til að bæta Ultimatum-upplifunina þína skaltu fara í <ph name="BEGIN_LINK2" />Google-þjónustur<ph name="END_LINK2" />.</translation>
 <translation id="1407069428457324124">Dökkt þema</translation>
 <translation id="1407135791313364759">Opna alla</translation>
 <translation id="1409879593029778104">Komið í veg fyrir niðurhal á <ph name="FILE_NAME" /> því að skráin er nú þegar til.</translation>
@@ -124,10 +124,10 @@ Til að skoða fleiri stillingar sem nota gögn til að bæta Chrome-upplifunina
 <translation id="1448440926884431741">Notaðu bókamerki til að flokka vörur sem þú vaktar</translation>
 <translation id="1455845192930279203">Viltu samt sækja „<ph name="FILE_NAME" />“ (<ph name="FILE_SIZE" />) úr <ph name="DOWNLOAD_DOMAIN" />?</translation>
 <translation id="1460751212339734034">Sparaðu tíma, sláðu minna inn</translation>
-<translation id="1466383950273130737">Velja tungumál Chrome</translation>
+<translation id="1466383950273130737">Velja tungumál Ultimatum</translation>
 <translation id="1477626028522505441">Niðurhal á <ph name="FILE_NAME" /> mistókst vegna vandamála á netþjóni.</translation>
 <translation id="147982357559798527">Breytt</translation>
-<translation id="1480287803138246127">Ekki er víst að hluti af ferlinum þínum birtist hér. Til að sjá allan Chrome-ferilinn skaltu opna Chrome-feril í heild sinni.</translation>
+<translation id="1480287803138246127">Ekki er víst að hluti af ferlinum þínum birtist hér. Til að sjá allan Ultimatum-ferilinn skaltu opna Ultimatum-feril í heild sinni.</translation>
 <translation id="1493287004536771723">Þú fylgist með <ph name="SITE_NAME" /></translation>
 <translation id="1495677929897281669">Aftur á flipa</translation>
 <translation id="1496514951988037011">notandanafn</translation>
@@ -137,14 +137,14 @@ Til að skoða fleiri stillingar sem nota gögn til að bæta Chrome-upplifunina
 <translation id="1515901671075971249">Flýtileiðir flipaflettingar</translation>
 <translation id="1516966594427080024">Opna nýjan glugga í huliðsstillingu</translation>
 <translation id="1521774566618522728">Virkt í dag</translation>
-<translation id="153446405401665083">Ný útgáfa af Chrome er í boði</translation>
+<translation id="153446405401665083">Ný útgáfa af Ultimatum er í boði</translation>
 <translation id="1540012742443808215">Veffangastika er efst eins og stendur</translation>
-<translation id="1544084554881119930">Greiðslumátar og vefföng eru ekki dulkóðuð. Vafraferill Chrome samstillist ekki.
-Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuðu gögnin þín. Aðgangsorðið er hvorki sent til né vistað hjá Google. Ef þú gleymir aðgangsorðinu eða vilt breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />hreinsa Chrome-gögnin á reikningnum þínum<ph name="END_LINK" />.</translation>
+<translation id="1544084554881119930">Greiðslumátar og vefföng eru ekki dulkóðuð. Vafraferill Ultimatum samstillist ekki.
+Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuðu gögnin þín. Aðgangsorðið er hvorki sent til né vistað hjá Google. Ef þú gleymir aðgangsorðinu eða vilt breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />hreinsa Ultimatum-gögnin á reikningnum þínum<ph name="END_LINK" />.</translation>
 <translation id="1544826120773021464">Til að hafa umsjón með Google reikningnum þínum skaltu velja hnappinn „Stjórna reikningi“</translation>
 <translation id="1549000191223877751">Færa í annan glugga</translation>
-<translation id="1553358976309200471">Uppfæra Chrome</translation>
-<translation id="1554532453982918912">Hjálpaðu okkur að bæta Chrome fyrir fólk sem notar það á sama hátt og þú</translation>
+<translation id="1553358976309200471">Uppfæra Ultimatum</translation>
+<translation id="1554532453982918912">Hjálpaðu okkur að bæta Ultimatum fyrir fólk sem notar það á sama hátt og þú</translation>
 <translation id="1568636008098739136">Hlusta á þessa síðu Haltu flýtileiðinni inni til að breyta henni.</translation>
 <translation id="1571041387761170095">Engin léleg eða endurnýtt aðgangsorð</translation>
 <translation id="1578591621182011812">{NUM_PASSWORDS,plural, =1{1 aðgangsorð í hættu í þessu tæki}one{# aðgangsorð í hættu í þessu tæki}other{# aðgangsorð í hættu í þessu tæki}}</translation>
@@ -171,24 +171,24 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="1702907158640575240">Stýrður vafri</translation>
 <translation id="170478069042229393"><ph name="TAB_TITLE" />, festur huliðsflipi</translation>
 <translation id="1718835860248848330">Undanfarna klukkustund</translation>
-<translation id="1726477445370128854">Þú getur vafrað og leitað á hraðari hátt þegar Chrome forhleður síðum sem vafrinn telur að þú munir opna</translation>
+<translation id="1726477445370128854">Þú getur vafrað og leitað á hraðari hátt þegar Ultimatum forhleður síðum sem vafrinn telur að þú munir opna</translation>
 <translation id="1728803206919861584">Vista aðgangslykil utan huliðsstillingar?</translation>
 <translation id="1732514748744806741">Við látum þig vita ef aðgangsorðin þín eru í hættu</translation>
-<translation id="1737694586321018892">Nýttu þér öflugustu öryggislausn Chrome</translation>
+<translation id="1737694586321018892">Nýttu þér öflugustu öryggislausn Ultimatum</translation>
 <translation id="1747593111377567311">{NUM_SITES,plural, =1{Eitt vefsvæði sendi margar tilkynningar nýlega}one{# vefsvæði sendi margar tilkynningar nýlega}other{# vefsvæði sendu margar tilkynningar nýlega}}</translation>
 <translation id="1749561566933687563">Samstilltu bókamerkin þín</translation>
 <translation id="1750238553597293878">Haltu áfram að nota aðgangsorðin á Google-reikningnum þínum</translation>
 <translation id="17513872634828108">Opnir flipar</translation>
 <translation id="1753744496844366747">Aa</translation>
 <translation id="1760873718737761808">{FILE_COUNT,plural, =1{Síður, 1 síða á lista}one{Síður, # síða á lista}other{Síður, # síður á lista}}</translation>
-<translation id="1771929606532798550">Google fær sendar upplýsingar um notkun þína á Chrome en þær eru ekki tengdar við þig\n\nEf Chrome hrynur er hugsanlegt að upplýsingar um hrunið feli í sér einhverjar persónuupplýsingar\n\nEf þú samstillir ferilinn þinn við Google-reikninginn þinn kunna mæligildi einnig að innihalda upplýsingar um vefslóðirnar sem þú opnar</translation>
+<translation id="1771929606532798550">Google fær sendar upplýsingar um notkun þína á Ultimatum en þær eru ekki tengdar við þig\n\nEf Ultimatum hrynur er hugsanlegt að upplýsingar um hrunið feli í sér einhverjar persónuupplýsingar\n\nEf þú samstillir ferilinn þinn við Google-reikninginn þinn kunna mæligildi einnig að innihalda upplýsingar um vefslóðirnar sem þú opnar</translation>
 <translation id="1778457539567749232">Merkja sem ólesið</translation>
 <translation id="1779766957982586368">Loka glugga</translation>
 <translation id="1780023393214832643">Aðgangsorð vistuð á <ph name="USERNAME" /></translation>
 <translation id="1791662854739702043">Uppsett</translation>
 <translation id="1792959175193046959">Þú getur breytt staðsetningu niðurhals hvenær sem er</translation>
 <translation id="1796666869097395659">Minnkaðu flipann til að fara aftur í hann síðar</translation>
-<translation id="1799920918471566157">Ábendingar fyrir Chrome</translation>
+<translation id="1799920918471566157">Ábendingar fyrir Ultimatum</translation>
 <translation id="1807246157184219062">Ljóst</translation>
 <translation id="1807709131360304325">Opna í nýjum glugga</translation>
 <translation id="1810845389119482123">Fyrstu uppsetningu samstillingar ekki lokið</translation>
@@ -197,13 +197,13 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="1820408774134375111">Innskráningarblað neðst</translation>
 <translation id="1823492026305965829">Skrá inn sem <ph name="USER_FULL_NAME" /></translation>
 <translation id="1824902652744048041">Ýttu á „Eyða vefskoðunargögnum“</translation>
-<translation id="1825772852827001597">Upplýsingar um greiðslumáta og heimilisföng frá Google Pay verða ekki dulkóðaðar. Vafraferill Chrome samstillist ekki.
-Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuðu gögnin þín. Aðgangsorðið er hvorki sent til né vistað hjá Google. Ef þú gleymir aðgangsorðinu eða vilt breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-gögnunum á reikningnum þínum<ph name="END_LINK" />.</translation>
+<translation id="1825772852827001597">Upplýsingar um greiðslumáta og heimilisföng frá Google Pay verða ekki dulkóðaðar. Vafraferill Ultimatum samstillist ekki.
+Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuðu gögnin þín. Aðgangsorðið er hvorki sent til né vistað hjá Google. Ef þú gleymir aðgangsorðinu eða vilt breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Ultimatum-gögnunum á reikningnum þínum<ph name="END_LINK" />.</translation>
 <translation id="1829244130665387512">Finna á síðu</translation>
 <translation id="1832459821645506983">Já, ég vil vera með</translation>
-<translation id="1845958458910716240">Til að vernda gögnin þín skaltu leyfa Chrome að fjarlægja heimildir vefsvæða sem þú hefur ekki heimsótt nýlega</translation>
-<translation id="1871098866036088250">Opna í Chrome vafra</translation>
-<translation id="1877026089748256423">Chrome er úrelt</translation>
+<translation id="1845958458910716240">Til að vernda gögnin þín skaltu leyfa Ultimatum að fjarlægja heimildir vefsvæða sem þú hefur ekki heimsótt nýlega</translation>
+<translation id="1871098866036088250">Opna í Ultimatum vafra</translation>
+<translation id="1877026089748256423">Ultimatum er úrelt</translation>
 <translation id="1877073879466606884">Prófíllinn sem þú ert skráð(ur) inn á er stýrður prófíll. Stjórnandinn þinn getur breytt stillingum prófílsins þíns í gegnum fjaraðgang, greint upplýsingar um vafrann þinn út frá skýrslum og framkvæmt aðrar nauðsynlegar aðgerðir.</translation>
 <translation id="1879904908408734349">Innskráningarblað neðst er lokað</translation>
 <translation id="1883903952484604915">Skrárnar mínar</translation>
@@ -215,7 +215,7 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="1910950723001426294">Listi yfir deilingarvalkosti er lokaður.</translation>
 <translation id="191726024256261717">Fara yfir heimildir</translation>
 <translation id="1917766536967060661">Þú munt umsvifalaust glata aðgangi að flipahópnum „<ph name="GROUP_NAME" />“ og <ph name="BLOCKED_MEMBER_FULL_NAME" /> (<ph name="BLOCKED_MEMBER_EMAIL" />) mun ekki lengur geta átt samskipti við þig í Google-þjónustum.</translation>
-<translation id="1919130412786645364">Leyfa innskráningu í Chrome</translation>
+<translation id="1919130412786645364">Leyfa innskráningu í Ultimatum</translation>
 <translation id="1922362554271624559">Tillögur að tungumálum</translation>
 <translation id="1924255092154549435">Flipi er stækkaður</translation>
 <translation id="1925021887439448749">Færðu inn sérsniðna vefslóð</translation>
@@ -225,11 +225,11 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="1944535645109964458">Engir aðgangslyklar tiltækir</translation>
 <translation id="1957557050935255529">Hleður PDF…</translation>
 <translation id="1959679933317802873">Bíður eftir efni</translation>
-<translation id="1960290143419248813">Chrome uppfærslur eru ekki lengur studdar fyrir þessa útgáfu af Android</translation>
+<translation id="1960290143419248813">Ultimatum uppfærslur eru ekki lengur studdar fyrir þessa útgáfu af Android</translation>
 <translation id="1962061488333185936"><ph name="TAB_TITLE" />, margvalinn flipi með hljóði</translation>
 <translation id="1963976881984600709">Hefðbundin vörn</translation>
 <translation id="1966710179511230534">Uppfærðu innskráningarupplýsingarnar þínar.</translation>
-<translation id="1969037871259811890">Þú skráist ekki út af Google-reikningnum þínum þegar þú eyðir vefskoðunargögnum. Þú þarft að <ph name="BEGIN_LINK1" />skrá þig út af Chrome<ph name="END_LINK1" /> til að gera það.</translation>
+<translation id="1969037871259811890">Þú skráist ekki út af Google-reikningnum þínum þegar þú eyðir vefskoðunargögnum. Þú þarft að <ph name="BEGIN_LINK1" />skrá þig út af Ultimatum<ph name="END_LINK1" /> til að gera það.</translation>
 <translation id="197288927597451399">Halda</translation>
 <translation id="1973912524893600642">Geyma gögn</translation>
 <translation id="1974060860693918893">Ítarlegt</translation>
@@ -242,7 +242,7 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="2021896219286479412">Stýringar vefsvæðis á öllum skjá</translation>
 <translation id="2029669011553795746">Val um að fá tilkynningar um ráð opnað í hálfri hæð</translation>
 <translation id="2038563949887743358">Kveikja á beiðni um vefsvæði fyrir tölvur</translation>
-<translation id="204321170514947529"><ph name="APP_NAME" /> er einnig með gögn í Chrome</translation>
+<translation id="204321170514947529"><ph name="APP_NAME" /> er einnig með gögn í Ultimatum</translation>
 <translation id="2047378580182589770">Haltu inni til að fara úr huliðsstillingu</translation>
 <translation id="2049574241039454490"><ph name="FILE_SIZE_OF_TOTAL" /> <ph name="SEPARATOR" /> <ph name="DESCRIPTION" /></translation>
 <translation id="2051669996101374349">Nota HTTPS þegar hægt er og fá viðvörun áður en síðum sem styðja það ekki er hlaðið. Þú getur ekki breytt þessari stillingu vegna þess að þú ert með kveikt á ítarlegri vernd.</translation>
@@ -265,9 +265,9 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="2138283760993967204">Stjórna tákni</translation>
 <translation id="2138632817776076519"><ph name="TAB_TITLE" />, valinn upptökuflipi</translation>
 <translation id="2141396931810938595">Miðað við notkun þína</translation>
-<translation id="2145315049852051678">Chrome athugar reglulega hvort vafrinn þinn sé með öruggustu stillingarnar. Við látum vita ef þú þarft að yfirfara eitthvað.</translation>
+<translation id="2145315049852051678">Ultimatum athugar reglulega hvort vafrinn þinn sé með öruggustu stillingarnar. Við látum vita ef þú þarft að yfirfara eitthvað.</translation>
 <translation id="2149973817440762519">Breyta bókamerki</translation>
-<translation id="2163089732491971196">Sláðu inn aðgangsorðið þitt til að nota og vista Chrome-gögn á Google-reikningnum þínum</translation>
+<translation id="2163089732491971196">Sláðu inn aðgangsorðið þitt til að nota og vista Ultimatum-gögn á Google-reikningnum þínum</translation>
 <translation id="2166228530126694506">Útgáfa <ph name="VERSION_NUMBER" /></translation>
 <translation id="2172688499998841696">Slökkt er á lýsingum mynda</translation>
 <translation id="2172905120685242547">Loka glugga?</translation>
@@ -280,7 +280,7 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="2194856509914051091">Atriði til að hafa í huga</translation>
 <translation id="2205701497928406883"><ph name="TAB_TITLE" />, festur flipi í deilingu</translation>
 <translation id="22091350895006575">Bæta notandanafni við</translation>
-<translation id="221494669172414749">Ef þú opnar Chrome án þess að nota prófíllás verða vistuð aðgangsorð og greiðslumátar fjarlægð úr bílnum. Notkun prófílláss gætir að öryggi þessara gagna.</translation>
+<translation id="221494669172414749">Ef þú opnar Ultimatum án þess að nota prófíllás verða vistuð aðgangsorð og greiðslumátar fjarlægð úr bílnum. Notkun prófílláss gætir að öryggi þessara gagna.</translation>
 <translation id="2226826835915474236">Óvirkar flýtileiðir</translation>
 <translation id="2227179592712503583">Fjarlægja tillögu</translation>
 <translation id="2227444325776770048">Halda áfram sem <ph name="USER_FULL_NAME" /></translation>
@@ -311,7 +311,7 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="2332515770639153015">Kveikt er á enn öruggari vefskoðun</translation>
 <translation id="233375395665273385">Eyða og skrá út</translation>
 <translation id="2341410551640223969">Ekki tókst að setja upp <ph name="WEBAPK_NAME" />.</translation>
-<translation id="2349710944427398404">Gögn sem Chrome notar alls, þ.m.t. reikningar, bókamerki og vistaðar stillingar</translation>
+<translation id="2349710944427398404">Gögn sem Ultimatum notar alls, þ.m.t. reikningar, bókamerki og vistaðar stillingar</translation>
 <translation id="235789365079050412">Persónuverndarstefna Google</translation>
 <translation id="2359808026110333948">Halda áfram</translation>
 <translation id="2362083820973145409">Skráð(ur) inn sem <ph name="USER_NAME" />. <ph name="USER_EMAIL" />. Opnar stillingar.</translation>
@@ -333,7 +333,7 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="2427025860753516072">{FILE_COUNT,plural, =1{Vídeó, 1 vídeó á lista}one{Vídeó, # vídeó á lista}other{Vídeó, # vídeó á lista}}</translation>
 <translation id="2433507940547922241">Útlit</translation>
 <translation id="2439153523196674349"><ph name="SITE_NAME" />: forskoðun</translation>
-<translation id="2449931042095204989">Þegar vefsvæði eða forrit Google biður um að forhlaða tenglum á síðu sinni í lokaðri stillingu mun Chrome dulkóða og forhlaða síðunum á Google-þjónum, án fótspora. Þetta kemur í veg fyrir að forhlaðna vefsvæðið geti auðkennt þig.</translation>
+<translation id="2449931042095204989">Þegar vefsvæði eða forrit Google biður um að forhlaða tenglum á síðu sinni í lokaðri stillingu mun Ultimatum dulkóða og forhlaða síðunum á Google-þjónum, án fótspora. Þetta kemur í veg fyrir að forhlaðna vefsvæðið geti auðkennt þig.</translation>
 <translation id="2450019289047528273">Greiðslumátar og aðrar upplýsingar úr Google-veski</translation>
 <translation id="2450083983707403292">Viltu byrja aftur að sækja <ph name="FILE_NAME" />?</translation>
 <translation id="2451607499823206582">Vöktun</translation>
@@ -342,17 +342,17 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="2466378451804467735"><ph name="TAB_TITLE" />, margvalinn flipi með slökkt á hljóði</translation>
 <translation id="2468444275314013497">Vafrinn er í góðu lagi</translation>
 <translation id="2471632347767899461">Prófaðu að leita í hjálparmiðstöðinni</translation>
-<translation id="2472163211318554013">Skráðu þig inn til að fá sem mest út úr Chrome</translation>
+<translation id="2472163211318554013">Skráðu þig inn til að fá sem mest út úr Ultimatum</translation>
 <translation id="247737702124049222">Kveikt er á lýsingum mynda</translation>
 <translation id="2479148705183875116">Opna stillingar</translation>
 <translation id="2482878487686419369">Tilkynningar</translation>
 <translation id="2496180316473517155">Vafraferill</translation>
 <translation id="2497852260688568942">Kerfisstjóri hefur gert samstillingu óvirka</translation>
-<translation id="250020030759455918">Þú sérð innskráningarstöðu þína, vafragögn og vefsvæðagögn fyrir <ph name="SITE_NAME" /> í Chrome.</translation>
+<translation id="250020030759455918">Þú sérð innskráningarstöðu þína, vafragögn og vefsvæðagögn fyrir <ph name="SITE_NAME" /> í Ultimatum.</translation>
 <translation id="2510106555128151389">Setur upp <ph name="WEBAPK_NAME" />…</translation>
 <translation id="2512234228327349533">Leita að kaupvalkostum</translation>
 <translation id="2513403576141822879">Frekari upplýsingar sem tengjast persónuvernd, öryggi og gagnasöfnun má finna í <ph name="BEGIN_LINK" />Samstilling og sérstillingar<ph name="END_LINK" /></translation>
-<translation id="2515921719039583189">Eyða Chrome-gögnum úr þessu tæki?</translation>
+<translation id="2515921719039583189">Eyða Ultimatum-gögnum úr þessu tæki?</translation>
 <translation id="2517113738956581680">Blað í fullri stærð</translation>
 <translation id="2523184218357549926">Sendir vefslóðir síðna sem þú skoðar til Google</translation>
 <translation id="2524132927880411790">Fara í raddleit Google-forrits</translation>
@@ -374,9 +374,9 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="2569733278091928697">Þú getur auðveldlega stjórnað efnisstýringum, huliðslotum, niðurhali og fleira</translation>
 <translation id="2571711316400087311">Bjóðast til að þýða síður á öðrum tungumálum í Google Translate</translation>
 <translation id="2571834852878229351">Búa til mitt eigið</translation>
-<translation id="2574249610672786438">Skráðu þig inn í öllum tækjunum þínum til að sjá flipana þína hvar sem þú notar Chrome</translation>
+<translation id="2574249610672786438">Skráðu þig inn í öllum tækjunum þínum til að sjá flipana þína hvar sem þú notar Ultimatum</translation>
 <translation id="2577981599306533385"><ph name="MEMBER_FULL_NAME" /> (<ph name="EMAIL" />) glatar umsvifalaust aðgangi að flipahópnum „<ph name="GROUP_NAME" />“ og mun ekki lengur geta átt samskipti við þig í Google-þjónustum.</translation>
-<translation id="2581165646603367611">Þetta mun eyða fótsporum, skyndiminni og öðrum gögnum frá vefsvæðum sem Chrome telur ekki mikilvæg.</translation>
+<translation id="2581165646603367611">Þetta mun eyða fótsporum, skyndiminni og öðrum gögnum frá vefsvæðum sem Ultimatum telur ekki mikilvæg.</translation>
 <translation id="2587052924345400782">Nýrri útgáfa er í boði</translation>
 <translation id="2593272815202181319">Jafnbreitt</translation>
 <translation id="260403163289591229">Fylgir</translation>
@@ -415,8 +415,8 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="2779651927720337254">mistókst</translation>
 <translation id="2781151931089541271">Ein sek. eftir</translation>
 <translation id="2789486458103222910">Í lagi</translation>
-<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Chrome fann endurnýtt aðgangsorð sem þú gætir bætt}one{Chrome fann # endurnýtt aðgangsorð sem þú gætir bætt}other{Chrome fann # endurnýtt aðgangsorð sem þú gætir bætt}}</translation>
-<translation id="2794551654724114396">Kveiktu á tilkynningum til að fá gagnleg ráð sem hjálpa þér að fá sem mest út úr Chrome</translation>
+<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Ultimatum fann endurnýtt aðgangsorð sem þú gætir bætt}one{Ultimatum fann # endurnýtt aðgangsorð sem þú gætir bætt}other{Ultimatum fann # endurnýtt aðgangsorð sem þú gætir bætt}}</translation>
+<translation id="2794551654724114396">Kveiktu á tilkynningum til að fá gagnleg ráð sem hjálpa þér að fá sem mest út úr Ultimatum</translation>
 <translation id="2805210243313393104">Sjáðu bókamerki og fleira í öllum tækjunum þínum</translation>
 <translation id="2805756323405976993">Forrit</translation>
 <translation id="2819849308549746319">Hætta áskrift að öllu</translation>
@@ -433,7 +433,7 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="2842985007712546952">Yfirmappa</translation>
 <translation id="2854916915045135148">Haltu inni til að skipta yfir í huliðsstillingu</translation>
 <translation id="2860954141821109167">Gakktu úr skugga um að símaforritið sé virkt í þessu tæki</translation>
-<translation id="2861923151411510142">Tilteknir Chrome eiginleikar verða ekki tiltækir lengur</translation>
+<translation id="2861923151411510142">Tilteknir Ultimatum eiginleikar verða ekki tiltækir lengur</translation>
 <translation id="286473047976978798">Nota útlitsstillingarnar?</translation>
 <translation id="2869416538780777323">{OTHER_TAB_COUNT,plural, =1{<ph name="URL" /> og 1 annar flipi}one{<ph name="URL" /> og <ph name="TAB_COUNT_MANY" /> annar flipi}other{<ph name="URL" /> og <ph name="TAB_COUNT_MANY" /> aðrir flipar}}</translation>
 <translation id="2869430948265924908">Til að vernda viðkvæmt efni í bílnum þarftu að búa til prófíllás fyrir bílinn.  Það má gera með PIN-númeri, kóða eða aðgangsorði.</translation>
@@ -441,10 +441,10 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="2871733351037274014">Forhlaða síðum</translation>
 <translation id="2876136027428473467"><ph name="CHILD_NAME" /> biður þig um að samþykkja þetta vefsvæði:</translation>
 <translation id="2876556152483133018">Leit fyrir vefsvæði</translation>
-<translation id="2876628302275096482">Nánar um <ph name="BEGIN_LINK" />hvernig Chrome heldur gögnunum þínum leyndum<ph name="END_LINK" /></translation>
+<translation id="2876628302275096482">Nánar um <ph name="BEGIN_LINK" />hvernig Ultimatum heldur gögnunum þínum leyndum<ph name="END_LINK" /></translation>
 <translation id="2878607776582720720"><ph name="TAB_TITLE" />, margvalinn huliðsflipi í deilingu</translation>
 <translation id="2885355868600171871">Hoppa yfir í veffangastiku</translation>
-<translation id="2888126860611144412">Um Chrome</translation>
+<translation id="2888126860611144412">Um Ultimatum</translation>
 <translation id="2891154217021530873">Stöðva hleðslu síðu</translation>
 <translation id="2893168226686371498">Sjálfgefinn vafri</translation>
 <translation id="2894821468041866720">Hægir ekki greinilega á vafranum eða tækinu.</translation>
@@ -463,14 +463,14 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="2923908459366352541">Nafnið er ógilt</translation>
 <translation id="2932150158123903946">Google <ph name="APP_NAME" /> geymslurými</translation>
 <translation id="2932222164150889403">Lyklaborðið þitt breytist ekki</translation>
-<translation id="2936980480904111527">Chrome tilkynningar auðvelda málin</translation>
+<translation id="2936980480904111527">Ultimatum tilkynningar auðvelda málin</translation>
 <translation id="2940075786175545812">Valkostur til að samþykkja eða samþykkja ekki vefsvæði</translation>
 <translation id="2942036813789421260">Forskoðunarflipi er lokaður</translation>
 <translation id="2951071800649516099">Bæta síðum á leslistann þinn til síðari nota</translation>
 <translation id="2954586176076923855">Færa veffangastikuna efst</translation>
 <translation id="2961208450284224863">{READING_LIST_UNREAD_PAGE_COUNT,plural, =1{<ph name="READING_LIST_UNREAD_PAGE_COUNT_ONE" /> ólesin síða}one{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> ólesin síða}other{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> ólesnar síður}}</translation>
 <translation id="2972109037780336501">Fjarlægja heimildir sjálfkrafa</translation>
-<translation id="2976550651269220761">Einhver Chrome-gögn hafa ekki enn verið vistuð á Google-reikningnum þínum.\nPrófaðu að bíða í nokkrar mínútur áður en þú skráir þig út. Ef þú skráir þig út núna verður þessum gögnum eytt.</translation>
+<translation id="2976550651269220761">Einhver Ultimatum-gögn hafa ekki enn verið vistuð á Google-reikningnum þínum.\nPrófaðu að bíða í nokkrar mínútur áður en þú skráir þig út. Ef þú skráir þig út núna verður þessum gögnum eytt.</translation>
 <translation id="2977350910003566746">Raðað eftir „Síðast opnað“</translation>
 <translation id="297771753501244313">Raða eftir „Síðast opnað“</translation>
 <translation id="2979639724566107830">Opna í nýjum glugga</translation>
@@ -493,15 +493,15 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="3035527385626181784"><ph name="TAB_TITLE" />, valinn flipi fyrir deilingu</translation>
 <translation id="3036750288708366620"><ph name="BEGIN_LINK" />Fá aðstoð<ph name="END_LINK" /></translation>
 <translation id="3037177537145227281">Vaktar verð</translation>
-<translation id="3037517125981011456">Sýnir innskráningartilkynningar í Chrome</translation>
+<translation id="3037517125981011456">Sýnir innskráningartilkynningar í Ultimatum</translation>
 <translation id="3038272154009688107">Sjá öll vefsvæði</translation>
 <translation id="3057938290530993634">Haltu inni til að festa vefsvæðin sem þú heimsækir oftast til að fá auðveldan aðgang næst</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> bókamerki}one{<ph name="BOOKMARKS_COUNT_MANY" /> bókamerki}other{<ph name="BOOKMARKS_COUNT_MANY" /> bókamerki}}</translation>
-<translation id="3062802207422175757">Greinar sem tengjast áhugamálum þínum í Chrome</translation>
+<translation id="3062802207422175757">Greinar sem tengjast áhugamálum þínum í Ultimatum</translation>
 <translation id="3066573403916685335">Færa niður</translation>
 <translation id="3067505415088964188">Verð er lágt</translation>
 <translation id="3070005020161560471">Þýða sjálfkrafa</translation>
-<translation id="3072980200212375806"><ph name="APP_NAME" /> opnast í Chrome. Með því að halda áfram samþykkirðu <ph name="BEGIN_LINK1" />þjónustuskilmála Google<ph name="END_LINK1" /> og <ph name="BEGIN_LINK2" />viðbótarþjónustuskilmála Google Chrome og ChromeOS<ph name="END_LINK2" />. <ph name="BEGIN_LINK3" />Persónuverndarstefnan<ph name="END_LINK3" /> gildir einnig.</translation>
+<translation id="3072980200212375806"><ph name="APP_NAME" /> opnast í Ultimatum. Með því að halda áfram samþykkirðu <ph name="BEGIN_LINK1" />þjónustuskilmála Google<ph name="END_LINK1" /> og <ph name="BEGIN_LINK2" />viðbótarþjónustuskilmála Ultimatum og UltimatumOS<ph name="END_LINK2" />. <ph name="BEGIN_LINK3" />Persónuverndarstefnan<ph name="END_LINK3" /> gildir einnig.</translation>
 <translation id="3080525922482950719">Þú getur vistað síður til að lesa þær síðar eða án nettengingar</translation>
 <translation id="3087734570205094154">Neðst</translation>
 <translation id="3091010850649238832">Sýna innihald klippiborðs</translation>
@@ -511,7 +511,7 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="3123734510202723619">Tilkynningar</translation>
 <translation id="3134385238404760368">Engir nýlegir flipar</translation>
 <translation id="3135655388926735587">Ýttu á „Nýlegir flipar“</translation>
-<translation id="314939179385989105">Heimasíða Chrome</translation>
+<translation id="314939179385989105">Heimasíða Ultimatum</translation>
 <translation id="3158667104057012316">Raðað handvirkt</translation>
 <translation id="3159335509547415276">Nánar um reikninga á bannlista</translation>
 <translation id="3161699713309727585"><ph name="BUTTON_TEXT" />, opnast í nýjum flipa</translation>
@@ -531,7 +531,7 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="3236059992281584593">Ein mín. eftir</translation>
 <translation id="3237087289225714896">Hefðbundin forhleðsla:</translation>
 <translation id="3244271242291266297">MM</translation>
-<translation id="3245429137663807393">Ef þú deilir einnig Chrome notkunarskýrslum innihalda þær skýrslur vefslóðirnar sem þú opnar</translation>
+<translation id="3245429137663807393">Ef þú deilir einnig Ultimatum notkunarskýrslum innihalda þær skýrslur vefslóðirnar sem þú opnar</translation>
 <translation id="3250563604907490871">Lýsingar á myndum birtast á ný þegar tengst er Wi-Fi neti</translation>
 <translation id="3254409185687681395">Setja þessa síðu í bókamerki</translation>
 <translation id="3265093782546847662">Allar síður á <ph name="DOMAIN" /></translation>
@@ -568,22 +568,22 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="3435575784518354875">Til að tryggja að þú hafir aðgang að aðgangsorðunum þínum skaltu flytja þau út núna, uppfæra þjónustu Google Play og flytja þau síðan aftur inn í Google-aðgangsorðastjórnun. <ph name="BEGIN_LINK" />Sjá ítarlegar leiðbeiningar<ph name="END_LINK" />.</translation>
 <translation id="3435738964857648380">Öryggi</translation>
 <translation id="3435914367318771664">Bæta flipa við nýjan hóp</translation>
-<translation id="3438681572027105609">Skráðu þig inn á Chromium til að fá aðgang að aðgangsorðum og fleiru í öllum tækjunum þínum</translation>
+<translation id="3438681572027105609">Skráðu þig inn á Ultimatum til að fá aðgang að aðgangsorðum og fleiru í öllum tækjunum þínum</translation>
 <translation id="3439276997620616816">Þú finnur nýlega flipa hér</translation>
 <translation id="3443221991560634068">Endurhlaða þessa síðu</translation>
 <translation id="3444179773590444986">Deila ábendingu um dökkt þema fyrir vefsvæði?</translation>
 <translation id="3448874648066942074">Taka saman með gervigreind</translation>
-<translation id="3452832259067974318">Til að gæta persónuverndar þinnar fyllir Chrome ekki sjálfkrafa út aðgangsorðið þitt í þennan reit.</translation>
+<translation id="3452832259067974318">Til að gæta persónuverndar þinnar fyllir Ultimatum ekki sjálfkrafa út aðgangsorðið þitt í þennan reit.</translation>
 <translation id="3474624961160222204">Halda áfram sem <ph name="NAME" /></translation>
 <translation id="3478363558367712427">Þú getur valið leitarvélina þína</translation>
 <translation id="3482805106082349287">Notaðu lyklaborðið, röddina, huliðsstillingu eða myndavélina til að leita</translation>
-<translation id="3487903178221457900">Aðrir kunna að hafa aðgang að útfluttu skránni, þ.m.t. forrit. Aðgangsorðunum þínum verður eytt úr Chrome þegar þú framkvæmir útflutninginn.</translation>
+<translation id="3487903178221457900">Aðrir kunna að hafa aðgang að útfluttu skránni, þ.m.t. forrit. Aðgangsorðunum þínum verður eytt úr Ultimatum þegar þú framkvæmir útflutninginn.</translation>
 <translation id="3488199663160411179">nafninu þínu</translation>
 <translation id="3493531032208478708"><ph name="BEGIN_LINK" />Frekari upplýsingar<ph name="END_LINK" /> um uppástungur að efni</translation>
 <translation id="3499246418971111862">chrome_qrcode_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="350276055892098337">Raða eftir elsta</translation>
 <translation id="3507132249039706973">Kveikt er á hefðbundinni vörn</translation>
-<translation id="3509330069915219067">Án nettengingar. Chrome getur ekki leitað að uppfærslum.</translation>
+<translation id="3509330069915219067">Án nettengingar. Ultimatum getur ekki leitað að uppfærslum.</translation>
 <translation id="3513019849832307207">Taka þátt og opna</translation>
 <translation id="3513704683820682405">Aukinn veruleiki</translation>
 <translation id="3516053221628030540">Opna Google Play</translation>
@@ -615,10 +615,10 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="3623240789707551553">{DOMAIN_COUNT,plural, =1{+ 1 vefsvæði}one{+ # vefsvæði}other{+ # vefsvæði}}</translation>
 <translation id="3625870480639975468">Endurstilla aðdrátt</translation>
 <translation id="3631987586758005671">Deilir í <ph name="DEVICE_NAME" /></translation>
-<translation id="3635073343384702370">Chrome getur athugað aðgangsorðin þín þegar þú vistar þau</translation>
+<translation id="3635073343384702370">Ultimatum getur athugað aðgangsorðin þín þegar þú vistar þau</translation>
 <translation id="3636940436873918441">Kjörtungumál</translation>
-<translation id="3637744895182738742">Ef þú gleymdir aðgangsorðinu eða vilt breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-gögnunum á reikningnum þínum<ph name="END_LINK" />.</translation>
-<translation id="3641581193271938629">Val á að taka þátt í Chrome Finds lokað</translation>
+<translation id="3637744895182738742">Ef þú gleymdir aðgangsorðinu eða vilt breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Ultimatum-gögnunum á reikningnum þínum<ph name="END_LINK" />.</translation>
+<translation id="3641581193271938629">Val á að taka þátt í Ultimatum Finds lokað</translation>
 <translation id="3647019414263135904">Opna eða loka sprettiglugga samhengis</translation>
 <translation id="3653111872753786013"><ph name="WEBSITE_TITLE" />: <ph name="WEBSITE_URL" /></translation>
 <translation id="3674208116086565128">Fara í Google Home-forritið</translation>
@@ -636,7 +636,7 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="3710501561113687889"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> mun deila <ph name="FIELDS_STRING" /> með þessu vefsvæði til að geta haldið áfram.</translation>
 <translation id="3710560693796335511">Samvinna</translation>
 <translation id="3714430408451673233">Neðsta blað flipa í hálfri hæð.</translation>
-<translation id="3718765429352682176">Þú gætir séð feril annarra forrita sem opna tengla í Chrome.</translation>
+<translation id="3718765429352682176">Þú gætir séð feril annarra forrita sem opna tengla í Ultimatum.</translation>
 <translation id="3721119614952978349">Þú og Google</translation>
 <translation id="3727000368239390918">Skráðu þig inn til að sækja flipana þína og fleira í öllum tækjunum þínum</translation>
 <translation id="3737319253362202215">Þýðingarstillingar</translation>
@@ -690,8 +690,8 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="3943322906274039960"><ph name="TAB_TITLE" />, festur mynd-í-mynd-flipi</translation>
 <translation id="3950820424414687140">Skrá inn</translation>
 <translation id="395377504920307820">Nota án reiknings</translation>
-<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Chrome hleður síðunni þegar hún er tilbúin}one{Chrome hleður síðunum þegar þær eru tilbúnar}other{Chrome hleður síðunum þegar þær eru tilbúnar}}</translation>
-<translation id="3969142555815019568">Chrome getur ekki athugað aðgangsorðin þín</translation>
+<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Ultimatum hleður síðunni þegar hún er tilbúin}one{Ultimatum hleður síðunum þegar þær eru tilbúnar}other{Ultimatum hleður síðunum þegar þær eru tilbúnar}}</translation>
+<translation id="3969142555815019568">Ultimatum getur ekki athugað aðgangsorðin þín</translation>
 <translation id="3969863827134279083">Færa upp</translation>
 <translation id="397105322502079400">Reiknar...</translation>
 <translation id="397583555483684758">Samstilling er hætt að virka</translation>
@@ -702,10 +702,10 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="3987993985790029246">Afrita tengil</translation>
 <translation id="3994236846568425219">Kveikja á dökku þema þegar kveikt er á dökku þema í tækinu</translation>
 <translation id="4000212216660919741">Ónettengt</translation>
-<translation id="4000670338830950598">Sérstilltu og stjórnaðu Google Chrome með auðkenndu atriði</translation>
+<translation id="4000670338830950598">Sérstilltu og stjórnaðu Ultimatum með auðkenndu atriði</translation>
 <translation id="4015643064997321279">{NUM_PASSWORDS,plural, =1{1 aðgangsorð í hættu á Google-reikningnum þínum}one{# aðgangsorð í hættu á Google-reikningnum þínum}other{# aðgangsorð í hættu á Google-reikningnum þínum}}</translation>
 <translation id="4016425174436051808">Ekkki er hægt að fylgja. Eitthvað fór úrskeiðis.</translation>
-<translation id="4023638601467301498">Skráðu þig inn á Chromium til að fá aðgang að bókamerkjum og fleiru í öllum tækjunum þínum</translation>
+<translation id="4023638601467301498">Skráðu þig inn á Ultimatum til að fá aðgang að bókamerkjum og fleiru í öllum tækjunum þínum</translation>
 <translation id="4024768890073681126">Foreldri þitt stjórnar vafranum</translation>
 <translation id="4027569221211770437">Mappa: <ph name="FOLDER_TITLE" /></translation>
 <translation id="4034817413553209278">{HOURS,plural, =1{# klst.}one{# klst.}other{# klst.}}</translation>
@@ -745,13 +745,13 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="4180726336228139707">Aðeins í þessu tæki</translation>
 <translation id="4181841719683918333">Tungumál</translation>
 <translation id="4188221736490993796">Flokka frá Ö til A</translation>
-<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{Chrome kom í veg fyrir að þetta vefsvæði sendi tilkynningar vegna ruslefnis eða blekkjandi efnis}one{Chrome kom í veg fyrir að þessi vefsvæði sendi tilkynningar vegna ruslefnis eða blekkjandi efnis}other{Chrome kom í veg fyrir að þessi vefsvæði sendi tilkynningar vegna ruslefnis eða blekkjandi efnis}}</translation>
+<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{Ultimatum kom í veg fyrir að þetta vefsvæði sendi tilkynningar vegna ruslefnis eða blekkjandi efnis}one{Ultimatum kom í veg fyrir að þessi vefsvæði sendi tilkynningar vegna ruslefnis eða blekkjandi efnis}other{Ultimatum kom í veg fyrir að þessi vefsvæði sendi tilkynningar vegna ruslefnis eða blekkjandi efnis}}</translation>
 <translation id="4195643157523330669">Opna í nýjum flipa</translation>
 <translation id="4197828496439691735">{NUM_TABS,plural, =1{1 flipi í þessu tæki}one{# flipi í þessu tæki}other{# flipar í þessu tæki}}</translation>
 <translation id="4198268995694216131">Önnur vefsvæði</translation>
 <translation id="4198423547019359126">Engar tiltækar niðurhalsstaðsetningar</translation>
 <translation id="4209029522667123437"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> • Áður notað á þessu vefsvæði</translation>
-<translation id="4214315110991671325">Chrome kann að nota fótspor við forhleðslu ef þú leyfir fótspor.</translation>
+<translation id="4214315110991671325">Ultimatum kann að nota fótspor við forhleðslu ef þú leyfir fótspor.</translation>
 <translation id="421517251707893998">Ýttu á „Festa þessa flýtileið“</translation>
 <translation id="4216511743389425832">Hlusta á þessa síðu</translation>
 <translation id="4217657297368492684"><ph name="TAB_TITLE" />, valinn festur huliðsflipi með mynd í mynd</translation>
@@ -759,7 +759,7 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="4225895483398857530">Flýtileið á tækjastiku</translation>
 <translation id="4232376164796433044">Aðgangsorð og sjálfvirk útfylling</translation>
 <translation id="4242533952199664413">Opna stillingar</translation>
-<translation id="424864128008805179">Viltu skrá þig út úr Chrome?</translation>
+<translation id="424864128008805179">Viltu skrá þig út úr Ultimatum?</translation>
 <translation id="4249955472157341256">Raða eftir nýjasta</translation>
 <translation id="4255841059940367080">Vörn í rauntíma, knúin af gervigreind, gegn hættulegum vefsvæðum, niðurhali og viðbótum sem byggir á vefskoðunargögnunum þínum sem eru send til Google</translation>
 <translation id="4256782883801055595">Leyfi opins kóða</translation>
@@ -768,7 +768,7 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="4270730597186910506">Kveiktu eða slökktu á rakningu vöru.</translation>
 <translation id="4277529130885813215">Nota annað tæki</translation>
 <translation id="427987768447457592">Nýr flipahópur</translation>
-<translation id="4282440837784183472">Fyrirtækið þitt, <ph name="MANAGED_DOMAIN" />, stjórnar reikningnum sem þú ert að skrá þig inn á og því hvernig hægt er að nota Chrome. Stjórnandinn getur sett upp eða takmarkað tiltekna eiginleika.</translation>
+<translation id="4282440837784183472">Fyrirtækið þitt, <ph name="MANAGED_DOMAIN" />, stjórnar reikningnum sem þú ert að skrá þig inn á og því hvernig hægt er að nota Ultimatum. Stjórnandinn getur sett upp eða takmarkað tiltekna eiginleika.</translation>
 <translation id="4283234489712362947"><ph name="TAB_TITLE" />, huliðsflipi með mynd-í-mynd</translation>
 <translation id="4285498937028063278">Losa</translation>
 <translation id="4285846616383034558">Fótspor, skyndiminni og önnur vefsvæðagögn</translation>
@@ -784,10 +784,10 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="4311652497846705514">Opna PDF-skrá?</translation>
 <translation id="4313895677475587452">{NUM_SUSPICIOUS_NOTIFICATIONS,plural, =1{Mögulegt ruslefni}one{Mögulegt ruslefni (#)}other{Mögulegt ruslefni (#)}}</translation>
 <translation id="4320177379694898372">Engin nettenging</translation>
-<translation id="4326079409704643112">Staðfestu að þetta sért þú til að nota og vista Chrome-gögn á Google-reikningnum þínum</translation>
+<translation id="4326079409704643112">Staðfestu að þetta sért þú til að nota og vista Ultimatum-gögn á Google-reikningnum þínum</translation>
 <translation id="433213510553688132">Fylgist með...</translation>
 <translation id="4335835283689002019">Slökkt er á öruggri vefnotkun</translation>
-<translation id="4343250402091037179">Til að leita á ákveðnu vefsvæði eða á hluta Chrome skaltu slá flýtileiðina inn í veffangastikuna og ýta svo á valinn flýtilykil.</translation>
+<translation id="4343250402091037179">Til að leita á ákveðnu vefsvæði eða á hluta Ultimatum skaltu slá flýtileiðina inn í veffangastikuna og ýta svo á valinn flýtilykil.</translation>
 <translation id="4351244548802238354">Loka glugga</translation>
 <translation id="4352287748243729941">Nota <ph name="PROVIDER" />-aðgangsorðið þitt?</translation>
 <translation id="4355272626458588338">Þú getur komist aftur á mikilvæga síðu á einfaldan hátt með því að setja inn bókamerki</translation>
@@ -800,7 +800,7 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="4384468725000734951">Notar Sogou fyrir leit</translation>
 <translation id="4387647248986092471">Búa til prófíllás fyrir bílinn</translation>
 <translation id="4387817230000841154">Opna niðurhal</translation>
-<translation id="4395046795145457714">Val um að taka þátt í „Chrome finnur“ opnað í fullri hæð</translation>
+<translation id="4395046795145457714">Val um að taka þátt í „Ultimatum finnur“ opnað í fullri hæð</translation>
 <translation id="4398561997852463382"><ph name="TAB_TITLE" />, valinn festur huliðsflipi sem er að taka upp</translation>
 <translation id="4402611456429872546"><ph name="LANG" /> - Sækir…</translation>
 <translation id="4404568932422911380">Engin bókamerki</translation>
@@ -822,16 +822,16 @@ Aðeins einstaklingar sem eru með aðgangsorðið þitt geta lesið dulkóðuð
 <translation id="4460822871039013969"><ph name="TAB_TITLE" />, valinn festur upptökuflipi</translation>
 <translation id="4460861538906892109">{ITEMS_COUNT,plural, =1{Eitt bókamerki}one{# bókamerki}other{# bókamerki}}</translation>
 <translation id="4478161224666880173">Þú getur notað <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />-reikninginn þinn á þessu vefsvæði. Skráðu þig inn á <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> til að halda áfram.</translation>
-<translation id="4479972344484327217">Setur upp <ph name="MODULE" /> fyrir Chrome…</translation>
+<translation id="4479972344484327217">Setur upp <ph name="MODULE" /> fyrir Ultimatum…</translation>
 <translation id="4484496141267039529">Engin tenging. Reyndu aftur síðar.</translation>
-<translation id="4487967297491345095">Öllum forritsgögnum Chrome verður eytt fyrir fullt og allt. Þar með taldar eru allar skrár, stillingar, reikningar, gagnagrunnar o.s.frv.</translation>
+<translation id="4487967297491345095">Öllum forritsgögnum Ultimatum verður eytt fyrir fullt og allt. Þar með taldar eru allar skrár, stillingar, reikningar, gagnagrunnar o.s.frv.</translation>
 <translation id="4494315997125191493">Velja „stjórna“ til að sjá alla glugga</translation>
 <translation id="4494806687727322324">Stjórnandinn þinn hefur kveikt á vistun á aðgangsorðum</translation>
 <translation id="4508528996305412043">Kortavalmynd straums er opin</translation>
 <translation id="4509741852167209430">Tilteknum gerðum gagna er deilt á milli vefsvæða til að mæla árangur auglýsinga þeirra, t.d. hvort þú hafir keypti vöru eftir að hafa skoðað vefsvæði</translation>
 <translation id="4513387527876475750">{DAYS,plural, =1{Fyrir # degi}one{Fyrir # degi}other{Fyrir # dögum}}</translation>
 <translation id="451872707440238414">Leita í bókamerkjunum þínum</translation>
-<translation id="4521489764227272523">Völdu gögnin hafa verið fjarlægð af Chrome og samstilltum tækjum.
+<translation id="4521489764227272523">Völdu gögnin hafa verið fjarlægð af Ultimatum og samstilltum tækjum.
 
 Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, svo sem yfir leit og virkni í annarri þjónustu Google, á <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="4523326818319942067">síðustu klukkustund</translation>
@@ -853,10 +853,10 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="4595276580892809760">Hengja myndir úr myndasafni við</translation>
 <translation id="4595805675102978678">Villa í Google-reikningi</translation>
 <translation id="4601095002996233687">Ítarleg leit að grunsamlegu niðurhali.</translation>
-<translation id="4606559747793337066">Þegar vefsvæði eða forrit biður um að forhlaða tenglum á síðu sinni í lokaðri stillingu mun Chrome dulkóða og forhlaða síðunum á Google-þjónum, án fótspora. Þetta kemur í veg fyrir að forhlaðna vefsvæðið geti auðkennt þig.</translation>
+<translation id="4606559747793337066">Þegar vefsvæði eða forrit biður um að forhlaða tenglum á síðu sinni í lokaðri stillingu mun Ultimatum dulkóða og forhlaða síðunum á Google-þjónum, án fótspora. Þetta kemur í veg fyrir að forhlaðna vefsvæðið geti auðkennt þig.</translation>
 <translation id="4616150815774728855">Opna <ph name="WEBAPK_NAME" /></translation>
 <translation id="4619564267100705184">Staðfestu hver þú ert</translation>
-<translation id="4624065194742029982">Huliðsstilling Chrome</translation>
+<translation id="4624065194742029982">Huliðsstilling Ultimatum</translation>
 <translation id="4634124774493850572">Nota aðgangsorð</translation>
 <translation id="463471994228293091">{PASSWORDS_COUNT,plural, =1{Eitt aðgangsorð og fleiri atriði eru aðeins vistuð í þessu tæki. Til að nota þau í öðrum tækjum skaltu vista þau á Google-reikningnum þínum.}one{# aðgangsorð og fleiri atriði eru aðeins vistuð í þessu tæki. Til að nota þau í öðrum tækjum skaltu vista þau á Google-reikningnum þínum.}other{# aðgangsorð og fleiri atriði eru aðeins vistuð í þessu tæki. Til að nota þau í öðrum tækjum skaltu vista þau á Google-reikningnum þínum.}}</translation>
 <translation id="4640331037679501949">{NUM_PASSWORDS,plural, =1{1 aðgangsorð í hættu}one{# aðgangsorð í hættu}other{# aðgangsorð í hættu}}</translation>
@@ -871,7 +871,7 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="4668347365065281350">Öll gögn sem vefsvæði geyma, þar á meðal fótspor og önnur gögn sem eru vistuð í tækinu</translation>
 <translation id="4673702426794876519">Huliðsgluggi</translation>
 <translation id="4675298276894277358">Þetta vefsvæði verður ekki sýnt aftur</translation>
-<translation id="4678082183394354975">Kveikt er á dökku þema fyrir vefsvæði í Chrome</translation>
+<translation id="4678082183394354975">Kveikt er á dökku þema fyrir vefsvæði í Ultimatum</translation>
 <translation id="4682306524980568490">Aðeins er hægt að sýna <ph name="MAX_INSTANCE_COUNT" /> glugga</translation>
 <translation id="4684427112815847243">Samstilla allt</translation>
 <translation id="4685741273709472646">Velja af fellilistanum</translation>
@@ -893,7 +893,7 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="4738836084190194332">Síðast samstillt: <ph name="WHEN" /></translation>
 <translation id="474121291218385686">Sía eftir forriti</translation>
 <translation id="4741753828624614066">Þú færð betri tillögur í veffangastikunni</translation>
-<translation id="4742795653798179840">Chrome-gögnum var eytt</translation>
+<translation id="4742795653798179840">Ultimatum-gögnum var eytt</translation>
 <translation id="4742970037960872810">Fjarlægja áherslumerkingu</translation>
 <translation id="4749960740855309258">Opna nýjan flipa</translation>
 <translation id="4753600213727157212">Skráð(ur) inn sem <ph name="USER_NAME" />. <ph name="USER_EMAIL" />. Villa á Google-reikningi. Opnar stillingar.</translation>
@@ -911,21 +911,21 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="4782929588435725897"><ph name="SEARCH_ENGINE" /> er sjálfgefin leitarvél þín.</translation>
 <translation id="4784349455504343791"><ph name="WEBSITE_ORIGIN" /> biður um að fá að nota persónuupplýsingar úr stafræna veskinu þínu.</translation>
 <translation id="4787736314074622408">Viltu eyða <ph name="ITEM_TITLE" />?</translation>
-<translation id="4793679854893018356">Kynntu þér hvernig Chrome gætir að öryggi þínu</translation>
+<translation id="4793679854893018356">Kynntu þér hvernig Ultimatum gætir að öryggi þínu</translation>
 <translation id="4794291718671962615">(<ph name="MEGABYTES" />) <ph name="URL" /></translation>
 <translation id="4807098396393229769">Nafn á korti</translation>
 <translation id="480990236307250886">Opna heimasíðuna</translation>
 <translation id="4822710610088666676"><ph name="TAB_GROUP_TITLE" /> flipahópur lokaður og vistaður</translation>
 <translation id="482405935591409882">Leitaðu í flipunum og hópunum þínum</translation>
 <translation id="4834250788637067901">Greiðslumátar, tilboð og heimilisföng sem nota Google Pay</translation>
-<translation id="4835385943915508971">Chrome hefur ekki aðgang að umbeðnu tilfangi.</translation>
+<translation id="4835385943915508971">Ultimatum hefur ekki aðgang að umbeðnu tilfangi.</translation>
 <translation id="483742037940503070">{TAB_COUNT,plural, =1{Endurheimta flipahóp í litnum „<ph name="COLOR_NAME" />“ með <ph name="TAB_COUNT_ONE" /> flipa sem nýjan flipahóp í bakgrunni.}one{Endurheimta flipahóp í litnum „<ph name="COLOR_NAME" />“ með <ph name="TAB_COUNT_MANY" /> flipa sem nýjan flipahóp í bakgrunni.}other{Endurheimta flipahóp í litnum „<ph name="COLOR_NAME" />“ með <ph name="TAB_COUNT_MANY" /> flipum sem nýjan flipahóp í bakgrunni.}}</translation>
 <translation id="4849731766219625109">Notaðu <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />-reikninginn þinn</translation>
 <translation id="4850886885716139402">Yfirlit</translation>
 <translation id="4852014461738377247">Skráir inn\u2026</translation>
 <translation id="4860895144060829044">Hringja</translation>
 <translation id="4864369630010738180">Skráir inn...</translation>
-<translation id="4866368707455379617">Ekki tókst að setja upp <ph name="MODULE" /> fyrir Chrome</translation>
+<translation id="4866368707455379617">Ekki tókst að setja upp <ph name="MODULE" /> fyrir Ultimatum</translation>
 <translation id="4871568871368204250">Slökkva á samstillingu</translation>
 <translation id="487567923005969537">Kveikja á gervigreindarstillingu</translation>
 <translation id="4875775213178255010">Tillögur að efni</translation>
@@ -934,27 +934,27 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="4880127995492972015">Þýða…</translation>
 <translation id="4881695831933465202">Opna</translation>
 <translation id="488187801263602086">Endurnefna skrá</translation>
-<translation id="4885273946141277891">Óstuddur fjöldi Chrome tilvika.</translation>
+<translation id="4885273946141277891">Óstuddur fjöldi Ultimatum tilvika.</translation>
 <translation id="4890973535105146893">Engin vistuð aðgangsorð á Google-reikningnum þínum</translation>
 <translation id="4905823827770127520">Hafa með tengil á síðuna</translation>
 <translation id="4908869848243824489">Tillögur frá Google</translation>
 <translation id="4910889077668685004">Greiðsluforrit</translation>
 <translation id="4911042367886397055">Velkomin(n) til baka, <ph name="USER_NAME" />!</translation>
 <translation id="4913169188695071480">Hætta að endurnýja</translation>
-<translation id="4921224083091001889">Skráðu þig inn á Chrome sem <ph name="EMAIL" /> til að fá aðgang að aðgangsorðum og fleiru í öllum tækjunum þínum</translation>
+<translation id="4921224083091001889">Skráðu þig inn á Ultimatum sem <ph name="EMAIL" /> til að fá aðgang að aðgangsorðum og fleiru í öllum tækjunum þínum</translation>
 <translation id="4923173329789776645">Fyrirtækið þitt mælir ekki með niðurhali</translation>
 <translation id="4925120120285606924">Skjámynd <ph name="CURRENT_DATE_ISO" /></translation>
 <translation id="4926901776383726965">Þú getur vistað myndir og skrár til að skoða án nettengingar eða deila í öðrum forritum</translation>
 <translation id="492699891214363151">{BOOKMARKS_COUNT,plural, =1{Eitt bókamerki og fleiri atriði eru aðeins vistuð í þessu tæki. Til að nota þau í öðrum tækjum skaltu vista þau á Google-reikningnum þínum.}one{# bókamerki og fleiri atriði eru aðeins vistuð í þessu tæki. Til að nota þau í öðrum tækjum skaltu vista þau á Google-reikningnum þínum.}other{# bókamerki og fleiri atriði eru aðeins vistuð í þessu tæki. Til að nota þau í öðrum tækjum skaltu vista þau á Google-reikningnum þínum.}}</translation>
-<translation id="4932247056774066048">Þar sem þú ert að skrá þig út af reikningi sem er stjórnað af <ph name="DOMAIN_NAME" /> verður Chrome gögnum þínum eytt úr þessu tæki. Þau verða áfram á Google reikningnum þínum.</translation>
+<translation id="4932247056774066048">Þar sem þú ert að skrá þig út af reikningi sem er stjórnað af <ph name="DOMAIN_NAME" /> verður Ultimatum gögnum þínum eytt úr þessu tæki. Þau verða áfram á Google reikningnum þínum.</translation>
 <translation id="4943703118917034429">Sýndarveruleiki</translation>
 <translation id="4943872375798546930">Engar niðurstöður</translation>
 <translation id="4957722034734105353">Frekari upplýsingar...</translation>
 <translation id="4959115606310463263">Innskráningarblað neðst opið í hálfri hæð</translation>
 <translation id="4961107849584082341">Þýddu þessa síðu yfir á hvaða tungumál sem er</translation>
-<translation id="4964614743143953889">Chrome varar þig við ótraustum vefsvæðum og niðurhali</translation>
+<translation id="4964614743143953889">Ultimatum varar þig við ótraustum vefsvæðum og niðurhali</translation>
 <translation id="496607651705915226">Til að vista og nota ný aðgangsorð á Google-reikningnum þínum skaltu uppfæra þjónustu Google Play.</translation>
-<translation id="4971753085054504448">Prófaðu að leita að einhverju öðru eða opnaðu Chrome-feril í heild sinni til að sjá fleiri niðurstöður.</translation>
+<translation id="4971753085054504448">Prófaðu að leita að einhverju öðru eða opnaðu Ultimatum-feril í heild sinni til að sjá fleiri niðurstöður.</translation>
 <translation id="497421865427891073">Áfram</translation>
 <translation id="497983151715419057">Skoðaðu óvirku flipana og flipahópana þína hér</translation>
 <translation id="498624032394115435">Allir með tengilinn geta breytt öllum flipum.</translation>
@@ -981,7 +981,7 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="506254248375231072">Engir flipar</translation>
 <translation id="5075939510584558547">Vista án dulkóðunar</translation>
 <translation id="5078638979202084724">Bókamerkja alla flipa</translation>
-<translation id="5085038751173179818">Skráðu þig inn á þetta vefsvæði og Chrome til að fá bókamerkin þín og fleira í öll tækin þín</translation>
+<translation id="5085038751173179818">Skráðu þig inn á þetta vefsvæði og Ultimatum til að fá bókamerkin þín og fleira í öll tækin þín</translation>
 <translation id="5088347662971855383">Festa Gemini</translation>
 <translation id="5091199029769593641">Fljótlega sérðu sögur frá <ph name="SITE_NAME" /> þegar þú opnar nýjan flipa. Vefsvæði sem þú fylgir eru vistuð á Google reikningnum þínum. Þú getur stjórnað þeim í stillingum Tillagna.</translation>
 <translation id="509429900233858213">Villa kom upp.</translation>
@@ -989,7 +989,7 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="510275257476243843">Ein klst. eftir</translation>
 <translation id="5114895953710637392">Síublað forrita er lokað.</translation>
 <translation id="5115811374190515607"><ph name="PRODUCT_NAME" /></translation>
-<translation id="5116239826668864748">Þú getur notað Chrome til að opna tengla úr skilaboðum, skjölum og öðrum forritum hvenær sem er</translation>
+<translation id="5116239826668864748">Þú getur notað Ultimatum til að opna tengla úr skilaboðum, skjölum og öðrum forritum hvenær sem er</translation>
 <translation id="5118713593561876160">Áhugasvið</translation>
 <translation id="5122378528687922675">Ef þú þarft aðstoð skaltu biðja foreldri um hjálp (<ph name="PARENT_NAME_1" /> eða <ph name="PARENT_NAME_2" />)</translation>
 <translation id="5123685120097942451">Huliðsflipi</translation>
@@ -1012,11 +1012,11 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="5206168361184759344">{FILE_COUNT,plural, =1{Sækir skrá…}one{Sækir # skrá…}other{Sækir # skrár…}}</translation>
 <translation id="5210286577605176222">Stökkva í fyrri flipa</translation>
 <translation id="5210365745912300556">Loka flipa</translation>
-<translation id="5212800876504289412">Endurræstu Chrome til að ljúka breytingunni. Flipar opnast sjálfkrafa þegar þú endurræsir.</translation>
+<translation id="5212800876504289412">Endurræstu Ultimatum til að ljúka breytingunni. Flipar opnast sjálfkrafa þegar þú endurræsir.</translation>
 <translation id="5213114823401215820">Enduropna lokaðan hóp</translation>
 <translation id="5215957675041756913">Stjórnaðu gögnunum og reikningnum þínum</translation>
 <translation id="5218324087477576825">Kortanúmer, áskilið</translation>
-<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> og fleiri <ph name="SEPARATOR" /> Chrome fjarlægði þessar heimildir því þú hefur ekki heimsótt nýlega</translation>
+<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> og fleiri <ph name="SEPARATOR" /> Ultimatum fjarlægði þessar heimildir því þú hefur ekki heimsótt nýlega</translation>
 <translation id="5222676887888702881">Skrá út</translation>
 <translation id="5226378907213531272">Þú tekur skjáinn úr lás í hvert skipti sem þú notar bílinn</translation>
 <translation id="5227554086496586518">Ýttu til að sjá leitarniðurstöður</translation>
@@ -1036,7 +1036,7 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="5313967007315987356">Bæta vefsvæði við</translation>
 <translation id="5316947901395241499">Stjórnandinn þinn hefur slökkt á vistun á aðgangsorðum</translation>
 <translation id="5317780077021120954">Vista</translation>
-<translation id="5319359161174645648">Google mælir með Chrome</translation>
+<translation id="5319359161174645648">Google mælir með Ultimatum</translation>
 <translation id="5326246328175179736">Þú getur ekki skráð þig inn með þessum reikningi</translation>
 <translation id="5327248766486351172">Heiti</translation>
 <translation id="5328542107300944283">Notaðu þetta með <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
@@ -1049,7 +1049,7 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="5375374982898812658">Þú munt umsvifalaust missa aðgang að flipahópnum „<ph name="GROUP_NAME" />“ og honum verður eytt úr öllum tækjunum þínum</translation>
 <translation id="5375577065097716013">Leita að mynd með Google linsu <ph name="BEGIN_NEW" />Nýtt<ph name="END_NEW" /></translation>
 <translation id="5390367025924544771"><ph name="WEBSITE_ORIGIN" /> biður um að fá að nota persónuupplýsingar úr stafræna veskinu þínu. Haltu eingöngu áfram ef þú treystir vefsvæðinu. Skaðleg vefsvæði gætu reynt að blekkja þig til að afhjúpa upplýsingar á borð við fullt nafn þitt eða kennitölu.</translation>
-<translation id="5395376160638294582">Gakktu úr skugga um að þú getir alltaf notað Chrome-gögnin á Google-reikningnum þínum</translation>
+<translation id="5395376160638294582">Gakktu úr skugga um að þú getir alltaf notað Ultimatum-gögnin á Google-reikningnum þínum</translation>
 <translation id="539881862970320163">Tillaga að traustu aðgangsorði. Lyklaborð er falið.</translation>
 <translation id="5409881200985013443">Senda <ph name="ONE_TIME_CODE" /> á <ph name="CLIENT_NAME" />?</translation>
 <translation id="5410300144953132176"><ph name="OWNER_FULL_NAME" /> (<ph name="OWNER_EMAIL" />) vill að þú takir þátt í flipahópi. Sýndu aðgát þegar þú tekur þátt þar sem allir með tengilinn geta breytt öllum flipum. Tengillinn rennur út eftir tvo sólarhringa.</translation>
@@ -1061,7 +1061,7 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="543271133149552180"><ph name="TAB_TITLE" />, margvalinn huliðsflipi með mynd í mynd</translation>
 <translation id="5436928407363358055">Samstilltu ferilinn þinn og flipa til að halda áfram þaðan sem frá var horfið með einföldum hætti</translation>
 <translation id="5438292632479953702">Sækja aftur</translation>
-<translation id="5439191312780166229">Varar þig við hættulegum vefsvæðum, jafnvel þeim sem Google hafði enga vitneskju um, með því að greina fleiri gögn frá vefsvæðum en hefðbundin vörn. Þú getur valið að sleppa Chrome-viðvörunum.</translation>
+<translation id="5439191312780166229">Varar þig við hættulegum vefsvæðum, jafnvel þeim sem Google hafði enga vitneskju um, með því að greina fleiri gögn frá vefsvæðum en hefðbundin vörn. Þú getur valið að sleppa Ultimatum-viðvörunum.</translation>
 <translation id="5441137934526263133">Virkar vefsvæðið ekki? Lokað er á fótspor frá þriðju aðilum</translation>
 <translation id="5441466871879044658">Þýða yfir á þetta tungumál</translation>
 <translation id="5444999712122199445">Fara aftur á vefsvæði</translation>
@@ -1072,7 +1072,7 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="5469852975082458401">Þú getur skoðað síður með textabendli. Ýttu á F7 til að slökkva.</translation>
 <translation id="5471273988133666918">Ekki er hægt að færa flipann „<ph name="TAB_TITLE" />“</translation>
 <translation id="548278423535722844">Opna í kortaforriti</translation>
-<translation id="5489222148748465285">Viltu að Chrome haldi áfram að leita?</translation>
+<translation id="5489222148748465285">Viltu að Ultimatum haldi áfram að leita?</translation>
 <translation id="5490848366863949315"><ph name="TAB_TITLE" />, margvalinn mynd-í-mynd-flipi</translation>
 <translation id="5494920125229734069">Velja allt</translation>
 <translation id="549660026907543296">Taka þátt sem <ph name="MEMBER_FULL_NAME" /></translation>
@@ -1080,7 +1080,7 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="5526281268548144413">Ekki hægt að loka í mörgum gluggum</translation>
 <translation id="5532536403031755365">Notaðu aukna vörn til að verjast ógnum á netinu af enn meiri krafti</translation>
 <translation id="5548606607480005320">Öryggisathugun</translation>
-<translation id="5554520618550346933">Þegar þú notar aðgangsorð varar Chrome þig við ef það hefur verið birt á netinu. Meðan á þessu stendur eru aðgangsorðin þín og notandanöfnin dulkóðuð svo enginn geti lesið þau, þ.m.t. Google.</translation>
+<translation id="5554520618550346933">Þegar þú notar aðgangsorð varar Ultimatum þig við ef það hefur verið birt á netinu. Meðan á þessu stendur eru aðgangsorðin þín og notandanöfnin dulkóðuð svo enginn geti lesið þau, þ.m.t. Google.</translation>
 <translation id="5555525474779371165">Veldu vernd öruggrar vefskoðunar</translation>
 <translation id="5556459405103347317">Endurhlaða</translation>
 <translation id="555671485580955310">Samstilla feril og flipa</translation>
@@ -1093,10 +1093,10 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="5578795271662203820">Leita að þessari mynd á <ph name="SEARCH_ENGINE" /></translation>
 <translation id="5596627076506792578">Fleiri valkostir</translation>
 <translation id="5599455543593328020">Huliðsstilling</translation>
-<translation id="5601180634394228718">Til að skoða fleiri stillingar sem nota gögn til að bæta Chrome-upplifunina þína skaltu fara í <ph name="BEGIN_LINK" />Google-þjónustur<ph name="END_LINK" />.</translation>
+<translation id="5601180634394228718">Til að skoða fleiri stillingar sem nota gögn til að bæta Ultimatum-upplifunina þína skaltu fara í <ph name="BEGIN_LINK" />Google-þjónustur<ph name="END_LINK" />.</translation>
 <translation id="5601924940067278327">Sæktu flipana þína og fleira í öllum tækjunum þínum</translation>
 <translation id="5611398002774823980">Vista á reikningi</translation>
-<translation id="5613381935190035031">Skráðu þig inn á Chrome sem <ph name="EMAIL" /> til að fá aðgang að flipunum þínum og fleiru í öllum tækjunum þínum</translation>
+<translation id="5613381935190035031">Skráðu þig inn á Ultimatum sem <ph name="EMAIL" /> til að fá aðgang að flipunum þínum og fleiru í öllum tækjunum þínum</translation>
 <translation id="5614625640221885312">Skráðu þig inn til að sækja bókamerkin þín, aðgangsorð og fleira í öllum tækjunum þínum</translation>
 <translation id="5619633276517849615">Fyrirtækið þitt kveikti á öruggri vefskoðun</translation>
 <translation id="5620163320393916465">Engin vistuð aðgangsorð</translation>
@@ -1112,21 +1112,21 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="5657871969392618475">Upplýsingunum þínum er læst með prófíllás</translation>
 <translation id="5659593005791499971">Netfang</translation>
 <translation id="5665379678064389456">Búa til viðburð í <ph name="APP_NAME" /></translation>
-<translation id="5683547024293500885">Chrome getur ekki leitað að uppfærslum.</translation>
+<translation id="5683547024293500885">Ultimatum getur ekki leitað að uppfærslum.</translation>
 <translation id="5683916195767086779">Flipahópur</translation>
 <translation id="5686790454216892815">Skráarheiti of langt</translation>
 <translation id="569536719314091526">Notaðu hnappinn „Fleiri valkostir“ til að þýða þessa síðu yfir á hvaða tungumál sem er</translation>
-<translation id="5696597120588531049">Chrome getur veitt þér vernd gegn öryggisbrotum, hættulegum vefsvæðum og fleira</translation>
+<translation id="5696597120588531049">Ultimatum getur veitt þér vernd gegn öryggisbrotum, hættulegum vefsvæðum og fleira</translation>
 <translation id="5698878456427040674">Kannaðu hvort valinn reikningur er studdur.</translation>
 <translation id="5709213329446699338"><ph name="SITE" /> vill tengjast við raðtengi</translation>
 <translation id="5715150588940290235">Eyða vistuðum öryggisnúmerum?</translation>
-<translation id="571930967925877633">Bókamerkin þín, ferillinn og önnur gögn úr Chrome verða ekki lengur samstillt við Google reikninginn þinn</translation>
+<translation id="571930967925877633">Bókamerkin þín, ferillinn og önnur gögn úr Ultimatum verða ekki lengur samstillt við Google reikninginn þinn</translation>
 <translation id="572328651809341494">Nýlegir flipar</translation>
 <translation id="5728072125198221967">Tengdar Google-þjónustur</translation>
 <translation id="5734658507307260911"><ph name="TAB_TITLE" />, festur huliðsflipi með hljóði</translation>
 <translation id="5744751019568455640">Hér eru raddirnar sem þú getur valið um til að lesa af vefsíðunum þínum. Ef þér líkar við þessa rödd og vilt að ég haldi áfram að nota hana skaltu ýta á heiti raddarinnar.</translation>
 <translation id="574845902699630049">Deilir sem <ph name="OWNER_FULL_NAME" /></translation>
-<translation id="5749068826913805084">Chrome þarf aðgang að geymslu til að geta sótt skrár.</translation>
+<translation id="5749068826913805084">Ultimatum þarf aðgang að geymslu til að geta sótt skrár.</translation>
 <translation id="5749237766298580851">Slökkt <ph name="SEPARATOR" /> Ekki mælt með</translation>
 <translation id="5752232708629533680">Aðeins deila GIF</translation>
 <translation id="5753570386948603678">Eyða úr ferli</translation>
@@ -1145,14 +1145,14 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="5811144606237321538"><ph name="TAB_TITLE" />, margvalinn festur flipi með slökkt á hljóði</translation>
 <translation id="5814749351757353073">Fylgstu með uppáhalds vefsvæðunum þínum</translation>
 <translation id="5823093032261493462">Viltu samt sækja „<ph name="FILE_NAME" />“ úr <ph name="DOWNLOAD_DOMAIN" />?</translation>
-<translation id="5825135637446025843">Þegar Chrome hefur verið endurræst verða upplýsingarnar sem eru vistaðar frá nýju þjónustuveitunni þinni notaðar til að fylla aðgangsorð, aðgangslykla, heimilisföng, greiðslumáta og aðrar upplýsingar sjálfkrafa út.</translation>
-<translation id="5828921839638612740">Þú getur eytt gögnum í stillingum Chrome</translation>
+<translation id="5825135637446025843">Þegar Ultimatum hefur verið endurræst verða upplýsingarnar sem eru vistaðar frá nýju þjónustuveitunni þinni notaðar til að fylla aðgangsorð, aðgangslykla, heimilisföng, greiðslumáta og aðrar upplýsingar sjálfkrafa út.</translation>
+<translation id="5828921839638612740">Þú getur eytt gögnum í stillingum Ultimatum</translation>
 <translation id="5829586821381540080">Vistað í <ph name="FOLDER_NAME" /></translation>
 <translation id="583281660410589416">Óþekkt</translation>
 <translation id="5833984609253377421">Deila tengli</translation>
-<translation id="5839058148541733625">Chrome Dino</translation>
+<translation id="5839058148541733625">Ultimatum Dino</translation>
 <translation id="5841444063256914865">Viltu samt sækja „<ph name="FILE_NAME" />“?</translation>
-<translation id="5847265694842662173">Chrome kom í veg fyrir að brotleg eða ónotuð vefsvæði sendi tilkynningar</translation>
+<translation id="5847265694842662173">Ultimatum kom í veg fyrir að brotleg eða ónotuð vefsvæði sendi tilkynningar</translation>
 <translation id="5848257610304005265">Opna PDF-skrá í <ph name="APP_NAME" />?</translation>
 <translation id="5849288995120328556">Hætta að deila?</translation>
 <translation id="5853623416121554550">hlé</translation>
@@ -1166,8 +1166,8 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="5865733239029070421">Sendir sjálfkrafa talnagögn um notkun og tilkynningar um hrun til Google</translation>
 <translation id="5869522115854928033">Vistuð aðgangsorð</translation>
 <translation id="5870416898561279542">Tvíteknir flipar og hópar eða þeir sem hafa ekki verið notaðir í <ph name="DAYS_INACTIVE" /> daga eru færðir hingað<ph name="AUTODELETE_SECTION" />. Þú getur breytt þessu hvenær sem er í <ph name="DECLUTTER_SETTINGS_TITLE" />.</translation>
-<translation id="587735546353481577">Til að fylgja vefsvæði skaltu opna vefsvæðið, opna Chrome valmyndina og smella á „Fylgja“.</translation>
-<translation id="5885378508678660271">Tilkynningar <ph name="SEPARATOR" /> Chrome fjarlægði þessar heimildir því að þetta vefsvæði er hættulegt</translation>
+<translation id="587735546353481577">Til að fylgja vefsvæði skaltu opna vefsvæðið, opna Ultimatum valmyndina og smella á „Fylgja“.</translation>
+<translation id="5885378508678660271">Tilkynningar <ph name="SEPARATOR" /> Ultimatum fjarlægði þessar heimildir því að þetta vefsvæði er hættulegt</translation>
 <translation id="5899667542927581604">Blaðinu „Engir aðgangslyklar“ var lokað</translation>
 <translation id="5907542076239273525">Bókamerki vistað í <ph name="FOLDER_NAME" /></translation>
 <translation id="5911301511366365629"><ph name="TAB_TITLE" />, valinn huliðsflipi með hljóði</translation>
@@ -1178,23 +1178,23 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="5942872142862698679">Notar Google fyrir leit</translation>
 <translation id="5945035219773565305">Núverandi tillaga:  <ph name="RECOMMENDATION" /></translation>
 <translation id="5951119116059277034">Skoðar síðu í beinni</translation>
-<translation id="5956665950594638604">Opna hjálparmiðstöð Chrome í nýjum flipa</translation>
+<translation id="5956665950594638604">Opna hjálparmiðstöð Ultimatum í nýjum flipa</translation>
 <translation id="59577092665511740">Veldu reikning.</translation>
 <translation id="5958275228015807058">Þú finnur skrár og síður í Niðurhali</translation>
-<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{Chrome kom í veg fyrir að vefsvæði sem þú hefur ekki opnað nýlega sendi þér tilkynningar}one{Chrome kom í veg fyrir að vefsvæði sem þú hefur ekki opnað nýlega sendi þér tilkynningar}other{Chrome kom í veg fyrir að vefsvæði sem þú hefur ekki opnað nýlega sendi þér tilkynningar}}</translation>
+<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{Ultimatum kom í veg fyrir að vefsvæði sem þú hefur ekki opnað nýlega sendi þér tilkynningar}one{Ultimatum kom í veg fyrir að vefsvæði sem þú hefur ekki opnað nýlega sendi þér tilkynningar}other{Ultimatum kom í veg fyrir að vefsvæði sem þú hefur ekki opnað nýlega sendi þér tilkynningar}}</translation>
 <translation id="5962718611393537961">Ýttu til að draga saman</translation>
 <translation id="5964869237734432770">Slökkva á myndlýsingum</translation>
 <translation id="5972844218283131174">Afvelja allt</translation>
 <translation id="5975083100439434680">Minnka aðdrátt</translation>
 <translation id="5977976211062815271">Í þessu tæki</translation>
 <translation id="5978661847409534366">{ITEMS_COUNT,plural, =1{Ein síða á leslistanum þínum}one{# síða á leslistanum þínum}other{# síður á leslistanum þínum}}</translation>
-<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Chrome fjarlægði þessar heimildir því þú hefur ekki heimsótt nýlega</translation>
+<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Ultimatum fjarlægði þessar heimildir því þú hefur ekki heimsótt nýlega</translation>
 <translation id="5995726099713306770">Sækja síðu aftur?</translation>
 <translation id="6000066717592683814">Nota Google áfram</translation>
 <translation id="6000203700195075278">Fylgja aftur</translation>
 <translation id="6011308810877101166">Bæta leitartillögur</translation>
 <translation id="6013305291643746595">Raðað eftir elsta</translation>
-<translation id="6022659036123304283">Gerðu Chrome að þínu</translation>
+<translation id="6022659036123304283">Gerðu Ultimatum að þínu</translation>
 <translation id="6026538407078977628">Birta á öllum skjánum</translation>
 <translation id="6030719887161080597">Stjórna upplýsingum sem vefsvæði nota til að mæla árangur auglýsinga</translation>
 <translation id="6039379616847168523">Stökkva í næsta flipa</translation>
@@ -1223,7 +1223,7 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="6125864963080902918"><ph name="BEGIN_LINK" />Nánari upplýsingar<ph name="END_LINK" /></translation>
 <translation id="6127860394906721547">Opnaðu flipahópinn <ph name="TITLE_OF_GROUP" />, <ph name="COLOR_NAME" /> á litinn, með vefsvæðunum <ph name="URL_LIST" />.</translation>
 <translation id="6130303040046284160">Minnka flipa</translation>
-<translation id="6132075343662013154">Chrome býðst til að vista aðgangsorðið þitt</translation>
+<translation id="6132075343662013154">Ultimatum býðst til að vista aðgangsorðið þitt</translation>
 <translation id="6134168885321518274">Opna leitarstiku</translation>
 <translation id="6135608400322377268">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> flipi}one{<ph name="TAB_COUNT_MANY" /> flipi}other{<ph name="TAB_COUNT_MANY" /> flipar}}</translation>
 <translation id="6137022273846704445">Tungumálið sem <ph name="APP_NAME" /> notar</translation>
@@ -1234,10 +1234,10 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="6146563240635539929">Myndskeið</translation>
 <translation id="614890671148262506">Alltaf leyfa tilkynningar frá þessu vefsvæði</translation>
 <translation id="6150320133806434356">Bókamerki vistað</translation>
-<translation id="6150706324143004339">Til að nota og vista Chrome-gögnin á Google-reikningnum þínum skaltu uppfæra Chrome</translation>
+<translation id="6150706324143004339">Til að nota og vista Ultimatum-gögnin á Google-reikningnum þínum skaltu uppfæra Ultimatum</translation>
 <translation id="6154478581116148741">Kveiktu á skjálás í stillingunum til að flytja aðgangsorðin þín út úr þessu tæki</translation>
 <translation id="6156323911414505561">Sýna bókamerkjastiku</translation>
-<translation id="6162892189396105610">Forhleður síðum sem Chrome telur að þú munir opna.</translation>
+<translation id="6162892189396105610">Forhleður síðum sem Ultimatum telur að þú munir opna.</translation>
 <translation id="6165508094623778733">Frekari upplýsingar</translation>
 <translation id="6170675927290506430">Opna tilkynningastillingar</translation>
 <translation id="6184972259157699660"><ph name="TAB_TITLE" />, huliðsflipi með slökkt á hljóði</translation>
@@ -1246,7 +1246,7 @@ Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil, sv
 <translation id="6193448654517602979">Velja flipa</translation>
 <translation id="6196315980958524839">Aðgangsorð eru vistuð í Google aðgangsorðastjórnun í þessu tæki.</translation>
 <translation id="6202812185118613467">Skráðu þig aftur inn til að hefja samstillingu</translation>
-<translation id="6204781143409202534">Chrome greindi mögulegt ruslefni frá <ph name="DOMAIN" />.</translation>
+<translation id="6204781143409202534">Ultimatum greindi mögulegt ruslefni frá <ph name="DOMAIN" />.</translation>
 <translation id="6205314730813004066">Persónuvernd auglýsinga</translation>
 <translation id="6210282067670792090">Notaðu þennan flýtilykil í veffangastikunni ásamt flýtileiðum fyrir leitarvélar og vefsvæðaleit</translation>
 <translation id="6210748933810148297">Ekki <ph name="EMAIL" />?</translation>
@@ -1260,12 +1260,12 @@ Sum vefsvæði kunna til dæmis að bregðast við beiðninni með því að bir
 <translation id="6247557882553405851">Aðgangsorðastjórnun Google</translation>
 <translation id="6248988683584659830">Leitarstillingar</translation>
 <translation id="6250847299079540062"><ph name="TAB_TITLE" />, margvalinn festur huliðsflipi</translation>
-<translation id="6251449557817521191">Skoða Chrome-ferilinn hér</translation>
+<translation id="6251449557817521191">Skoða Ultimatum-ferilinn hér</translation>
 <translation id="6254139308321626268">Þú ert að skoða PDF-skjal</translation>
-<translation id="6255809143828972562">Með verkfærum Chrome geturðu vafrað á öruggan hátt og verið við stjórnvölinn</translation>
+<translation id="6255809143828972562">Með verkfærum Ultimatum geturðu vafrað á öruggan hátt og verið við stjórnvölinn</translation>
 <translation id="6264376385120300461">Sækja samt</translation>
 <translation id="6264485186158353794">Aftur í öruggt skjól</translation>
-<translation id="6267106249090587268">Tilkynningar <ph name="SEPARATOR" /> Chrome fjarlægði þessar heimildir vegna ruslefnis eða villandi efnis</translation>
+<translation id="6267106249090587268">Tilkynningar <ph name="SEPARATOR" /> Ultimatum fjarlægði þessar heimildir vegna ruslefnis eða villandi efnis</translation>
 <translation id="6276708887952587684">Skoða frumkóða síðu</translation>
 <translation id="6277522088822131679">Vandamál kom upp við að prenta síðuna. Reyndu aftur.</translation>
 <translation id="6278428485366576908">Þema</translation>
@@ -1281,7 +1281,7 @@ Sum vefsvæði kunna til dæmis að bregðast við beiðninni með því að bir
 <translation id="6312687380483398334">Vefforrit (þögult)</translation>
 <translation id="6315386555979018699">Eyða og halda áfram</translation>
 <translation id="6316139424528454185">Android-útgáfa ekki studd</translation>
-<translation id="631839948975905034">Læsa huliðsgluggum þegar þú lokar Chrome</translation>
+<translation id="631839948975905034">Læsa huliðsgluggum þegar þú lokar Ultimatum</translation>
 <translation id="6324916366299863871">Breyta flýtileið</translation>
 <translation id="6324977638108296054">Ekki er hægt að búa til tengil í merktan texta</translation>
 <translation id="6333140779060797560">Deila í gegnum <ph name="APPLICATION" /></translation>
@@ -1297,13 +1297,13 @@ Sum vefsvæði kunna til dæmis að bregðast við beiðninni með því að bir
 <translation id="6356893102071098867">Kannaðu hvort þú hafir valið réttan reikning.</translation>
 <translation id="6363990818884053551">Staðfestu að þetta sért þú til að hefja samstillingu</translation>
 <translation id="6364438453358674297">Fjarlægja tillögu úr ferlinum?</translation>
-<translation id="6380100320871303656">Forhleður oftar síðum sem Chrome telur að þú munir opna. Þessi stilling kann að auka gagnanotkun.</translation>
+<translation id="6380100320871303656">Forhleður oftar síðum sem Ultimatum telur að þú munir opna. Þessi stilling kann að auka gagnanotkun.</translation>
 <translation id="6382848304055775421">Flytur út</translation>
 <translation id="6388152137132427505">Sýndu ávallt aðgát þegar þú deilir. Tenglar renna út eftir tvo sólarhringa.</translation>
 <translation id="6394791151443660613">Leit: <ph name="SEARCH_QUERY" /></translation>
 <translation id="6397616442223433927">Nettenging komin aftur</translation>
 <translation id="6399363707848566877">Nú geturðu bætt flipum við hópa hér með einföldum hætti</translation>
-<translation id="6401458660421980302">Til að senda þennan flipa í annað tæki þarftu að skrá þig þar inn í Chrome</translation>
+<translation id="6401458660421980302">Til að senda þennan flipa í annað tæki þarftu að skrá þig þar inn í Ultimatum</translation>
 <translation id="6404511346730675251">Breyta bókamerki</translation>
 <translation id="6406506848690869874">Samstilling</translation>
 <translation id="6408370409308816490"><ph name="TAB_TITLE" />, valinn festur huliðsflipi í deilingu</translation>
@@ -1323,24 +1323,24 @@ Sum vefsvæði kunna til dæmis að bregðast við beiðninni með því að bir
 <translation id="6452534462676960500">Ný virkni</translation>
 <translation id="6459045781120991510">Kannanir</translation>
 <translation id="6461962085415701688">Ekki hægt að opna skrá</translation>
-<translation id="6464977750820128603">Þú sérð vefsvæðin sem þú opnar í Chrome og velur teljara fyrir þau.\n\nGoogle fær upplýsingar um þau vefsvæði sem þú velur teljara fyrir og hversu lengi þú ert á þeim. Þessar upplýsingar eru notaðar til að bæta virkni stafrænnar vellíðunar.</translation>
+<translation id="6464977750820128603">Þú sérð vefsvæðin sem þú opnar í Ultimatum og velur teljara fyrir þau.\n\nGoogle fær upplýsingar um þau vefsvæði sem þú velur teljara fyrir og hversu lengi þú ert á þeim. Þessar upplýsingar eru notaðar til að bæta virkni stafrænnar vellíðunar.</translation>
 <translation id="6468703991511753953">Veffangastika er neðst eins og stendur</translation>
-<translation id="6470181189905173055">Síðurnar sem þú opnaðir í Chrome á meðan þú varst að nota <ph name="APP_LABEL" /> birtast hér.</translation>
+<translation id="6470181189905173055">Síðurnar sem þú opnaðir í Ultimatum á meðan þú varst að nota <ph name="APP_LABEL" /> birtast hér.</translation>
 <translation id="6473086018775716761">Listi yfir deilingarkosti á hálfum skjánum.</translation>
 <translation id="6475951671322991020">Sækja myndskeið</translation>
 <translation id="6477928892249167417">Þessi vefsvæði virðast vera þér mikilvæg:</translation>
-<translation id="6479881432656947268">Opna Vefverslun Chrome</translation>
-<translation id="6481963882741794338">Tengdu Chrome við aðrar Google-þjónustur til að sérsníða upplifun þína og fleira</translation>
+<translation id="6479881432656947268">Opna Vefverslun Ultimatum</translation>
+<translation id="6481963882741794338">Tengdu Ultimatum við aðrar Google-þjónustur til að sérsníða upplifun þína og fleira</translation>
 <translation id="6482749332252372425"><ph name="FILE_NAME" /> niðurhal mistókst vegna skorts á geymslurými.</translation>
 <translation id="6486420406192123355">Þessi PDF-skrá er af vefsvæði sem notar óörugga tengingu</translation>
 <translation id="650224091954855786">{FILE_COUNT,plural, =1{Skrá sótt}one{# skrá sótt}other{# skrár sóttar}}</translation>
-<translation id="6508722015517270189">Endurræsa Chrome</translation>
+<translation id="6508722015517270189">Endurræsa Ultimatum</translation>
 <translation id="6513924416597632811">Afrita tengil á síðu með niðurstöðum leitarfyrirspurnarinnar: <ph name="SEARCH_QUERY" />. Heimild: <ph name="PAGE_URL" /></translation>
 <translation id="6518133107902771759">Staðfesta</translation>
 <translation id="6521218807522232085">Búðu til, vistaðu og stjórnaðu aðgangsorðunum þínum til að skrá þig inn á einfaldan hátt</translation>
 <translation id="6527303717912515753">Deila</translation>
-<translation id="652948702951888897">Chrome-ferill</translation>
-<translation id="6532866250404780454">Vefsvæði sem þú opnar í Chrome birtast ekki. Öllum teljurum vefsvæða verður eytt.</translation>
+<translation id="652948702951888897">Ultimatum-ferill</translation>
+<translation id="6532866250404780454">Vefsvæði sem þú opnar í Ultimatum birtast ekki. Öllum teljurum vefsvæða verður eytt.</translation>
 <translation id="6539092367496845964">Eitthvað fór úrskeiðis. Reyndu aftur síðar.</translation>
 <translation id="6541983376925655882">{NUM_HOURS,plural, =1{Síðast athugað fyrir 1 klukkustund}one{Síðast athugað fyrir # klukkustund}other{Síðast athugað fyrir # klukkustundum}}</translation>
 <translation id="6545017243486555795">Hreinsa öll gögn</translation>
@@ -1355,7 +1355,7 @@ Sum vefsvæði kunna til dæmis að bregðast við beiðninni með því að bir
 <translation id="6569373978618239158">Núna sérðu sögur frá <ph name="SITE_NAME" /> þegar þú opnar nýjan flipa. Vefsvæði sem þú fylgir eru vistuð á Google reikningnum þínum. Þú getur stjórnað þeim í stillingum Tillagna.</translation>
 <translation id="657177046675873214">Kveiktu á „Bókamerki“ í stillingunum til að sjá bókamerkin þín í öllum tækjunum þínum</translation>
 <translation id="6573096386450695060">Leyfa alltaf</translation>
-<translation id="6573431926118603307">Flipar sem þú hefur opnað í Chrome í öðrum tækjum birtast hér.</translation>
+<translation id="6573431926118603307">Flipar sem þú hefur opnað í Ultimatum í öðrum tækjum birtast hér.</translation>
 <translation id="6583199322650523874">Bókamerkja þessa síðu</translation>
 <translation id="6588043302623806746">Nota öruggt DNS</translation>
 <translation id="6590471736817333463">Sparaðu allt að 60% af gögnum</translation>
@@ -1363,28 +1363,28 @@ Sum vefsvæði kunna til dæmis að bregðast við beiðninni með því að bir
 <translation id="6594347733515723558">Val í „Flokka og skoða“</translation>
 <translation id="6595046016124923392">Myndir eru sendar til Google til að bæta lýsingar.</translation>
 <translation id="661266467055912436">Eykur öryggi þitt og allra á vefnum.</translation>
-<translation id="6621391692573306628">Til að senda þennan flipa í annað tæki þarftu að skrá þig inn í Chrome í báðum tækjum</translation>
+<translation id="6621391692573306628">Til að senda þennan flipa í annað tæki þarftu að skrá þig inn í Ultimatum í báðum tækjum</translation>
 <translation id="6627583120233659107">Breyta möppu</translation>
 <translation id="6633067410344541938">Taka huliðsstillingu úr lás</translation>
 <translation id="6636623428211296678">Skoðaðu fleiri stillingar hér að neðan eða ljúktu þessu núna</translation>
-<translation id="6637100877383020115">Chrome sendir gögn um notkun og hrun til Google til að bæta forritið. <ph name="BEGIN_UMA_LINK" />Stjórna<ph name="END_UMA_LINK" /></translation>
+<translation id="6637100877383020115">Ultimatum sendir gögn um notkun og hrun til Google til að bæta forritið. <ph name="BEGIN_UMA_LINK" />Stjórna<ph name="END_UMA_LINK" /></translation>
 <translation id="6641780377503683465">Fjarlægja <ph name="INTEREST" /></translation>
 <translation id="6642299196749785472">Hengja flipa við</translation>
 <translation id="6647441008198474441">Vefslóðir sem þú opnar eru sendar til Google til að spá fyrir um hvaða vefsvæði þú kannt að opna næst</translation>
 <translation id="6648977384226967773">{CONTACT,plural, =1{<ph name="CONTACT_PREVIEW" />\u2026 og <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" /> í viðbót}one{<ph name="CONTACT_PREVIEW" />\u2026 og <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" /> í viðbót}other{<ph name="CONTACT_PREVIEW" />\u2026 og <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" /> í viðbót}}</translation>
 <translation id="6649642165559792194">Forskoða mynd <ph name="BEGIN_NEW" />Nýtt<ph name="END_NEW" /></translation>
 <translation id="6659594942844771486">Flipi</translation>
-<translation id="6661521899577697780">Val um að fá Chrome-fundi opnað í hálfri hæð</translation>
+<translation id="6661521899577697780">Val um að fá Ultimatum-fundi opnað í hálfri hæð</translation>
 <translation id="666731172850799929">Opna í <ph name="APP_NAME" /></translation>
 <translation id="6669390930482049506">Láta mig vita</translation>
-<translation id="6670767097276846646">Sumar viðbætur geta bætt leitarvélum við Chrome</translation>
+<translation id="6670767097276846646">Sumar viðbætur geta bætt leitarvélum við Ultimatum</translation>
 <translation id="6671495933530132209">Afrita mynd</translation>
 <translation id="6672697278890207089">Sláðu inn aðgangsorðið þitt</translation>
 <translation id="6672917148207387131">Bæta <ph name="DOMAIN" /> við</translation>
 <translation id="6674571176963658787">Sláðu inn aðgangsorðið þitt til að hefja samstillingu</translation>
-<translation id="6676927815633975364">Skráðu þig inn á þetta vefsvæði og Chrome</translation>
+<translation id="6676927815633975364">Skráðu þig inn á þetta vefsvæði og Ultimatum</translation>
 <translation id="6684262542644248484">Skráðu þig inn á vefsvæði</translation>
-<translation id="6684809838922667136">Bættu Chrome</translation>
+<translation id="6684809838922667136">Bættu Ultimatum</translation>
 <translation id="6689436252814043643">Lesstilling er ekki í boði</translation>
 <translation id="669971068476817798">Ýttu á „Vista“.</translation>
 <translation id="6700279777779583398">Valið var vistað</translation>
@@ -1408,18 +1408,18 @@ Sum vefsvæði kunna til dæmis að bregðast við beiðninni með því að bir
 <translation id="6764137532716892442">Ný virkni í sameiginlegum flipahópi: <ph name="GROUP_TITLE" /></translation>
 <translation id="6767294960381293877">Tækjalisti fyrir deilingu flipa opinn á hálfum skjánum.</translation>
 <translation id="6783664456110886353">{TAB_COUNT,plural, =1{<ph name="INCOGNITO_TAB_COUNT" /> huliðsflipa og <ph name="TAB_COUNT_ONE" /> öðrum flipa verður lokað}one{<ph name="INCOGNITO_TAB_COUNT" /> huliðsflipa og <ph name="TAB_COUNT_MANY" /> öðrum flipa verður lokað}other{<ph name="INCOGNITO_TAB_COUNT" /> huliðsflipum og <ph name="TAB_COUNT_MANY" /> öðrum flipum verður lokað}}</translation>
-<translation id="6785476624617658922">Viðbótarskilmálar Google Chrome og ChromeOS</translation>
+<translation id="6785476624617658922">Viðbótarskilmálar Ultimatum og UltimatumOS</translation>
 <translation id="6786747875388722282">Viðbætur</translation>
 <translation id="6787600234697426339"><ph name="MAX_INSTANCE_COUNT" /> gluggahámarki náð</translation>
 <translation id="6795633245022906657">Opna nýjan flipa hratt. Opnaðu stillingar til að breyta þessari flýtileið.</translation>
-<translation id="679588508577699489">Gerðu Chrome að sjálfgefnum vafra</translation>
+<translation id="679588508577699489">Gerðu Ultimatum að sjálfgefnum vafra</translation>
 <translation id="679956319013005046">Byrjaðu á því að bæta valinni þjónustu við í <ph name="BEGIN_LINK" />stillingum Android<ph name="END_LINK" /> til að stilla sjálfvirka útfyllingu fyrir hana.</translation>
 <translation id="6802555630140434547">Glugganum verður lokað</translation>
 <translation id="6803791793483522764">Fara yfir tilkynningar</translation>
 <translation id="6809470175540814047">Opna í huliðsglugga</translation>
 <translation id="6811034713472274749">Hægt er að skoða síðuna</translation>
 <translation id="6813359536773993594">{FILE_COUNT,plural, =1{Myndir, 1 mynd á lista}one{Myndir, # mynd á lista}other{Myndir, # myndir á lista}}</translation>
-<translation id="6813446258015311409">Skrá inn á Chrome, opnað.</translation>
+<translation id="6813446258015311409">Skrá inn á Ultimatum, opnað.</translation>
 <translation id="6815692190508268848">Útlitsstillingarnar þínar voru notaðar</translation>
 <translation id="6817747507826986771">Deildu þessari síðu á skjótan hátt. Haltu fingri á þessari flýtileið til að breyta henni.</translation>
 <translation id="6820686453637990663">CVC</translation>
@@ -1428,7 +1428,7 @@ Sum vefsvæði kunna til dæmis að bregðast við beiðninni með því að bir
 <translation id="6828070228333235514">Hætta að vakta verð</translation>
 <translation id="6830728435402077660">Ekki öruggt</translation>
 <translation id="6831043979455480757">Þýða</translation>
-<translation id="6835182496791325827">Fáðu tilkynningu þegar Chrome finnur bestu niðurstöðurnar fyrir leitirnar þínar á meðan þú ert í burtu.</translation>
+<translation id="6835182496791325827">Fáðu tilkynningu þegar Ultimatum finnur bestu niðurstöðurnar fyrir leitirnar þínar á meðan þú ert í burtu.</translation>
 <translation id="6846298663435243399">Hleður…</translation>
 <translation id="6850409657436465440">Enn er verið að sækja</translation>
 <translation id="6850830437481525139"><ph name="TAB_COUNT" /> flipum lokað</translation>
@@ -1451,7 +1451,7 @@ Sum vefsvæði kunna til dæmis að bregðast við beiðninni með því að bir
 <translation id="6886500155621657325">{ITEMS_COUNT,plural, =1{Eitt aðgangsorð}one{# aðgangsorð}other{# aðgangsorð}}</translation>
 <translation id="688730033107341407">Eftir að þú skráir þig út verða bókamerki, aðgangsorð og fleira á Google-reikningnum þínum fjarlægt úr þessu tæki.</translation>
 <translation id="6896758677409633944">Afrita</translation>
-<translation id="6898797562238201317">Nota þitt eigið aðgangsorð til að dulkóða öll Chrome-gögn á Google-reikningnum þínum</translation>
+<translation id="6898797562238201317">Nota þitt eigið aðgangsorð til að dulkóða öll Ultimatum-gögn á Google-reikningnum þínum</translation>
 <translation id="6900532703269623216">Aukin vörn</translation>
 <translation id="6903907808598579934">Kveikja á samstillingu</translation>
 <translation id="6906448540340261898">Gakktu úr skugga um að þú getir alltaf notað aðgangsorðin á Google-reikningnum þínum</translation>
@@ -1461,7 +1461,7 @@ Sum vefsvæði kunna til dæmis að bregðast við beiðninni með því að bir
 <translation id="6910211073230771657">Eytt</translation>
 <translation id="6916590542764765824">Stjórna viðbótum</translation>
 <translation id="6918398787259831832">Ef þetta vandamál heldur áfram að koma upp <ph name="BEGIN_LINK" />geturðu fengið meiri upplýsingar<ph name="END_LINK" /> frá <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Chrome fjarlægði þessar heimildir því þú hefur ekki heimsótt nýlega</translation>
+<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Ultimatum fjarlægði þessar heimildir því þú hefur ekki heimsótt nýlega</translation>
 <translation id="6927821422725196292">{TABS_COUNT,plural, =1{1 flipi}one{<ph name="NUMBER_OF_TABS" /> flipi}other{<ph name="NUMBER_OF_TABS" /> flipar}}</translation>
 <translation id="6929224077895306814">Öllum öryggisnúmerum sem vistuð eru í tækinu og á Google-reikningnum þínum verður eytt</translation>
 <translation id="6933180670536678127"><ph name="TAB_TITLE" />, valinn festur flipi með hljóði</translation>
@@ -1490,30 +1490,30 @@ Sum vefsvæði kunna til dæmis að bregðast við beiðninni með því að bir
 <translation id="7020741890149022655">Bæta við leslista <ph name="BEGIN_NEW" />Nýtt<ph name="END_NEW" /></translation>
 <translation id="7022756207310403729">Opna í vafra</translation>
 <translation id="7029809446516969842">Aðgangsorð</translation>
-<translation id="7037994709569287156">Gera Chrome að sjálfgefnum vafra</translation>
+<translation id="7037994709569287156">Gera Ultimatum að sjálfgefnum vafra</translation>
 <translation id="7053256416619638731">Gerðu aðgangsorðin þín í þessu tæki öflugri</translation>
 <translation id="7053983685419859001">Setja á bannlista</translation>
 <translation id="7054588988317389591">Fá myndlýsingar?</translation>
-<translation id="7057969023583258980">Opna allan Chrome-feril</translation>
+<translation id="7057969023583258980">Opna allan Ultimatum-feril</translation>
 <translation id="7063006564040364415">Ekki var hægt að tengjast samstillingarþjóninum.</translation>
 <translation id="7063106218165698546">Sérsníddu flipahóp og ýttu á „Lokið“</translation>
 <translation id="7071521146534760487">Stjórna reikningi</translation>
 <translation id="707155805709242880">Veldu hvað á að samstilla hér að neðan</translation>
 <translation id="7072949719501323344"><ph name="TAB_TITLE" />, margvalinn festur huliðsflipi með mynd í mynd</translation>
 <translation id="7077143737582773186">SD-kort</translation>
-<translation id="7078916049958741685">Eyða líka Chrome-gögnunum úr þessu tæki</translation>
+<translation id="7078916049958741685">Eyða líka Ultimatum-gögnunum úr þessu tæki</translation>
 <translation id="7080145768121641840"><ph name="TAB_TITLE" />, valinn festur flipi með slökkt á hljóði</translation>
 <translation id="7084115944294706056">Veldu stöðu veffangastikunnar</translation>
-<translation id="7085332316435785646">Veldu hvort að Chrome-ferill eigi að fylgja með til að fá sérsniðnari upplifun í Google-þjónustum</translation>
-<translation id="7088681679121566888">Chrome er uppfærður</translation>
+<translation id="7085332316435785646">Veldu hvort að Ultimatum-ferill eigi að fylgja með til að fá sérsniðnari upplifun í Google-þjónustum</translation>
+<translation id="7088681679121566888">Ultimatum er uppfærður</translation>
 <translation id="7098100324909062850"><ph name="TAB_TITLE" />, margvalinn huliðsflipi með slökkt á hljóði</translation>
 <translation id="7106762743910369165">Vafranum er stjórnað af fyrirtækinu þínu</translation>
-<translation id="7111394291981742152">Chrome veitir þér betri stjórn á auglýsingunum sem þú sérð og takmarkar upplýsingar um þig sem vefsvæði safna þegar þau birta þér sérsniðnar auglýsingar.</translation>
+<translation id="7111394291981742152">Ultimatum veitir þér betri stjórn á auglýsingunum sem þú sérð og takmarkar upplýsingar um þig sem vefsvæði safna þegar þau birta þér sérsniðnar auglýsingar.</translation>
 <translation id="7111822978084196600">Nefndu þennan glugga</translation>
 <translation id="7115358764509798967">Sjálfgildi kerfis</translation>
 <translation id="7117485132243600300">Stjórnaðu efni sem þú fylgist með, tillögum að efni og leitum</translation>
 <translation id="7119984597597798764">Loka <ph name="INSTANCE_TITLE" /></translation>
-<translation id="7121179479711575744">Skráðu þig inn á Chrome</translation>
+<translation id="7121179479711575744">Skráðu þig inn á Ultimatum</translation>
 <translation id="7136694880210472378">Gera sjálfgefið</translation>
 <translation id="7136902389402789299">{NUM_SITES,plural, =1{Farið yfir heimildir fyrir eitt vefsvæði}one{Farið yfir heimildir fyrir # vefsvæði}other{Farið yfir heimildir fyrir # vefsvæði}}</translation>
 <translation id="7138678301420049075">Annað</translation>
@@ -1523,8 +1523,8 @@ Sum vefsvæði kunna til dæmis að bregðast við beiðninni með því að bir
 <translation id="7149893636342594995">Síðastliðinn sólarhring</translation>
 <translation id="71503698506017927">Dulkóðun aðgangsorða felur ekki í sér greiðslumáta og heimilisföng á Google Pay.
 
-Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-gögnunum á reikningnum þínum<ph name="END_LINK" />.</translation>
-<translation id="7165972437814027679">Nánar um hvers vegna Chrome lokar fyrir vissar skrár</translation>
+Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Ultimatum-gögnunum á reikningnum þínum<ph name="END_LINK" />.</translation>
+<translation id="7165972437814027679">Nánar um hvers vegna Ultimatum lokar fyrir vissar skrár</translation>
 <translation id="7168323970702333693">Skráð(ur) inn sem <ph name="USER_NAME" />. Opnar stillingar.</translation>
 <translation id="7170930892977483182">Öllum öryggiskóðum sem vistaðir eru í tækinu og í Google-veski verður eytt</translation>
 <translation id="7173114856073700355">Opna stillingar</translation>
@@ -1544,7 +1544,7 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="7197682514647286393">Eyddu vefskoðunargögnum fljótt og örugglega</translation>
 <translation id="719791532916917144">Flýtilykill</translation>
 <translation id="7207760545532569765">Endurheimta <ph name="TAB_COUNT" /> flipa sem nýja bakgrunnsflipa.</translation>
-<translation id="7217781228893594884">Huliðsflipum verður læst þegar þú lokar Chrome</translation>
+<translation id="7217781228893594884">Huliðsflipum verður læst þegar þú lokar Ultimatum</translation>
 <translation id="7221869452894271364">Endurhlaða þessa síðu</translation>
 <translation id="722681077040152344">Þú sagðir upp áskrift að <ph name="COUNT" /> vefsvæðum</translation>
 <translation id="7227218174981371415">{FILE_COUNT,plural, =1{Ein skrá bíður niðurhals}one{# skrá bíður niðurhals}other{# skrár bíða niðurhals}}</translation>
@@ -1554,12 +1554,12 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="724510009481365878">Ekki er hægt að prenta þessa síðu</translation>
 <translation id="7248671827512403053">Forrit</translation>
 <translation id="7253951228444156601">Athugar aðgangsorð…</translation>
-<translation id="7260367682327802201">Hugsanlega er svipuð stilling í Android-tækinu þínu. Ef kveikt er á auglýsingamælingum í Chrome og Android-tækinu þínu getur fyrirtæki hugsanlega mælt árangur auglýsingar á vefsvæðum sem þú heimsækir og í forritum sem þú notar.</translation>
+<translation id="7260367682327802201">Hugsanlega er svipuð stilling í Android-tækinu þínu. Ef kveikt er á auglýsingamælingum í Ultimatum og Android-tækinu þínu getur fyrirtæki hugsanlega mælt árangur auglýsingar á vefsvæðum sem þú heimsækir og í forritum sem þú notar.</translation>
 <translation id="727288900855680735">Senda <ph name="ONE_TIME_CODE" /> til <ph name="ORIGIN" />?</translation>
 <translation id="7274013316676448362">Vefsvæði á bannlista</translation>
 <translation id="7276868533747677875">Ef þú hefur áður flutt út aðgangsorð skaltu leita að CSV-skrá í tækinu þínu og flytja þau inn í aðgangsorðastjórnun að eigin vali.</translation>
 <translation id="728377807486816582">Ýttu á veffangastikuna</translation>
-<translation id="7289049772085228972">Þú ert með hámarksöryggi Chrome</translation>
+<translation id="7289049772085228972">Þú ert með hámarksöryggi Ultimatum</translation>
 <translation id="7289303553784750393">Ef þú ert nettengd(ur) en þetta vandamál heldur áfram að koma upp geturðu prófað aðrar leiðir til að halda áfram í <ph name="SITE_ETLD_PLUS_ONE" />.</translation>
 <translation id="7290209999329137901">Ekki er hægt að endurnefna</translation>
 <translation id="7291910923717764901">Lýsingum á myndum var bætt við fyrir þessa síðu</translation>
@@ -1592,12 +1592,12 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="7400003506822844357">{FILE_COUNT,plural, =1{Önnur 1 skrá á lista}one{Önnur # skrá á lista}other{Aðrar # skrár á lista}}</translation>
 <translation id="7400418766976504921">Vefslóð</translation>
 <translation id="7400424692675800399">Til að opna nýjan glugga skaltu fækka virkum og óvirkum gluggum í <ph name="MAX_WINDOW_COUNT_MINUS_ONE" /> eða færri.</translation>
-<translation id="7403691278183511381">Fyrsta notkun Chrome</translation>
+<translation id="7403691278183511381">Fyrsta notkun Ultimatum</translation>
 <translation id="7411224099004328643">Notandi Google-reiknings</translation>
 <translation id="7419565702166471774">Nota ávallt öruggar tengingar</translation>
 <translation id="7421293530411019405">Yfirgefa flipahóp?</translation>
 <translation id="7435356471928173109">Kerfisstjórinn slökkti á þessu</translation>
-<translation id="7437998757836447326">Skrá út af Chrome</translation>
+<translation id="7437998757836447326">Skrá út af Ultimatum</translation>
 <translation id="7439467816829380878">Flytja flipa í hóp</translation>
 <translation id="7439749340204407129">Opna bókamerkjastjórnun</translation>
 <translation id="7453810262525006706">Draga saman í hliðarglugga</translation>
@@ -1631,7 +1631,7 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="7525248386620136756"><ph name="TAB_GROUPS_AND_TABS_PART" /> lokað og vistað</translation>
 <translation id="7545347190366646170">Fólk með aðgang</translation>
 <translation id="7553482318994371148">Enduropna lokaða flipa</translation>
-<translation id="7554643625247105821">Ekki er hægt að athuga Chrome-útgáfu</translation>
+<translation id="7554643625247105821">Ekki er hægt að athuga Ultimatum-útgáfu</translation>
 <translation id="7557508262441527045">Útskráð(ur)</translation>
 <translation id="7573665567024262965">Veldu sjálfgefin forrit</translation>
 <translation id="757855969265046257">{FILES,plural, =1{<ph name="FILES_DOWNLOADED_ONE" /> skrá sótt}one{<ph name="FILES_DOWNLOADED_MANY" /> skrá sótt}other{<ph name="FILES_DOWNLOADED_MANY" /> skrár sóttar}}</translation>
@@ -1647,7 +1647,7 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="7612619742409846846">Innskráð(ur) á Google sem</translation>
 <translation id="7612989789287281429">Skráir þig inn…</translation>
 <translation id="7619072057915878432">Niðurhal á <ph name="FILE_NAME" /> mistókst vegna villu í netkerfi.</translation>
-<translation id="7626032353295482388">Velkomin(n) í Chrome</translation>
+<translation id="7626032353295482388">Velkomin(n) í Ultimatum</translation>
 <translation id="7628417132421583481">Opna Aðgangsorðastjórnun</translation>
 <translation id="7630202231528827509">Vefslóð veitu</translation>
 <translation id="7638584964844754484">Rangt aðgangsorð</translation>
@@ -1662,7 +1662,7 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="7666185984446444960"><ph name="TAB_GROUPS_AND_TABS_PART" /> lokað</translation>
 <translation id="7682724950699840886">Prófaðu eftirfarandi: Gakktu úr skugga um að nóg pláss sé á tækinu og reyndu að flytja út aftur.</translation>
 <translation id="7686086654630106285">Nánar um auglýsingar sem vefsvæði leggja til</translation>
-<translation id="7690596512217303514">Tækið þitt gat ekki opnað Chrome. Sæktu nýjustu Chrome-uppfærsluna úr forritaverslun til að lagfæra vandamálið.</translation>
+<translation id="7690596512217303514">Tækið þitt gat ekki opnað Ultimatum. Sæktu nýjustu Ultimatum-uppfærsluna úr forritaverslun til að lagfæra vandamálið.</translation>
 <translation id="7691043218961417207">Skoðaðu efni til að fylgja</translation>
 <translation id="7692761875510935111">Opna í flýti í vafra. Haltu flýtileiðinni inni til að breyta henni.</translation>
 <translation id="7697383401610880082">Dragkló</translation>
@@ -1670,7 +1670,7 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="7702420606070050505">Blað neðst sem sýnir nýlega virkni, opið til fulls</translation>
 <translation id="7707922173985738739">Nota farsímagögn</translation>
 <translation id="7708994397325774423">Sjáðu öll aðgangsorðin þín</translation>
-<translation id="7714077993070342304">Opna valmynd Chrome</translation>
+<translation id="7714077993070342304">Opna valmynd Ultimatum</translation>
 <translation id="7733878270780732638">Ekki nóg pláss í tæki.</translation>
 <translation id="7740287852186792672">Leitarniðurstöður</translation>
 <translation id="774403695779169686"><ph name="TAB_TITLE" />, valinn huliðsflipi í deilingu</translation>
@@ -1697,9 +1697,9 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="7821130663268546430">Þú finnur alla opna flipa í flipavalinu</translation>
 <translation id="7822705602465980873">Þegar þú ert innskráð(ur) eru þessi gögn tengd við Google-reikninginn þinn til að vernda þig í Google-þjónustum, t.d. með því að auka vernd í Gmail eftir öryggistilvik.</translation>
 <translation id="7824665136384946951">Fyrirtækið þitt slökkti á öruggri vefskoðun</translation>
-<translation id="7826342993930002256">Chrome-vafrinn þinn, hvar sem er</translation>
+<translation id="7826342993930002256">Ultimatum-vafrinn þinn, hvar sem er</translation>
 <translation id="7844171778363018843">Engin gögn valin fyrir samstillingu</translation>
-<translation id="784453721355882533">Prófaðu Gemini í Chrome til að fá svör, samantekt á helstu atriðum og fleira.</translation>
+<translation id="784453721355882533">Prófaðu Gemini í Ultimatum til að fá svör, samantekt á helstu atriðum og fleira.</translation>
 <translation id="7846161022626028328">Villa kom upp. Reyndu aftur.</translation>
 <translation id="7846296061357476882">Google þjónusta</translation>
 <translation id="784652447248278262">Núverandi gluggi</translation>
@@ -1709,10 +1709,10 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="7853202427316060426">Virkni</translation>
 <translation id="7859988229622350291">Þýða aldrei</translation>
 <translation id="7866213166286285359">Þýddu síður hér</translation>
-<translation id="7873610418439765081">Prófaðu Gemini í Chrome til að fá svör, samantekt á helstu atriðum og fleira með því að ýta á hnappinn „Fleiri valkostir“.</translation>
+<translation id="7873610418439765081">Prófaðu Gemini í Ultimatum til að fá svör, samantekt á helstu atriðum og fleira með því að ýta á hnappinn „Fleiri valkostir“.</translation>
 <translation id="7875915731392087153">Skrifa tölvupóst</translation>
 <translation id="7876243839304621966">Fjarlægja allt</translation>
-<translation id="7886917304091689118">Keyrir í Chrome</translation>
+<translation id="7886917304091689118">Keyrir í Ultimatum</translation>
 <translation id="7887174313503389866">Fáðu kynningu með leiðsögn um helstu öryggis- og persónuverndarstýringar Opnaðu hverja stillingu fyrir sig til að fá að sjá fleiri valkosti.</translation>
 <translation id="7913993612870913335">{FILE_COUNT,plural, =1{Fyrirtækið þitt lokaði á eitt atriði}one{Fyrirtækið þitt lokaði á # atriði}other{Fyrirtækið þitt lokaði á # atriði}}</translation>
 <translation id="7914399737746719723">Forrit uppsett</translation>
@@ -1721,7 +1721,7 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="7921782882718083488">Taka þessa síðu saman</translation>
 <translation id="7926975587469166629">Gælunafn spjalds</translation>
 <translation id="7927073875790626822">Víðveruleiki (XR)</translation>
-<translation id="7929587383660661825">Chrome fjarlægir sjálfkrafa heimildir vefsvæða sem misnota tilkynningar eða sem þú hefur ekki skoðað nýlega</translation>
+<translation id="7929587383660661825">Ultimatum fjarlægir sjálfkrafa heimildir vefsvæða sem misnota tilkynningar eða sem þú hefur ekki skoðað nýlega</translation>
 <translation id="7934668619883965330">Ekki er hægt að sækja skrá. Skráarsnið ekki stutt.</translation>
 <translation id="7942131818088350342"><ph name="PRODUCT_NAME" /> er úrelt.</translation>
 <translation id="7944772052836377867">Samstilling verður að staðfesta að þetta sért þú</translation>
@@ -1738,7 +1738,7 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="7971136598759319605">Virkt fyrir 1 degi</translation>
 <translation id="7975379999046275268">Forskoða síðu <ph name="BEGIN_NEW" />Nýtt<ph name="END_NEW" /></translation>
 <translation id="7977451675950311423">Varar þig við ef þú notar aðgangsorð í hættu vegna öryggisbrots.</translation>
-<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Chrome fjarlægði þessar heimildir því þú hefur ekki heimsótt nýlega</translation>
+<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Ultimatum fjarlægði þessar heimildir því þú hefur ekki heimsótt nýlega</translation>
 <translation id="7995059495660416932">Þú sérð efni þegar það verður tiltækt</translation>
 <translation id="799576009106109668">Þú getur vafrað hraðar því að efni er hlaðið forvirkt í samræmi við vefsíðuna sem þú ert að skoða í hvert skipti</translation>
 <translation id="7998918019931843664">Opna aftur flipa sem var lokað</translation>
@@ -1756,17 +1756,17 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="804335162455518893">SD-kort fannst ekki</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> huliðsflipi}one{<ph name="TAB_COUNT_NORMAL" /> huliðsflipi}other{<ph name="TAB_COUNT_NORMAL" /> huliðsflipar}}</translation>
 <translation id="8051695050440594747"><ph name="MEGABYTES" /> MB tiltæk</translation>
-<translation id="8058746566562539958">Opna í nýjum flipa Chrome</translation>
+<translation id="8058746566562539958">Opna í nýjum flipa Ultimatum</translation>
 <translation id="8062594758852531064">Aukin forhleðsla:</translation>
 <translation id="8063895661287329888">Ekki tókst að bæta bókamerki við.</translation>
 <translation id="8066816452984416180">Bókamerktu þessa síðu í snatri. Haltu flýtileiðinni inni til að breyta henni.</translation>
-<translation id="8072436850275034464">Þú getur opnað flipa sem þú lokaðir nýlega aftur, hvar sem þú notar Chrome</translation>
+<translation id="8072436850275034464">Þú getur opnað flipa sem þú lokaðir nýlega aftur, hvar sem þú notar Ultimatum</translation>
 <translation id="8073388330009372546">Opna mynd í nýjum flipa</translation>
 <translation id="8076492880354921740">Flipar</translation>
 <translation id="8078096376109663956">Aðeins deila texta</translation>
 <translation id="8078348702936632821">Festa þessa flýtileið</translation>
 <translation id="8084285576995584326">Stjórnaðu gögnum Google reikningsins</translation>
-<translation id="8084864785646838999">Ekki er víst að allur ferillinn þinn birtist hér Opnaðu Chrome-ferilinn í heild sinni til að skoða allan ferilinn. Google-reikningurinn þinn kann þar að auki að vera með annars konar vafraferil á <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
+<translation id="8084864785646838999">Ekki er víst að allur ferillinn þinn birtist hér Opnaðu Ultimatum-ferilinn í heild sinni til að skoða allan ferilinn. Google-reikningurinn þinn kann þar að auki að vera með annars konar vafraferil á <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="8088176524274673045">Deildu með öðrum og leyfðu fólki í nágrenninu að skanna inn þennan QR-kóða</translation>
 <translation id="8090732854597034573">Ef þú þarft aðstoð skaltu biðja foreldri um hjálp</translation>
 <translation id="8101414242770404289">Engir flipar frá <ph name="TIME_PERIOD" /></translation>
@@ -1774,10 +1774,10 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="810433609302852">Kynningarblað neðst með ábendingu um að prófa eiginleika og notkunarleiðbeiningum</translation>
 <translation id="8105893657415066307"><ph name="DESCRIPTION" /> <ph name="SEPARATOR" /> <ph name="FILE_SIZE" /></translation>
 <translation id="8107530384992929318">Loka röðunarvalkostum</translation>
-<translation id="8110024788458304985">Hjálpa til við að bæta eiginleika og afköst Chrome</translation>
-<translation id="8110087112193408731">Viltu sjá það sem þú gerir í Chrome í stafrænni vellíðan?</translation>
+<translation id="8110024788458304985">Hjálpa til við að bæta eiginleika og afköst Ultimatum</translation>
+<translation id="8110087112193408731">Viltu sjá það sem þú gerir í Ultimatum í stafrænni vellíðan?</translation>
 <translation id="8118117428362942925">Ef þú þarft aðstoð skaltu biðja foreldri um hjálp (<ph name="PARENT_NAME" />)</translation>
-<translation id="8118151008374483324">Skráðu þig inn á Chromium til að fá aðgang að flipuum þínum og fleiru í öllum tækjunum þínum</translation>
+<translation id="8118151008374483324">Skráðu þig inn á Ultimatum til að fá aðgang að flipuum þínum og fleiru í öllum tækjunum þínum</translation>
 <translation id="8120286190326371840">Engin aðgangsorð í hættu í þessu tæki</translation>
 <translation id="8122623268651408616">Raðað eftir nýjasta</translation>
 <translation id="8127542551745560481">Breyta heimasíðu</translation>
@@ -1818,7 +1818,7 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="8260126382462817229">Reyndu að skrá þig inn aftur</translation>
 <translation id="8261506727792406068">Eyða</translation>
 <translation id="82619448491672958">Sjá aðra flipa</translation>
-<translation id="8265730590513812063">Opnaðu Chrome-valmyndina</translation>
+<translation id="8265730590513812063">Opnaðu Ultimatum-valmyndina</translation>
 <translation id="8266753737658117282">Halda áfram sem <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8266862848225348053">Niðurhalsmappa</translation>
 <translation id="8271267069224406035">Tilkynna ruslefni</translation>
@@ -1832,7 +1832,7 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="8317318757008452355">Opna valkosti til að prenta</translation>
 <translation id="8320212361750431956">Nýlegar aðgerðir</translation>
 <translation id="832514020744584629"><ph name="PREF_TITLE" />  <ph name="BEGIN_NEW" />Nýtt<ph name="END_NEW" /></translation>
-<translation id="8342727528718219152">Chrome mun tilkynna þér um vefsvæði sem gætu verið að senda of margar tilkynningar</translation>
+<translation id="8342727528718219152">Ultimatum mun tilkynna þér um vefsvæði sem gætu verið að senda of margar tilkynningar</translation>
 <translation id="834313815369870491">Aldrei þýða vefsvæði</translation>
 <translation id="8348215005712416247"><ph name="TAB_TITLE" />, margvalinn festur huliðsflipi sem er að taka upp</translation>
 <translation id="8348430946834215779">Nota HTTPS þegar hægt er og fá viðvörun áður en síðum sem styðja það ekki er hlaðið</translation>
@@ -1846,12 +1846,12 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="8398389123831319859">Ýttu tvisvar og haltu inni til að skipta yfir í huliðsstillingu</translation>
 <translation id="8402673309244746971">Opna „Fylgist með“</translation>
 <translation id="8413126021676339697">Sýna allan feril</translation>
-<translation id="8413795581997394485">Verndar gegn vefsvæðum, niðurhali og viðbótum sem vitað er að eru hættuleg. Þegar þú opnar vefsvæði sendir Chrome ruglaðan hluta vefslóðarinnar til Google í gegnum traustan þjón sem felur IP-töluna þína. Ef vefsvæði gerir eitthvað grunsamlegt eru heilar vefslóðir og efnisbútar af síðu einnig sendir.</translation>
+<translation id="8413795581997394485">Verndar gegn vefsvæðum, niðurhali og viðbótum sem vitað er að eru hættuleg. Þegar þú opnar vefsvæði sendir Ultimatum ruglaðan hluta vefslóðarinnar til Google í gegnum traustan þjón sem felur IP-töluna þína. Ef vefsvæði gerir eitthvað grunsamlegt eru heilar vefslóðir og efnisbútar af síðu einnig sendir.</translation>
 <translation id="8414396119627470038">Skráðu þig inn á <ph name="SITE_ETLD_PLUS_ONE" /> með <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8419144699778179708">Eyðir ferli, þ.m.t. ferli leitarreits</translation>
 <translation id="8419244640277402268">Taka með</translation>
 <translation id="8422250855136581222">Engir flipar í þessu tæki</translation>
-<translation id="842386925677997438">Öryggisverkfæri Chrome</translation>
+<translation id="842386925677997438">Öryggisverkfæri Ultimatum</translation>
 <translation id="8427875596167638501">Forskoðunarflipinn er hálfopinn</translation>
 <translation id="8428213095426709021">Stillingar</translation>
 <translation id="8430824733382774043">Aðeins deila skjámynd</translation>
@@ -1868,7 +1868,7 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="8455675988389029454">Sjáðu bókamerki, aðgangsorð og fleira í öllum tækjunum þínum</translation>
 <translation id="8458341576712814616">Flýtileið</translation>
 <translation id="8458413889418591446">Samstilltu ferilinn þinn og flipa til að hafa greiðan aðgang að vefsvæðum sem þú hefur heimsótt</translation>
-<translation id="84594714173170813">Haltu áfram að nota Chrome-gögnin á Google-reikningnum þínum</translation>
+<translation id="84594714173170813">Haltu áfram að nota Ultimatum-gögnin á Google-reikningnum þínum</translation>
 <translation id="8460008946585880786">Dragðu og slepptu einum flipa yfir annan</translation>
 <translation id="8460448946170646641">Fara yfir helstu öryggis- og persónuverndarstýringar</translation>
 <translation id="8460932807646981183">Umsjón með leitarvélum og leit á vefsvæðum</translation>
@@ -1890,8 +1890,8 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="8540136935098276800">Sláðu inn vefslóð á réttu sniði</translation>
 <translation id="854522910157234410">Opna þessa síðu</translation>
 <translation id="8547466829003330976">Fara yfir PDF-skrá með gervigreind</translation>
-<translation id="8551513938758868521">Læsa huliðsflipum um leið og þú hættir í Chrome</translation>
-<translation id="8559961053328923750">Chrome takmarkar heildarmagn gagna sem vefsvæði geta deilt í gegnum vafrann til að mæla árangur auglýsinga</translation>
+<translation id="8551513938758868521">Læsa huliðsflipum um leið og þú hættir í Ultimatum</translation>
+<translation id="8559961053328923750">Ultimatum takmarkar heildarmagn gagna sem vefsvæði geta deilt í gegnum vafrann til að mæla árangur auglýsinga</translation>
 <translation id="8559990750235505898">Bjóðast til að þýða síður á önnur tungumál</translation>
 <translation id="8560602726703398413">Finndu leslistann þinn í bókamerkjum</translation>
 <translation id="85618473456579127">Ýttu á prófíl efst til hægri</translation>
@@ -1904,12 +1904,12 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="859046281437143747">Nota hnappinn „Fleiri valkostir“ til að vakta verð</translation>
 <translation id="859064343657890103"><ph name="TAB_GROUP_TITLE" /> flipahóp eytt</translation>
 <translation id="860043288473659153">Nafn korthafa</translation>
-<translation id="8602358303461588329">Skrá inn á Chrome, lokað.</translation>
+<translation id="8602358303461588329">Skrá inn á Ultimatum, lokað.</translation>
 <translation id="860282621117673749">Tilkynningar um verðlækkanir</translation>
 <translation id="8611922158252451755">Allir með tengilinn geta gert breytingar á öllum flipum og farðu því varlega í að deila. Tengillinn rennur út eftir 48 klukkustundir.</translation>
 <translation id="8616006591992756292">Google reikningurinn þinn kann að vera með annars konar vefskoðunarferil á <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="8617240290563765734">Opna ráðlögðu vefslóðina sem tilgreind er í sótta efninu?</translation>
-<translation id="8629093325209491835">Farðu í „Valmynd Chrome &gt; Stillingar“</translation>
+<translation id="8629093325209491835">Farðu í „Valmynd Ultimatum &gt; Stillingar“</translation>
 <translation id="8634050254805484913">Faldir eða mjóir skjáir</translation>
 <translation id="8635399646025169806">Halda flipahóp?</translation>
 <translation id="8636825310635137004">Kveiktu á samstillingu til að fá aðgang að flipunum þínum í öðrum tækjum.</translation>
@@ -1928,15 +1928,15 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="8715300232952757586"><ph name="TAB_TITLE" /> verður lokað</translation>
 <translation id="8723453889042591629">Þýða þessa síðu í hvelli. Haltu flýtileiðinni inni til að breyta henni.</translation>
 <translation id="8725066075913043281">Reyna aftur</translation>
-<translation id="8727043961453758442">Fáðu sem mest út úr Chrome</translation>
+<translation id="8727043961453758442">Fáðu sem mest út úr Ultimatum</translation>
 <translation id="8731268612289859741">Öryggiskóði</translation>
 <translation id="8738163682604285902">Sjá lesstillingu?</translation>
 <translation id="8746155870861185046">Deila áherslumerkingu</translation>
 <translation id="8748850008226585750">Innihald falið</translation>
 <translation id="8754448020583829686">Afrita án tengils</translation>
 <translation id="8756969031206844760">Uppfæra aðgangsorð?</translation>
-<translation id="8765470054473112089">Þegar þú skrifar í veffangastiku eða leitarreit sendir Chrome það sem þú skrifar á sjálfgefna leitarvél til að fá betri tillögur. Slökkt er á þessu í huliðsstillingu.</translation>
-<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Chrome fann lélegt aðgangsorð sem þú gætir bætt}one{Chrome fann # lélegt aðgangsorð sem þú gætir bætt}other{Chrome fann # léleg aðgangsorð sem þú gætir bætt}}</translation>
+<translation id="8765470054473112089">Þegar þú skrifar í veffangastiku eða leitarreit sendir Ultimatum það sem þú skrifar á sjálfgefna leitarvél til að fá betri tillögur. Slökkt er á þessu í huliðsstillingu.</translation>
+<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Ultimatum fann lélegt aðgangsorð sem þú gætir bætt}one{Ultimatum fann # lélegt aðgangsorð sem þú gætir bætt}other{Ultimatum fann # léleg aðgangsorð sem þú gætir bætt}}</translation>
 <translation id="8766529642647037772">Búa til yfirstrikaðan tengil eins og þennan?</translation>
 <translation id="8788265440806329501">Ferill er lokaður</translation>
 <translation id="8790193082819560975">Ýttu til að leita að kaupvalkostum fyrir vöruna á nýjum flipa.</translation>
@@ -1959,7 +1959,7 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="885480114717186641">Þú getur óskað eftir tölvuvef fyrir <ph name="HOST_NAME" /></translation>
 <translation id="8856607253650333758">Fá lýsingar</translation>
 <translation id="8863714995118816041">Heimildir leyfðar aftur fyrir <ph name="SITE_NAME" /></translation>
-<translation id="8865415417596392024">Chrome-gögn á reikningnum þínum</translation>
+<translation id="8865415417596392024">Ultimatum-gögn á reikningnum þínum</translation>
 <translation id="8872506776304248286">Opna í forriti</translation>
 <translation id="8890668505403261809">Leitaðu í huliðsflipunum þínum</translation>
 <translation id="8892234476517513962">Þú ert þegar skráð(ur) inn</translation>
@@ -1971,7 +1971,7 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="8922289737868596582">Náðu í síður með hnappnum „Fleiri valkostir“ til að nota þær án nettengingar</translation>
 <translation id="8924575305646776101"><ph name="BEGIN_LINK" />Nánar<ph name="END_LINK" /></translation>
 <translation id="892496902842311796"><ph name="LANG" /> er til reiðu</translation>
-<translation id="8937772741022875483">Viltu fjarlægja það sem þú gerir í Chrome úr stafrænni vellíðan?</translation>
+<translation id="8937772741022875483">Viltu fjarlægja það sem þú gerir í Ultimatum úr stafrænni vellíðan?</translation>
 <translation id="8942627711005830162">Opna í öðrum glugga</translation>
 <translation id="8945143127965743188"><ph name="LANG" /> - Ekki tókst að hlaða þessu tungumáli niður. Reyndu aftur síðar.</translation>
 <translation id="8946759102391960088">Ekki missa aðgang að aðgangsorðunum þínum</translation>
@@ -1983,12 +1983,12 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="8970887620466824814">Eitthvað fór úrskeiðis.</translation>
 <translation id="8972098258593396643">Hlaða niður í sjálfgefna möppu?</translation>
 <translation id="8987736167266086032">Haltu áfram þaðan sem frá var horfið</translation>
-<translation id="8992769679401294069">Gögnin þín eru dulkóðuð með aðgangsorði. Sláðu það inn til að nota og vista Chrome-gögn á Google-reikningnum þínum.</translation>
+<translation id="8992769679401294069">Gögnin þín eru dulkóðuð með aðgangsorði. Sláðu það inn til að nota og vista Ultimatum-gögn á Google-reikningnum þínum.</translation>
 <translation id="8993760627012879038">Opna nýjan flipa í huliðsstillingu</translation>
 <translation id="8995521496079646922">Forritin sem þú velur verða notuð sjálfkrafa. Ef forrit er ekki þegar í tækinu verður það sótt innan skamms.</translation>
 <translation id="8996847606757455498">Velja aðra veitu</translation>
 <translation id="8998837250940831980">Ekki tókst að minnka flipa. Reyndu aftur síðar.</translation>
-<translation id="9001604755921395912">Opna í huliðsflipa í Chrome</translation>
+<translation id="9001604755921395912">Opna í huliðsflipa í Ultimatum</translation>
 <translation id="9012585441087414258">Vernda þig gegn vefsvæðum, niðurhali og viðbótum sem vitað er að eru hættuleg. Ef grunsamleg virkni greinist á síðu eru vefslóðir og hlutar af innihaldi síðna sendir í örugga vefskoðun Google.</translation>
 <translation id="9019199799064251516">Halda áfram án þess að nota prófíllás bílsins?</translation>
 <translation id="9022774213089566801">Oft skoðað</translation>
@@ -1996,7 +1996,7 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="9027728231343310283">Afturkalla <ph name="SITE" /></translation>
 <translation id="9035378196785279980">Flytja í\u2026</translation>
 <translation id="9042893549633094279">Persónuvernd og öryggi</translation>
-<translation id="9047347135558855162">Leitaðu í Chrome í einum grænum</translation>
+<translation id="9047347135558855162">Leitaðu í Ultimatum í einum grænum</translation>
 <translation id="9050666287014529139">Aðgangsorð</translation>
 <translation id="9055497320631373736">Vefsvæði bætt aftur við sem mögulegu vefsvæði</translation>
 <translation id="9057030985451135243">Nánar um sameiginlega flipahópa</translation>
@@ -2004,7 +2004,7 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="9063400323119781058">Áskrift hætt</translation>
 <translation id="9063523880881406963">Slökkva á beiðni um vefsvæði fyrir tölvur</translation>
 <translation id="9065203028668620118">Breyta</translation>
-<translation id="9065383040763568503">Vistuð gögn sem Chrome telur ekki mikilvæg (t.d. vefsvæði með engar vistaðar stillingar eða sem þú heimsækir sjaldan)</translation>
+<translation id="9065383040763568503">Vistuð gögn sem Ultimatum telur ekki mikilvæg (t.d. vefsvæði með engar vistaðar stillingar eða sem þú heimsækir sjaldan)</translation>
 <translation id="9067341854474068781">Blaðið „Engir aðgangslyklar“ opið í fullri hæð</translation>
 <translation id="906781307897697745">í <ph name="PRODUCT_NAME" /></translation>
 <translation id="9068568736932147490"><ph name="TAB_TITLE" />, margvalinn festur huliðsflipi með hljóði</translation>
@@ -2014,8 +2014,8 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="9074739597929991885">Bluetooth</translation>
 <translation id="9081543426177426948">Vefsvæði sem þú opnar eru ekki vistuð í huliðsstillingu</translation>
 <translation id="9086455579313502267">Ekki fæst aðgangur að netinu</translation>
-<translation id="9093915805850895575">Opna í Chrome-glugga</translation>
-<translation id="909756639352028172">Til að fá sem mest sérsniðna upplifun skaltu hafa Chrome með í vef- og forritavirkni og tengdum Google-þjónustum</translation>
+<translation id="9093915805850895575">Opna í Ultimatum-glugga</translation>
+<translation id="909756639352028172">Til að fá sem mest sérsniðna upplifun skaltu hafa Ultimatum með í vef- og forritavirkni og tengdum Google-þjónustum</translation>
 <translation id="9099220545925418560">Byggt á vafraferlinum þínum. Slökkt er á þessari stillingu.</translation>
 <translation id="9100610230175265781">Aðgangsorðs krafist</translation>
 <translation id="9101137867221042551">Stjórnun</translation>
@@ -2051,9 +2051,9 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="9218430445555521422">Velja sem sjálfgefið</translation>
 <translation id="9219103736887031265">Myndir</translation>
 <translation id="9222198206152536936">Skráðu þig inn sem „<ph name="EMAIL" />“ til að fá aðgang að flipunum þínum og fleiru í öllum tækjunum þínum</translation>
-<translation id="924447568950697217">Gera Chrome að sjálfgefnum vafra</translation>
-<translation id="926205370408745186">Fjarlægja það sem þú gerir í Chrome úr stafrænni vellíðan</translation>
-<translation id="927968626442779827">Nota Léttútgáfu í Google Chrome</translation>
+<translation id="924447568950697217">Gera Ultimatum að sjálfgefnum vafra</translation>
+<translation id="926205370408745186">Fjarlægja það sem þú gerir í Ultimatum úr stafrænni vellíðan</translation>
+<translation id="927968626442779827">Nota Léttútgáfu í Ultimatum</translation>
 <translation id="928550791203542716">Fylgist með <ph name="SITE_NAME" /></translation>
 <translation id="930124987204876019">Eyddu ferli, fótsporum, vefsvæðagögnum, skyndiminni…</translation>
 <translation id="930834144334005936">Endurstilla núverandi stillingu <ph name="MODE_NAME" /> í Leit</translation>
@@ -2061,7 +2061,7 @@ Til að breyta þessari stillingu skaltu <ph name="BEGIN_LINK" />eyða Chrome-g�
 <translation id="939598580284253335">Sláðu inn aðgangsorð</translation>
 <translation id="94161319503679839"><ph name="TAB_TITLE" />, festur huliðsflipi með mynd í mynd</translation>
 <translation id="945522503751344254">Senda ábendingu</translation>
-<translation id="95817756606698420">Chrome getur notast við <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> fyrir leit í Kína. Þú getur breytt þessu í <ph name="BEGIN_LINK" />stillingunum<ph name="END_LINK" />.</translation>
+<translation id="95817756606698420">Ultimatum getur notast við <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> fyrir leit í Kína. Þú getur breytt þessu í <ph name="BEGIN_LINK" />stillingunum<ph name="END_LINK" />.</translation>
 <translation id="961856697154696964">Eyða vefskoðunargögnum</translation>
 <translation id="963246339335003378">Opna verkstjórn</translation>
 <translation id="966131775676567255">Eyðir reikningsgögnum</translation>

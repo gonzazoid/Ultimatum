@@ -5,20 +5,20 @@
 <translation id="1036348656032585052">Désactiver</translation>
 <translation id="1046742265332833834">Thème bleu</translation>
 <translation id="1070329623210597193">Les fichiers que ce site peut afficher ou modifier</translation>
-<translation id="1073417869336441572">Aidez-nous à améliorer Chrome en nous indiquant pourquoi vous avez autorisé les témoins tiers. <ph name="BEGIN_LINK" />Envoyer des commentaires<ph name="END_LINK" /></translation>
+<translation id="1073417869336441572">Aidez-nous à améliorer Ultimatum en nous indiquant pourquoi vous avez autorisé les témoins tiers. <ph name="BEGIN_LINK" />Envoyer des commentaires<ph name="END_LINK" /></translation>
 <translation id="1074758928858737435">Vous pouvez demander à voir la version pour ordinateur de bureau des sites</translation>
 <translation id="1109482864356262001">Les fonctionnalités qui nécessitent l'accès aux capteurs de mouvement ou de luminosité ne seront pas accessibles</translation>
-<translation id="1126523729897810826">Effectuez les actions suggérées ci-dessous pour tirer le meilleur parti de Chrome</translation>
+<translation id="1126523729897810826">Effectuez les actions suggérées ci-dessous pour tirer le meilleur parti de Ultimatum</translation>
 <translation id="113098737392899175">Parcourir les pages à l'aide d'un curseur de texte lorsqu'un clavier est connecté</translation>
 <translation id="1148624853678088576">Vous êtes prêt(e)!</translation>
-<translation id="1149644372535087155">Enregistrez les mots de passe dans Chrome</translation>
+<translation id="1149644372535087155">Enregistrez les mots de passe dans Ultimatum</translation>
 <translation id="1178015372320901893">Zone de contenu dans le bas de l'écran concernant Mes raccourcis</translation>
 <translation id="1178581264944972037">Interrompre</translation>
 <translation id="1181037720776840403">Supprimer</translation>
 <translation id="1192844206376121885">Cette action supprimera toutes les données et tous les témoins stockés par <ph name="ORIGIN" />.</translation>
 <translation id="1199963004393929848">Thème vert</translation>
 <translation id="1201402288615127009">Suivant</translation>
-<translation id="1240190568154816272">Astuces de Chrome</translation>
+<translation id="1240190568154816272">Astuces de Ultimatum</translation>
 <translation id="1242008676835033345">Intégré sur <ph name="WEBSITE_URL" /></translation>
 <translation id="1263609676484797429">Touchez Applis &gt; Applis par défaut.</translation>
 <translation id="1272079795634619415">Arrêter</translation>
@@ -38,7 +38,7 @@
 <translation id="1396327438254055134">Autorisez le site à utiliser l'optimiseur V8.</translation>
 <translation id="1409338233051621926">Touchez Applis puis Applis par défaut</translation>
 <translation id="1415402041810619267">URL tronquée</translation>
-<translation id="1415855080660575082">Autorisez Chrome à partager vos onglets récents avec votre appareil afin qu'ils s'affichent dans la liste d'applis et dans les résultats de recherche de votre appareil. Vous pouvez activer ou désactiver cette option dans les paramètres de Chrome.</translation>
+<translation id="1415855080660575082">Autorisez Ultimatum à partager vos onglets récents avec votre appareil afin qu'ils s'affichent dans la liste d'applis et dans les résultats de recherche de votre appareil. Vous pouvez activer ou désactiver cette option dans les paramètres de Ultimatum.</translation>
 <translation id="1420688843103859429">Avancez et reculez en balayant le pavé tactile avec deux doigts</translation>
 <translation id="1432650420699700107">Les sites peuvent demander à se connecter à n'importe quel appareil de votre réseau local</translation>
 <translation id="1442081309487427303">Activer les liens du mode Lecture</translation>
@@ -52,7 +52,7 @@
 <translation id="1532175480576580256">Zone de contenu dans le bas de l'écran concernant Mes raccourcis ouverte à pleine hauteur</translation>
 <translation id="1538031354170655462">Les sites utilisent généralement la communication en champ proche (CCP) pour fonctionner avec des balises ou des appareils à proximité, comme le balayage de badges ou le paiement sans contact</translation>
 <translation id="1547123415014299762">Les témoins tiers sont autorisés</translation>
-<translation id="1569054338208717605">Accélérer les sites avec le moteur V8 de Chrome, mais rendre Chrome légèrement moins résistant aux attaques</translation>
+<translation id="1569054338208717605">Accélérer les sites avec le moteur V8 de Ultimatum, mais rendre Ultimatum légèrement moins résistant aux attaques</translation>
 <translation id="1593426485665524382">Nouvelles actions accessibles près du haut de l'écran</translation>
 <translation id="1594521731409209842">Pincer l'écran pour redimensionner la photo</translation>
 <translation id="1599268789440304082">Feuille de configuration ouverte</translation>
@@ -73,14 +73,14 @@
 <translation id="1717996979683942279">Lorsque cette option est activée, les sites peuvent demander à gérer les fenêtres sur tous vos écrans. Lorsqu'elle est désactivée, les sites ne peuvent pas gérer les fenêtres sur tous vos écrans.</translation>
 <translation id="1738912554587725807">Zone de contenu dans le bas de l'écran concernant les collections de thèmes de l'apparence de la page Nouvel onglet</translation>
 <translation id="1743802530341753419">Demander avant d'autoriser des sites à se connecter à un appareil (recommandé)</translation>
-<translation id="1766455884659449403">Recevez des notifications de conseils Chrome</translation>
+<translation id="1766455884659449403">Recevez des notifications de conseils Ultimatum</translation>
 <translation id="1777815584158991902">Zone de contenu dans le bas de l'écran concernant le flux Découvertes</translation>
 <translation id="1779089405699405702">Décodeur d’image</translation>
 <translation id="1781533683087883868">Désactiver les liens du mode Lecture</translation>
 <translation id="1785415724048343560">Recommandé pour une expérience optimale</translation>
 <translation id="1796588414813960292">Les fonctionnalités qui utilisent des sons ne fonctionneront pas</translation>
-<translation id="1799920918471566157">Astuces de Chrome</translation>
-<translation id="1816835383954230954">Lorsque l'optimiseur est activé, Chrome s'exécute plus rapidement, et les fonctionnalités qui utilisent JavaScript devraient fonctionner comme prévu. Lorsque l'optimiseur est désactivé, les performances s'en trouvent réduites, mais le V8 est plus résistant aux attaques.</translation>
+<translation id="1799920918471566157">Astuces de Ultimatum</translation>
+<translation id="1816835383954230954">Lorsque l'optimiseur est activé, Ultimatum s'exécute plus rapidement, et les fonctionnalités qui utilisent JavaScript devraient fonctionner comme prévu. Lorsque l'optimiseur est désactivé, les performances s'en trouvent réduites, mais le V8 est plus résistant aux attaques.</translation>
 <translation id="1818308510395330587">Pour autoriser <ph name="APP_NAME" /> à utiliser la RA, activez aussi l'accès à l'appareil photo dans les <ph name="BEGIN_LINK" />paramètres d'Android<ph name="END_LINK" />.</translation>
 <translation id="1822318649925991542">Changez la position pour personnaliser votre expérience de navigation</translation>
 <translation id="1848033246551405023">Police : Sans Serif</translation>
@@ -135,7 +135,7 @@
 <translation id="2315043854645842844">La sélection du certificat client SSL n'est pas prise en charge par le système d'exploitation.</translation>
 <translation id="2347601491101454548">Zone de contenu dans le bas de l'écran concernant Mes raccourcis ouverte à mi-hauteur</translation>
 <translation id="2359808026110333948">Continuer</translation>
-<translation id="2379925928934107488">Si possible, appliquer le thème sombre aux sites lorsque Chrome l'utilise</translation>
+<translation id="2379925928934107488">Si possible, appliquer le thème sombre aux sites lorsque Ultimatum l'utilise</translation>
 <translation id="2390272837142897736">Augmenter le zoom</translation>
 <translation id="2397689164757137845">Autorisée • Précise</translation>
 <translation id="2402980924095424747"><ph name="MEGABYTES" /> Mo</translation>
@@ -147,7 +147,7 @@
 <translation id="2433507940547922241">Apparence</translation>
 <translation id="2434158240863470628">Téléchargement terminé <ph name="SEPARATOR" /> <ph name="BYTES_DOWNLOADED" /></translation>
 <translation id="2442870161001914531">Toujours demander le site pour ordinateurs de bureau</translation>
-<translation id="2445311670906052406">Chrome partage désormais vos onglets récents avec votre appareil. Ils s'afficheront dans la liste d'applis et dans les résultats de recherche de votre appareil. Vous pouvez désactiver cette option en tout temps dans les paramètres de Chrome.</translation>
+<translation id="2445311670906052406">Ultimatum partage désormais vos onglets récents avec votre appareil. Ils s'afficheront dans la liste d'applis et dans les résultats de recherche de votre appareil. Vous pouvez désactiver cette option en tout temps dans les paramètres de Ultimatum.</translation>
 <translation id="245322989586167203">Les sites se connectent généralement aux ports série pour utiliser les fonctionnalités de transfert de données, comme la configuration de votre réseau</translation>
 <translation id="2469312991797799607">Cette action supprimera l'ensemble des données et des témoins de connexion pour <ph name="ORIGIN" /> et tous les sites qui lui sont subordonnés</translation>
 <translation id="2482878487686419369">Notifications</translation>
@@ -159,7 +159,7 @@
 <translation id="2536779053640817375">Autorisée cette fois • Précise</translation>
 <translation id="2544997614631598250">Couleur de thème : foncé</translation>
 <translation id="2546283357679194313">Témoins et données des sites</translation>
-<translation id="2553552004849639664">Obtenez la protection la plus robuste de Chrome contre les menaces en ligne</translation>
+<translation id="2553552004849639664">Obtenez la protection la plus robuste de Ultimatum contre les menaces en ligne</translation>
 <translation id="2570922361219980984">L'accès à la localisation est également désactivé pour cet appareil. Activez-le dans les <ph name="BEGIN_LINK" />paramètres Android<ph name="END_LINK" />.</translation>
 <translation id="257931822824936280">Développé : cliquer pour réduire</translation>
 <translation id="2586657967955657006">Presse-papiers</translation>
@@ -168,7 +168,7 @@
 <translation id="2606760465469169465">Vérification automatique</translation>
 <translation id="2610903128639500624">Gérer dans les <ph name="BEGIN_LINK1" />paramètres Android<ph name="END_LINK1" />
 
-La protection avancée contrôle ces paramètres Chrome :
+La protection avancée contrôle ces paramètres Ultimatum :
 • « Toujours utiliser des connexions sécurisées » est activé.
 • « L'optimiseur JavaScript » est désactivé. <ph name="BEGIN_LINK2" />Gérer les exceptions du site<ph name="END_LINK2" /></translation>
 <translation id="2621115761605608342">Autoriser JavaScript pour un site en particulier.</translation>
@@ -183,18 +183,18 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="2710883118091822664">Connectez-vous pour continuer facilement sur tous vos appareils</translation>
 <translation id="2713106313042589954">Désactiver la caméra</translation>
 <translation id="2717722538473713889">Adresses de courriel</translation>
-<translation id="2726059656860238749">Lancez Chrome avec l'omnibox focalisé, réduisant ainsi le temps de démarrage sur les appareils bas de gamme.</translation>
+<translation id="2726059656860238749">Lancez Ultimatum avec l'omnibox focalisé, réduisant ainsi le temps de démarrage sur les appareils bas de gamme.</translation>
 <translation id="2750481671343847896">Les sites peuvent afficher des invites de connexion provenant de services de vérification d'identité.</translation>
 <translation id="2787357173144933081">Démarrage rapide d'omnibox</translation>
 <translation id="2789132527330338807">Les sites peuvent demander de créer une carte 3D de votre environnement ou de suivre la position de la caméra</translation>
 <translation id="2790501146643349491">Lorsque cette option est activée, les sites récemment fermés peuvent terminer l'envoi et la réception de données. Lorsqu'elle est désactivée, les sites récemment fermés ne peuvent pas terminer l'envoi ni la réception de données.</translation>
-<translation id="2794551654724114396">Activez les notifications pour recevoir des conseils utiles qui vous aideront à tirer le plein potentiel de Chrome</translation>
+<translation id="2794551654724114396">Activez les notifications pour recevoir des conseils utiles qui vous aideront à tirer le plein potentiel de Ultimatum</translation>
 <translation id="2795716239552913152">Les sites utilisent généralement votre position pour proposer des fonctionnalités ou de l'information pertinente, comme la météo locale ou des magasins à proximité</translation>
 <translation id="2800760947029405028">Téléverser une image</translation>
 <translation id="2802908157808345702">Ne pas autoriser les sites à envoyer des fenêtres contextuelles ni à utiliser des redirections</translation>
-<translation id="2814830417943086299">Chrome affiche maintenant vos onglets récents dans la liste d'applis et les résultats de recherche de votre appareil. Vous pouvez désactiver cette option en tout temps dans les paramètres de Chrome.</translation>
+<translation id="2814830417943086299">Ultimatum affiche maintenant vos onglets récents dans la liste d'applis et les résultats de recherche de votre appareil. Vous pouvez désactiver cette option en tout temps dans les paramètres de Ultimatum.</translation>
 <translation id="2822354292072154809">Voulez-vous vraiment réinitialiser toutes les autorisations de site pour <ph name="CHOSEN_OBJECT_NAME" />?</translation>
-<translation id="2848335882304088250">Vous allez maintenant tirer le meilleur parti de Chrome sur votre appareil.</translation>
+<translation id="2848335882304088250">Vous allez maintenant tirer le meilleur parti de Ultimatum sur votre appareil.</translation>
 <translation id="2850913818900871965">Demander l'affichage sur un appareil mobile</translation>
 <translation id="2870560284913253234">Site</translation>
 <translation id="2874939134665556319">Chanson précédente</translation>
@@ -273,7 +273,7 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="3678318839615834650">Zone de contenu dans le bas de l'écran concernant les cartes de la page Nouvel onglet ouverte à pleine hauteur</translation>
 <translation id="3697164069658504920">Lorsque cette option est activée, les sites peuvent demander à utiliser des appareils USB. Lorsqu'elle est désactivée, les sites ne peuvent pas utiliser d'appareils USB.</translation>
 <translation id="3703430731944883733">Gérer votre flux</translation>
-<translation id="3707034683772193706">Un site que vous visitez peut enregistrer une petite quantité d'informations avec Chrome, principalement pour confirmer que vous n'êtes pas un robot</translation>
+<translation id="3707034683772193706">Un site que vous visitez peut enregistrer une petite quantité d'informations avec Ultimatum, principalement pour confirmer que vous n'êtes pas un robot</translation>
 <translation id="3708684582558000260">Ne pas autoriser les sites fermés à terminer l'envoi ni la réception de données</translation>
 <translation id="3709818294139939629">Accès du site au fichier retiré</translation>
 <translation id="3721953990244350188">Ignorer et afficher la prochaine action proposée</translation>
@@ -285,13 +285,13 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="3779154269823594982">Modifier les mots de passe</translation>
 <translation id="3797520601150691162">Ne pas appliquer le thème sombre à un site particulier</translation>
 <translation id="3803367742635802571">Les sites que vous visitez peuvent cesser de fonctionner comme prévu</translation>
-<translation id="3816118180265633665">Couleurs de Chrome</translation>
+<translation id="3816118180265633665">Couleurs de Ultimatum</translation>
 <translation id="381841723434055211">Numéros de téléphone</translation>
 <translation id="3823453485268218808">Police : Mono</translation>
 <translation id="3826050100957962900">Connexion tierce</translation>
 <translation id="3831065134033923230">Vérifier les mots de passe enregistrés</translation>
 <translation id="3835233591525155343">Votre utilisation de l'appareil</translation>
-<translation id="3843916486309149084">Chrome bloquera à nouveau les témoins aujourd'hui</translation>
+<translation id="3843916486309149084">Ultimatum bloquera à nouveau les témoins aujourd'hui</translation>
 <translation id="385051799172605136">Retour</translation>
 <translation id="3859306556332390985">Rechercher vers l'avant</translation>
 <translation id="389521680295183045">Les sites peuvent demander à savoir quand vous utilisez activement votre appareil</translation>
@@ -318,7 +318,7 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="4046123991198612571">Chanson suivante</translation>
 <translation id="4077310749977440510">Les sites lisent généralement votre presse-papiers pour des fonctionnalités telles que la conservation de la mise en forme du texte que vous avez copié</translation>
 <translation id="4082080074595021446">Les exceptions pour des sites Web précis sont interdites, car l'appareil Android ne dispose pas de suffisamment de mémoire vive.</translation>
-<translation id="4089304748532599471">Certains paramètres de Chrome ont été modifiés</translation>
+<translation id="4089304748532599471">Certains paramètres de Ultimatum ont été modifiés</translation>
 <translation id="4149890623864272035">Voulez-vous vraiment supprimer toutes les données locales, y compris les témoins, et réinitialiser toutes les autorisations pour ce site Web?</translation>
 <translation id="4149994727733219643">Affichage simplifié pour les pages Web</translation>
 <translation id="4151930093518524179">Zoom par défaut</translation>
@@ -342,13 +342,13 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="4340799661701629185">Ne pas autoriser les sites à envoyer des notifications</translation>
 <translation id="4341577178275615435">Pour activer ou désactiver la navigation au clavier, utilisez le raccourci F7</translation>
 <translation id="4402755511846832236">Empêcher les sites de savoir quand vous êtes en train d'utiliser cet appareil</translation>
-<translation id="4412683424767388419">Zone de contenu dans le bas de l'écran concernant les couleurs de Chrome ouverte à mi-hauteur</translation>
+<translation id="4412683424767388419">Zone de contenu dans le bas de l'écran concernant les couleurs de Ultimatum ouverte à mi-hauteur</translation>
 <translation id="4412992751769744546">Autoriser les témoins tiers</translation>
 <translation id="4425416282877905577">Police : Serif</translation>
 <translation id="443121186588148776">Port série</translation>
 <translation id="4434045419905280838">Fenêt. context. et redirections</translation>
 <translation id="443552056913301231">Cette action supprimera toutes les données locales, y compris les témoins, et réinitialisera toutes les autorisations pour <ph name="ORIGIN" /></translation>
-<translation id="4441527683895888777">Zone de contenu dans le bas de l'écran concernant les couleurs de Chrome ouverte à pleine hauteur</translation>
+<translation id="4441527683895888777">Zone de contenu dans le bas de l'écran concernant les couleurs de Ultimatum ouverte à pleine hauteur</translation>
 <translation id="4468959413250150279">Désactivez le son sur un site précis.</translation>
 <translation id="4475912480633855319">{COOKIES,plural, =1{# témoin}one{# témoin}other{# témoins}}</translation>
 <translation id="4478158430052450698">Faciliter la personnalisation du zoom pour différents sites</translation>
@@ -370,7 +370,7 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="4655846733459137112">Touchez Oui pour utiliser facilement ce mot de passe lors de votre prochaine connexion</translation>
 <translation id="4663373278480897665">La caméra est autorisée</translation>
 <translation id="4670064810192446073">Réalité virtuelle</translation>
-<translation id="4672315773691449562">Toucher l'appli Navigateur, puis Chrome</translation>
+<translation id="4672315773691449562">Toucher l'appli Navigateur, puis Ultimatum</translation>
 <translation id="4676059169848868271">Pour permettre à <ph name="APP_NAME" /> d'utiliser le suivi des mains, activez également le suivi des mains dans les <ph name="BEGIN_LINK" />paramètres système<ph name="END_LINK" />.</translation>
 <translation id="4688045258817337666">Gérer vos cartes</translation>
 <translation id="4722332387043141878">Les sites utilisent généralement les capteurs de mouvement et de luminosité de votre appareil pour proposer des fonctionnalités comme la réalité virtuelle ou le suivi des activités physiques</translation>
@@ -391,7 +391,7 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="4953688446973710931">Lorsque cette option est activée, les sites peuvent demander de télécharger automatiquement plusieurs fichiers. Lorsqu'elle est désactivée, les sites ne peuvent pas télécharger automatiquement plusieurs fichiers.</translation>
 <translation id="4962975101802056554">Révoquer toutes les autorisations pour l'appareil</translation>
 <translation id="4972737347717125191">Les sites peuvent demander à utiliser des données et des appareils de réalité virtuelle</translation>
-<translation id="4973805849704516244">Zone de contenu dans le bas de l'écran concernant les couleurs de Chrome</translation>
+<translation id="4973805849704516244">Zone de contenu dans le bas de l'écran concernant les couleurs de Ultimatum</translation>
 <translation id="497421865427891073">Avancer</translation>
 <translation id="4976702386844183910">Dernière visite : <ph name="DATE" /></translation>
 <translation id="4978178243417029856">En savoir plus sur le flux Découvertes</translation>
@@ -409,7 +409,7 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="5091663350197390230">Lorsque cette option est activée, les sites peuvent utiliser JavaScript. Lorsqu'elle est désactivée, les sites ne peuvent pas utiliser JavaScript.</translation>
 <translation id="5099358668261120049">Cette action supprimera l'ensemble des données et des témoins stockés par <ph name="ORIGIN" /> ou par son application sur votre écran d'accueil.</translation>
 <translation id="5100237604440890931">Réduit : cliquer pour développer</translation>
-<translation id="5116239826668864748">Vous pouvez utiliser Chrome chaque fois que vous touchez des liens dans des messages, des documents et des applis</translation>
+<translation id="5116239826668864748">Vous pouvez utiliser Ultimatum chaque fois que vous touchez des liens dans des messages, des documents et des applis</translation>
 <translation id="5123685120097942451">Onglet de navigation privée</translation>
 <translation id="512938610812707830">Zone de contenu dans le bas de l'écran concernant les collections de thèmes de l'apparence de la page Nouvel onglet ouverte à pleine hauteur</translation>
 <translation id="5137460097045297858">Zone de contenu dans le bas de l'écran concernant le flux Découvertes ouverte à mi-hauteur</translation>
@@ -446,7 +446,7 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="5516455585884385570">Ouvrir les paramètres de notification</translation>
 <translation id="5527111080432883924">Demander une autorisation lorsque les sites veulent lire du texte et des images du presse-papiers (recommandé)</translation>
 <translation id="5553374991681107062">Plus récentes</translation>
-<translation id="5555115555607204100">Ne pas accélérer les sites avec le moteur V8 de Chrome, mais rendre Chrome légèrement plus résistant aux attaques</translation>
+<translation id="5555115555607204100">Ne pas accélérer les sites avec le moteur V8 de Ultimatum, mais rendre Ultimatum légèrement plus résistant aux attaques</translation>
 <translation id="5556459405103347317">Actualiser</translation>
 <translation id="5591840828808741583"><ph name="SITE_NAME" /> bloqué</translation>
 <translation id="560980142378233747">Cela signifie que les fonctionnalités du site devraient fonctionner comme prévu, mais que le niveau de protection de la navigation est moins élevé. <ph name="BEGIN_LINK" />Envoyer des commentaires<ph name="END_LINK" /></translation>
@@ -473,7 +473,7 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="5804241973901381774">Autorisations</translation>
 <translation id="5817042798620209981">Informations sur le site, boîte de dialogue</translation>
 <translation id="5822675474983796325">Zone de contenu dans le bas de l'écran de Personnaliser votre page Nouvel onglet ouverte à pleine hauteur</translation>
-<translation id="5826403277762134844">Zone de contenu dans le bas de l'écran contenant des instructions pour enregistrer les mots de passe dans Chrome</translation>
+<translation id="5826403277762134844">Zone de contenu dans le bas de l'écran contenant des instructions pour enregistrer les mots de passe dans Ultimatum</translation>
 <translation id="5833899990800318936">Ne pas autoriser les sites à utiliser JavaScript</translation>
 <translation id="583673505367439042">Les sites peuvent demander à modifier les fichiers et les dossiers de votre appareil</translation>
 <translation id="5844448279347999754">Lorsque cette option est activée, les sites peuvent demander à voir le texte et les images enregistrées dans votre presse-papiers. Lorsqu'elle est désactivée, les sites ne peuvent pas voir le texte ni les images enregistrées dans votre presse-papiers.</translation>
@@ -502,7 +502,7 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="6012967556075291653">Raccourci épinglé</translation>
 <translation id="6013003831291591200">Tâche terminée</translation>
 <translation id="6015775454662021376">Gérez l'accès de ce site à votre appareil</translation>
-<translation id="6022659036123304283">Appropriez-vous Chrome</translation>
+<translation id="6022659036123304283">Appropriez-vous Ultimatum</translation>
 <translation id="6040143037577758943">Fermer</translation>
 <translation id="6042308850641462728">Plus</translation>
 <translation id="6064125863973209585">Téléchargements terminés</translation>
@@ -510,20 +510,20 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="6085954183010297841">Supprimer l'autorisation de modification de fichier? <ph name="FILE" /></translation>
 <translation id="6104860901391833523">Lorsque cette option est activée, les sites peuvent entrer automatiquement en mode Incrustation d'image. Lorsqu'elle est désactivée, les sites ne peuvent pas entrer automatiquement en mode Incrustation d'image.</translation>
 <translation id="6120483543004435978">Lorsque cette option est activée, les sites peuvent vous demander si vous utilisez activement votre appareil. Lorsqu'elle est désactivée, les sites ne peuvent pas savoir si vous utilisez activement votre appareil.</translation>
-<translation id="6132075343662013154">Chrome vous proposera d'enregistrer votre mot de passe</translation>
+<translation id="6132075343662013154">Ultimatum vous proposera d'enregistrer votre mot de passe</translation>
 <translation id="615886654739818377">Ne pas autoriser les sites à gérer les fenêtres sur tous vos écrans</translation>
 <translation id="6165508094623778733">En savoir plus</translation>
 <translation id="6171020522141473435">Lorsque cette option est activée, les sites peuvent demander à utiliser des appareils Bluetooth. Lorsqu'elle est désactivée, les sites ne peuvent pas utiliser d'appareils Bluetooth.</translation>
 <translation id="6177128806592000436">Votre connexion à ce site n'est pas sécurisée</translation>
 <translation id="6181444274883918285">Ajouter une exception pour le site</translation>
-<translation id="6194967801833346599">{DAYS,plural, =1{Chrome bloquera à nouveau les témoins demain}one{# jour jusqu'à ce que les témoins soient bloqués à nouveau}other{# jours jusqu'à ce que les témoins soient bloqués à nouveau}}</translation>
+<translation id="6194967801833346599">{DAYS,plural, =1{Ultimatum bloquera à nouveau les témoins demain}one{# jour jusqu'à ce que les témoins soient bloqués à nouveau}other{# jours jusqu'à ce que les témoins soient bloqués à nouveau}}</translation>
 <translation id="6196640612572343990">Bloquer les témoins de tiers</translation>
 <translation id="6205314730813004066">Confidentialité des annonces</translation>
 <translation id="6207207788774442484">Supprimer les données et réinitialiser les autorisations</translation>
 <translation id="6211409961905616543">Les sites peuvent utiliser les capteurs de mouvement et de luminosité</translation>
 <translation id="6218508144653756827">Thème fuchsia</translation>
 <translation id="6231752747840485235">Désinstaller « <ph name="APP_NAME" /> »?</translation>
-<translation id="6234351944623978659">Touchez Appli de navigation &gt; Chrome.</translation>
+<translation id="6234351944623978659">Touchez Appli de navigation &gt; Ultimatum.</translation>
 <translation id="6260830281887654268">Zone de contenu dans le bas de l'écran concernant les collections de thèmes de l'apparence de la page Nouvel onglet ouverte à mi-hauteur</translation>
 <translation id="6262191102408817757">En fonction de votre dernier onglet</translation>
 <translation id="6262279340360821358">Autorisations <ph name="PERMISSION_1" /> et <ph name="PERMISSION_2" /> bloquées</translation>
@@ -573,7 +573,7 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="6787751205395685251">Sélectionner une option pour <ph name="SITE_NAME" /></translation>
 <translation id="6790428901817661496">Jouer</translation>
 <translation id="6818926723028410516">Sélectionner des éléments</translation>
-<translation id="6838525730752203626">Utiliser Chrome par défaut</translation>
+<translation id="6838525730752203626">Utiliser Ultimatum par défaut</translation>
 <translation id="6840760312327750441">Pour regrouper des onglets, maintenez le doigt sur un onglet, puis faites-le glisser vers un autre.</translation>
 <translation id="6842868554183332230">En général, les sites détectent quand vous utilisez activement votre appareil pour définir votre disponibilité dans les applications de clavardage</translation>
 <translation id="6864395892908308021">Cet appareil ne prend pas en charge la technologie CCP</translation>
@@ -591,7 +591,7 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="6992014788289743568">Renforcez votre sécurité et protégez vos données en vérifiant vos mots de passe</translation>
 <translation id="6992289844737586249">Demander avant d'autoriser des sites à utiliser votre microphone (recommandé)</translation>
 <translation id="7000754031042624318">Désactivée dans les paramètres Android</translation>
-<translation id="702275896380648118">Ce site détermine ce que vous aimez et suggère ensuite des annonces à d'autres sites. Ce site récupère également les sujets de vos annonces à partir de Chrome pour vous montrer des annonces plus pertinentes.</translation>
+<translation id="702275896380648118">Ce site détermine ce que vous aimez et suggère ensuite des annonces à d'autres sites. Ce site récupère également les sujets de vos annonces à partir de Ultimatum pour vous montrer des annonces plus pertinentes.</translation>
 <translation id="7036823721811529709">Écouter en arrière-plan</translation>
 <translation id="7044081119134178347">L'appareil photo est autorisé cette fois</translation>
 <translation id="7053983685419859001">Bloquer</translation>
@@ -649,7 +649,7 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="7658239707568436148">Annuler</translation>
 <translation id="7667547420449112975">Le Magicien d'Oz</translation>
 <translation id="7681597159868843240">Les sites utilisent généralement les capteurs de mouvement de votre appareil pour proposer des fonctionnalités comme la réalité virtuelle ou le suivi des activités physiques</translation>
-<translation id="7688240020069572972">Masquer la carte des astuces de Chrome</translation>
+<translation id="7688240020069572972">Masquer la carte des astuces de Ultimatum</translation>
 <translation id="7719367874908701697">Zoom de la page</translation>
 <translation id="775043444390799886">Révoquer l'autorisation</translation>
 <translation id="7758789811447313947">Thème violet</translation>
@@ -681,7 +681,7 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="8033047164036749181">S'abonner pour recevoir des notifications de ce site</translation>
 <translation id="8042586301629853791">Trier par :</translation>
 <translation id="8051193500142930381">Les fonctionnalités qui nécessitent une caméra ne seront pas accessibles</translation>
-<translation id="8056330801132235235">Chrome par défaut</translation>
+<translation id="8056330801132235235">Ultimatum par défaut</translation>
 <translation id="8067883171444229417">Lire la vidéo</translation>
 <translation id="8068648041423924542">Impossible de sélectionner le certificat.</translation>
 <translation id="8077120325605624147">Tous les sites que vous visitez peuvent vous suggérer n’importe quelle annonce</translation>
@@ -735,10 +735,10 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="8514955299594277296">Ne pas autoriser les sites à enregistrer des données sur votre appareil (non recommandé)</translation>
 <translation id="851751545965956758">Empêcher les sites de se connecter à des appareils</translation>
 <translation id="8525306231823319788">Plein écran</translation>
-<translation id="8541410041357371550">Ce site récupère vos sujets d'annonces à partir de Chrome pour vous montrer des annonces plus pertinentes</translation>
+<translation id="8541410041357371550">Ce site récupère vos sujets d'annonces à partir de Ultimatum pour vous montrer des annonces plus pertinentes</translation>
 <translation id="854876774113449365">Les sites que vous visitez peuvent intégrer du contenu provenant d'autres sites, p. ex. des images, des publicités et du texte. Ces autres sites peuvent demander l'autorisation d'utiliser les informations qu'ils ont enregistrées à votre sujet lorsque vous naviguez sur le site. <ph name="BEGIN_LINK" />En savoir plus à propos du contenu intégré<ph name="END_LINK" /></translation>
 <translation id="8549127125482561383">Comment afficher les requêtes</translation>
-<translation id="8558480467877843976">Vous pouvez désormais utiliser Chrome chaque fois que vous naviguez ou que vous touchez des liens dans des messages, des documents et d'autres applications.</translation>
+<translation id="8558480467877843976">Vous pouvez désormais utiliser Ultimatum chaque fois que vous naviguez ou que vous touchez des liens dans des messages, des documents et d'autres applications.</translation>
 <translation id="857943718398505171">Autorisée (recommandé)</translation>
 <translation id="8593422116412089302">Lorsque cette option est activée, les sites peuvent demander d'utiliser les informations qu'ils ont enregistrées à votre sujet. Lorsqu'elle est désactivée, les sites ne peuvent pas vous demander d'utiliser les informations qu'ils ont enregistrées à votre sujet.</translation>
 <translation id="8609465669617005112">Déplacer vers le haut</translation>
@@ -755,7 +755,7 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="8719283222052720129">Vous pouvez activer l'autorisation pour <ph name="APP_NAME" /> dans les <ph name="BEGIN_LINK" />paramètres d'Android<ph name="END_LINK" />.</translation>
 <translation id="8721719390026067591">Lorsque cette option est activée, les sites peuvent demander à rechercher des appareils Bluetooth. Lorsqu'elle est désactivée, les sites ne peuvent pas rechercher d'appareils Bluetooth.</translation>
 <translation id="8725066075913043281">Réessayer</translation>
-<translation id="8727043961453758442">Tirez le meilleur parti de Chrome</translation>
+<translation id="8727043961453758442">Tirez le meilleur parti de Ultimatum</translation>
 <translation id="8730621377337864115">Terminé</translation>
 <translation id="8737426583868847403">Les sites pour lesquels vous enregistrez un niveau de zoom personnalisé s'afficheront ici</translation>
 <translation id="8748714929822124637">N'autorisez pas les sites à accéder à d'autres appareils sur votre réseau local</translation>
@@ -763,13 +763,13 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="8775741625735357092">Vous pouvez activer la barre de favoris dans Paramètres &gt; Apparence</translation>
 <translation id="8800034312320686233">Le site ne fonctionne pas?</translation>
 <translation id="8801436777607969138">Bloquez JavaScript sur un site en particulier.</translation>
-<translation id="8801657293260363985">V8 est le moteur JavaScript et WebAssembly de Chrome utilisé pour améliorer les performances du site</translation>
+<translation id="8801657293260363985">V8 est le moteur JavaScript et WebAssembly de Ultimatum utilisé pour améliorer les performances du site</translation>
 <translation id="8803526663383843427">Lorsque activée</translation>
 <translation id="8805385115381080995">La navigation est plus rapide, car il est moins probable qu'un site vérifie que vous êtes bien une personne réelle</translation>
 <translation id="881644524232657178">Lorsque cette option est activée, les sites peuvent utiliser les capteurs de mouvement et de luminosité de votre appareil. Lorsqu'elle est désactivée, les sites ne peuvent pas utiliser de capteurs.</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">Essayez d'autoriser temporairement les témoins tiers, ce qui signifie que la navigation est moins protégée, mais que les fonctionnalités des sites sont plus susceptibles de fonctionner comme prévu.</translation>
-<translation id="8889294078294184559">Pendant que vous continuez à les parcourir, les sites peuvent vérifier la probabilité que vous soyez une personne réelle par le biais de Chrome et d'un site que vous avez visité précédemment</translation>
+<translation id="8889294078294184559">Pendant que vous continuez à les parcourir, les sites peuvent vérifier la probabilité que vous soyez une personne réelle par le biais de Ultimatum et d'un site que vous avez visité précédemment</translation>
 <translation id="8899807382908246773">Annonces intrusives</translation>
 <translation id="8903921497873541725">Zoom avant</translation>
 <translation id="8919911527569629802">Connectez-vous à n'importe quel site Web</translation>
@@ -795,7 +795,7 @@ La protection avancée contrôle ces paramètres Chrome :
 <translation id="9138037198177304356">Accès aux notifications autorisé</translation>
 <translation id="9138217887606523162">Le zoom actuel est de <ph name="ZOOM_LEVEL" /> %%</translation>
 <translation id="915112772806845021">Les sites utilisent cette fonctionnalité pour accéder automatiquement à l'Incrustation d'image. Cela vous permet de continuer à regarder une vidéo tout en libérant votre écran pour d'autres tâches.</translation>
-<translation id="9156722768168878035">Laissez Chrome afficher vos onglets récents dans la liste d'applis et les résultats de recherche de votre appareil. Vous pouvez désactiver cette option en tout temps dans les paramètres de Chrome.</translation>
+<translation id="9156722768168878035">Laissez Ultimatum afficher vos onglets récents dans la liste d'applis et les résultats de recherche de votre appareil. Vous pouvez désactiver cette option en tout temps dans les paramètres de Ultimatum.</translation>
 <translation id="9162462602695099906">Cette page est dangereuse</translation>
 <translation id="9182556968660520230">Ne pas autoriser les sites à faire jouer du contenu protégé</translation>
 <translation id="947156494302904893">Les sites que vous visitez peuvent vérifier que vous êtes une personne réelle et non un robot</translation>

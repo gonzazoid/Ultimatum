@@ -5,20 +5,20 @@
 <translation id="1036348656032585052">Lülita välja</translation>
 <translation id="1046742265332833834">Sinine teema</translation>
 <translation id="1070329623210597193">Failid, mida see sait saab vaadata või muuta</translation>
-<translation id="1073417869336441572">Aidake meil Chrome’i täiustada, andes teada, miks lubasite kolmanda osapoole küpsisefailid. <ph name="BEGIN_LINK" />Tagasiside saatmine<ph name="END_LINK" /></translation>
+<translation id="1073417869336441572">Aidake meil Ultimatum’i täiustada, andes teada, miks lubasite kolmanda osapoole küpsisefailid. <ph name="BEGIN_LINK" />Tagasiside saatmine<ph name="END_LINK" /></translation>
 <translation id="1074758928858737435">Saate paluda saitide lauaarvuti versiooni nägemist</translation>
 <translation id="1109482864356262001">Liikumis- või valgusandureid vajavad funktsioonid ei tööta.</translation>
-<translation id="1126523729897810826">Viige lõpule allolevad soovitatavad toimingud, et Chrome'i parimal moel kasutada.</translation>
+<translation id="1126523729897810826">Viige lõpule allolevad soovitatavad toimingud, et Ultimatum'i parimal moel kasutada.</translation>
 <translation id="113098737392899175">Lehtedel navigeerimine tekstikursoriga, kui klaviatuur on ühendatud</translation>
 <translation id="1148624853678088576">Teil on kõik seadistatud!</translation>
-<translation id="1149644372535087155">Paroolide salvestamine Chrome'is</translation>
+<translation id="1149644372535087155">Paroolide salvestamine Ultimatum'is</translation>
 <translation id="1178015372320901893">Minu otseteede alumine leht</translation>
 <translation id="1178581264944972037">Peata</translation>
 <translation id="1181037720776840403">Eemalda</translation>
 <translation id="1192844206376121885">See kustutab kõik saidi <ph name="ORIGIN" /> salvestatud andmed ja küpsisefailid.</translation>
 <translation id="1199963004393929848">Roheline teema</translation>
 <translation id="1201402288615127009">Järgmine</translation>
-<translation id="1240190568154816272">Chrome’i nõuanded</translation>
+<translation id="1240190568154816272">Ultimatum’i nõuanded</translation>
 <translation id="1242008676835033345">Manustatud aadressil <ph name="WEBSITE_URL" /></translation>
 <translation id="1263609676484797429">Puudutage valikuid Rakendused &gt; Vaikerakendused</translation>
 <translation id="1272079795634619415">Peata</translation>
@@ -38,7 +38,7 @@
 <translation id="1396327438254055134">Lubage saidil V8 optimeerijat kasutada.</translation>
 <translation id="1409338233051621926">Puudutage valikut Rakendused ja seejärel valikut Vaikerakendused</translation>
 <translation id="1415402041810619267">Lühendatud URL</translation>
-<translation id="1415855080660575082">Lubage Chrome’il jagada teie hiljutisi vahelehti teie seadmega, et näha neid seadme rakenduste loendis ja otsingutulemustes. Saate selle Chrome’i seadetes sisse või välja lülitada.</translation>
+<translation id="1415855080660575082">Lubage Ultimatum’il jagada teie hiljutisi vahelehti teie seadmega, et näha neid seadme rakenduste loendis ja otsingutulemustes. Saate selle Ultimatum’i seadetes sisse või välja lülitada.</translation>
 <translation id="1420688843103859429">Puuteplaadil kahe sõrmega pühkides edasi ja tagasi navigeerimine.</translation>
 <translation id="1432650420699700107">Saidid saavad küsida luba teie kohalikus võrgus mis tahes seadmega ühenduse loomiseks</translation>
 <translation id="1442081309487427303">Lugemisrežiimi linkide sisselülitamine</translation>
@@ -52,7 +52,7 @@
 <translation id="1532175480576580256">Minu otseteede alumine leht on avatud täiskõrgusel.</translation>
 <translation id="1538031354170655462">Tavaliselt kasutavad saidid lähedalasuvate märgendite või seadmetega töötamiseks lähiväljasidet (NFC) (nt märkide skannimiseks või viipemakseks)</translation>
 <translation id="1547123415014299762">Kolmanda osapoole küpsisefailid on lubatud</translation>
-<translation id="1569054338208717605">Kiirenda saite Chrome’i V8 mootoriga, aga vähenda pisut Chrome’i vastupanuvõimet rünnetele</translation>
+<translation id="1569054338208717605">Kiirenda saite Ultimatum’i V8 mootoriga, aga vähenda pisut Ultimatum’i vastupanuvõimet rünnetele</translation>
 <translation id="1593426485665524382">Uued toimingud on saadaval ekraanikuva ülaosas</translation>
 <translation id="1594521731409209842">Foto suuruse muutmiseks liigutage ekraanil sõrmi kokku-lahku</translation>
 <translation id="1599268789440304082">Seadistusleht on avatud</translation>
@@ -73,14 +73,14 @@
 <translation id="1717996979683942279">Kui see on sisse lülitatud, saavad saidid küsida luba akende haldamiseks kõikidel teie ekraanidel. Kui see on välja lülitatud, ei saa saidid kõikidel teie ekraanidel aknaid hallata.</translation>
 <translation id="1738912554587725807">Uue vahelehe välimuse teema kogude alumine leht</translation>
 <translation id="1743802530341753419">Küsi luba, kui saidid üritavad seadmega ühendust luua (soovitatav)</translation>
-<translation id="1766455884659449403">Hankige Chrome'i nõuandemärguanded</translation>
+<translation id="1766455884659449403">Hankige Ultimatum'i nõuandemärguanded</translation>
 <translation id="1777815584158991902">Avastamisvoo alumine leht</translation>
 <translation id="1779089405699405702">Pildi dekooder</translation>
 <translation id="1781533683087883868">Lugemisrežiimi linkide väljalülitamine</translation>
 <translation id="1785415724048343560">Soovitatav parima kasutuskogemuse saamiseks</translation>
 <translation id="1796588414813960292">Heli vajavad funktsioonid ei tööta</translation>
-<translation id="1799920918471566157">Chrome’i nõuanded</translation>
-<translation id="1816835383954230954">Kui seade on sees, töötab Chrome kiiremini ja JavaScripti kasutavad funktsioonid peaksid töötama kavandatud viisil. Kui seade on väljas, vähendab see jõudlust, kuid muudab V8 rünnakutele vastupidavamaks.</translation>
+<translation id="1799920918471566157">Ultimatum’i nõuanded</translation>
+<translation id="1816835383954230954">Kui seade on sees, töötab Ultimatum kiiremini ja JavaScripti kasutavad funktsioonid peaksid töötama kavandatud viisil. Kui seade on väljas, vähendab see jõudlust, kuid muudab V8 rünnakutele vastupidavamaks.</translation>
 <translation id="1818308510395330587">Selleks et rakendus <ph name="APP_NAME" /> saaks AR-i kasutada, lülitage sisse kaamera ka <ph name="BEGIN_LINK" />Androidi seadetes<ph name="END_LINK" />.</translation>
 <translation id="1822318649925991542">Sirvimiskogemuse kohandamiseks vahetage asukohta.</translation>
 <translation id="1848033246551405023">Sans Serifi font</translation>
@@ -135,7 +135,7 @@
 <translation id="2315043854645842844">Operatsioonisüsteem ei toeta kliendipoolset sertifikaadi valimist.</translation>
 <translation id="2347601491101454548">Minu otseteede alumine leht on avatud poolel kõrgusel.</translation>
 <translation id="2359808026110333948">Jätka</translation>
-<translation id="2379925928934107488">Kui Chrome kasutab tumedat teemat, rakendatakse saitidele võimaluse korral tume teema</translation>
+<translation id="2379925928934107488">Kui Ultimatum kasutab tumedat teemat, rakendatakse saitidele võimaluse korral tume teema</translation>
 <translation id="2390272837142897736">Suumi suurendamine</translation>
 <translation id="2397689164757137845">Lubatud • Täpne</translation>
 <translation id="2402980924095424747"><ph name="MEGABYTES" /> MB</translation>
@@ -147,7 +147,7 @@
 <translation id="2433507940547922241">Välimus</translation>
 <translation id="2434158240863470628">Allalaadimine jõudis lõpule: <ph name="SEPARATOR" /> <ph name="BYTES_DOWNLOADED" /></translation>
 <translation id="2442870161001914531">Alati taotletakse arvutisaiti</translation>
-<translation id="2445311670906052406">Chrome jagab nüüd teie hiljutisi vahelehti teie seadmega. Näete neid oma seadme rakenduste loendis ja otsingutulemustes. Saate selle Chrome’i seadetes igal ajal välja lülitada.</translation>
+<translation id="2445311670906052406">Ultimatum jagab nüüd teie hiljutisi vahelehti teie seadmega. Näete neid oma seadme rakenduste loendis ja otsingutulemustes. Saate selle Ultimatum’i seadetes igal ajal välja lülitada.</translation>
 <translation id="245322989586167203">Saidid loovad jadaportidega ühenduse tavaliselt andmeedastuse funktsioonide jaoks, näiteks võrgu seadistamiseks</translation>
 <translation id="2469312991797799607">See toiming kustutab kõik saidigrupi <ph name="ORIGIN" /> ning selle all olevate kõigi saitide andmed ja küpsised</translation>
 <translation id="2482878487686419369">Märguanded</translation>
@@ -159,7 +159,7 @@
 <translation id="2536779053640817375">Lubatud sel korral • Täpne</translation>
 <translation id="2544997614631598250">Tume teemavärv</translation>
 <translation id="2546283357679194313">Küpsised ja saidi andmed</translation>
-<translation id="2553552004849639664">Hankige Chrome'i tugevaim kaitse veebiohtude vastu.</translation>
+<translation id="2553552004849639664">Hankige Ultimatum'i tugevaim kaitse veebiohtude vastu.</translation>
 <translation id="2570922361219980984">Ka juurdepääs asukohale on selle seadme puhul välja lülitatud. Lülitage see sisse <ph name="BEGIN_LINK" />Androidi seadetes<ph name="END_LINK" />.</translation>
 <translation id="257931822824936280">Laiendatud – ahendamiseks klõpsake.</translation>
 <translation id="2586657967955657006">Lõikelaud</translation>
@@ -168,7 +168,7 @@
 <translation id="2606760465469169465">Automaatne kinnitamine</translation>
 <translation id="2610903128639500624">Hallake <ph name="BEGIN_LINK1" />Androidi seadetes<ph name="END_LINK1" />
 
-Täiustatud kaitse reguleerib neid Chrome’i seadeid:
+Täiustatud kaitse reguleerib neid Ultimatum’i seadeid:
 • „Kasuta alati turvalist ühendust“ on sisse lülitatud.
 • „JavaScripti optimeerija“ on välja lülitatud. <ph name="BEGIN_LINK2" />Saidi erandite haldamine<ph name="END_LINK2" /></translation>
 <translation id="2621115761605608342">Lubage JavaScript konkreetse saidi jaoks.</translation>
@@ -183,18 +183,18 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="2710883118091822664">Logige sisse, et tegevust hõlpsasti kõigis oma seadmetes jätkata</translation>
 <translation id="2713106313042589954">Lülita kaamera välja</translation>
 <translation id="2717722538473713889">E-posti aadressid</translation>
-<translation id="2726059656860238749">Chrome’i käivitamisel on kursor omnikastikeses, et vähendada väiksema jõudlusega seadmete puhul käivitusaega.</translation>
+<translation id="2726059656860238749">Ultimatum’i käivitamisel on kursor omnikastikeses, et vähendada väiksema jõudlusega seadmete puhul käivitusaega.</translation>
 <translation id="2750481671343847896">Saidid saavad kuvada identiteedihaldusteenuste sisselogimisviipasid.</translation>
 <translation id="2787357173144933081">Omnikastikese kiirkäivitamine</translation>
 <translation id="2789132527330338807">Lubage saitidel küsida luba luua teie ümbrusest 3D-kaarti või jälgida kaamera asendit</translation>
 <translation id="2790501146643349491">Kui see on sisse lülitatud, saavad hiljuti suletud saidid andmete saatmise ja vastuvõtmise lõpetada. Kui see on välja lülitatud, ei saa hiljuti suletud saidid andmete saatmist ega vastuvõtmist lõpetada.</translation>
-<translation id="2794551654724114396">Lülitage sisse märguanded, et saada kasulikke nõuandeid Chrome’i parimal moel kasutamiseks.</translation>
+<translation id="2794551654724114396">Lülitage sisse märguanded, et saada kasulikke nõuandeid Ultimatum’i parimal moel kasutamiseks.</translation>
 <translation id="2795716239552913152">Saidid kasutavad teie asukohateavet tavaliselt asjakohaste funktsioonide või teabe (nt kohalikud uudised või läheduses asuvad kauplused) pakkumiseks</translation>
 <translation id="2800760947029405028">Laadige üles pilt</translation>
 <translation id="2802908157808345702">Ärge lubage saitidel saata hüpikaknaid ega kasutada ümbersuunamisi</translation>
-<translation id="2814830417943086299">Chrome kuvab nüüd teie hiljutisi vahelehti teie seadme rakenduste loendis ja otsingutulemustes. Saate selle Chrome’i seadetes igal ajal välja lülitada.</translation>
+<translation id="2814830417943086299">Ultimatum kuvab nüüd teie hiljutisi vahelehti teie seadme rakenduste loendis ja otsingutulemustes. Saate selle Ultimatum’i seadetes igal ajal välja lülitada.</translation>
 <translation id="2822354292072154809">Kas soovite objekti <ph name="CHOSEN_OBJECT_NAME" /> jaoks kindlasti lähtestada kõik saidi load?</translation>
-<translation id="2848335882304088250">Nüüd saate Chrome’i kasutada oma seadmes parimal viisil.</translation>
+<translation id="2848335882304088250">Nüüd saate Ultimatum’i kasutada oma seadmes parimal viisil.</translation>
 <translation id="2850913818900871965">Mobiilivaate taotlemine</translation>
 <translation id="2870560284913253234">Sait</translation>
 <translation id="2874939134665556319">Eelmine lugu</translation>
@@ -273,7 +273,7 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="3678318839615834650">Uue vahelehe kaartide alumine leht on avatud täiskõrguseni</translation>
 <translation id="3697164069658504920">Kui see on sisse lülitatud, võivad saidid küsida luba USB-seadmete kasutamiseks. Kui see on välja lülitatud, ei saa saidid USB-seadmeid kasutada.</translation>
 <translation id="3703430731944883733">Voo haldamine</translation>
-<translation id="3707034683772193706">Külastatav sait võib Chrome’iga salvestada väikese hulga teavet, peamiselt kinnitamaks, et te pole robot.</translation>
+<translation id="3707034683772193706">Külastatav sait võib Ultimatum’iga salvestada väikese hulga teavet, peamiselt kinnitamaks, et te pole robot.</translation>
 <translation id="3708684582558000260">Ära luba suletud saitidel viia andmete saatmist või vastuvõtmist lõpule</translation>
 <translation id="3709818294139939629">Saidi juurdepääs failile on eemaldatud</translation>
 <translation id="3721953990244350188">Loobu ja kuva järgmine saadaolev toiming</translation>
@@ -285,13 +285,13 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="3779154269823594982">Muuda paroole</translation>
 <translation id="3797520601150691162">Tumedat teemat ei rakendata konkreetsele saidile</translation>
 <translation id="3803367742635802571">Külastatavad saidid võivad lõpetada ootuspäraselt toimimise</translation>
-<translation id="3816118180265633665">Chrome'i värvid</translation>
+<translation id="3816118180265633665">Ultimatum'i värvid</translation>
 <translation id="381841723434055211">Telefoninumbrid</translation>
 <translation id="3823453485268218808">Monofont</translation>
 <translation id="3826050100957962900">Kolmanda osapoole sisselogimisviibad</translation>
 <translation id="3831065134033923230">Salvestatud paroolide kontrollimine</translation>
 <translation id="3835233591525155343">Teie seadmekasutus</translation>
-<translation id="3843916486309149084">Chrome blokeerib täna küpsisefailid uuesti</translation>
+<translation id="3843916486309149084">Ultimatum blokeerib täna küpsisefailid uuesti</translation>
 <translation id="385051799172605136">Tagasi</translation>
 <translation id="3859306556332390985">Keri edasi</translation>
 <translation id="389521680295183045">Saidid võivad küsida luba selle teadmiseks, millal seadet aktiivselt kasutate</translation>
@@ -318,7 +318,7 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="4046123991198612571">Järgmine lugu</translation>
 <translation id="4077310749977440510">Tavaliselt loevad saidid teie lõikelaual olevat sisu näiteks teie kopeeritud teksti vormingu säilitamiseks</translation>
 <translation id="4082080074595021446">Kindlate veebisaitide erandid on keelatud, kuna Androidi seadmes pole piisavalt RAM-i.</translation>
-<translation id="4089304748532599471">Mõningaid Chrome'i seadeid on muudetud</translation>
+<translation id="4089304748532599471">Mõningaid Ultimatum'i seadeid on muudetud</translation>
 <translation id="4149890623864272035">Kas olete kindel, et soovite kustutada kõik kohalikud andmed, sh küpsised, ja lähtestada kõik selle veebisaidi õigused?</translation>
 <translation id="4149994727733219643">Veebilehtede lihtsustatud vaade</translation>
 <translation id="4151930093518524179">Vaikesuum</translation>
@@ -342,13 +342,13 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="4340799661701629185">Ära luba saitidel saata märguandeid</translation>
 <translation id="4341577178275615435">Sisestusmärgiga sirvimise sisse- ja väljalülitamiseks võite kasutada kiirklahvi F7</translation>
 <translation id="4402755511846832236">Keelake saitidel selle tuvastamine, millal seda seadet aktiivselt kasutate</translation>
-<translation id="4412683424767388419">Chrome'i värvide alumine leht on avatud poolel kõrgusel</translation>
+<translation id="4412683424767388419">Ultimatum'i värvide alumine leht on avatud poolel kõrgusel</translation>
 <translation id="4412992751769744546">Luba kolmanda osapoole küpsisefailid</translation>
 <translation id="4425416282877905577">Serifi font</translation>
 <translation id="443121186588148776">Jadaport</translation>
 <translation id="4434045419905280838">Hüpikaknad ja ümbersuunamised</translation>
 <translation id="443552056913301231">See toiming kustutab kõik kohalikud andmed, sh küpsised, ja lähtestab kõik lähtekoha <ph name="ORIGIN" /> õigused</translation>
-<translation id="4441527683895888777">Chrome'i värvide alumine leht on avatud täiskõrgusel</translation>
+<translation id="4441527683895888777">Ultimatum'i värvide alumine leht on avatud täiskõrgusel</translation>
 <translation id="4468959413250150279">Konkreetse saidi heli vaigistamine.</translation>
 <translation id="4475912480633855319">{COOKIES,plural, =1{# küpsisefail}other{# küpsisefaili}}</translation>
 <translation id="4478158430052450698">Muutke erinevate saitide jaoks suumi kohandamine lihtsamaks</translation>
@@ -370,7 +370,7 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="4655846733459137112">Puudutage valikut Jah, et järgmisel sisselogimisel seda parooli hõlpsasti kasutada.</translation>
 <translation id="4663373278480897665">Kaamera on lubatud</translation>
 <translation id="4670064810192446073">Virtuaalreaalsus</translation>
-<translation id="4672315773691449562">Puudutage valikut Brauseri rakendus ja seejärel valikut Chrome</translation>
+<translation id="4672315773691449562">Puudutage valikut Brauseri rakendus ja seejärel valikut Ultimatum</translation>
 <translation id="4676059169848868271">Kui soovite lubada rakendusel <ph name="APP_NAME" /> kasutada käeliigutuste jälgimist, lülitage <ph name="BEGIN_LINK" />süsteemiseadetes<ph name="END_LINK" /> sisse ka käeliigutuste jälgimine.</translation>
 <translation id="4688045258817337666">Kaartide haldamine</translation>
 <translation id="4722332387043141878">Saidid kasutavad teie seadme liikumis- ja valgusandureid tavaliselt näiteks VR-kogemuse pakkumiseks või treeningu jälgimiseks.</translation>
@@ -391,7 +391,7 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="4953688446973710931">Kui see on sisse lülitatud, võivad saidid küsida luba mitme faili automaatseks allalaadimiseks. Kui see on välja lülitatud, ei saa saidid mitut faili automaatselt alla laadida.</translation>
 <translation id="4962975101802056554">Seadme puhul kõigi lubade tühistamine</translation>
 <translation id="4972737347717125191">Saidid saavad küsida luba VR-seadmete ja -andmete kasutamiseks</translation>
-<translation id="4973805849704516244">Chrome'i värvide alumine leht</translation>
+<translation id="4973805849704516244">Ultimatum'i värvide alumine leht</translation>
 <translation id="497421865427891073">Edasiminek</translation>
 <translation id="4976702386844183910">Viimati külastati <ph name="DATE" /></translation>
 <translation id="4978178243417029856">Lisateave Discoveri voo kohta</translation>
@@ -409,7 +409,7 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="5091663350197390230">Kui see on sisse lülitatud, saavad saidid JavaScripti kasutada. Kui see on välja lülitatud, ei saa saidid JavaScripti kasutada.</translation>
 <translation id="5099358668261120049">See kustutab saidi <ph name="ORIGIN" /> või selle rakenduse salvestatud kõik andmed ja küpsisefailid teie avakuvalt.</translation>
 <translation id="5100237604440890931">Ahendatud – laiendamiseks klõpsake.</translation>
-<translation id="5116239826668864748">Saate kasutada Chrome'i iga kord, kui puudutate linke sõnumites, dokumentides ja muudes rakendustes</translation>
+<translation id="5116239826668864748">Saate kasutada Ultimatum'i iga kord, kui puudutate linke sõnumites, dokumentides ja muudes rakendustes</translation>
 <translation id="5123685120097942451">Inkognito vaheleht</translation>
 <translation id="512938610812707830">Uue vahelehe välimuse teema kogude alumine leht on avatud täiskõrguses</translation>
 <translation id="5137460097045297858">Discoveri voo alumine leht on avatud poolel kõrgusel</translation>
@@ -446,7 +446,7 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="5516455585884385570">Ava märguandeseaded</translation>
 <translation id="5527111080432883924">Küsi luba, kui sait soovib lugeda lõikelaual olevat teksti ja pilte (soovitatav)</translation>
 <translation id="5553374991681107062">Uusimad</translation>
-<translation id="5555115555607204100">Ära kiirenda saite Chrome’i V8 mootoriga, aga suurenda pisut Chrome’i vastupanuvõimet rünnetele</translation>
+<translation id="5555115555607204100">Ära kiirenda saite Ultimatum’i V8 mootoriga, aga suurenda pisut Ultimatum’i vastupanuvõimet rünnetele</translation>
 <translation id="5556459405103347317">Laadi uuesti</translation>
 <translation id="5591840828808741583">Saidi <ph name="SITE_NAME" /> jaoks blokeeritud</translation>
 <translation id="560980142378233747">See tähendab, et saidi funktsioonid peaksid ootuspäraselt töötama, kuid teil võib olla väiksem sirvimiskaitse. <ph name="BEGIN_LINK" />Tagasiside saatmine<ph name="END_LINK" /></translation>
@@ -473,7 +473,7 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="5804241973901381774">Load</translation>
 <translation id="5817042798620209981">Saiditeave, dialoog</translation>
 <translation id="5822675474983796325">Uue vahelehe kohandamise alumine leht on avatud täispikkuses</translation>
-<translation id="5826403277762134844">Alumine leht Chrome’is paroolide salvestamise juhistega</translation>
+<translation id="5826403277762134844">Alumine leht Ultimatum’is paroolide salvestamise juhistega</translation>
 <translation id="5833899990800318936">Ärge lubage saitidel kasutada JavaScripti</translation>
 <translation id="583673505367439042">Saidid saavad küsida luba teie seadmes olevate failide ja kaustade muutmiseks</translation>
 <translation id="5844448279347999754">Kui see on sisse lülitatud, võivad saidid küsida luba teie lõikelauale salvestatud teksti ja piltide nägemiseks. Kui see on välja lülitatud, ei näe saidid teie lõikelauale salvestatud teksti ega pilte.</translation>
@@ -502,7 +502,7 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="6012967556075291653">Kinnitatud otsetee</translation>
 <translation id="6013003831291591200">Toiming on tehtud.</translation>
 <translation id="6015775454662021376">Selle saidi juurdepääsu muutmine teie seadmele</translation>
-<translation id="6022659036123304283">Isikupärastage Chrome'i</translation>
+<translation id="6022659036123304283">Isikupärastage Ultimatum'i</translation>
 <translation id="6040143037577758943">Sulge</translation>
 <translation id="6042308850641462728">Rohkem</translation>
 <translation id="6064125863973209585">Lõpetatud allalaadimised</translation>
@@ -510,20 +510,20 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="6085954183010297841">Kas kustutada faili muutmise luba? <ph name="FILE" /></translation>
 <translation id="6104860901391833523">Kui see on sisse lülitatud, saavad saidid automaatselt režiimi Pilt pildis aktiveerida. Kui see on välja lülitatud, ei saa saidid automaatselt režiimi Pilt pildis aktiveerida.</translation>
 <translation id="6120483543004435978">Kui see on sisse lülitatud, võivad saidid küsida luba selle teadmiseks, millal seadet aktiivselt kasutate. Kui see on välja lülitatud, ei saa saidid teada, millal seadet aktiivselt kasutate.</translation>
-<translation id="6132075343662013154">Chrome pakub võimalust parool salvestada</translation>
+<translation id="6132075343662013154">Ultimatum pakub võimalust parool salvestada</translation>
 <translation id="615886654739818377">Saitidel pole lubatud aknaid kõikidel teie ekraanidel hallata</translation>
 <translation id="6165508094623778733">Lisateave</translation>
 <translation id="6171020522141473435">Kui see on sisse lülitatud, võivad saidid küsida luba Bluetooth-seadmete kasutamiseks. Kui see on välja lülitatud, ei saa saidid Bluetooth-seadmeid kasutada.</translation>
 <translation id="6177128806592000436">Teie ühendus selle saidiga pole turvaline</translation>
 <translation id="6181444274883918285">Lisa saidi erand</translation>
-<translation id="6194967801833346599">{DAYS,plural, =1{Chrome blokeerib homme küpsisefailid uuesti}other{Küpsisefailid blokeeritakse uuesti # päeva pärast}}</translation>
+<translation id="6194967801833346599">{DAYS,plural, =1{Ultimatum blokeerib homme küpsisefailid uuesti}other{Küpsisefailid blokeeritakse uuesti # päeva pärast}}</translation>
 <translation id="6196640612572343990">Blokeeri kolmanda osapoole küpsisefailid</translation>
 <translation id="6205314730813004066">Reklaamide privaatsus</translation>
 <translation id="6207207788774442484">Kustuta andmed ja õigused</translation>
 <translation id="6211409961905616543">Saidid saavad kasutada liikumis- ja valgusandureid</translation>
 <translation id="6218508144653756827">Fuksiaroosa teema</translation>
 <translation id="6231752747840485235">Kas desinstallida rakendus <ph name="APP_NAME" />?</translation>
-<translation id="6234351944623978659">Puudutage valikuid Brauserirakendus &gt; Chrome</translation>
+<translation id="6234351944623978659">Puudutage valikuid Brauserirakendus &gt; Ultimatum</translation>
 <translation id="6260830281887654268">Uue vahelehe välimuse teemakogude alumine leht on avatud poolel kõrgusel</translation>
 <translation id="6262191102408817757">Teie viimase vahelehe põhjal</translation>
 <translation id="6262279340360821358"><ph name="PERMISSION_1" /> ja <ph name="PERMISSION_2" /> on keelatud</translation>
@@ -573,7 +573,7 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="6787751205395685251">Tehke saidi <ph name="SITE_NAME" /> puhul valik</translation>
 <translation id="6790428901817661496">Esita</translation>
 <translation id="6818926723028410516">Valige üksused</translation>
-<translation id="6838525730752203626">Kasutage Chrome'i vaikimisi</translation>
+<translation id="6838525730752203626">Kasutage Ultimatum'i vaikimisi</translation>
 <translation id="6840760312327750441">Vahelehtede rühmitamiseks puudutage vahelehte pikalt. Seejärel lohistage see teise vahelehe peale.</translation>
 <translation id="6842868554183332230">Saidid tuvastavad, millel seadet aktiivselt kasutate, et määrata vestlusrakendustes teie saadavalolek</translation>
 <translation id="6864395892908308021">See seade ei saa NFC andmeid lugeda</translation>
@@ -591,7 +591,7 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="6992014788289743568">Suurendage oma turvalisust ja hoidke oma andmed turvalisemalt, kontrollides oma paroole</translation>
 <translation id="6992289844737586249">Küsi enne saitidele minu mikrofoni kasutamiseks juurdepääsu lubamist (soovitatav)</translation>
 <translation id="7000754031042624318">Androidi seadetes välja lülitatud</translation>
-<translation id="702275896380648118">See sait tuvastab asjad, mis teile meeldivad, ja soovitab seejärel teistele saitidele reklaame. Samuti hangib see sait Chrome'ist teie reklaamiteemad, et näidata teile asjakohasemaid reklaame.</translation>
+<translation id="702275896380648118">See sait tuvastab asjad, mis teile meeldivad, ja soovitab seejärel teistele saitidele reklaame. Samuti hangib see sait Ultimatum'ist teie reklaamiteemad, et näidata teile asjakohasemaid reklaame.</translation>
 <translation id="7036823721811529709">Kuulake taustal</translation>
 <translation id="7044081119134178347">Kaamera seekord lubatud</translation>
 <translation id="7053983685419859001">Blokeeri</translation>
@@ -649,7 +649,7 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="7658239707568436148">Tühista</translation>
 <translation id="7667547420449112975">Võlur Oz</translation>
 <translation id="7681597159868843240">Saidid kasutavad teie seadme liikumisandureid näiteks VR-kogemuse pakkumiseks või treeningu jälgimiseks</translation>
-<translation id="7688240020069572972">Chrome'i nõuannete kaardi peitmine</translation>
+<translation id="7688240020069572972">Ultimatum'i nõuannete kaardi peitmine</translation>
 <translation id="7719367874908701697">Lehe suum</translation>
 <translation id="775043444390799886">Tühista luba</translation>
 <translation id="7758789811447313947">Kannikeselilla teema</translation>
@@ -681,7 +681,7 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="8033047164036749181">Selle saidi märguannete tellimine</translation>
 <translation id="8042586301629853791">Sortimisalus:</translation>
 <translation id="8051193500142930381">Kaamerat vajavad funktsioonid ei tööta</translation>
-<translation id="8056330801132235235">Chrome (vaikevalik)</translation>
+<translation id="8056330801132235235">Ultimatum (vaikevalik)</translation>
 <translation id="8067883171444229417">Esita video</translation>
 <translation id="8068648041423924542">Sertifikaati ei saa valida.</translation>
 <translation id="8077120325605624147">Mis tahes külastatav sait saab teile kuvada mis tahes reklaami</translation>
@@ -735,10 +735,10 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="8514955299594277296">Saitidel ei lubata teie seadmesse andmeid salvestada (pole soovitatav)</translation>
 <translation id="851751545965956758">Blokeeri saitidel seadmetega ühenduse loomine</translation>
 <translation id="8525306231823319788">Täisekraan</translation>
-<translation id="8541410041357371550">See sait hangib Chrome'ist teie reklaamiteemad, et näidata teile asjakohasemaid reklaame</translation>
+<translation id="8541410041357371550">See sait hangib Ultimatum'ist teie reklaamiteemad, et näidata teile asjakohasemaid reklaame</translation>
 <translation id="854876774113449365">Teie külastatavad saidid võivad manustada sisu muudelt saitidelt (nt pilte, reklaame ja teksti). Kui sirvite neid saite, võivad need küsida luba kasutada teavet, mille need on teie kohta salvestanud. <ph name="BEGIN_LINK" />Lisateave manustatud sisu kohta<ph name="END_LINK" /></translation>
 <translation id="8549127125482561383">Kuidas taotlusi kuvada?</translation>
-<translation id="8558480467877843976">Nüüd saate kasutada Chrome'i iga kord, kui sirvite või puudutate linke sõnumites, dokumentides ja muudes rakendustes.</translation>
+<translation id="8558480467877843976">Nüüd saate kasutada Ultimatum'i iga kord, kui sirvite või puudutate linke sõnumites, dokumentides ja muudes rakendustes.</translation>
 <translation id="857943718398505171">Lubatud (soovitatav)</translation>
 <translation id="8593422116412089302">Kui see on sisse lülitatud, võivad saidid küsida luba teabe kasutamiseks, mille nad on teie kohta salvestanud. Kui see on välja lülitatud, ei saa saidid küsida luba teabe kasutamiseks, mille nad on teie kohta salvestanud.</translation>
 <translation id="8609465669617005112">Liiguta üles</translation>
@@ -755,7 +755,7 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="8719283222052720129">Lülitage <ph name="BEGIN_LINK" />Androidi seadetes<ph name="END_LINK" /> sisse luba rakendusele <ph name="APP_NAME" />.</translation>
 <translation id="8721719390026067591">Kui see on sisse lülitatud, võivad saidid küsida luba Bluetooth-seadmete otsimiseks. Kui see on välja lülitatud, ei saa saidid Bluetooth-seadmeid otsida.</translation>
 <translation id="8725066075913043281">Proovi uuesti</translation>
-<translation id="8727043961453758442">Kasutage Chrome'i parimal moel</translation>
+<translation id="8727043961453758442">Kasutage Ultimatum'i parimal moel</translation>
 <translation id="8730621377337864115">Valmis</translation>
 <translation id="8737426583868847403">Siin kuvatakse saidid, mille jaoks salvestate kohandatud suumitaseme</translation>
 <translation id="8748714929822124637">Ära luba saitidel teie kohaliku võrgu teistele seadmetele juurde pääseda.</translation>
@@ -763,13 +763,13 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="8775741625735357092">Järjehoidjariba saate sisse lülitada menüüs Seaded &gt; Välimus.</translation>
 <translation id="8800034312320686233">Kas sait ei tööta?</translation>
 <translation id="8801436777607969138">JavaScripti blokeerimine konkreetsel saidil.</translation>
-<translation id="8801657293260363985">V8 on Chrome'i JavaScripti ja WebAssembly mootor, mida kasutatakse saidi jõudluse parandamiseks</translation>
+<translation id="8801657293260363985">V8 on Ultimatum'i JavaScripti ja WebAssembly mootor, mida kasutatakse saidi jõudluse parandamiseks</translation>
 <translation id="8803526663383843427">Kui on sisse lülitatud</translation>
 <translation id="8805385115381080995">Sirvimine on kiirem, kuna sait ei palu teil nii tihti kinnitada seda, et olete päris inimene</translation>
 <translation id="881644524232657178">Kui see on sisse lülitatud, saavad saidid kasutada teie seadme liikumis- ja valgusandureid. Kui see on välja lülitatud, ei saa saidid andureid kasutada.</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">Proovige kolmanda osapoole küpsisefailid ajutiselt lubada. See vähendab sirvimiskaitset, kuid saidi funktsiooni töötavad suurema tõenäosusega oodatud moel.</translation>
-<translation id="8889294078294184559">Kui jätkate sirvimist, saavad saidid Chrome’iga kontrollida ja teie eelmisel külastatud saidil kinnitada, et olete tõenäoliselt päris inimene</translation>
+<translation id="8889294078294184559">Kui jätkate sirvimist, saavad saidid Ultimatum’iga kontrollida ja teie eelmisel külastatud saidil kinnitada, et olete tõenäoliselt päris inimene</translation>
 <translation id="8899807382908246773">Sekkuvad reklaamid</translation>
 <translation id="8903921497873541725">Suurendab</translation>
 <translation id="8919911527569629802">Logige sisse mis tahes veebisaidile.</translation>
@@ -795,7 +795,7 @@ Täiustatud kaitse reguleerib neid Chrome’i seadeid:
 <translation id="9138037198177304356">Märguanded on lubatud</translation>
 <translation id="9138217887606523162">Praegune suumitase on <ph name="ZOOM_LEVEL" /> %%</translation>
 <translation id="915112772806845021">Saidid kasutavad seda funktsiooni, et lubada automaatselt pilt pildis režiimi siseneda. See võimaldab teil video vaatamist jätkata, vabastades ekraanikuval ruumi muude toimingute jaoks.</translation>
-<translation id="9156722768168878035">Laske Chrome'il kuvada teie hiljutisi vahelehti teie seadme rakenduste loendis ja otsingutulemustes. Saate selle Chrome’i seadetes igal ajal välja lülitada.</translation>
+<translation id="9156722768168878035">Laske Ultimatum'il kuvada teie hiljutisi vahelehti teie seadme rakenduste loendis ja otsingutulemustes. Saate selle Ultimatum’i seadetes igal ajal välja lülitada.</translation>
 <translation id="9162462602695099906">See leht on ohtlik</translation>
 <translation id="9182556968660520230">Ära luba saitidel kaitstud sisu esitada</translation>
 <translation id="947156494302904893">Külastatavad saidid saavad kinnitada, et olete päris inimene, mitte robot</translation>

@@ -5,20 +5,20 @@
 <translation id="1036348656032585052">Turn off</translation>
 <translation id="1046742265332833834">Blue theme</translation>
 <translation id="1070329623210597193">Files this site can view or edit</translation>
-<translation id="1073417869336441572">Help us improve Chrome by telling us why you allowed third-party cookies. <ph name="BEGIN_LINK" />Send feedback<ph name="END_LINK" /></translation>
+<translation id="1073417869336441572">Help us improve Ultimatum by telling us why you allowed third-party cookies. <ph name="BEGIN_LINK" />Send feedback<ph name="END_LINK" /></translation>
 <translation id="1074758928858737435">You can ask to see the desktop version of sites</translation>
 <translation id="1109482864356262001">Features that need motion or light sensors won't work</translation>
-<translation id="1126523729897810826">Complete these suggested actions below to get the most out of Chrome</translation>
+<translation id="1126523729897810826">Complete these suggested actions below to get the most out of Ultimatum</translation>
 <translation id="113098737392899175">Navigate pages with a text cursor when a keyboard is attached</translation>
 <translation id="1148624853678088576">You’re all set!</translation>
-<translation id="1149644372535087155">Save passwords in Chrome</translation>
+<translation id="1149644372535087155">Save passwords in Ultimatum</translation>
 <translation id="1178015372320901893">My shortcuts bottom sheet</translation>
 <translation id="1178581264944972037">Pause</translation>
 <translation id="1181037720776840403">Remove</translation>
 <translation id="1192844206376121885">This will delete all data and cookies stored by <ph name="ORIGIN" />.</translation>
 <translation id="1199963004393929848">Green theme</translation>
 <translation id="1201402288615127009">Next</translation>
-<translation id="1240190568154816272">Chrome tips</translation>
+<translation id="1240190568154816272">Ultimatum tips</translation>
 <translation id="1242008676835033345">Embedded on <ph name="WEBSITE_URL" /></translation>
 <translation id="1263609676484797429">Tap Apps  &gt; Default apps</translation>
 <translation id="1272079795634619415">Stop</translation>
@@ -38,7 +38,7 @@
 <translation id="1396327438254055134">Allow site to use V8 optimiser.</translation>
 <translation id="1409338233051621926">Tap Apps, then tap Default apps</translation>
 <translation id="1415402041810619267">URL truncated</translation>
-<translation id="1415855080660575082">Let Chrome share your recent tabs with your device to see them in your device's app list and search results. You can turn this on or off in Chrome settings.</translation>
+<translation id="1415855080660575082">Let Ultimatum share your recent tabs with your device to see them in your device's app list and search results. You can turn this on or off in Ultimatum settings.</translation>
 <translation id="1420688843103859429">Navigate back and forth by swiping with two fingers on the touchpad</translation>
 <translation id="1432650420699700107">Sites can ask to connect to any device on your local network</translation>
 <translation id="1442081309487427303">Turn Reading mode links on</translation>
@@ -52,7 +52,7 @@
 <translation id="1532175480576580256">My shortcuts bottom sheet opened at full height</translation>
 <translation id="1538031354170655462">Sites usually use Near Field Communication (NFC) to work with nearby tags or devices, such as scanning badges or paying contactless</translation>
 <translation id="1547123415014299762">Third-party cookies are allowed</translation>
-<translation id="1569054338208717605">Speed up sites with Chrome's V8 engine but make Chrome slightly less resistant to attacks</translation>
+<translation id="1569054338208717605">Speed up sites with Ultimatum's V8 engine but make Ultimatum slightly less resistant to attacks</translation>
 <translation id="1593426485665524382">New actions available near top of the screen</translation>
 <translation id="1594521731409209842">Pinch screen to resize photo</translation>
 <translation id="1599268789440304082">Setup sheet opened</translation>
@@ -73,14 +73,14 @@
 <translation id="1717996979683942279">When on, sites can ask to manage windows on all your displays. When off, sites can't manage windows on all your displays.</translation>
 <translation id="1738912554587725807">New tab page appearance theme collections bottom sheet</translation>
 <translation id="1743802530341753419">Ask before allowing sites to connect to a device (recommended)</translation>
-<translation id="1766455884659449403">Get Chrome tips notifications</translation>
+<translation id="1766455884659449403">Get Ultimatum tips notifications</translation>
 <translation id="1777815584158991902">Discover feed bottom sheet</translation>
 <translation id="1779089405699405702">Image decoder</translation>
 <translation id="1781533683087883868">Turn Reading mode links off</translation>
 <translation id="1785415724048343560">Recommended for best experience</translation>
 <translation id="1796588414813960292">Features that need sound won't work</translation>
-<translation id="1799920918471566157">Chrome tips</translation>
-<translation id="1816835383954230954">When on, Chrome runs faster and features that use JavaScript should work as designed. When off, this reduces performance but makes V8 more resistant to attacks.</translation>
+<translation id="1799920918471566157">Ultimatum tips</translation>
+<translation id="1816835383954230954">When on, Ultimatum runs faster and features that use JavaScript should work as designed. When off, this reduces performance but makes V8 more resistant to attacks.</translation>
 <translation id="1818308510395330587">To let <ph name="APP_NAME" /> use AR, also turn on camera in <ph name="BEGIN_LINK" />Android settings<ph name="END_LINK" />.</translation>
 <translation id="1822318649925991542">Switch the position to customise your browsing experience</translation>
 <translation id="1848033246551405023">Font Sans Serif</translation>
@@ -135,7 +135,7 @@
 <translation id="2315043854645842844">Client side certificate selection is not supported by the operating system.</translation>
 <translation id="2347601491101454548">My shortcuts bottom sheet opened at half height</translation>
 <translation id="2359808026110333948">Continue</translation>
-<translation id="2379925928934107488">Apply Dark theme to sites when Chrome uses Dark theme, when possible</translation>
+<translation id="2379925928934107488">Apply Dark theme to sites when Ultimatum uses Dark theme, when possible</translation>
 <translation id="2390272837142897736">Increase zoom</translation>
 <translation id="2397689164757137845">Allowed • Precise</translation>
 <translation id="2402980924095424747"><ph name="MEGABYTES" /> MB</translation>
@@ -147,7 +147,7 @@
 <translation id="2433507940547922241">Appearance</translation>
 <translation id="2434158240863470628">Download complete <ph name="SEPARATOR" /> <ph name="BYTES_DOWNLOADED" /></translation>
 <translation id="2442870161001914531">Always request desktop site</translation>
-<translation id="2445311670906052406">Chrome now shares your recent tabs with your device. You'll see them in your device's app list and search results. You can turn this off at any time in Chrome settings.</translation>
+<translation id="2445311670906052406">Ultimatum now shares your recent tabs with your device. You'll see them in your device's app list and search results. You can turn this off at any time in Ultimatum settings.</translation>
 <translation id="245322989586167203">Sites usually connect to serial ports for data transfer features, like setting up your network</translation>
 <translation id="2469312991797799607">This action will clear all data and cookies for <ph name="ORIGIN" /> and all sites under it</translation>
 <translation id="2482878487686419369">Notifications</translation>
@@ -159,7 +159,7 @@
 <translation id="2536779053640817375">Allowed this time • Precise</translation>
 <translation id="2544997614631598250">Theme colour dark</translation>
 <translation id="2546283357679194313">Cookies and site data</translation>
-<translation id="2553552004849639664">Get Chrome's strongest protection against online threats</translation>
+<translation id="2553552004849639664">Get Ultimatum's strongest protection against online threats</translation>
 <translation id="2570922361219980984">Location access is also off for this device. Turn it on in <ph name="BEGIN_LINK" />Android Settings<ph name="END_LINK" />.</translation>
 <translation id="257931822824936280">Expanded – click to collapse.</translation>
 <translation id="2586657967955657006">Clipboard</translation>
@@ -168,7 +168,7 @@
 <translation id="2606760465469169465">Auto-verify</translation>
 <translation id="2610903128639500624">Manage in <ph name="BEGIN_LINK1" />Android settings<ph name="END_LINK1" />
 
-Advanced Protection controls these Chrome settings:
+Advanced Protection controls these Ultimatum settings:
 • 'Always use secure connections' is on.
 • 'JavaScript optimiser' is off. <ph name="BEGIN_LINK2" />Manage site exceptions<ph name="END_LINK2" /></translation>
 <translation id="2621115761605608342">Allow JavaScript for a specific site.</translation>
@@ -183,18 +183,18 @@ Advanced Protection controls these Chrome settings:
 <translation id="2710883118091822664">Sign in to easily continue on all your devices</translation>
 <translation id="2713106313042589954">Turn off camera</translation>
 <translation id="2717722538473713889">Email addresses</translation>
-<translation id="2726059656860238749">Launch Chrome with the omnibox focused, reducing start-up time on low-end devices.</translation>
+<translation id="2726059656860238749">Launch Ultimatum with the omnibox focused, reducing start-up time on low-end devices.</translation>
 <translation id="2750481671343847896">Sites can show sign-in prompts from identity services.</translation>
 <translation id="2787357173144933081">Jump-start omnibox</translation>
 <translation id="2789132527330338807">Sites can ask to create a 3D map of your surroundings or track camera position</translation>
 <translation id="2790501146643349491">When on, recently closed sites can finish sending and receiving data. When off, recently closed sites can't finish sending or receiving data.</translation>
-<translation id="2794551654724114396">Turn on notifications for useful tips to help you get the best of Chrome</translation>
+<translation id="2794551654724114396">Turn on notifications for useful tips to help you get the best of Ultimatum</translation>
 <translation id="2795716239552913152">Sites usually use your location for relevant features or info, like local news or nearby shops</translation>
 <translation id="2800760947029405028">Upload an image</translation>
 <translation id="2802908157808345702">Don't allow sites to send pop-ups and use redirects</translation>
-<translation id="2814830417943086299">Chrome now shows your recent tabs in your device's app list and search results. You can turn this off at any time in Chrome settings.</translation>
+<translation id="2814830417943086299">Ultimatum now shows your recent tabs in your device's app list and search results. You can turn this off at any time in Ultimatum settings.</translation>
 <translation id="2822354292072154809">Are you sure that you want to reset all site permissions for <ph name="CHOSEN_OBJECT_NAME" />?</translation>
-<translation id="2848335882304088250">You'll now get the most out of Chrome on your device.</translation>
+<translation id="2848335882304088250">You'll now get the most out of Ultimatum on your device.</translation>
 <translation id="2850913818900871965">Request mobile view</translation>
 <translation id="2870560284913253234">Site</translation>
 <translation id="2874939134665556319">Previous track</translation>
@@ -273,7 +273,7 @@ Advanced Protection controls these Chrome settings:
 <translation id="3678318839615834650">New tab page cards bottom sheet opened at full height</translation>
 <translation id="3697164069658504920">When on, sites can ask to use USB devices. When off, sites can't use USB devices.</translation>
 <translation id="3703430731944883733">Manage your feed</translation>
-<translation id="3707034683772193706">A site that you visit can save a small amount of info with Chrome, mainly to validate that you're not a bot</translation>
+<translation id="3707034683772193706">A site that you visit can save a small amount of info with Ultimatum, mainly to validate that you're not a bot</translation>
 <translation id="3708684582558000260">Don't allow closed sites to finish sending or receiving data</translation>
 <translation id="3709818294139939629">Removed site's access to file</translation>
 <translation id="3721953990244350188">Dismiss and show next available action</translation>
@@ -285,13 +285,13 @@ Advanced Protection controls these Chrome settings:
 <translation id="3779154269823594982">Change passwords</translation>
 <translation id="3797520601150691162">Don’t apply Dark theme for a specific site</translation>
 <translation id="3803367742635802571">Sites that you visit may stop working as designed</translation>
-<translation id="3816118180265633665">Chrome colours</translation>
+<translation id="3816118180265633665">Ultimatum colours</translation>
 <translation id="381841723434055211">Phone numbers</translation>
 <translation id="3823453485268218808">Font Mono</translation>
 <translation id="3826050100957962900">Third-party sign-in</translation>
 <translation id="3831065134033923230">Check your saved passwords</translation>
 <translation id="3835233591525155343">Your device use</translation>
-<translation id="3843916486309149084">Chrome will block cookies again today</translation>
+<translation id="3843916486309149084">Ultimatum will block cookies again today</translation>
 <translation id="385051799172605136">Back</translation>
 <translation id="3859306556332390985">Seek forward</translation>
 <translation id="389521680295183045">Sites can ask to know when you're actively using your device</translation>
@@ -318,7 +318,7 @@ Advanced Protection controls these Chrome settings:
 <translation id="4046123991198612571">Next track</translation>
 <translation id="4077310749977440510">Sites usually read your clipboard for features like keeping the formatting of text that you copied</translation>
 <translation id="4082080074595021446">Exceptions for specific websites disallowed because Android device does not have enough RAM.</translation>
-<translation id="4089304748532599471">Some Chrome settings changed</translation>
+<translation id="4089304748532599471">Some Ultimatum settings changed</translation>
 <translation id="4149890623864272035">Are you sure that you want to delete all local data, including cookies, and reset all permissions for this website?</translation>
 <translation id="4149994727733219643">Simplified view for web pages</translation>
 <translation id="4151930093518524179">Default zoom</translation>
@@ -342,13 +342,13 @@ Advanced Protection controls these Chrome settings:
 <translation id="4340799661701629185">Don't allow sites to send notifications</translation>
 <translation id="4341577178275615435">To turn caret browsing on or off, use the shortcut F7</translation>
 <translation id="4402755511846832236">Block sites from knowing when you're actively using this device</translation>
-<translation id="4412683424767388419">Chrome colours bottom sheet opened at half height</translation>
+<translation id="4412683424767388419">Ultimatum colours bottom sheet opened at half height</translation>
 <translation id="4412992751769744546">Allow third-party cookies</translation>
 <translation id="4425416282877905577">Font Serif</translation>
 <translation id="443121186588148776">Serial port</translation>
 <translation id="4434045419905280838">Pop-ups and redirects</translation>
 <translation id="443552056913301231">This action will delete all local data, including cookies, and reset all permissions for <ph name="ORIGIN" /></translation>
-<translation id="4441527683895888777">Chrome colours bottom sheet opened at full height</translation>
+<translation id="4441527683895888777">Ultimatum colours bottom sheet opened at full height</translation>
 <translation id="4468959413250150279">Mute sound for a specific site.</translation>
 <translation id="4475912480633855319">{COOKIES,plural, =1{# cookie}other{# cookies}}</translation>
 <translation id="4478158430052450698">Make it easier to customise zoom for different sites</translation>
@@ -370,7 +370,7 @@ Advanced Protection controls these Chrome settings:
 <translation id="4655846733459137112">Tap Yes to easily use this password the next time that you sign in</translation>
 <translation id="4663373278480897665">Camera allowed</translation>
 <translation id="4670064810192446073">Virtual reality</translation>
-<translation id="4672315773691449562">Tap Browser app, then tap Chrome</translation>
+<translation id="4672315773691449562">Tap Browser app, then tap Ultimatum</translation>
 <translation id="4676059169848868271">To let <ph name="APP_NAME" /> use hand tracking, also turn on hand tracking in <ph name="BEGIN_LINK" />system settings<ph name="END_LINK" />.</translation>
 <translation id="4688045258817337666">Manage your cards</translation>
 <translation id="4722332387043141878">Sites usually use your device's motion and light sensors for features like virtual reality or fitness tracking</translation>
@@ -391,7 +391,7 @@ Advanced Protection controls these Chrome settings:
 <translation id="4953688446973710931">When on, sites can ask to download multiple files automatically. When off, sites can't download multiple files automatically.</translation>
 <translation id="4962975101802056554">Revoke all permissions for device</translation>
 <translation id="4972737347717125191">Sites can ask to use virtual reality devices and data</translation>
-<translation id="4973805849704516244">Chrome colours bottom sheet</translation>
+<translation id="4973805849704516244">Ultimatum colours bottom sheet</translation>
 <translation id="497421865427891073">go forward</translation>
 <translation id="4976702386844183910">Last visited <ph name="DATE" /></translation>
 <translation id="4978178243417029856">Learn more about Discover feed</translation>
@@ -409,7 +409,7 @@ Advanced Protection controls these Chrome settings:
 <translation id="5091663350197390230">When on, sites can use JavaScript. When off, sites can't use JavaScript.</translation>
 <translation id="5099358668261120049">This will clear all data and cookies stored by <ph name="ORIGIN" /> or by its app on your home screen.</translation>
 <translation id="5100237604440890931">Collapsed – click to expand.</translation>
-<translation id="5116239826668864748">You can use Chrome any time that you tap links in messages, documents and other apps</translation>
+<translation id="5116239826668864748">You can use Ultimatum any time that you tap links in messages, documents and other apps</translation>
 <translation id="5123685120097942451">Incognito tab</translation>
 <translation id="512938610812707830">New tab page appearance theme collections bottom sheet opened at full height</translation>
 <translation id="5137460097045297858">Discover feed bottom sheet opened at half height</translation>
@@ -446,7 +446,7 @@ Advanced Protection controls these Chrome settings:
 <translation id="5516455585884385570">Open notification settings</translation>
 <translation id="5527111080432883924">Ask before allowing sites to read text and images from the clipboard (recommended)</translation>
 <translation id="5553374991681107062">Latest</translation>
-<translation id="5555115555607204100">Do not speed up sites with Chrome's V8 engine but make Chrome slightly more resistant to attacks</translation>
+<translation id="5555115555607204100">Do not speed up sites with Ultimatum's V8 engine but make Ultimatum slightly more resistant to attacks</translation>
 <translation id="5556459405103347317">Reload</translation>
 <translation id="5591840828808741583"><ph name="SITE_NAME" /> blocked</translation>
 <translation id="560980142378233747">This means site features should work as expected, but you may have less browsing protection. <ph name="BEGIN_LINK" />Send feedback<ph name="END_LINK" /></translation>
@@ -473,7 +473,7 @@ Advanced Protection controls these Chrome settings:
 <translation id="5804241973901381774">Permissions</translation>
 <translation id="5817042798620209981">Site information, dialogue</translation>
 <translation id="5822675474983796325">Customise your new tab page bottom sheet opened at full height</translation>
-<translation id="5826403277762134844">Instructional bottom sheet for saving passwords in Chrome</translation>
+<translation id="5826403277762134844">Instructional bottom sheet for saving passwords in Ultimatum</translation>
 <translation id="5833899990800318936">Don't allow sites to use JavaScript</translation>
 <translation id="583673505367439042">Sites can ask to edit files and folders on your device</translation>
 <translation id="5844448279347999754">When on, sites can ask to see text and images saved to your clipboard. When off, sites can't see text or images saved to your clipboard.</translation>
@@ -502,7 +502,7 @@ Advanced Protection controls these Chrome settings:
 <translation id="6012967556075291653">Pinned shortcut</translation>
 <translation id="6013003831291591200">Task completed</translation>
 <translation id="6015775454662021376">Control this site's access to your device</translation>
-<translation id="6022659036123304283">Make Chrome your own</translation>
+<translation id="6022659036123304283">Make Ultimatum your own</translation>
 <translation id="6040143037577758943">Close</translation>
 <translation id="6042308850641462728">More</translation>
 <translation id="6064125863973209585">Completed downloads</translation>
@@ -510,20 +510,20 @@ Advanced Protection controls these Chrome settings:
 <translation id="6085954183010297841">Delete file editing grant? <ph name="FILE" /></translation>
 <translation id="6104860901391833523">When on, sites can enter picture-in-picture automatically. When off, sites can't enter picture-in-picture automatically.</translation>
 <translation id="6120483543004435978">When on, sites can ask to know when you're actively using your device. When off, sites can't know when you're actively using your device.</translation>
-<translation id="6132075343662013154">Chrome will offer to save your password</translation>
+<translation id="6132075343662013154">Ultimatum will offer to save your password</translation>
 <translation id="615886654739818377">Don't allow sites to manage windows on all your displays</translation>
 <translation id="6165508094623778733">Learn more</translation>
 <translation id="6171020522141473435">When on, sites can ask to use Bluetooth devices. When off, sites can't use Bluetooth devices.</translation>
 <translation id="6177128806592000436">Your connection to this site is not secure</translation>
 <translation id="6181444274883918285">Add site exception</translation>
-<translation id="6194967801833346599">{DAYS,plural, =1{Chrome will block cookies again tomorrow}other{# days until cookies are blocked again}}</translation>
+<translation id="6194967801833346599">{DAYS,plural, =1{Ultimatum will block cookies again tomorrow}other{# days until cookies are blocked again}}</translation>
 <translation id="6196640612572343990">Block third-party cookies</translation>
 <translation id="6205314730813004066">Ads privacy</translation>
 <translation id="6207207788774442484">Delete data and reset permissions</translation>
 <translation id="6211409961905616543">Sites can use motion and light sensors</translation>
 <translation id="6218508144653756827">Fuchsia theme</translation>
 <translation id="6231752747840485235">Uninstall '<ph name="APP_NAME" />'?</translation>
-<translation id="6234351944623978659">Tap Browser app &gt; Chrome</translation>
+<translation id="6234351944623978659">Tap Browser app &gt; Ultimatum</translation>
 <translation id="6260830281887654268">New tab page appearance theme collections bottom sheet opened at half height</translation>
 <translation id="6262191102408817757">Based on your last tab</translation>
 <translation id="6262279340360821358"><ph name="PERMISSION_1" /> and <ph name="PERMISSION_2" /> blocked</translation>
@@ -573,7 +573,7 @@ Advanced Protection controls these Chrome settings:
 <translation id="6787751205395685251">Select an option for <ph name="SITE_NAME" /></translation>
 <translation id="6790428901817661496">Play</translation>
 <translation id="6818926723028410516">Select items</translation>
-<translation id="6838525730752203626">Use Chrome by default</translation>
+<translation id="6838525730752203626">Use Ultimatum by default</translation>
 <translation id="6840760312327750441">To group tabs, touch and hold a tab. Then, drag it onto another tab.</translation>
 <translation id="6842868554183332230">Sites usually detect when you're actively using your device to set your availability on chat apps</translation>
 <translation id="6864395892908308021">This device can't read NFC</translation>
@@ -591,7 +591,7 @@ Advanced Protection controls these Chrome settings:
 <translation id="6992014788289743568">Strengthen your security and keep your data safer by checking your passwords</translation>
 <translation id="6992289844737586249">Ask first before allowing sites to use your microphone (recommended)</translation>
 <translation id="7000754031042624318">Turned off in Android settings</translation>
-<translation id="702275896380648118">This site determines things that you like and then suggests ads to other sites. This site also gets your ad topics from Chrome to show you more relevant ads.</translation>
+<translation id="702275896380648118">This site determines things that you like and then suggests ads to other sites. This site also gets your ad topics from Ultimatum to show you more relevant ads.</translation>
 <translation id="7036823721811529709">Listen in the background</translation>
 <translation id="7044081119134178347">Camera allowed this time</translation>
 <translation id="7053983685419859001">Block</translation>
@@ -649,7 +649,7 @@ Advanced Protection controls these Chrome settings:
 <translation id="7658239707568436148">Cancel</translation>
 <translation id="7667547420449112975">The Wonderful Wizard of Oz</translation>
 <translation id="7681597159868843240">Sites usually use your device's motion sensors for features like virtual reality or fitness tracking</translation>
-<translation id="7688240020069572972">Hide Chrome tips card</translation>
+<translation id="7688240020069572972">Hide Ultimatum tips card</translation>
 <translation id="7719367874908701697">Page zoom</translation>
 <translation id="775043444390799886">Revoke permission</translation>
 <translation id="7758789811447313947">Violet theme</translation>
@@ -681,7 +681,7 @@ Advanced Protection controls these Chrome settings:
 <translation id="8033047164036749181">Subscribe for notifications from this site</translation>
 <translation id="8042586301629853791">Sort by:</translation>
 <translation id="8051193500142930381">Features that need a camera won't work</translation>
-<translation id="8056330801132235235">Chrome default</translation>
+<translation id="8056330801132235235">Ultimatum default</translation>
 <translation id="8067883171444229417">Play video</translation>
 <translation id="8068648041423924542">Unable to select certificate.</translation>
 <translation id="8077120325605624147">Any site that you visit can show any ad to you</translation>
@@ -735,10 +735,10 @@ Advanced Protection controls these Chrome settings:
 <translation id="8514955299594277296">Don't allow sites to save data on your device (not recommended)</translation>
 <translation id="851751545965956758">Block sites from connecting to devices</translation>
 <translation id="8525306231823319788">Full screen</translation>
-<translation id="8541410041357371550">This site gets your ad topics from Chrome to show you more relevant ads</translation>
+<translation id="8541410041357371550">This site gets your ad topics from Ultimatum to show you more relevant ads</translation>
 <translation id="854876774113449365">Sites that you visit can embed content from other sites. For example, images, ads and text. These other sites can ask for permission to use information that they've saved about you as you browse the site. <ph name="BEGIN_LINK" />Learn more about embedded content<ph name="END_LINK" /></translation>
 <translation id="8549127125482561383">How to show requests</translation>
-<translation id="8558480467877843976">You can now use Chrome any time that you browse or tap links in messages, documents and other apps.</translation>
+<translation id="8558480467877843976">You can now use Ultimatum any time that you browse or tap links in messages, documents and other apps.</translation>
 <translation id="857943718398505171">Allowed (recommended)</translation>
 <translation id="8593422116412089302">When on, sites can ask to use information that they've saved about you. When off, sites can't ask to use info that they've saved about you.</translation>
 <translation id="8609465669617005112">Move up</translation>
@@ -755,7 +755,7 @@ Advanced Protection controls these Chrome settings:
 <translation id="8719283222052720129">Turn on permission for <ph name="APP_NAME" /> in <ph name="BEGIN_LINK" />Android settings<ph name="END_LINK" />.</translation>
 <translation id="8721719390026067591">When on, sites can ask to look for Bluetooth devices. When off, sites can't look for Bluetooth devices.</translation>
 <translation id="8725066075913043281">Try again</translation>
-<translation id="8727043961453758442">Get the most out of Chrome</translation>
+<translation id="8727043961453758442">Get the most out of Ultimatum</translation>
 <translation id="8730621377337864115">Done</translation>
 <translation id="8737426583868847403">Sites that you save a custom zoom level for will appear here</translation>
 <translation id="8748714929822124637">Don't allow sites to access other devices on your local network</translation>
@@ -763,13 +763,13 @@ Advanced Protection controls these Chrome settings:
 <translation id="8775741625735357092">You can turn on the bookmarks bar in Settings &gt; Appearance</translation>
 <translation id="8800034312320686233">Site not working?</translation>
 <translation id="8801436777607969138">Block JavaScript for a specific site.</translation>
-<translation id="8801657293260363985">V8 is Chrome’s JavaScript and WebAssembly engine used to improve site performance</translation>
+<translation id="8801657293260363985">V8 is Ultimatum’s JavaScript and WebAssembly engine used to improve site performance</translation>
 <translation id="8803526663383843427">When on</translation>
 <translation id="8805385115381080995">Browsing is faster because a site is less likely to ask you to verify that you're a real person</translation>
 <translation id="881644524232657178">When on, sites can use your device's motion and light sensors. When off, sites can't use sensors.</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">Try temporarily allowing third-party cookies, which means less browsing protection but site features are more likely to work as expected.</translation>
-<translation id="8889294078294184559">As you keep browsing, sites can check with Chrome and verify with a previous site that you've visited that you're likely a real person</translation>
+<translation id="8889294078294184559">As you keep browsing, sites can check with Ultimatum and verify with a previous site that you've visited that you're likely a real person</translation>
 <translation id="8899807382908246773">Intrusive ads</translation>
 <translation id="8903921497873541725">Zoom in</translation>
 <translation id="8919911527569629802">Sign in to any website</translation>
@@ -795,7 +795,7 @@ Advanced Protection controls these Chrome settings:
 <translation id="9138037198177304356">Notifications allowed</translation>
 <translation id="9138217887606523162">Current zoom is <ph name="ZOOM_LEVEL" /> %%</translation>
 <translation id="915112772806845021">Sites use this feature to enter picture-in-picture automatically. This lets you continue watching a video while freeing up your screen for other tasks.</translation>
-<translation id="9156722768168878035">Let Chrome show your recent tabs in your device's app list and search results. You can turn this off at any time in Chrome settings.</translation>
+<translation id="9156722768168878035">Let Ultimatum show your recent tabs in your device's app list and search results. You can turn this off at any time in Ultimatum settings.</translation>
 <translation id="9162462602695099906">This page is dangerous</translation>
 <translation id="9182556968660520230">Don't allow sites to play protected content</translation>
 <translation id="947156494302904893">Sites that you visit can verify that you're a real person and not a bot</translation>

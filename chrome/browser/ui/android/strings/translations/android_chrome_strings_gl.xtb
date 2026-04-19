@@ -24,9 +24,9 @@
 <translation id="1089606299949659462">Completaches a revisión</translation>
 <translation id="1094555143448724771">Para ver as pestanas dos teus outros dispositivos, sincroniza as pestanas e o historial</translation>
 <translation id="1095761715416917775">Asegúrate de poder acceder sempre aos teus datos sincronizados</translation>
-<translation id="1096091316906284742">Panel inferior para activar a función Chrome Finds</translation>
+<translation id="1096091316906284742">Panel inferior para activar a función Ultimatum Finds</translation>
 <translation id="1100066534610197918">Abrir pestana nova nun grupo</translation>
-<translation id="1103142993930332957">Queres axudar a mellorar Chrome?</translation>
+<translation id="1103142993930332957">Queres axudar a mellorar Ultimatum?</translation>
 <translation id="1105960400813249514">Screen Capture</translation>
 <translation id="1108214977745280468">Ver estatísticas da páxina</translation>
 <translation id="1108938384783527433">Sincronización do historial</translation>
@@ -34,20 +34,20 @@
 <translation id="1123537484474186311"><ph name="TAB_TITLE" />, pestana do modo de pantalla superposta</translation>
 <translation id="1126696498560056882">Xestionar contas deste dispositivo</translation>
 <translation id="1135018701024399762">O modo de incógnito mantén a túa navegación privada para que outros usuarios que utilicen o teu dispositivo non a poidan ver</translation>
-<translation id="113752097246673894">Para poder acceder aos teus marcadores e a outros datos en todos os teus dispositivos, inicia sesión en Chrome como <ph name="EMAIL" /></translation>
+<translation id="113752097246673894">Para poder acceder aos teus marcadores e a outros datos en todos os teus dispositivos, inicia sesión en Ultimatum como <ph name="EMAIL" /></translation>
 <translation id="1138458427267715730">Recibe alertas cando baixe o prezo en calquera sitio da Web</translation>
 <translation id="1140317858355046628">Se o eliminas, todas as persoas perderán inmediatamente o acceso ao grupo de pestanas "<ph name="GROUP_NAME" />", que se eliminará de todos os dispositivos.</translation>
 <translation id="1142732900304639782">Non ofrecer a opción de traducir estes sitios</translation>
 <translation id="1143193470214071120">Pecha unha ou xestiona as ventás</translation>
 <translation id="1149725087019908252">Analizando <ph name="FILE_NAME" /></translation>
-<translation id="1150263420752757504"><ph name="APP_NAME" /> abrirase en Chrome. Ao continuar, aceptas as <ph name="BEGIN_LINK1" />Condicións de servizo de Google<ph name="END_LINK1" />, así como as <ph name="BEGIN_LINK2" />Condicións de servizo adicionais de Google Chrome e Chrome OS<ph name="END_LINK2" />.</translation>
+<translation id="1150263420752757504"><ph name="APP_NAME" /> abrirase en Ultimatum. Ao continuar, aceptas as <ph name="BEGIN_LINK1" />Condicións de servizo de Google<ph name="END_LINK1" />, así como as <ph name="BEGIN_LINK2" />Condicións de servizo adicionais de Ultimatum e Ultimatum OS<ph name="END_LINK2" />.</translation>
 <translation id="1154555449933432029">Non tes ningún contrasinal gardado no xestor de contrasinais de Google.</translation>
 <translation id="115483310321669804">Usar contrasinal <ph name="PASSWORD" /></translation>
 <translation id="1161065531352634524">Sincroniza as pestanas e o historial</translation>
 <translation id="1165109137568919258">Tira unha foto ou engade unha imaxe da galería para facer buscas</translation>
 <translation id="1173894706177603556">Cambiar o nome</translation>
-<translation id="1174479719160874822">Chrome solicitará abrir o sitio para móbiles cando a pantalla sexa estreita</translation>
-<translation id="1175241315203286684">A persoa administradora pode facer cambios no teu perfil e no teu navegador de forma remota, analizar información sobre o navegador mediante informes e realizar outras tarefas necesarias. A actividade deste dispositivo tamén se pode xestionar fóra de Chrome.</translation>
+<translation id="1174479719160874822">Ultimatum solicitará abrir o sitio para móbiles cando a pantalla sexa estreita</translation>
+<translation id="1175241315203286684">A persoa administradora pode facer cambios no teu perfil e no teu navegador de forma remota, analizar información sobre o navegador mediante informes e realizar outras tarefas necesarias. A actividade deste dispositivo tamén se pode xestionar fóra de Ultimatum.</translation>
 <translation id="1177863135347784049">Personalizada</translation>
 <translation id="1181037720776840403">Eliminar</translation>
 <translation id="1183189057400844278">Para asegurarte de poder usar sempre os contrasinais na túa Conta de Google, verifica a túa identidade</translation>
@@ -85,13 +85,13 @@
 <translation id="1318262688555255786">Compartir a ligazón á páxina web <ph name="PAGE_TITLE" />. Fonte: <ph name="PAGE_URL" /></translation>
 <translation id="1320912611264252795">Cartafoles de fluxo para gardar marcadores abertos a pantalla completa</translation>
 <translation id="1327257854815634930">O historial de navegación está aberto</translation>
-<translation id="1331212799747679585">Chrome non se pode actualizar. Máis opcións</translation>
-<translation id="1332501820983677155">Atallos das funcións de Google Chrome</translation>
+<translation id="1331212799747679585">Ultimatum non se pode actualizar. Máis opcións</translation>
+<translation id="1332501820983677155">Atallos das funcións de Ultimatum</translation>
 <translation id="1333491156693005331">Comprobado recentemente</translation>
 <translation id="1336996151357442890">Cancelaches a subscrición a <ph name="SITE_NAME" />. Preguntaráseche de novo cando volvas visitar o sitio.</translation>
 <translation id="1340839264183302272">Saír do grupo</translation>
 <translation id="1342886103232377846">Para comprobar os contrasinais vulnerados, vai ao xestor de contrasinais de Google</translation>
-<translation id="1343830902827845050">Inicia sesión en Chrome</translation>
+<translation id="1343830902827845050">Inicia sesión en Ultimatum</translation>
 <translation id="1344653310988386453">Inclúe unha ligazón ao texto destacado</translation>
 <translation id="1355088659320425659">Historial e pestanas</translation>
 <translation id="1360432990279830238">Queres pechar sesión?</translation>
@@ -105,12 +105,12 @@
 <translation id="1383876407941801731">Buscar</translation>
 <translation id="1384704387250346179">Traducir imaxe con Google Lens <ph name="BEGIN_NEW" />Novo<ph name="END_NEW" /></translation>
 <translation id="1386674309198842382">Dispositivo activo hai <ph name="LAST_UPDATED" />días</translation>
-<translation id="1390418506739274310">Podes ver o historial doutras aplicacións que abran ligazóns en Chrome. Ademais, a túa Conta de Google pode ter outro contido do historial de navegación en <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
+<translation id="1390418506739274310">Podes ver o historial doutras aplicacións que abran ligazóns en Ultimatum. Ademais, a túa Conta de Google pode ter outro contido do historial de navegación en <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="139752016751285248">Pechouse o panel inferior de estatísticas de prezos</translation>
 <translation id="1397811292916898096">Buscar con <ph name="PRODUCT_NAME" /></translation>
-<translation id="1398057416966591719">Podes <ph name="BEGIN_LINK1" />xestionar que datos de Chrome se gardan<ph name="END_LINK1" /> na túa Conta de Google.
+<translation id="1398057416966591719">Podes <ph name="BEGIN_LINK1" />xestionar que datos de Ultimatum se gardan<ph name="END_LINK1" /> na túa Conta de Google.
 
-Se queres ver máis opcións de configuración que usen datos para mellorar a túa experiencia con Chrome, vai a <ph name="BEGIN_LINK2" />Servizos de Google<ph name="END_LINK2" />.</translation>
+Se queres ver máis opcións de configuración que usen datos para mellorar a túa experiencia con Ultimatum, vai a <ph name="BEGIN_LINK2" />Servizos de Google<ph name="END_LINK2" />.</translation>
 <translation id="1407069428457324124">Tema escuro</translation>
 <translation id="1407135791313364759">Abrir todo</translation>
 <translation id="1409879593029778104">Impediuse a descarga de <ph name="FILE_NAME" /> porque o ficheiro xa existe.</translation>
@@ -124,10 +124,10 @@ Se queres ver máis opcións de configuración que usen datos para mellorar a t�
 <translation id="1448440926884431741">Organiza os produtos dos que fagas un seguimento en Marcadores</translation>
 <translation id="1455845192930279203">Queres descargar o ficheiro "<ph name="FILE_NAME" />" (<ph name="FILE_SIZE" />) de <ph name="DOWNLOAD_DOMAIN" /> de todos os modos?</translation>
 <translation id="1460751212339734034">Aforra tempo, escribe menos</translation>
-<translation id="1466383950273130737">Escolle o idioma de Chrome</translation>
+<translation id="1466383950273130737">Escolle o idioma de Ultimatum</translation>
 <translation id="1477626028522505441">Produciuse un erro ao descargar <ph name="FILE_NAME" /> debido a problemas co servidor.</translation>
 <translation id="147982357559798527">Cambiada</translation>
-<translation id="1480287803138246127">É posible que parte do teu historial non se mostre aquí. Para velo todo, abre o historial completo de Chrome.</translation>
+<translation id="1480287803138246127">É posible que parte do teu historial non se mostre aquí. Para velo todo, abre o historial completo de Ultimatum.</translation>
 <translation id="1493287004536771723">Estás seguindo <ph name="SITE_NAME" /></translation>
 <translation id="1495677929897281669">Volver á pestana</translation>
 <translation id="1496514951988037011">nome de usuario</translation>
@@ -137,14 +137,14 @@ Se queres ver máis opcións de configuración que usen datos para mellorar a t�
 <translation id="1515901671075971249">Atallos de navegación polas pestanas</translation>
 <translation id="1516966594427080024">Abre unha nova ventá no modo de incógnito</translation>
 <translation id="1521774566618522728">Dispositivo activo hoxe</translation>
-<translation id="153446405401665083">Hai unha versión de Chrome máis recente</translation>
+<translation id="153446405401665083">Hai unha versión de Ultimatum máis recente</translation>
 <translation id="1540012742443808215">A barra de enderezos está actualmente na parte superior</translation>
-<translation id="1544084554881119930">Os enderezos e os métodos de pago non se encriptarán. Tampouco se sincronizará o historial de navegación de Chrome.
-Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase de acceso. Google non recibirá nin almacenará a frase de acceso. Se a esqueces ou queres cambiar esta opción de configuración, <ph name="BEGIN_LINK" />borra os datos de Chrome da túa conta<ph name="END_LINK" />.</translation>
+<translation id="1544084554881119930">Os enderezos e os métodos de pago non se encriptarán. Tampouco se sincronizará o historial de navegación de Ultimatum.
+Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase de acceso. Google non recibirá nin almacenará a frase de acceso. Se a esqueces ou queres cambiar esta opción de configuración, <ph name="BEGIN_LINK" />borra os datos de Ultimatum da túa conta<ph name="END_LINK" />.</translation>
 <translation id="1544826120773021464">Para xestionar a túa conta de Google, toca o botón Xestionar conta</translation>
 <translation id="1549000191223877751">Mover a outra ventá</translation>
-<translation id="1553358976309200471">Actualizar Chrome</translation>
-<translation id="1554532453982918912">Axuda a mellorar Chrome para as persoas que o usan igual ca ti</translation>
+<translation id="1553358976309200471">Actualizar Ultimatum</translation>
+<translation id="1554532453982918912">Axuda a mellorar Ultimatum para as persoas que o usan igual ca ti</translation>
 <translation id="1568636008098739136">Escoitar esta páxina. Mantén premido este atallo para editalo.</translation>
 <translation id="1571041387761170095">Non se atopou ningún contrasinal pouco seguro nin reutilizado</translation>
 <translation id="1578591621182011812">{NUM_PASSWORDS,plural, =1{1 contrasinal vulnerado neste dispositivo}other{# contrasinais vulnerados neste dispositivo}}</translation>
@@ -171,24 +171,24 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="1702907158640575240">Navegador xestionado</translation>
 <translation id="170478069042229393"><ph name="TAB_TITLE" />, pestana do modo de incógnito fixada</translation>
 <translation id="1718835860248848330">Última hora</translation>
-<translation id="1726477445370128854">Podes navegar e facer buscas máis rápido se Chrome precarga as páxinas que considera que poderías visitar</translation>
+<translation id="1726477445370128854">Podes navegar e facer buscas máis rápido se Ultimatum precarga as páxinas que considera que poderías visitar</translation>
 <translation id="1728803206919861584">Queres gardar a clave de acceso fóra do modo de incógnito?</translation>
 <translation id="1732514748744806741">Avisarémoste se se vulneran os teus contrasinais</translation>
-<translation id="1737694586321018892">Goza da máxima seguranza de Chrome</translation>
+<translation id="1737694586321018892">Goza da máxima seguranza de Ultimatum</translation>
 <translation id="1747593111377567311">{NUM_SITES,plural, =1{1 sitio enviou recentemente moitas notificacións}other{# sitios enviaron recentemente moitas notificacións}}</translation>
 <translation id="1749561566933687563">Sincroniza os teus marcadores</translation>
 <translation id="1750238553597293878">Sigue usando os contrasinais na túa Conta de Google</translation>
 <translation id="17513872634828108">Pestanas abertas</translation>
 <translation id="1753744496844366747">Aa</translation>
 <translation id="1760873718737761808">{FILE_COUNT,plural, =1{Páxinas, 1 páxina na lista}other{Páxinas, # páxinas na lista}}</translation>
-<translation id="1771929606532798550">Envíaselle a Google a información sobre o uso que fas de Chrome, pero non se vincula contigo\n\nEn caso de que se produza un fallo en Chrome, entre os datos da incidencia podería incluírse algunha información persoal\n\nSe sincronizas o teu historial coa túa Conta de Google, as métricas tamén poderían conter información sobre os URL que visites</translation>
+<translation id="1771929606532798550">Envíaselle a Google a información sobre o uso que fas de Ultimatum, pero non se vincula contigo\n\nEn caso de que se produza un fallo en Ultimatum, entre os datos da incidencia podería incluírse algunha información persoal\n\nSe sincronizas o teu historial coa túa Conta de Google, as métricas tamén poderían conter información sobre os URL que visites</translation>
 <translation id="1778457539567749232">Marcar como sen ler</translation>
 <translation id="1779766957982586368">Pechar ventá</translation>
 <translation id="1780023393214832643">Contrasinais gardados en <ph name="USERNAME" /></translation>
 <translation id="1791662854739702043">Completouse a instalación</translation>
 <translation id="1792959175193046959">Cambia a localización de descarga predeterminada en calquera momento</translation>
 <translation id="1796666869097395659">Minimizar pestana para volver máis tarde</translation>
-<translation id="1799920918471566157">Consellos de Chrome</translation>
+<translation id="1799920918471566157">Consellos de Ultimatum</translation>
 <translation id="1807246157184219062">Claro</translation>
 <translation id="1807709131360304325">Abrir unha nova ventá</translation>
 <translation id="1810845389119482123">Non se completou a configuración de sincronización inicial</translation>
@@ -197,13 +197,13 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="1820408774134375111">Panel inferior de inicio de sesión</translation>
 <translation id="1823492026305965829">Iniciar sesión como <ph name="USER_FULL_NAME" /></translation>
 <translation id="1824902652744048041">Toca Eliminar datos de navegación</translation>
-<translation id="1825772852827001597">Non se encriptarán os métodos de pago nin os enderezos de Google Pay. Tampouco se sincronizará o historial de navegación de Chrome.
-Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase de acceso. Google non recibirá nin almacenará a frase de acceso. Se a esqueces ou queres cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os datos de Chrome da túa conta<ph name="END_LINK" />.</translation>
+<translation id="1825772852827001597">Non se encriptarán os métodos de pago nin os enderezos de Google Pay. Tampouco se sincronizará o historial de navegación de Ultimatum.
+Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase de acceso. Google non recibirá nin almacenará a frase de acceso. Se a esqueces ou queres cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os datos de Ultimatum da túa conta<ph name="END_LINK" />.</translation>
 <translation id="1829244130665387512">Buscar na páxina</translation>
 <translation id="1832459821645506983">Si, acepto</translation>
-<translation id="1845958458910716240">Para protexer os teus datos, permite que Chrome quite os permisos dos sitios que leves tempo sen visitar</translation>
-<translation id="1871098866036088250">Abrir no navegador Chrome</translation>
-<translation id="1877026089748256423">Chrome está desactualizado</translation>
+<translation id="1845958458910716240">Para protexer os teus datos, permite que Ultimatum quite os permisos dos sitios que leves tempo sen visitar</translation>
+<translation id="1871098866036088250">Abrir no navegador Ultimatum</translation>
+<translation id="1877026089748256423">Ultimatum está desactualizado</translation>
 <translation id="1877073879466606884">O perfil no que tes a sesión iniciada é un perfil xestionado. A persoa administradora pode facer cambios na súa configuración de forma remota, analizar información sobre o navegador mediante informes e realizar outras tarefas necesarias.</translation>
 <translation id="1879904908408734349">Panel inferior de inicio de sesión pechado</translation>
 <translation id="1883903952484604915">Os meus ficheiros</translation>
@@ -215,7 +215,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="1910950723001426294">A lista de opcións para compartir está pechada.</translation>
 <translation id="191726024256261717">Revisar os permisos</translation>
 <translation id="1917766536967060661">Perderás inmediatamente o acceso ao grupo de pestanas "<ph name="GROUP_NAME" />" e <ph name="BLOCKED_MEMBER_FULL_NAME" /> (<ph name="BLOCKED_MEMBER_EMAIL" />) xa non poderá interactuar contigo nos servizos de Google.</translation>
-<translation id="1919130412786645364">Permitir inicio de sesión en Chrome</translation>
+<translation id="1919130412786645364">Permitir inicio de sesión en Ultimatum</translation>
 <translation id="1922362554271624559">Idiomas suxeridos</translation>
 <translation id="1924255092154549435">Despregouse a pestana</translation>
 <translation id="1925021887439448749">Introducir enderezo web personalizado</translation>
@@ -225,11 +225,11 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="1944535645109964458">Non hai claves de acceso dispoñibles</translation>
 <translation id="1957557050935255529">Cargando PDF…</translation>
 <translation id="1959679933317802873">Á espera de contido</translation>
-<translation id="1960290143419248813">As actualizacións de Chrome xa non son compatibles con esta versión de Android</translation>
+<translation id="1960290143419248813">As actualizacións de Ultimatum xa non son compatibles con esta versión de Android</translation>
 <translation id="1962061488333185936"><ph name="TAB_TITLE" />, pestana con son multiseleccionada</translation>
 <translation id="1963976881984600709">Protección estándar</translation>
 <translation id="1966710179511230534">Actualiza a túa información de inicio de sesión.</translation>
-<translation id="1969037871259811890">Ao eliminar os teus datos de navegación, non se pecha a sesión da túa Conta de Google. Para facelo, <ph name="BEGIN_LINK1" />pecha a sesión en Chrome<ph name="END_LINK1" />.</translation>
+<translation id="1969037871259811890">Ao eliminar os teus datos de navegación, non se pecha a sesión da túa Conta de Google. Para facelo, <ph name="BEGIN_LINK1" />pecha a sesión en Ultimatum<ph name="END_LINK1" />.</translation>
 <translation id="197288927597451399">Continuar</translation>
 <translation id="1973912524893600642">Conservar datos</translation>
 <translation id="1974060860693918893">Configuración avanzada</translation>
@@ -242,7 +242,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="2021896219286479412">Controis de pantalla completa</translation>
 <translation id="2029669011553795746">Opción de activar as notificacións de consellos aberta a media altura</translation>
 <translation id="2038563949887743358">Activa a opción Ver como ordenador</translation>
-<translation id="204321170514947529"><ph name="APP_NAME" /> tamén ten datos en Chrome</translation>
+<translation id="204321170514947529"><ph name="APP_NAME" /> tamén ten datos en Ultimatum</translation>
 <translation id="2047378580182589770">Mantén premido o botón para saír do modo de incógnito</translation>
 <translation id="2049574241039454490"><ph name="FILE_SIZE_OF_TOTAL" /> <ph name="SEPARATOR" /> <ph name="DESCRIPTION" /></translation>
 <translation id="2051669996101374349">Usa HTTPS sempre que sexa posible e recibe advertencias antes de cargar sitios que non admitan este protocolo. Non podes cambiar esta opción de configuración porque tes activada a opción Protección avanzada.</translation>
@@ -265,9 +265,9 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="2138283760993967204">Icona de xestionar</translation>
 <translation id="2138632817776076519"><ph name="TAB_TITLE" />, pestana con gravación en curso seleccionada</translation>
 <translation id="2141396931810938595">Segundo o uso que fas do navegador</translation>
-<translation id="2145315049852051678">Chrome fai comprobacións de forma periódica para ver se tes a configuración máis segura. Informarémoste se atopamos algo que necesites revisar.</translation>
+<translation id="2145315049852051678">Ultimatum fai comprobacións de forma periódica para ver se tes a configuración máis segura. Informarémoste se atopamos algo que necesites revisar.</translation>
 <translation id="2149973817440762519">Editar marcador</translation>
-<translation id="2163089732491971196">Para usar e gardar os datos de Chrome na túa Conta de Google, introduce a túa frase de acceso</translation>
+<translation id="2163089732491971196">Para usar e gardar os datos de Ultimatum na túa Conta de Google, introduce a túa frase de acceso</translation>
 <translation id="2166228530126694506">Versión <ph name="VERSION_NUMBER" /></translation>
 <translation id="2172688499998841696">As descricións das imaxes están desactivadas</translation>
 <translation id="2172905120685242547">Queres pechar a ventá?</translation>
@@ -280,7 +280,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="2194856509914051091">Cuestións que se deben ter en conta</translation>
 <translation id="2205701497928406883"><ph name="TAB_TITLE" />, pestana de uso compartido fixada</translation>
 <translation id="22091350895006575">Engadir nome de usuario</translation>
-<translation id="221494669172414749">Se abres Chrome sen un bloqueo de perfil, os teus métodos de pago e contrasinais gardados quitaranse do coche. O bloqueo de perfil protexe estes datos.</translation>
+<translation id="221494669172414749">Se abres Ultimatum sen un bloqueo de perfil, os teus métodos de pago e contrasinais gardados quitaranse do coche. O bloqueo de perfil protexe estes datos.</translation>
 <translation id="2226826835915474236">Atallos inactivos</translation>
 <translation id="2227179592712503583">Quitar suxestión</translation>
 <translation id="2227444325776770048">Continuar como <ph name="USER_FULL_NAME" /></translation>
@@ -311,7 +311,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="2332515770639153015">Está activada a función Navegación segura mellorada</translation>
 <translation id="233375395665273385">Eliminar e pechar sesión</translation>
 <translation id="2341410551640223969">Non se puido instalar <ph name="WEBAPK_NAME" />.</translation>
-<translation id="2349710944427398404">Datos totais usados por Chrome, incluídas as contas, os marcadores e a configuración gardada</translation>
+<translation id="2349710944427398404">Datos totais usados por Ultimatum, incluídas as contas, os marcadores e a configuración gardada</translation>
 <translation id="235789365079050412">Política de privacidade de Google</translation>
 <translation id="2359808026110333948">Continuar</translation>
 <translation id="2362083820973145409">Iniciaches sesión como <ph name="USER_NAME" />. <ph name="USER_EMAIL" />. Abre a configuración.</translation>
@@ -333,7 +333,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="2427025860753516072">{FILE_COUNT,plural, =1{Vídeos, 1 vídeo na lista}other{Vídeos, # vídeos na lista}}</translation>
 <translation id="2433507940547922241">Aparencia</translation>
 <translation id="2439153523196674349">Vista previa de <ph name="SITE_NAME" /></translation>
-<translation id="2449931042095204989">Cando un sitio ou aplicación de Google solicita precargar ligazóns da súa páxina de forma privada, Chrome encripta e precarga as páxinas correspondentes a través dos seus servidores sen cookies. Deste xeito, ocúltaselle a túa identidade ao sitio precargado.</translation>
+<translation id="2449931042095204989">Cando un sitio ou aplicación de Google solicita precargar ligazóns da súa páxina de forma privada, Ultimatum encripta e precarga as páxinas correspondentes a través dos seus servidores sen cookies. Deste xeito, ocúltaselle a túa identidade ao sitio precargado.</translation>
 <translation id="2450019289047528273">Métodos de pago e outra información de Google Wallet</translation>
 <translation id="2450083983707403292">Queres empezar a descargar <ph name="FILE_NAME" /> de novo?</translation>
 <translation id="2451607499823206582">Estase facendo un seguimento</translation>
@@ -342,17 +342,17 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="2466378451804467735"><ph name="TAB_TITLE" />, pestana silenciada e multiseleccionada</translation>
 <translation id="2468444275314013497">Todo en orde co navegador</translation>
 <translation id="2471632347767899461">Proba a buscar no Centro de axuda</translation>
-<translation id="2472163211318554013">Inicia sesión para sacarlle o máximo partido a Chrome</translation>
+<translation id="2472163211318554013">Inicia sesión para sacarlle o máximo partido a Ultimatum</translation>
 <translation id="247737702124049222">As descricións das imaxes están activadas</translation>
 <translation id="2479148705183875116">Ir a Configuración</translation>
 <translation id="2482878487686419369">Notificacións</translation>
 <translation id="2496180316473517155">Historial de navegación</translation>
 <translation id="2497852260688568942">O administrador desactivou a sincronización</translation>
-<translation id="250020030759455918">Poderás ver o teu estado de inicio de sesión de <ph name="SITE_NAME" />, os teus datos de navegación e os datos do sitio en Chrome</translation>
+<translation id="250020030759455918">Poderás ver o teu estado de inicio de sesión de <ph name="SITE_NAME" />, os teus datos de navegación e os datos do sitio en Ultimatum</translation>
 <translation id="2510106555128151389">Instalando <ph name="WEBAPK_NAME" />…</translation>
 <translation id="2512234228327349533">Buscar opcións de compra</translation>
 <translation id="2513403576141822879">Para ver máis opcións relacionadas coa configuración da privacidade, seguranza e recompilación de datos, consulta <ph name="BEGIN_LINK" />Sincronización e servizos de Google<ph name="END_LINK" /></translation>
-<translation id="2515921719039583189">Eliminar datos de Chrome do dispositivo?</translation>
+<translation id="2515921719039583189">Eliminar datos de Ultimatum do dispositivo?</translation>
 <translation id="2517113738956581680">Panel de tamaño completo</translation>
 <translation id="2523184218357549926">Envía a Google os URL das páxinas que visitas</translation>
 <translation id="2524132927880411790">Ir á busca por voz da aplicación Google</translation>
@@ -374,9 +374,9 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="2569733278091928697">Poderás xestionar con facilidade os controis multimedia, as sesións do modo de incógnito, as descargas e moito máis</translation>
 <translation id="2571711316400087311">Ofrecer opción de enviar ao Tradutor de Google as páxinas escritas noutros idiomas</translation>
 <translation id="2571834852878229351">Crear un propio</translation>
-<translation id="2574249610672786438">Para ver as túas pestanas desde calquera dispositivo no que utilices Chrome, inicia sesión en todos eles</translation>
+<translation id="2574249610672786438">Para ver as túas pestanas desde calquera dispositivo no que utilices Ultimatum, inicia sesión en todos eles</translation>
 <translation id="2577981599306533385"><ph name="MEMBER_FULL_NAME" /> (<ph name="EMAIL" />) perderá inmediatamente o acceso a "<ph name="GROUP_NAME" />" e xa non poderá interactuar contigo nos servizos de Google.</translation>
-<translation id="2581165646603367611">Borraranse as cookies, a memoria caché e outros datos dos sitios que Chrome non considera importantes.</translation>
+<translation id="2581165646603367611">Borraranse as cookies, a memoria caché e outros datos dos sitios que Ultimatum non considera importantes.</translation>
 <translation id="2587052924345400782">Versión nova dispoñible</translation>
 <translation id="2593272815202181319">Monoespazado</translation>
 <translation id="260403163289591229">Seguindo</translation>
@@ -415,8 +415,8 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="2779651927720337254">produciuse un erro</translation>
 <translation id="2781151931089541271">Queda 1 segundo</translation>
 <translation id="2789486458103222910">Aceptar</translation>
-<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Chrome encontrou un contrasinal reutilizado que poderías mellorar}other{Chrome encontrou # contrasinais reutilizados que poderías mellorar}}</translation>
-<translation id="2794551654724114396">Activa as notificacións para recibir consellos útiles que che axudarán a tirar o máximo proveito de Chrome</translation>
+<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Ultimatum encontrou un contrasinal reutilizado que poderías mellorar}other{Ultimatum encontrou # contrasinais reutilizados que poderías mellorar}}</translation>
+<translation id="2794551654724114396">Activa as notificacións para recibir consellos útiles que che axudarán a tirar o máximo proveito de Ultimatum</translation>
 <translation id="2805210243313393104">Accede aos teus marcadores e moito máis en todos os teus dispositivos</translation>
 <translation id="2805756323405976993">Aplicacións</translation>
 <translation id="2819849308549746319">Cancelar a subscrición a todos</translation>
@@ -433,7 +433,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="2842985007712546952">Cartafol principal</translation>
 <translation id="2854916915045135148">Mantén premido o botón para cambiar ao modo de incógnito</translation>
 <translation id="2860954141821109167">Asegúrate de que haxa unha aplicación de teléfono activada neste dispositivo</translation>
-<translation id="2861923151411510142">Algunhas funcións de Chrome non estarán dispoñibles</translation>
+<translation id="2861923151411510142">Algunhas funcións de Ultimatum non estarán dispoñibles</translation>
 <translation id="286473047976978798">Queres aplicar as túas preferencias de aparencia?</translation>
 <translation id="2869416538780777323">{OTHER_TAB_COUNT,plural, =1{<ph name="URL" /> e 1 pestana máis}other{<ph name="URL" /> e <ph name="TAB_COUNT_MANY" /> pestanas máis}}</translation>
 <translation id="2869430948265924908">Para protexer o teu contido confidencial no coche, debes crear un bloqueo do perfil do coche.  Podes facelo cun PIN, cun código ou cun contrasinal.</translation>
@@ -441,10 +441,10 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="2871733351037274014">Precargar páxinas</translation>
 <translation id="2876136027428473467"><ph name="CHILD_NAME" /> quere que aprobes este sitio web:</translation>
 <translation id="2876556152483133018">Busca de sitios</translation>
-<translation id="2876628302275096482">Máis información sobre <ph name="BEGIN_LINK" />como protexe Chrome a privacidade dos teus datos<ph name="END_LINK" /></translation>
+<translation id="2876628302275096482">Máis información sobre <ph name="BEGIN_LINK" />como protexe Ultimatum a privacidade dos teus datos<ph name="END_LINK" /></translation>
 <translation id="2878607776582720720"><ph name="TAB_TITLE" />, pestana do modo de incógnito de uso compartido multiseleccionada</translation>
 <translation id="2885355868600171871">Ir á barra de enderezos</translation>
-<translation id="2888126860611144412">Acerca de Chrome</translation>
+<translation id="2888126860611144412">Acerca de Ultimatum</translation>
 <translation id="2891154217021530873">Detén a carga da páxina</translation>
 <translation id="2893168226686371498">Navegador predeterminado</translation>
 <translation id="2894821468041866720">Non retarda de forma significativa o teu navegador nin o teu dispositivo.</translation>
@@ -463,14 +463,14 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="2923908459366352541">O nome non é válido</translation>
 <translation id="2932150158123903946">Almacenamento de Google <ph name="APP_NAME" /></translation>
 <translation id="2932222164150889403">O teclado non cambiará</translation>
-<translation id="2936980480904111527">As notificacións de Chrome facilítanche as cousas</translation>
+<translation id="2936980480904111527">As notificacións de Ultimatum facilítanche as cousas</translation>
 <translation id="2940075786175545812">Opción para aprobar ou non un sitio web</translation>
 <translation id="2942036813789421260">A pestana de vista previa está pechada</translation>
 <translation id="2951071800649516099">Engade páxinas á lista de lectura para consultalas noutro momento</translation>
 <translation id="2954586176076923855">Mover barra de enderezos á parte superior</translation>
 <translation id="2961208450284224863">{READING_LIST_UNREAD_PAGE_COUNT,plural, =1{<ph name="READING_LIST_UNREAD_PAGE_COUNT_ONE" /> páxina sen ler}other{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> páxinas sen ler}}</translation>
 <translation id="2972109037780336501">Quitar permisos automaticamente</translation>
-<translation id="2976550651269220761">Algúns dos teus datos de Chrome aínda non se gardaron na túa Conta de Google.\nProba a esperar uns minutiños antes de pechar a sesión. Se a pechas agora, estes datos eliminaranse.</translation>
+<translation id="2976550651269220761">Algúns dos teus datos de Ultimatum aínda non se gardaron na túa Conta de Google.\nProba a esperar uns minutiños antes de pechar a sesión. Se a pechas agora, estes datos eliminaranse.</translation>
 <translation id="2977350910003566746">Ordenando pola data de última apertura</translation>
 <translation id="297771753501244313">Ordenar: Última apertura</translation>
 <translation id="2979639724566107830">Abre o marcador nunha ventá nova</translation>
@@ -493,15 +493,15 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="3035527385626181784"><ph name="TAB_TITLE" />, pestana de uso compartido seleccionada</translation>
 <translation id="3036750288708366620"><ph name="BEGIN_LINK" />Obter axuda<ph name="END_LINK" /></translation>
 <translation id="3037177537145227281">Estase facendo un seguimento do prezo</translation>
-<translation id="3037517125981011456">Mostra solicitudes para iniciar sesión en Chrome</translation>
+<translation id="3037517125981011456">Mostra solicitudes para iniciar sesión en Ultimatum</translation>
 <translation id="3038272154009688107">Ver todos os sitios</translation>
 <translation id="3057938290530993634">Mantén premidos os sitios web que máis visitas para fixalos e acceder facilmente a eles a próxima vez</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> marcador}other{<ph name="BOOKMARKS_COUNT_MANY" /> marcadores}}</translation>
-<translation id="3062802207422175757">Artigos sobre os teus intereses en Chrome</translation>
+<translation id="3062802207422175757">Artigos sobre os teus intereses en Ultimatum</translation>
 <translation id="3066573403916685335">Mover para abaixo</translation>
 <translation id="3067505415088964188">Prezo baixo</translation>
 <translation id="3070005020161560471">Traducir automaticamente</translation>
-<translation id="3072980200212375806"><ph name="APP_NAME" /> abrirase en Chrome. Ao continuar, aceptas as <ph name="BEGIN_LINK1" />Condicións de servizo de Google<ph name="END_LINK1" />, así como as <ph name="BEGIN_LINK2" />Condicións de servizo adicionais de Google Chrome e Chrome OS<ph name="END_LINK2" />. Tamén é aplicable a <ph name="BEGIN_LINK3" />Política de privacidade<ph name="END_LINK3" />.</translation>
+<translation id="3072980200212375806"><ph name="APP_NAME" /> abrirase en Ultimatum. Ao continuar, aceptas as <ph name="BEGIN_LINK1" />Condicións de servizo de Google<ph name="END_LINK1" />, así como as <ph name="BEGIN_LINK2" />Condicións de servizo adicionais de Ultimatum e Ultimatum OS<ph name="END_LINK2" />. Tamén é aplicable a <ph name="BEGIN_LINK3" />Política de privacidade<ph name="END_LINK3" />.</translation>
 <translation id="3080525922482950719">Podes gardar páxinas para lelas máis tarde ou sen conexión</translation>
 <translation id="3087734570205094154">Parte inferior</translation>
 <translation id="3091010850649238832">Mostrar contido do portapapeis</translation>
@@ -511,7 +511,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="3123734510202723619">Avisos</translation>
 <translation id="3134385238404760368">Non hai ningunha pestana recente</translation>
 <translation id="3135655388926735587">Toca Pestanas recentes</translation>
-<translation id="314939179385989105">Páxina de inicio de Chrome</translation>
+<translation id="314939179385989105">Páxina de inicio de Ultimatum</translation>
 <translation id="3158667104057012316">Ordenando de maneira manual</translation>
 <translation id="3159335509547415276">Máis información acerca das contas bloqueadas</translation>
 <translation id="3161699713309727585"><ph name="BUTTON_TEXT" />; ábrese nunha pestana nova</translation>
@@ -531,7 +531,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="3236059992281584593">Queda 1 minuto</translation>
 <translation id="3237087289225714896">Precarga estándar:</translation>
 <translation id="3244271242291266297">MM</translation>
-<translation id="3245429137663807393">Se, ademais, compartes os informes de uso de Chrome, neles inclúense os URL que visitas</translation>
+<translation id="3245429137663807393">Se, ademais, compartes os informes de uso de Ultimatum, neles inclúense os URL que visitas</translation>
 <translation id="3250563604907490871">As descricións das imaxes retomaranse cando te conectes á wifi</translation>
 <translation id="3254409185687681395">Engadir esta páxina aos marcadores</translation>
 <translation id="3265093782546847662">Todas as páxinas de <ph name="DOMAIN" /></translation>
@@ -568,22 +568,22 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="3435575784518354875">Para poder acceder aos contrasinais, expórtaos agora, actualiza os servizos de Google Play e despois volve importalos no xestor de contrasinais de Google. <ph name="BEGIN_LINK" />Ver as instrucións completas.<ph name="END_LINK" /></translation>
 <translation id="3435738964857648380">Seguranza</translation>
 <translation id="3435914367318771664">Engadir pestana ao grupo novo</translation>
-<translation id="3438681572027105609">Para poder acceder aos teus contrasinais e moito máis en todos os teus dispositivos, inicia sesión en Chrome</translation>
+<translation id="3438681572027105609">Para poder acceder aos teus contrasinais e moito máis en todos os teus dispositivos, inicia sesión en Ultimatum</translation>
 <translation id="3439276997620616816">Aquí atoparás as pestanas recentes</translation>
 <translation id="3443221991560634068">Volver cargar a páxina actual</translation>
 <translation id="3444179773590444986">Queres compartir comentarios sobre o tema escuro para os sitios?</translation>
 <translation id="3448874648066942074">Resume a páxina coa IA</translation>
-<translation id="3452832259067974318">Para protexer a túa privacidade, Chrome non autocompletará o teu contrasinal neste campo.</translation>
+<translation id="3452832259067974318">Para protexer a túa privacidade, Ultimatum non autocompletará o teu contrasinal neste campo.</translation>
 <translation id="3474624961160222204">Continuar como <ph name="NAME" /></translation>
 <translation id="3478363558367712427">Podes escoller o motor de busca</translation>
 <translation id="3482805106082349287">Fai buscas co teclado, a voz, o modo de incógnito ou a cámara</translation>
-<translation id="3487903178221457900">Outras persoas (ou aplicacións) poden acceder ao ficheiro exportado. En canto o exportes, os teus contrasinais eliminaranse de Chrome.</translation>
+<translation id="3487903178221457900">Outras persoas (ou aplicacións) poden acceder ao ficheiro exportado. En canto o exportes, os teus contrasinais eliminaranse de Ultimatum.</translation>
 <translation id="3488199663160411179">nome</translation>
 <translation id="3493531032208478708"><ph name="BEGIN_LINK" />Máis información<ph name="END_LINK" /> acerca do contido suxerido</translation>
 <translation id="3499246418971111862">chrome_qrcode_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="350276055892098337">Ordenar polo máis antigo</translation>
 <translation id="3507132249039706973">A protección estándar está activada</translation>
-<translation id="3509330069915219067">Estás sen conexión. Chrome non puido buscar actualizacións.</translation>
+<translation id="3509330069915219067">Estás sen conexión. Ultimatum non puido buscar actualizacións.</translation>
 <translation id="3513019849832307207">Unirse e abrir</translation>
 <translation id="3513704683820682405">Realidade aumentada</translation>
 <translation id="3516053221628030540">Ir a Google Play</translation>
@@ -615,10 +615,10 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="3623240789707551553">{DOMAIN_COUNT,plural, =1{e 1 sitio máis}other{e # sitios máis}}</translation>
 <translation id="3625870480639975468">Restablecer zoom</translation>
 <translation id="3631987586758005671">Compartindo co dispositivo <ph name="DEVICE_NAME" /></translation>
-<translation id="3635073343384702370">Chrome pode comprobar os teus contrasinais cando os gardes</translation>
+<translation id="3635073343384702370">Ultimatum pode comprobar os teus contrasinais cando os gardes</translation>
 <translation id="3636940436873918441">Idiomas preferidos</translation>
-<translation id="3637744895182738742">Se esqueciches a frase de acceso ou queres cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os datos de Chrome da túa conta<ph name="END_LINK" />.</translation>
-<translation id="3641581193271938629">Pechouse a opción de activar a función Chrome Finds</translation>
+<translation id="3637744895182738742">Se esqueciches a frase de acceso ou queres cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os datos de Ultimatum da túa conta<ph name="END_LINK" />.</translation>
+<translation id="3641581193271938629">Pechouse a opción de activar a función Ultimatum Finds</translation>
 <translation id="3647019414263135904">Abrir ou pechar a ventá emerxente contextual</translation>
 <translation id="3653111872753786013"><ph name="WEBSITE_TITLE" />: <ph name="WEBSITE_URL" /></translation>
 <translation id="3674208116086565128">Ir ao inicio da aplicación Google</translation>
@@ -636,7 +636,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="3710501561113687889">Para continuar, <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> compartirá con este sitio os seguintes datos: <ph name="FIELDS_STRING" />.</translation>
 <translation id="3710560693796335511">Colaboración</translation>
 <translation id="3714430408451673233">Panel inferior da pestana a media altura.</translation>
-<translation id="3718765429352682176">Podes ver o historial doutras aplicacións que abran ligazóns en Chrome.</translation>
+<translation id="3718765429352682176">Podes ver o historial doutras aplicacións que abran ligazóns en Ultimatum.</translation>
 <translation id="3721119614952978349">Ti e Google</translation>
 <translation id="3727000368239390918">Inicia sesión para poder acceder ás túas pestanas e moito máis en todos os teus dispositivos</translation>
 <translation id="3737319253362202215">Configuración da tradución</translation>
@@ -690,8 +690,8 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="3943322906274039960"><ph name="TAB_TITLE" />, pestana do modo de pantalla superposta fixada</translation>
 <translation id="3950820424414687140">Iniciar sesión</translation>
 <translation id="395377504920307820">Usar sen conta</translation>
-<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Chrome cargará a páxina cando o dispositivo estea listo}other{Chrome cargará as páxinas cando o dispositivo estea listo}}</translation>
-<translation id="3969142555815019568">Chrome non puido comprobar os teus contrasinais</translation>
+<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Ultimatum cargará a páxina cando o dispositivo estea listo}other{Ultimatum cargará as páxinas cando o dispositivo estea listo}}</translation>
+<translation id="3969142555815019568">Ultimatum non puido comprobar os teus contrasinais</translation>
 <translation id="3969863827134279083">Mover cara arriba</translation>
 <translation id="397105322502079400">Calculando...</translation>
 <translation id="397583555483684758">A sincronización deixou de funcionar</translation>
@@ -702,10 +702,10 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="3987993985790029246">Copiar ligazón</translation>
 <translation id="3994236846568425219">O tema escuro activarase cando estea activado no dispositivo</translation>
 <translation id="4000212216660919741">Inicio sen conexión</translation>
-<translation id="4000670338830950598">Personalizar e controlar Google Chrome cun elemento destacado</translation>
+<translation id="4000670338830950598">Personalizar e controlar Ultimatum cun elemento destacado</translation>
 <translation id="4015643064997321279">{NUM_PASSWORDS,plural, =1{1 contrasinal vulnerado na túa Conta de Google}other{# contrasinais vulnerados na túa Conta de Google}}</translation>
 <translation id="4016425174436051808">Non se puido seguir o feed. Produciuse un erro.</translation>
-<translation id="4023638601467301498">Para poder acceder aos teus marcadores e outros datos en todos os teus dispositivos, inicia sesión en Chrome</translation>
+<translation id="4023638601467301498">Para poder acceder aos teus marcadores e outros datos en todos os teus dispositivos, inicia sesión en Ultimatum</translation>
 <translation id="4024768890073681126">O teu pai ou nai xestiona o teu navegador</translation>
 <translation id="4027569221211770437">Cartafol <ph name="FOLDER_TITLE" /></translation>
 <translation id="4034817413553209278">{HOURS,plural, =1{# h}other{# h}}</translation>
@@ -745,13 +745,13 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="4180726336228139707">Só neste dispositivo</translation>
 <translation id="4181841719683918333">Idiomas</translation>
 <translation id="4188221736490993796">Ordenar do Z ao A</translation>
-<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{Chrome evitou que este sitio enviase notificacións debido a spam ou contido enganoso}other{Chrome evitou que estes sitios enviasen notificacións debido a spam ou contido enganoso}}</translation>
+<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{Ultimatum evitou que este sitio enviase notificacións debido a spam ou contido enganoso}other{Ultimatum evitou que estes sitios enviasen notificacións debido a spam ou contido enganoso}}</translation>
 <translation id="4195643157523330669">Abrir en pestana nova</translation>
 <translation id="4197828496439691735">{NUM_TABS,plural, =1{1 pestana neste dispositivo}other{# pestanas neste dispositivo}}</translation>
 <translation id="4198268995694216131">Máis sitios</translation>
 <translation id="4198423547019359126">Non hai localizacións de descarga dispoñibles</translation>
 <translation id="4209029522667123437"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> • Usáchela neste sitio</translation>
-<translation id="4214315110991671325">Se permites o uso de cookies, Chrome poderá utilizalas para as precargas.</translation>
+<translation id="4214315110991671325">Se permites o uso de cookies, Ultimatum poderá utilizalas para as precargas.</translation>
 <translation id="421517251707893998">Toca Fixar este atallo</translation>
 <translation id="4216511743389425832">Escoitar esta páxina</translation>
 <translation id="4217657297368492684"><ph name="TAB_TITLE" />, pestana dos modos de incógnito e pantalla superposta fixada e seleccionada</translation>
@@ -759,7 +759,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="4225895483398857530">Atallo da barra de ferramentas</translation>
 <translation id="4232376164796433044">Contrasinais e autocompletado</translation>
 <translation id="4242533952199664413">Abrir configuración</translation>
-<translation id="424864128008805179">Queres pechar sesión en Chrome?</translation>
+<translation id="424864128008805179">Queres pechar sesión en Ultimatum?</translation>
 <translation id="4249955472157341256">Ordenar por máis recente</translation>
 <translation id="4255841059940367080">Protección con tecnoloxía de IA e en tempo real contra sitios, descargas e extensións perigosos baseada nos teus datos de navegación enviados a Google</translation>
 <translation id="4256782883801055595">Licenzas de código aberto</translation>
@@ -768,7 +768,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="4270730597186910506">Iniciar ou deter o seguimento dun produto.</translation>
 <translation id="4277529130885813215">Usar outro dispositivo</translation>
 <translation id="427987768447457592">Novo grupo de pestanas</translation>
-<translation id="4282440837784183472">A túa organización, <ph name="MANAGED_DOMAIN" />, xestiona a conta na que estás iniciando sesión e o xeito no que se usa Chrome. A persoa administradora pode configurar ou restrinxir determinadas funcións.</translation>
+<translation id="4282440837784183472">A túa organización, <ph name="MANAGED_DOMAIN" />, xestiona a conta na que estás iniciando sesión e o xeito no que se usa Ultimatum. A persoa administradora pode configurar ou restrinxir determinadas funcións.</translation>
 <translation id="4283234489712362947"><ph name="TAB_TITLE" />, pestana dos modos de incógnito e pantalla superposta</translation>
 <translation id="4285498937028063278">Deixar de fixar</translation>
 <translation id="4285846616383034558">Cookies, memoria caché e outros datos dos sitios</translation>
@@ -784,10 +784,10 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="4311652497846705514">Queres abrir o PDF?</translation>
 <translation id="4313895677475587452">{NUM_SUSPICIOUS_NOTIFICATIONS,plural, =1{Posible spam}other{Posible spam (#)}}</translation>
 <translation id="4320177379694898372">Non hai conexión a Internet</translation>
-<translation id="4326079409704643112">Para usar e gardar os datos de Chrome na túa Conta de Google, verifica a túa identidade</translation>
+<translation id="4326079409704643112">Para usar e gardar os datos de Ultimatum na túa Conta de Google, verifica a túa identidade</translation>
 <translation id="433213510553688132">Seguindo...</translation>
 <translation id="4335835283689002019">A navegación segura está desactivada</translation>
-<translation id="4343250402091037179">Para realizar buscas nunha parte ou sitio específico de Chrome, escribe o seu atallo na barra de enderezos, seguido do atallo de teclado que prefiras.</translation>
+<translation id="4343250402091037179">Para realizar buscas nunha parte ou sitio específico de Ultimatum, escribe o seu atallo na barra de enderezos, seguido do atallo de teclado que prefiras.</translation>
 <translation id="4351244548802238354">Pechar cadro de diálogo</translation>
 <translation id="4352287748243729941">Queres utilizar o teu contrasinal de <ph name="PROVIDER" />?</translation>
 <translation id="4355272626458588338">Engade un marcador ás páxinas que consideres importantes para volver acceder a elas</translation>
@@ -800,7 +800,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="4384468725000734951">Uso de Sogou para a busca</translation>
 <translation id="4387647248986092471">Crear un bloqueo do perfil do coche</translation>
 <translation id="4387817230000841154">Abrir Descargas</translation>
-<translation id="4395046795145457714">Opción de activar a función Chrome Finds está aberta a altura completa</translation>
+<translation id="4395046795145457714">Opción de activar a función Ultimatum Finds está aberta a altura completa</translation>
 <translation id="4398561997852463382"><ph name="TAB_TITLE" />, pestana do modo de incógnito con gravación en curso fixada e seleccionada</translation>
 <translation id="4402611456429872546"><ph name="LANG" />: descargando…</translation>
 <translation id="4404568932422911380">Non hai marcadores</translation>
@@ -822,16 +822,16 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="4460822871039013969"><ph name="TAB_TITLE" />, pestana con gravación en curso fixada e seleccionada</translation>
 <translation id="4460861538906892109">{ITEMS_COUNT,plural, =1{1 marcador}other{# marcadores}}</translation>
 <translation id="4478161224666880173">Podes usar a túa conta de <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> neste sitio. Para continuar, inicia sesión en <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="4479972344484327217">Instalando <ph name="MODULE" /> para Chrome…</translation>
+<translation id="4479972344484327217">Instalando <ph name="MODULE" /> para Ultimatum…</translation>
 <translation id="4484496141267039529">Sen conexión. Téntao de novo máis tarde.</translation>
-<translation id="4487967297491345095">Eliminaranse permanentemente todos os datos da aplicación Chrome, mesmo os ficheiros, a configuración, as contas, as bases de datos  etc.</translation>
+<translation id="4487967297491345095">Eliminaranse permanentemente todos os datos da aplicación Ultimatum, mesmo os ficheiros, a configuración, as contas, as bases de datos  etc.</translation>
 <translation id="4494315997125191493">Selecciona a opción de xestionar para ver todas as ventás</translation>
 <translation id="4494806687727322324">A persoa administradora activou a opción de gardar contrasinais</translation>
 <translation id="4508528996305412043">Menú da tarxeta do feed aberto</translation>
 <translation id="4509741852167209430">Certo tipo de datos (como, por exemplo, se fixeches unha compra despois de visitar un sitio) compártese entre os sitios para medir o rendemento dos seus anuncios</translation>
 <translation id="4513387527876475750">{DAYS,plural, =1{Hai # día}other{Hai # días}}</translation>
 <translation id="451872707440238414">Buscar nos teus marcadores</translation>
-<translation id="4521489764227272523">Os datos seleccionados elimináronse de Chrome e dos dispositivos sincronizados.
+<translation id="4521489764227272523">Os datos seleccionados elimináronse de Ultimatum e dos dispositivos sincronizados.
 
 É posible que a túa conta de Google teña outras formas do historial de navegación, como buscas e actividade doutros servizos de Google, en <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="4523326818319942067">última hora</translation>
@@ -853,10 +853,10 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="4595276580892809760">Anexar imaxes da galería</translation>
 <translation id="4595805675102978678">Produciuse un erro na Conta de Google</translation>
 <translation id="4601095002996233687">Análises minuciosas para detectar descargas sospeitosas.</translation>
-<translation id="4606559747793337066">Cando un sitio ou aplicación solicita precargar ligazóns da súa páxina de forma privada, Chrome encripta e precarga as páxinas correspondentes a través dos servidores de Google sen cookies. Deste xeito, ocúltaselle a túa identidade ao sitio precargado.</translation>
+<translation id="4606559747793337066">Cando un sitio ou aplicación solicita precargar ligazóns da súa páxina de forma privada, Ultimatum encripta e precarga as páxinas correspondentes a través dos servidores de Google sen cookies. Deste xeito, ocúltaselle a túa identidade ao sitio precargado.</translation>
 <translation id="4616150815774728855">Abrir <ph name="WEBAPK_NAME" /></translation>
 <translation id="4619564267100705184">Verificar a túa identidade</translation>
-<translation id="4624065194742029982">Modo de incógnito de Chrome</translation>
+<translation id="4624065194742029982">Modo de incógnito de Ultimatum</translation>
 <translation id="4634124774493850572">Usar contrasinal</translation>
 <translation id="463471994228293091">{PASSWORDS_COUNT,plural, =1{Hai 1 contrasinal e outros elementos gardados só neste dispositivo. Para usalo noutros dispositivos, gárdao na túa Conta de Google.}other{Hai # contrasinais e outros elementos gardados só neste dispositivo. Para usalos noutros dispositivos, gárdaos na túa Conta de Google.}}</translation>
 <translation id="4640331037679501949">{NUM_PASSWORDS,plural, =1{1 contrasinal vulnerado}other{# contrasinais vulnerados}}</translation>
@@ -871,7 +871,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="4668347365065281350">Todos os datos que almacenasen os sitios, como as cookies e outros datos gardados localmente</translation>
 <translation id="4673702426794876519">Ventá do modo de incógnito</translation>
 <translation id="4675298276894277358">Este sitio non se volverá mostrar</translation>
-<translation id="4678082183394354975">O tema escuro para os sitios está activado en Chrome</translation>
+<translation id="4678082183394354975">O tema escuro para os sitios está activado en Ultimatum</translation>
 <translation id="4682306524980568490">Só se poden mostrar <ph name="MAX_INSTANCE_COUNT" /> ventás</translation>
 <translation id="4684427112815847243">Sincronizar todo</translation>
 <translation id="4685741273709472646">Seleccionar elemento da lista despregable</translation>
@@ -893,7 +893,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="4738836084190194332">Última sincronización: <ph name="WHEN" /></translation>
 <translation id="474121291218385686">Filtrar por aplicación</translation>
 <translation id="4741753828624614066">Recibirás suxestións melloradas na barra de enderezos</translation>
-<translation id="4742795653798179840">Datos de Chrome eliminados</translation>
+<translation id="4742795653798179840">Datos de Ultimatum eliminados</translation>
 <translation id="4742970037960872810">Deixar de salientar texto</translation>
 <translation id="4749960740855309258">Abrir unha nova pestana</translation>
 <translation id="4753600213727157212">Sesión iniciada como <ph name="USER_NAME" />. <ph name="USER_EMAIL" />. Produciuse un erro na Conta de Google. Abre a configuración.</translation>
@@ -911,21 +911,21 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="4782929588435725897"><ph name="SEARCH_ENGINE" /> é o teu buscador predeterminado</translation>
 <translation id="4784349455504343791"><ph name="WEBSITE_ORIGIN" /> quere usar información persoal do teu moedeiro dixital.</translation>
 <translation id="4787736314074622408">Queres eliminar <ph name="ITEM_TITLE" />?</translation>
-<translation id="4793679854893018356">Descubre como te protexe Chrome</translation>
+<translation id="4793679854893018356">Descubre como te protexe Ultimatum</translation>
 <translation id="4794291718671962615">(<ph name="MEGABYTES" />) <ph name="URL" /></translation>
 <translation id="4807098396393229769">Nome que aparece na tarxeta</translation>
 <translation id="480990236307250886">Abre a páxina de inicio</translation>
 <translation id="4822710610088666676"><ph name="TAB_GROUP_TITLE" /> grupo de pestanas pechado e gardado</translation>
 <translation id="482405935591409882">Busca nas túas pestanas ou grupos</translation>
 <translation id="4834250788637067901">Métodos de pago, ofertas e enderezos que usan Google Pay</translation>
-<translation id="4835385943915508971">Chrome non ten acceso ao recurso solicitado.</translation>
+<translation id="4835385943915508971">Ultimatum non ten acceso ao recurso solicitado.</translation>
 <translation id="483742037940503070">{TAB_COUNT,plural, =1{Restaurar grupo de <ph name="TAB_COUNT_ONE" /> pestana, coa cor <ph name="COLOR_NAME" />, como un novo grupo de pestanas en segundo plano.}other{Restaurar grupo de <ph name="TAB_COUNT_MANY" /> pestanas, coa cor <ph name="COLOR_NAME" />, como un novo grupo de pestanas en segundo plano.}}</translation>
 <translation id="4849731766219625109">Usar a túa conta de <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="4850886885716139402">Vista</translation>
 <translation id="4852014461738377247">Iniciando sesión…</translation>
 <translation id="4860895144060829044">Chamar</translation>
 <translation id="4864369630010738180">Iniciando sesión...</translation>
-<translation id="4866368707455379617">Non se puido instalar o módulo <ph name="MODULE" /> para Chrome</translation>
+<translation id="4866368707455379617">Non se puido instalar o módulo <ph name="MODULE" /> para Ultimatum</translation>
 <translation id="4871568871368204250">Desactivar sincronización</translation>
 <translation id="487567923005969537">Activar o modo de IA</translation>
 <translation id="4875775213178255010">Suxestións de contido</translation>
@@ -934,27 +934,27 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="4880127995492972015">Traducir…</translation>
 <translation id="4881695831933465202">Abrir</translation>
 <translation id="488187801263602086">Cambia o nome do ficheiro</translation>
-<translation id="4885273946141277891">Non se admite este número de instancias de Chrome.</translation>
+<translation id="4885273946141277891">Non se admite este número de instancias de Ultimatum.</translation>
 <translation id="4890973535105146893">Non hai ningún contrasinal gardado na túa Conta de Google</translation>
 <translation id="4905823827770127520">Incluír unha ligazón á páxina</translation>
 <translation id="4908869848243824489">Discover, de Google</translation>
 <translation id="4910889077668685004">Aplicacións de pagos</translation>
 <translation id="4911042367886397055">Dámosche a benvida de novo, <ph name="USER_NAME" /></translation>
 <translation id="4913169188695071480">Deter a actualización</translation>
-<translation id="4921224083091001889">Para poder acceder aos teus contrasinais e moito máis en todos os teus dispositivos, inicia sesión en Chrome como <ph name="EMAIL" /></translation>
+<translation id="4921224083091001889">Para poder acceder aos teus contrasinais e moito máis en todos os teus dispositivos, inicia sesión en Ultimatum como <ph name="EMAIL" /></translation>
 <translation id="4923173329789776645">A túa organización non recomenda a descarga</translation>
 <translation id="4925120120285606924">Captura de pantalla (<ph name="CURRENT_DATE_ISO" />)</translation>
 <translation id="4926901776383726965">Podes gardar imaxes e ficheiros para velos sen conexión ou compartilos noutras aplicacións</translation>
 <translation id="492699891214363151">{BOOKMARKS_COUNT,plural, =1{Hai 1 marcador e outros elementos gardados só neste dispositivo. Para usalo noutros dispositivos, gárdao na túa Conta de Google.}other{Hai # marcadores e outros elementos gardados só neste dispositivo. Para usalos noutros dispositivos, gárdaos na túa Conta de Google.}}</translation>
-<translation id="4932247056774066048">Dado que estás pechando sesión nunha conta xestionada por <ph name="DOMAIN_NAME" />, os teus datos de Chrome eliminaranse deste dispositivo. Permanecerá na túa Conta de Google.</translation>
+<translation id="4932247056774066048">Dado que estás pechando sesión nunha conta xestionada por <ph name="DOMAIN_NAME" />, os teus datos de Ultimatum eliminaranse deste dispositivo. Permanecerá na túa Conta de Google.</translation>
 <translation id="4943703118917034429">Realidade virtual</translation>
 <translation id="4943872375798546930">Non hai resultados</translation>
 <translation id="4957722034734105353">Máis información...</translation>
 <translation id="4959115606310463263">Panel inferior de inicio de sesión aberto ata media altura</translation>
 <translation id="4961107849584082341">Traduce esta páxina a calquera idioma</translation>
-<translation id="4964614743143953889">Chrome avísate sobre descargas e sitios pouco seguros</translation>
+<translation id="4964614743143953889">Ultimatum avísate sobre descargas e sitios pouco seguros</translation>
 <translation id="496607651705915226">Para gardar e usar contrasinais novos na túa Conta de Google, actualiza os servizos de Google Play</translation>
-<translation id="4971753085054504448">Proba a buscar outra cousa ou abre todo o historial de Chrome para ver máis resultados.</translation>
+<translation id="4971753085054504448">Proba a buscar outra cousa ou abre todo o historial de Ultimatum para ver máis resultados.</translation>
 <translation id="497421865427891073">Avanzar</translation>
 <translation id="497983151715419057">Revisa as pestanas e grupos de pestanas inactivos</translation>
 <translation id="498624032394115435">Calquera persoa que teña a ligazón poderá editar todas as pestanas.</translation>
@@ -981,7 +981,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="506254248375231072">Ningunha pestana</translation>
 <translation id="5075939510584558547">Gardar sen encriptación</translation>
 <translation id="5078638979202084724">Establecer todas as pestanas como marcadores</translation>
-<translation id="5085038751173179818">Inicia sesión neste sitio e en Chrome para acceder aos teus marcadores e a máis contido en todos os teus dispositivos</translation>
+<translation id="5085038751173179818">Inicia sesión neste sitio e en Ultimatum para acceder aos teus marcadores e a máis contido en todos os teus dispositivos</translation>
 <translation id="5088347662971855383">Fixar Gemini</translation>
 <translation id="5091199029769593641">Pronto se che mostrarán historias de <ph name="SITE_NAME" /> cando abras unha pestana nova. Os sitios que segues gárdanse na túa conta de Google. Podes xestionalos na configuración de Discover.</translation>
 <translation id="509429900233858213">Produciuse un erro.</translation>
@@ -989,7 +989,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="510275257476243843">Queda 1 hora</translation>
 <translation id="5114895953710637392">A folla para filtrar por aplicación está pechada.</translation>
 <translation id="5115811374190515607">á seguinte localización: <ph name="PRODUCT_NAME" /></translation>
-<translation id="5116239826668864748">Podes utilizar Chrome cando toques as ligazóns en mensaxes, en documentos e noutras aplicacións</translation>
+<translation id="5116239826668864748">Podes utilizar Ultimatum cando toques as ligazóns en mensaxes, en documentos e noutras aplicacións</translation>
 <translation id="5118713593561876160">Intereses</translation>
 <translation id="5122378528687922675">Se necesitas axuda, pídella ao teu pai ou á túa nai (<ph name="PARENT_NAME_1" /> ou <ph name="PARENT_NAME_2" />)</translation>
 <translation id="5123685120097942451">Pestana do modo de incógnito</translation>
@@ -1012,11 +1012,11 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="5206168361184759344">{FILE_COUNT,plural, =1{Descargando ficheiro…}other{Descargando # ficheiros…}}</translation>
 <translation id="5210286577605176222">Saltar á pestana anterior</translation>
 <translation id="5210365745912300556">Pechar pestana</translation>
-<translation id="5212800876504289412">Reinicia Google Chrome para completar este cambio. As pestanas volven abrirse automaticamente co reinicio.</translation>
+<translation id="5212800876504289412">Reinicia Ultimatum para completar este cambio. As pestanas volven abrirse automaticamente co reinicio.</translation>
 <translation id="5213114823401215820">Volver abrir grupo pechado</translation>
 <translation id="5215957675041756913">Controlar os teus datos e a túa conta</translation>
 <translation id="5218324087477576825">Cómpre indicar o número da tarxeta</translation>
-<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> e algúns máis <ph name="SEPARATOR" /> Chrome quitou estes permisos porque levas tempo sen acceder</translation>
+<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> e algúns máis <ph name="SEPARATOR" /> Ultimatum quitou estes permisos porque levas tempo sen acceder</translation>
 <translation id="5222676887888702881">Pechar sesión</translation>
 <translation id="5226378907213531272">Terás que desbloquear a pantalla cada vez que uses o coche</translation>
 <translation id="5227554086496586518">Toca para ver os resultados da busca</translation>
@@ -1036,7 +1036,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="5313967007315987356">Engadir sitio</translation>
 <translation id="5316947901395241499">A persoa administradora desactivou a opción de gardar contrasinais</translation>
 <translation id="5317780077021120954">Gardar</translation>
-<translation id="5319359161174645648">Google recomenda Chrome</translation>
+<translation id="5319359161174645648">Google recomenda Ultimatum</translation>
 <translation id="5326246328175179736">Non podes iniciar sesión con esta conta</translation>
 <translation id="5327248766486351172">Nome</translation>
 <translation id="5328542107300944283">Úsao con <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
@@ -1049,7 +1049,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="5375374982898812658">Perderás inmediatamente o acceso ao grupo de pestanas "<ph name="GROUP_NAME" />", que se eliminará de todos os dispositivos</translation>
 <translation id="5375577065097716013">Buscar imaxe con Google Lens <ph name="BEGIN_NEW" />Novo<ph name="END_NEW" /></translation>
 <translation id="5390367025924544771"><ph name="WEBSITE_ORIGIN" /> quere usar información persoal do teu moedeiro dixital. Continúa só se confías neste sitio. Os sitios perigosos poderían enganarte para que reveles información como o teu nome legal ou número de documento de identidade.</translation>
-<translation id="5395376160638294582">Asegúrate de poder usar sempre os datos de Chrome na túa Conta de Google</translation>
+<translation id="5395376160638294582">Asegúrate de poder usar sempre os datos de Ultimatum na túa Conta de Google</translation>
 <translation id="539881862970320163">Suxestión de contrasinal seguro. Teclado oculto.</translation>
 <translation id="5409881200985013443">Queres enviar o código <ph name="ONE_TIME_CODE" /> a <ph name="CLIENT_NAME" />?</translation>
 <translation id="5410300144953132176"><ph name="OWNER_FULL_NAME" /> (<ph name="OWNER_EMAIL" />) quere que te unas a un grupo de pestanas. Calquera persoa que teña a ligazón poderá editar todas as pestanas, polo que che recomendamos que teñas coidado ao unirte. A ligazón caducará ás 48 horas.</translation>
@@ -1061,7 +1061,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="543271133149552180"><ph name="TAB_TITLE" />, pestana dos modos de incógnito e pantalla superposta multiseleccionada</translation>
 <translation id="5436928407363358055">Para continuar facilmente onde o deixases, sincroniza o historial e as pestanas</translation>
 <translation id="5438292632479953702">Descargar de novo</translation>
-<translation id="5439191312780166229">Analiza máis datos de sitios que a protección estándar para avisarte sobre os sitios perigosos (mesmo sobre os que Google non coñeza ata ese momento). Se queres, podes omitir as advertencias de Chrome.</translation>
+<translation id="5439191312780166229">Analiza máis datos de sitios que a protección estándar para avisarte sobre os sitios perigosos (mesmo sobre os que Google non coñeza ata ese momento). Se queres, podes omitir as advertencias de Ultimatum.</translation>
 <translation id="5441137934526263133">O sitio non funciona? As cookies de terceiros están bloqueadas</translation>
 <translation id="5441466871879044658">Traducir texto a este idioma</translation>
 <translation id="5444999712122199445">Volver ao sitio</translation>
@@ -1072,7 +1072,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="5469852975082458401">Podes navegar polas páxinas cun cursor de texto. Preme F7 para desactivar esta función.</translation>
 <translation id="5471273988133666918">A pestana <ph name="TAB_TITLE" /> non se pode mover</translation>
 <translation id="548278423535722844">Abrir na aplicación de mapas</translation>
-<translation id="5489222148748465285">Queres que Chrome siga buscando?</translation>
+<translation id="5489222148748465285">Queres que Ultimatum siga buscando?</translation>
 <translation id="5490848366863949315"><ph name="TAB_TITLE" />, pestana do modo de pantalla superposta multiseleccionada</translation>
 <translation id="5494920125229734069">Seleccionar todo</translation>
 <translation id="549660026907543296">Unirte como <ph name="MEMBER_FULL_NAME" /></translation>
@@ -1080,7 +1080,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="5526281268548144413">Non se poden pechar en varias ventás</translation>
 <translation id="5532536403031755365">Engade unha capa máis de protección contra as ameazas en liña con protección mellorada</translation>
 <translation id="5548606607480005320">Revisión de seguranza</translation>
-<translation id="5554520618550346933">Cando usas un contrasinal, Chrome avísate se se publicou en liña. Ao facelo, os teus contrasinais e os teus nomes de usuario encríptanse, polo que ninguén pode lelos, nin sequera Google.</translation>
+<translation id="5554520618550346933">Cando usas un contrasinal, Ultimatum avísate se se publicou en liña. Ao facelo, os teus contrasinais e os teus nomes de usuario encríptanse, polo que ninguén pode lelos, nin sequera Google.</translation>
 <translation id="5555525474779371165">Escolle a protección da función Navegación segura</translation>
 <translation id="5556459405103347317">Volver cargar</translation>
 <translation id="555671485580955310">Sincronizar historial e pestanas</translation>
@@ -1093,10 +1093,10 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="5578795271662203820">Busca esta imaxe en <ph name="SEARCH_ENGINE" /></translation>
 <translation id="5596627076506792578">Máis opcións</translation>
 <translation id="5599455543593328020">Modo de incógnito</translation>
-<translation id="5601180634394228718">Se queres ver máis opcións de configuración que usen datos para mellorar a túa experiencia con Chrome, vai a <ph name="BEGIN_LINK" />Servizos de Google<ph name="END_LINK" />.</translation>
+<translation id="5601180634394228718">Se queres ver máis opcións de configuración que usen datos para mellorar a túa experiencia con Ultimatum, vai a <ph name="BEGIN_LINK" />Servizos de Google<ph name="END_LINK" />.</translation>
 <translation id="5601924940067278327">Accede ás túas pestanas e a outros datos en todos os teus dispositivos</translation>
 <translation id="5611398002774823980">Gardar na conta</translation>
-<translation id="5613381935190035031">Para poder acceder ás túas pestanas e a outros datos en todos os teus dispositivos, inicia sesión en Chrome como <ph name="EMAIL" /></translation>
+<translation id="5613381935190035031">Para poder acceder ás túas pestanas e a outros datos en todos os teus dispositivos, inicia sesión en Ultimatum como <ph name="EMAIL" /></translation>
 <translation id="5614625640221885312">Inicia sesión para poder acceder aos teus marcadores, contrasinais e moito máis en todos os teus dispositivos</translation>
 <translation id="5619633276517849615">A túa organización activou Navegación segura</translation>
 <translation id="5620163320393916465">Non hai contrasinais gardados</translation>
@@ -1112,21 +1112,21 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="5657871969392618475">A túa información está protexida cun bloqueo do perfil</translation>
 <translation id="5659593005791499971">Correo electrónico</translation>
 <translation id="5665379678064389456">Crea un evento en <ph name="APP_NAME" /></translation>
-<translation id="5683547024293500885">Chrome non puido buscar actualizacións</translation>
+<translation id="5683547024293500885">Ultimatum non puido buscar actualizacións</translation>
 <translation id="5683916195767086779">Grupo de pestanas</translation>
 <translation id="5686790454216892815">O nome do ficheiro é demasiado longo</translation>
 <translation id="569536719314091526">Traduce esta páxina a calquera idioma desde o botón Máis opcións</translation>
-<translation id="5696597120588531049">Chrome pode protexerte contra violacións da seguranza dos datos, sitios web que non son seguros e moito máis</translation>
+<translation id="5696597120588531049">Ultimatum pode protexerte contra violacións da seguranza dos datos, sitios web que non son seguros e moito máis</translation>
 <translation id="5698878456427040674">Comproba se se admite a conta seleccionada.</translation>
 <translation id="5709213329446699338"><ph name="SITE" /> quere conectarse a un porto en serie</translation>
 <translation id="5715150588940290235">Queres eliminar os códigos de seguranza gardados?</translation>
-<translation id="571930967925877633">Os marcadores, o historial e outros datos de Chrome deixarán de sincronizarse coa túa Conta de Google</translation>
+<translation id="571930967925877633">Os marcadores, o historial e outros datos de Ultimatum deixarán de sincronizarse coa túa Conta de Google</translation>
 <translation id="572328651809341494">Pestanas recentes</translation>
 <translation id="5728072125198221967">Servizos de Google vinculados</translation>
 <translation id="5734658507307260911"><ph name="TAB_TITLE" />, pestana do modo de incógnito con son fixada</translation>
 <translation id="5744751019568455640">Estas son as voces que podo usar para ler o contido das páxinas web. Se che gusta esta voz e queres que a siga usando, só tes que tocar o seu nome.</translation>
 <translation id="574845902699630049">Comparte o grupo como <ph name="OWNER_FULL_NAME" /></translation>
-<translation id="5749068826913805084">Chrome precisa acceder ao almacenamento para descargar ficheiros.</translation>
+<translation id="5749068826913805084">Ultimatum precisa acceder ao almacenamento para descargar ficheiros.</translation>
 <translation id="5749237766298580851">Desactivada <ph name="SEPARATOR" /> Non recomendado</translation>
 <translation id="5752232708629533680">Compartir só GIF</translation>
 <translation id="5753570386948603678">Eliminar do historial</translation>
@@ -1145,14 +1145,14 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="5811144606237321538"><ph name="TAB_TITLE" />, pestana fixada, silenciada e multiseleccionada</translation>
 <translation id="5814749351757353073">Non perdas as novidades dos teus sitios favoritos</translation>
 <translation id="5823093032261493462">Queres descargar o ficheiro "<ph name="FILE_NAME" />" de <ph name="DOWNLOAD_DOMAIN" /> de todos os modos?</translation>
-<translation id="5825135637446025843">Cando se reinicie Chrome, a información gardada do teu novo fornecedor usarase para autocompletar contrasinais, claves de acceso, enderezos e métodos de pago, entre outra información.</translation>
-<translation id="5828921839638612740">Podes eliminar os datos na configuración de Chrome</translation>
+<translation id="5825135637446025843">Cando se reinicie Ultimatum, a información gardada do teu novo fornecedor usarase para autocompletar contrasinais, claves de acceso, enderezos e métodos de pago, entre outra información.</translation>
+<translation id="5828921839638612740">Podes eliminar os datos na configuración de Ultimatum</translation>
 <translation id="5829586821381540080">Gardouse en <ph name="FOLDER_NAME" /></translation>
 <translation id="583281660410589416">Descoñecido</translation>
 <translation id="5833984609253377421">Compartir ligazón</translation>
-<translation id="5839058148541733625">O dinosauro de Chrome</translation>
+<translation id="5839058148541733625">O dinosauro de Ultimatum</translation>
 <translation id="5841444063256914865">Queres descargar o ficheiro "<ph name="FILE_NAME" />" de todos os modos?</translation>
-<translation id="5847265694842662173">Chrome impediu que sitios inadecuados ou que non se usan enviasen notificacións</translation>
+<translation id="5847265694842662173">Ultimatum impediu que sitios inadecuados ou que non se usan enviasen notificacións</translation>
 <translation id="5848257610304005265">Queres abrir o PDF con <ph name="APP_NAME" />?</translation>
 <translation id="5849288995120328556">Queres deixar de compartir o grupo?</translation>
 <translation id="5853623416121554550">en pausa</translation>
@@ -1166,8 +1166,8 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="5865733239029070421">Envía estatísticas de uso e informes de erros automaticamente a Google</translation>
 <translation id="5869522115854928033">Contrasinais gardados</translation>
 <translation id="5870416898561279542">As pestanas e grupos duplicados ou os que non se usen durante <ph name="DAYS_INACTIVE" /> días moveranse aquí<ph name="AUTODELETE_SECTION" />. Podes cambiar esta opción cando queiras en <ph name="DECLUTTER_SETTINGS_TITLE" />.</translation>
-<translation id="587735546353481577">Para seguir un sitio, entra nel, abre o menú de Chrome e toca Seguir.</translation>
-<translation id="5885378508678660271">Notificacións <ph name="SEPARATOR" /> Chrome quitou estes permisos porque este sitio é perigoso</translation>
+<translation id="587735546353481577">Para seguir un sitio, entra nel, abre o menú de Ultimatum e toca Seguir.</translation>
+<translation id="5885378508678660271">Notificacións <ph name="SEPARATOR" /> Ultimatum quitou estes permisos porque este sitio é perigoso</translation>
 <translation id="5899667542927581604">Non se pechou ningunha folla de claves de acceso</translation>
 <translation id="5907542076239273525">O marcador gardouse en <ph name="FOLDER_NAME" /></translation>
 <translation id="5911301511366365629"><ph name="TAB_TITLE" />, pestana do modo de incógnito con son seleccionada</translation>
@@ -1178,23 +1178,23 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="5942872142862698679">Uso de Google para a busca</translation>
 <translation id="5945035219773565305">Recomendación actual: <ph name="RECOMMENDATION" /></translation>
 <translation id="5951119116059277034">Vendo páxina publicada</translation>
-<translation id="5956665950594638604">Abrir o Centro de axuda de Chrome nunha nova pestana</translation>
+<translation id="5956665950594638604">Abrir o Centro de axuda de Ultimatum nunha nova pestana</translation>
 <translation id="59577092665511740">Escoller unha conta.</translation>
 <translation id="5958275228015807058">Atopa os ficheiros e as páxinas que descargaches na sección Descargas</translation>
-<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{Chrome evitou que un sitio que non visitaches recentemente che enviase notificacións}other{Chrome impediu que sitios que non visitaches recentemente che enviasen notificacións}}</translation>
+<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{Ultimatum evitou que un sitio que non visitaches recentemente che enviase notificacións}other{Ultimatum impediu que sitios que non visitaches recentemente che enviasen notificacións}}</translation>
 <translation id="5962718611393537961">Toca para contraer</translation>
 <translation id="5964869237734432770">Descricións de imaxes: non</translation>
 <translation id="5972844218283131174">Anular toda a selección</translation>
 <translation id="5975083100439434680">Afastar</translation>
 <translation id="5977976211062815271">Neste dispositivo</translation>
 <translation id="5978661847409534366">{ITEMS_COUNT,plural, =1{1 páxina na túa lista de lectura}other{# páxinas na túa lista de lectura}}</translation>
-<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Chrome quitou estes permisos porque levas tempo sen acceder</translation>
+<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Ultimatum quitou estes permisos porque levas tempo sen acceder</translation>
 <translation id="5995726099713306770">Queres descargar esta páxina de novo?</translation>
 <translation id="6000066717592683814">Manter Google</translation>
 <translation id="6000203700195075278">Volver seguir</translation>
 <translation id="6011308810877101166">Mellorar as suxestións de busca</translation>
 <translation id="6013305291643746595">Ordenando por máis antigo</translation>
-<translation id="6022659036123304283">Personaliza Chrome</translation>
+<translation id="6022659036123304283">Personaliza Ultimatum</translation>
 <translation id="6026538407078977628">Ampliar a pantalla completa</translation>
 <translation id="6030719887161080597">Xestiona a información que usan os sitios para medir o rendemento publicitario</translation>
 <translation id="6039379616847168523">Saltar á seguinte pestana</translation>
@@ -1223,7 +1223,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="6125864963080902918"><ph name="BEGIN_LINK" />Máis detalles<ph name="END_LINK" /></translation>
 <translation id="6127860394906721547">Abre o grupo de pestanas "<ph name="TITLE_OF_GROUP" />", de cor <ph name="COLOR_NAME" />, cos sitios <ph name="URL_LIST" />.</translation>
 <translation id="6130303040046284160">Minimizar a pestana</translation>
-<translation id="6132075343662013154">Chrome ofrecerache gardar o teu contrasinal</translation>
+<translation id="6132075343662013154">Ultimatum ofrecerache gardar o teu contrasinal</translation>
 <translation id="6134168885321518274">Abrir a barra de busca</translation>
 <translation id="6135608400322377268">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> pestana}other{<ph name="TAB_COUNT_MANY" /> pestanas}}</translation>
 <translation id="6137022273846704445">Idioma de <ph name="APP_NAME" /></translation>
@@ -1234,10 +1234,10 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="6146563240635539929">Vídeos</translation>
 <translation id="614890671148262506">Permitir sempre as notificacións deste sitio</translation>
 <translation id="6150320133806434356">Gardouse o marcador</translation>
-<translation id="6150706324143004339">Para usar e gardar os datos de Chrome na túa Conta de Google, actualiza Chrome</translation>
+<translation id="6150706324143004339">Para usar e gardar os datos de Ultimatum na túa Conta de Google, actualiza Ultimatum</translation>
 <translation id="6154478581116148741">Activa o bloqueo de pantalla en Configuración para exportar os teus contrasinais deste dispositivo</translation>
 <translation id="6156323911414505561">Mostrar barra de marcadores</translation>
-<translation id="6162892189396105610">Precarga aquelas páxinas que Chrome considera que é probable que visites.</translation>
+<translation id="6162892189396105610">Precarga aquelas páxinas que Ultimatum considera que é probable que visites.</translation>
 <translation id="6165508094623778733">Máis información</translation>
 <translation id="6170675927290506430">Ir á configuración de notificacións</translation>
 <translation id="6184972259157699660"><ph name="TAB_TITLE" />, pestana do modo de incógnito silenciada</translation>
@@ -1246,7 +1246,7 @@ Só poderán ler os teus datos encriptados as persoas que coñezan a túa frase 
 <translation id="6193448654517602979">Selecciona pestanas</translation>
 <translation id="6196315980958524839">Os contrasinais gárdanse no xestor de contrasinais de Google neste dispositivo</translation>
 <translation id="6202812185118613467">Inicia sesión de novo para comezar coa sincronización</translation>
-<translation id="6204781143409202534">Chrome detectou posible spam de <ph name="DOMAIN" />.</translation>
+<translation id="6204781143409202534">Ultimatum detectou posible spam de <ph name="DOMAIN" />.</translation>
 <translation id="6205314730813004066">Privacidade nos anuncios</translation>
 <translation id="6210282067670792090">Na barra de enderezos, utiliza esta combinación de teclas con atallos para motores de busca e a busca de sitios</translation>
 <translation id="6210748933810148297">Non es <ph name="EMAIL" />?</translation>
@@ -1260,12 +1260,12 @@ Por exemplo, algúns sitios web poden responder a esta solicitude mostrándoche 
 <translation id="6247557882553405851">Xestor de contrasinais de Google</translation>
 <translation id="6248988683584659830">Configuración de busca</translation>
 <translation id="6250847299079540062"><ph name="TAB_TITLE" />, pestana do modo de incógnito fixada e multiseleccionada</translation>
-<translation id="6251449557817521191">Consulta o historial de Chrome aquí</translation>
+<translation id="6251449557817521191">Consulta o historial de Ultimatum aquí</translation>
 <translation id="6254139308321626268">Estás vendo un ficheiro PDF</translation>
-<translation id="6255809143828972562">Coas ferramentas de Chrome, podes navegar de maneira segura e manter o control</translation>
+<translation id="6255809143828972562">Coas ferramentas de Ultimatum, podes navegar de maneira segura e manter o control</translation>
 <translation id="6264376385120300461">Descargar de todos os modos</translation>
 <translation id="6264485186158353794">Volver para estar a salvo</translation>
-<translation id="6267106249090587268">Notificacións <ph name="SEPARATOR" /> Chrome quitou estes permisos porque o sitio inclúe contido enganoso ou spam</translation>
+<translation id="6267106249090587268">Notificacións <ph name="SEPARATOR" /> Ultimatum quitou estes permisos porque o sitio inclúe contido enganoso ou spam</translation>
 <translation id="6276708887952587684">Consultar fonte da páxina</translation>
 <translation id="6277522088822131679">Produciuse un problema ao imprimir a páxina. Téntao de novo.</translation>
 <translation id="6278428485366576908">Tema</translation>
@@ -1281,7 +1281,7 @@ Por exemplo, algúns sitios web poden responder a esta solicitude mostrándoche 
 <translation id="6312687380483398334">Aplicacións web (silenciadas)</translation>
 <translation id="6315386555979018699">Eliminar e continuar</translation>
 <translation id="6316139424528454185">Versión Android non compatible</translation>
-<translation id="631839948975905034">Bloquear ventás do modo de incógnito ao saír de Chrome</translation>
+<translation id="631839948975905034">Bloquear ventás do modo de incógnito ao saír de Ultimatum</translation>
 <translation id="6324916366299863871">Editar atallo</translation>
 <translation id="6324977638108296054">Non se puido crear unha ligazón ao texto destacado</translation>
 <translation id="6333140779060797560">Comparte a través de <ph name="APPLICATION" /></translation>
@@ -1297,13 +1297,13 @@ Por exemplo, algúns sitios web poden responder a esta solicitude mostrándoche 
 <translation id="6356893102071098867">Comproba se seleccionaches a conta correcta</translation>
 <translation id="6363990818884053551">Para comezar a sincronización, verifica a túa identidade</translation>
 <translation id="6364438453358674297">Queres eliminar a suxestión do historial?</translation>
-<translation id="6380100320871303656">Adoita precargar aquelas páxinas que Chrome considera que é probable que visites. Esta opción de configuración pode provocar un maior consumo de datos.</translation>
+<translation id="6380100320871303656">Adoita precargar aquelas páxinas que Ultimatum considera que é probable que visites. Esta opción de configuración pode provocar un maior consumo de datos.</translation>
 <translation id="6382848304055775421">Exportando</translation>
 <translation id="6388152137132427505">Comparte as ligazóns con prudencia. Caducan despois de 48 horas.</translation>
 <translation id="6394791151443660613">Buscar: <ph name="SEARCH_QUERY" /></translation>
 <translation id="6397616442223433927">De novo en liña</translation>
 <translation id="6399363707848566877">Agora podes engadir facilmente pestanas aos grupos aquí</translation>
-<translation id="6401458660421980302">Para enviar esta pestana a outro dispositivo, inicia sesión en Chrome nel</translation>
+<translation id="6401458660421980302">Para enviar esta pestana a outro dispositivo, inicia sesión en Ultimatum nel</translation>
 <translation id="6404511346730675251">Editar marcador</translation>
 <translation id="6406506848690869874">Sincronización</translation>
 <translation id="6408370409308816490"><ph name="TAB_TITLE" />, pestana do modo de incógnito de uso compartido fixada e seleccionada</translation>
@@ -1323,24 +1323,24 @@ Por exemplo, algúns sitios web poden responder a esta solicitude mostrándoche 
 <translation id="6452534462676960500">Actividade nova</translation>
 <translation id="6459045781120991510">Enquisas</translation>
 <translation id="6461962085415701688">Non se puido abrir o ficheiro</translation>
-<translation id="6464977750820128603">Podes ver os sitios que visitas en Chrome e definirlles temporizadores.\n\nGoogle obtén información sobre os sitios para os que estableces temporizadores e sobre a duración da túa visita. Estes datos utilízanse para mellorar Benestar dixital.</translation>
+<translation id="6464977750820128603">Podes ver os sitios que visitas en Ultimatum e definirlles temporizadores.\n\nGoogle obtén información sobre os sitios para os que estableces temporizadores e sobre a duración da túa visita. Estes datos utilízanse para mellorar Benestar dixital.</translation>
 <translation id="6468703991511753953">A barra de enderezos está actualmente na parte inferior</translation>
-<translation id="6470181189905173055">As páxinas que abras en Chrome mentres usas <ph name="APP_LABEL" /> mostraranse aquí.</translation>
+<translation id="6470181189905173055">As páxinas que abras en Ultimatum mentres usas <ph name="APP_LABEL" /> mostraranse aquí.</translation>
 <translation id="6473086018775716761">A lista de cartafoles de opcións para compartir está aberta a media pantalla.</translation>
 <translation id="6475951671322991020">Descargar vídeo</translation>
 <translation id="6477928892249167417">Estes sitios parecen importantes para ti:</translation>
-<translation id="6479881432656947268">Visitar Chrome Web Store</translation>
-<translation id="6481963882741794338">Vincula Chrome e outros servizos de Google para beneficiarte da personalización, entre outras cousas</translation>
+<translation id="6479881432656947268">Visitar Ultimatum Web Store</translation>
+<translation id="6481963882741794338">Vincula Ultimatum e outros servizos de Google para beneficiarte da personalización, entre outras cousas</translation>
 <translation id="6482749332252372425">Produciuse un erro ao descargar <ph name="FILE_NAME" /> por falta de espazo de almacenamento.</translation>
 <translation id="6486420406192123355">Este ficheiro PDF procede dun sitio que usa unha conexión pouco segura</translation>
 <translation id="650224091954855786">{FILE_COUNT,plural, =1{Ficheiro descargado}other{# descargas completadas}}</translation>
-<translation id="6508722015517270189">Reinicia Chrome</translation>
+<translation id="6508722015517270189">Reinicia Ultimatum</translation>
 <translation id="6513924416597632811">Copiar a ligazón á páxina de resultados de busca para <ph name="SEARCH_QUERY" />. Fonte: <ph name="PAGE_URL" /></translation>
 <translation id="6518133107902771759">Verificar</translation>
 <translation id="6521218807522232085">Crea, garda e xestiona os teus contrasinais para que poidas iniciar sesión facilmente</translation>
 <translation id="6527303717912515753">Compartir</translation>
-<translation id="652948702951888897">Historial de Chrome</translation>
-<translation id="6532866250404780454">Non se mostrarán os sitios que visites en Chrome. Eliminaranse todos os temporizadores dos sitios.</translation>
+<translation id="652948702951888897">Historial de Ultimatum</translation>
+<translation id="6532866250404780454">Non se mostrarán os sitios que visites en Ultimatum. Eliminaranse todos os temporizadores dos sitios.</translation>
 <translation id="6539092367496845964">Produciuse un erro. Téntao de novo máis tarde.</translation>
 <translation id="6541983376925655882">{NUM_HOURS,plural, =1{A comprobación realizouse hai 1 hora}other{A comprobación realizouse hai # horas}}</translation>
 <translation id="6545017243486555795">Borrar todos os datos</translation>
@@ -1355,7 +1355,7 @@ Por exemplo, algúns sitios web poden responder a esta solicitude mostrándoche 
 <translation id="6569373978618239158">Agora mostraránseche historias de <ph name="SITE_NAME" /> cando abras unha pestana nova. Os sitios que segues gárdanse na túa conta de Google. Podes xestionalos na configuración de Discover.</translation>
 <translation id="657177046675873214">Activa na configuración a opción Marcadores para poder acceder a eles en todos os teus dispositivos</translation>
 <translation id="6573096386450695060">Permitir sempre</translation>
-<translation id="6573431926118603307">Aquí aparecerán as pestanas que abrises en Chrome noutros dispositivos.</translation>
+<translation id="6573431926118603307">Aquí aparecerán as pestanas que abrises en Ultimatum noutros dispositivos.</translation>
 <translation id="6583199322650523874">Engadir aos marcadores a páxina actual</translation>
 <translation id="6588043302623806746">Usar DNS seguro</translation>
 <translation id="6590471736817333463">Aforra ata un 60 % de datos</translation>
@@ -1363,28 +1363,28 @@ Por exemplo, algúns sitios web poden responder a esta solicitude mostrándoche 
 <translation id="6594347733515723558">Ordenar e ver opcións</translation>
 <translation id="6595046016124923392">As imaxes envíanse a Google coa finalidade de mellorar as descricións para ti.</translation>
 <translation id="661266467055912436">Mellora a túa seguranza e a do resto dos usuarios da Web.</translation>
-<translation id="6621391692573306628">Para enviar esta pestana a outro dispositivo, inicia sesión en Chrome nos dous dispositivos</translation>
+<translation id="6621391692573306628">Para enviar esta pestana a outro dispositivo, inicia sesión en Ultimatum nos dous dispositivos</translation>
 <translation id="6627583120233659107">Editar cartafol</translation>
 <translation id="6633067410344541938">Desbloquear modo de incógnito</translation>
 <translation id="6636623428211296678">Explora máis opcións de configuración a continuación ou remata agora</translation>
-<translation id="6637100877383020115">Para contribuír a mellorar a aplicación, Chrome envíalle a Google datos de uso e de fallos. <ph name="BEGIN_UMA_LINK" />Xestionar<ph name="END_UMA_LINK" /></translation>
+<translation id="6637100877383020115">Para contribuír a mellorar a aplicación, Ultimatum envíalle a Google datos de uso e de fallos. <ph name="BEGIN_UMA_LINK" />Xestionar<ph name="END_UMA_LINK" /></translation>
 <translation id="6641780377503683465">Quitar <ph name="INTEREST" /></translation>
 <translation id="6642299196749785472">Anexar pestanas</translation>
 <translation id="6647441008198474441">Os URL que visitas envíanse a Google para predicir os sitios que probablemente visites a continuación</translation>
 <translation id="6648977384226967773">{CONTACT,plural, =1{<ph name="CONTACT_PREVIEW" />\u2026 e <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" /> máis}other{<ph name="CONTACT_PREVIEW" />\u2026 e <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" /> máis}}</translation>
 <translation id="6649642165559792194">Vista previa: imaxe <ph name="BEGIN_NEW" />Novidade<ph name="END_NEW" /></translation>
 <translation id="6659594942844771486">Pestana</translation>
-<translation id="6661521899577697780">Opción de activar a función Chrome Finds está aberta a media altura</translation>
+<translation id="6661521899577697780">Opción de activar a función Ultimatum Finds está aberta a media altura</translation>
 <translation id="666731172850799929">Abrir en <ph name="APP_NAME" /></translation>
 <translation id="6669390930482049506">Recibir notificación</translation>
-<translation id="6670767097276846646">Algunhas extensións poden engadir motores de busca a Chrome</translation>
+<translation id="6670767097276846646">Algunhas extensións poden engadir motores de busca a Ultimatum</translation>
 <translation id="6671495933530132209">Copiar imaxe</translation>
 <translation id="6672697278890207089">Introduce a frase de acceso</translation>
 <translation id="6672917148207387131">Engadir <ph name="DOMAIN" /></translation>
 <translation id="6674571176963658787">Para comezar a sincronizar datos, escribe a túa frase de acceso</translation>
-<translation id="6676927815633975364">Inicia sesión neste sitio e en Chrome</translation>
+<translation id="6676927815633975364">Inicia sesión neste sitio e en Ultimatum</translation>
 <translation id="6684262542644248484">Inicia sesión nun sitio web</translation>
-<translation id="6684809838922667136">Mellora Chrome</translation>
+<translation id="6684809838922667136">Mellora Ultimatum</translation>
 <translation id="6689436252814043643">O modo de lectura non está dispoñible</translation>
 <translation id="669971068476817798">Toca Gardar</translation>
 <translation id="6700279777779583398">Gardouse a túa escolla</translation>
@@ -1408,18 +1408,18 @@ Por exemplo, algúns sitios web poden responder a esta solicitude mostrándoche 
 <translation id="6764137532716892442">Grupo de pestanas <ph name="GROUP_TITLE" /> compartido con nova actividade</translation>
 <translation id="6767294960381293877">A lista de dispositivos cos que compartir unha pestana está aberta a media pantalla.</translation>
 <translation id="6783664456110886353">{TAB_COUNT,plural, =1{Pecharanse <ph name="INCOGNITO_TAB_COUNT" /> pestanas de incógnito e <ph name="TAB_COUNT_ONE" /> pestana máis}other{Pecharanse <ph name="INCOGNITO_TAB_COUNT" /> pestanas de incógnito e <ph name="TAB_COUNT_MANY" /> pestanas máis}}</translation>
-<translation id="6785476624617658922">Condicións de servizo adicionais de Chrome e Chrome OS</translation>
+<translation id="6785476624617658922">Condicións de servizo adicionais de Ultimatum e Ultimatum OS</translation>
 <translation id="6786747875388722282">Extensións</translation>
 <translation id="6787600234697426339">Alcanzouse o límite máximo de ventás (<ph name="MAX_INSTANCE_COUNT" />)</translation>
 <translation id="6795633245022906657">Abre rapidamente unha pestana nova. Para editar este atallo, vai a Configuración.</translation>
-<translation id="679588508577699489">Fai que Chrome sexa o teu navegador predeterminado</translation>
+<translation id="679588508577699489">Fai que Ultimatum sexa o teu navegador predeterminado</translation>
 <translation id="679956319013005046">Para configurar o teu servizo preferido de autocompletar, primeiro engádeo na <ph name="BEGIN_LINK" />configuración de Android<ph name="END_LINK" />.</translation>
 <translation id="6802555630140434547">Pecharase a ventá</translation>
 <translation id="6803791793483522764">Revisar as notificacións</translation>
 <translation id="6809470175540814047">Abrir nunha ventá do modo de incógnito</translation>
 <translation id="6811034713472274749">A páxina está lista para vela</translation>
 <translation id="6813359536773993594">{FILE_COUNT,plural, =1{Imaxes, 1 imaxe na lista}other{Imaxes, # imaxes na lista}}</translation>
-<translation id="6813446258015311409">Panel Iniciar sesión en Chrome (aberto).</translation>
+<translation id="6813446258015311409">Panel Iniciar sesión en Ultimatum (aberto).</translation>
 <translation id="6815692190508268848">Aplicáronse as túas preferencias de aparencia</translation>
 <translation id="6817747507826986771">Compartir rapidamente esta páxina. Para editar este atallo, mantén premido o botón.</translation>
 <translation id="6820686453637990663">CVC</translation>
@@ -1428,7 +1428,7 @@ Por exemplo, algúns sitios web poden responder a esta solicitude mostrándoche 
 <translation id="6828070228333235514">Deter seguimento do prezo</translation>
 <translation id="6830728435402077660">Non seguro</translation>
 <translation id="6831043979455480757">Traducir</translation>
-<translation id="6835182496791325827">Recibe notificacións cando Chrome atope os mellores resultados para as túas buscas mentres esteas ausente.</translation>
+<translation id="6835182496791325827">Recibe notificacións cando Ultimatum atope os mellores resultados para as túas buscas mentres esteas ausente.</translation>
 <translation id="6846298663435243399">Cargando…</translation>
 <translation id="6850409657436465440">A descarga aínda está en curso</translation>
 <translation id="6850830437481525139"><ph name="TAB_COUNT" /> pestanas pechadas</translation>
@@ -1451,7 +1451,7 @@ Por exemplo, algúns sitios web poden responder a esta solicitude mostrándoche 
 <translation id="6886500155621657325">{ITEMS_COUNT,plural, =1{1 contrasinal}other{# contrasinais}}</translation>
 <translation id="688730033107341407">Cando peches a sesión, os marcadores, os contrasinais e outros datos da túa Conta de Google quitaranse deste dispositivo.</translation>
 <translation id="6896758677409633944">Copiar</translation>
-<translation id="6898797562238201317">Usa a túa propia frase de acceso para encriptar todos os datos de Chrome na túa Conta de Google</translation>
+<translation id="6898797562238201317">Usa a túa propia frase de acceso para encriptar todos os datos de Ultimatum na túa Conta de Google</translation>
 <translation id="6900532703269623216">Protección mellorada</translation>
 <translation id="6903907808598579934">Activar sincronización</translation>
 <translation id="6906448540340261898">Asegúrate de poder usar sempre os contrasinais na túa Conta de Google</translation>
@@ -1461,7 +1461,7 @@ Por exemplo, algúns sitios web poden responder a esta solicitude mostrándoche 
 <translation id="6910211073230771657">Eliminado</translation>
 <translation id="6916590542764765824">Xestionar extensións</translation>
 <translation id="6918398787259831832">Se o problema persiste, <ph name="BEGIN_LINK" />obtén máis información<ph name="END_LINK" /> de <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Chrome quitou estes permisos porque levas tempo sen acceder</translation>
+<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Ultimatum quitou estes permisos porque levas tempo sen acceder</translation>
 <translation id="6927821422725196292">{TABS_COUNT,plural, =1{1 pestana}other{<ph name="NUMBER_OF_TABS" /> pestanas}}</translation>
 <translation id="6929224077895306814">Eliminaranse todos os códigos de seguranza que teñas gardados no dispositivo e na Conta de Google</translation>
 <translation id="6933180670536678127"><ph name="TAB_TITLE" />, pestana con son fixada e seleccionada</translation>
@@ -1490,30 +1490,30 @@ Por exemplo, algúns sitios web poden responder a esta solicitude mostrándoche 
 <translation id="7020741890149022655">Engadir á lista lectura <ph name="BEGIN_NEW" />Novo<ph name="END_NEW" /></translation>
 <translation id="7022756207310403729">Abrir no navegador</translation>
 <translation id="7029809446516969842">Contrasinais</translation>
-<translation id="7037994709569287156">Definir Chrome como navegador predeterminado</translation>
+<translation id="7037994709569287156">Definir Ultimatum como navegador predeterminado</translation>
 <translation id="7053256416619638731">Reforza os contrasinais deste dispositivo</translation>
 <translation id="7053983685419859001">Bloquear</translation>
 <translation id="7054588988317389591">Queres obter descricións de imaxes?</translation>
-<translation id="7057969023583258980">Abrir historial completo de Chrome</translation>
+<translation id="7057969023583258980">Abrir historial completo de Ultimatum</translation>
 <translation id="7063006564040364415">Non se puido conectar co servidor de sincronización.</translation>
 <translation id="7063106218165698546">Personaliza o grupo de pestanas e preme Feito</translation>
 <translation id="7071521146534760487">Xestiona a conta</translation>
 <translation id="707155805709242880">Escolle abaixo o que queres sincronizar</translation>
 <translation id="7072949719501323344"><ph name="TAB_TITLE" />, pestana dos modos de incógnito e pantalla superposta fixada e multiseleccionada</translation>
 <translation id="7077143737582773186">Tarxeta SD</translation>
-<translation id="7078916049958741685">Borrar tamén deste dispositivo os teus datos de Chrome</translation>
+<translation id="7078916049958741685">Borrar tamén deste dispositivo os teus datos de Ultimatum</translation>
 <translation id="7080145768121641840"><ph name="TAB_TITLE" />, pestana fixada, silenciada e seleccionada</translation>
 <translation id="7084115944294706056">Escolle a posición da barra de enderezos</translation>
-<translation id="7085332316435785646">Escolle se queres incluír o historial de Chrome para gozar de experiencias máis personalizadas cos servizos de Google</translation>
-<translation id="7088681679121566888">Chrome está actualizado</translation>
+<translation id="7085332316435785646">Escolle se queres incluír o historial de Ultimatum para gozar de experiencias máis personalizadas cos servizos de Google</translation>
+<translation id="7088681679121566888">Ultimatum está actualizado</translation>
 <translation id="7098100324909062850"><ph name="TAB_TITLE" />, pestana do modo de incógnito silenciada e multiseleccionada</translation>
 <translation id="7106762743910369165">A túa organización xestiona o teu navegador</translation>
-<translation id="7111394291981742152">Chrome ofréceche máis control sobre os anuncios que ves e limita a información que os sitios poden obter sobre ti cando che mostran anuncios personalizados.</translation>
+<translation id="7111394291981742152">Ultimatum ofréceche máis control sobre os anuncios que ves e limita a información que os sitios poden obter sobre ti cando che mostran anuncios personalizados.</translation>
 <translation id="7111822978084196600">Asigna un nome a esta ventá</translation>
 <translation id="7115358764509798967">Opción predeterminada do sistema</translation>
 <translation id="7117485132243600300">Xestiona o contido que segues e as buscas e os temas suxeridos</translation>
 <translation id="7119984597597798764">Pechar <ph name="INSTANCE_TITLE" /></translation>
-<translation id="7121179479711575744">Iniciar sesión en Chrome</translation>
+<translation id="7121179479711575744">Iniciar sesión en Ultimatum</translation>
 <translation id="7136694880210472378">Converter en predeterminado</translation>
 <translation id="7136902389402789299">{NUM_SITES,plural, =1{Revisáronse os permisos de 1 sitio}other{Revisáronse os permisos de # sitios}}</translation>
 <translation id="7138678301420049075">Outros</translation>
@@ -1523,8 +1523,8 @@ Por exemplo, algúns sitios web poden responder a esta solicitude mostrándoche 
 <translation id="7149893636342594995">Últimas 24 horas</translation>
 <translation id="71503698506017927">A encriptación mediante frase de acceso non inclúe os métodos de pago nin os enderezos de Google Pay.
 
-Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os datos de Chrome da túa conta<ph name="END_LINK" />.</translation>
-<translation id="7165972437814027679">Máis información sobre por que Chrome bloquea algúns ficheiros</translation>
+Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os datos de Ultimatum da túa conta<ph name="END_LINK" />.</translation>
+<translation id="7165972437814027679">Máis información sobre por que Ultimatum bloquea algúns ficheiros</translation>
 <translation id="7168323970702333693">Iniciaches sesión como <ph name="USER_NAME" />. Abre a configuración.</translation>
 <translation id="7170930892977483182">Eliminaranse todos os códigos de seguranza que teñas gardados no dispositivo e en Google Wallet</translation>
 <translation id="7173114856073700355">Abrir Configuración</translation>
@@ -1544,7 +1544,7 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="7197682514647286393">Elimina rapidamente os datos de navegación</translation>
 <translation id="719791532916917144">Atallo de teclado</translation>
 <translation id="7207760545532569765">Restablecer <ph name="TAB_COUNT" /> pestanas como novas pestanas en segundo plano.</translation>
-<translation id="7217781228893594884">As pestanas do modo de incógnito bloquearanse cando saias de Chrome</translation>
+<translation id="7217781228893594884">As pestanas do modo de incógnito bloquearanse cando saias de Ultimatum</translation>
 <translation id="7221869452894271364">Volver cargar esta páxina</translation>
 <translation id="722681077040152344">Cancelouse a subscrición a <ph name="COUNT" /> sitios</translation>
 <translation id="7227218174981371415">{FILE_COUNT,plural, =1{1 descarga pendente}other{# descargas pendentes}}</translation>
@@ -1554,12 +1554,12 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="724510009481365878">Non se puido imprimir esta páxina</translation>
 <translation id="7248671827512403053">Aplicación</translation>
 <translation id="7253951228444156601">Comprobando contrasinais…</translation>
-<translation id="7260367682327802201">O teu dispositivo Android pode incluír unha opción de configuración similar. Se activas a medición de anuncios en Chrome e no teu dispositivo Android, as empresas poderán medir a eficacia dos anuncios nos sitios web que visites e nas aplicacións que uses.</translation>
+<translation id="7260367682327802201">O teu dispositivo Android pode incluír unha opción de configuración similar. Se activas a medición de anuncios en Ultimatum e no teu dispositivo Android, as empresas poderán medir a eficacia dos anuncios nos sitios web que visites e nas aplicacións que uses.</translation>
 <translation id="727288900855680735">Queres enviar <ph name="ONE_TIME_CODE" /> a <ph name="ORIGIN" />?</translation>
 <translation id="7274013316676448362">Bloqueouse o sitio</translation>
 <translation id="7276868533747677875">Se anteriormente exportaches contrasinais, busca un ficheiro CVS no teu dispositivo e impórtao ao teu xestor de contrasinais preferido.</translation>
 <translation id="728377807486816582">Toca a barra de enderezos</translation>
-<translation id="7289049772085228972">Contas coa máxima seguranza de Chrome</translation>
+<translation id="7289049772085228972">Contas coa máxima seguranza de Ultimatum</translation>
 <translation id="7289303553784750393">Se estás en liña, pero o problema persiste, podes probar outras maneiras de continuar en <ph name="SITE_ETLD_PLUS_ONE" />.</translation>
 <translation id="7290209999329137901">Non está dispoñible a opción de cambiar o nome</translation>
 <translation id="7291910923717764901">Engadíronse descricións de imaxes para esta páxina</translation>
@@ -1592,12 +1592,12 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="7400003506822844357">{FILE_COUNT,plural, =1{Outros, 1 ficheiro na lista}other{Outros, # ficheiros na lista}}</translation>
 <translation id="7400418766976504921">URL</translation>
 <translation id="7400424692675800399">Para abrir unha nova ventá, reduce o número total das que estean activas e inactivas a <ph name="MAX_WINDOW_COUNT_MINUS_ONE" /> ou menos.</translation>
-<translation id="7403691278183511381">Experiencia de primeira execución de Chrome</translation>
+<translation id="7403691278183511381">Experiencia de primeira execución de Ultimatum</translation>
 <translation id="7411224099004328643">Usuario da Conta de Google</translation>
 <translation id="7419565702166471774">Usar sempre conexións seguras</translation>
 <translation id="7421293530411019405">Queres saír do grupo de pestanas?</translation>
 <translation id="7435356471928173109">Desactivada polo teu administrador</translation>
-<translation id="7437998757836447326">Pechar sesión en Chrome</translation>
+<translation id="7437998757836447326">Pechar sesión en Ultimatum</translation>
 <translation id="7439467816829380878">Mover pestana a un grupo</translation>
 <translation id="7439749340204407129">Abrir o xestor de marcadores</translation>
 <translation id="7453810262525006706">Contraer no panel lateral</translation>
@@ -1631,7 +1631,7 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="7525248386620136756">Elementos pechados e gardados: <ph name="TAB_GROUPS_AND_TABS_PART" /></translation>
 <translation id="7545347190366646170">Persoas con acceso</translation>
 <translation id="7553482318994371148">Volver abrir pestanas pechadas</translation>
-<translation id="7554643625247105821">Non se puido comprobar a versión de Chrome</translation>
+<translation id="7554643625247105821">Non se puido comprobar a versión de Ultimatum</translation>
 <translation id="7557508262441527045">Pechouse a sesión</translation>
 <translation id="7573665567024262965">Escolle as túas aplicacións predeterminadas</translation>
 <translation id="757855969265046257">{FILES,plural, =1{<ph name="FILES_DOWNLOADED_ONE" /> ficheiro descargado}other{<ph name="FILES_DOWNLOADED_MANY" /> ficheiros descargados}}</translation>
@@ -1647,7 +1647,7 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="7612619742409846846">Iniciaches sesión en Google como</translation>
 <translation id="7612989789287281429">Iniciando sesión…</translation>
 <translation id="7619072057915878432">Produciuse un erro ao descargar <ph name="FILE_NAME" /> debido a erros na rede.</translation>
-<translation id="7626032353295482388">Dámosche a benvida a Chrome</translation>
+<translation id="7626032353295482388">Dámosche a benvida a Ultimatum</translation>
 <translation id="7628417132421583481">Ir ao xestor de contrasinais</translation>
 <translation id="7630202231528827509">URL do provedor</translation>
 <translation id="7638584964844754484">Contrasinal incorrecto</translation>
@@ -1662,7 +1662,7 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="7666185984446444960">Elementos pechados: <ph name="TAB_GROUPS_AND_TABS_PART" /></translation>
 <translation id="7682724950699840886">Sigue estes consellos: asegúrate de que hai espazo suficiente no dispositivo e proba a exportar os contrasinais de novo.</translation>
 <translation id="7686086654630106285">Máis información sobre os anuncios suxeridos polos sitios</translation>
-<translation id="7690596512217303514">O teu dispositivo non puido abrir Chrome. Para solucionar o problema, descarga a actualización máis recente de Chrome desde a tenda de aplicacións.</translation>
+<translation id="7690596512217303514">O teu dispositivo non puido abrir Ultimatum. Para solucionar o problema, descarga a actualización máis recente de Ultimatum desde a tenda de aplicacións.</translation>
 <translation id="7691043218961417207">Descubre contido para seguir</translation>
 <translation id="7692761875510935111">Ábreo rapidamente no navegador. Para editar este atallo, mantén premido o botón.</translation>
 <translation id="7697383401610880082">Controlador de arrastre</translation>
@@ -1670,7 +1670,7 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="7702420606070050505">Panel inferior de actividade recente aberto a altura completa</translation>
 <translation id="7707922173985738739">Utilizaranse datos móbiles</translation>
 <translation id="7708994397325774423">Obtén todos os teus contrasinais</translation>
-<translation id="7714077993070342304">Abrir o Menú de Chrome</translation>
+<translation id="7714077993070342304">Abrir o Menú de Ultimatum</translation>
 <translation id="7733878270780732638">Non hai suficiente espazo no dispositivo.</translation>
 <translation id="7740287852186792672">Resultados da busca</translation>
 <translation id="774403695779169686"><ph name="TAB_TITLE" />, pestana do modo de incógnito de uso compartido seleccionada</translation>
@@ -1697,9 +1697,9 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="7821130663268546430">Podes atopar todas as pestanas abertas no selector de pestanas</translation>
 <translation id="7822705602465980873">Cando tes a sesión iniciada, estes datos asócianse á túa Conta de Google para protexerte nos servizos de Google (por exemplo, aumentando a protección en Gmail despois dun incidente de seguranza).</translation>
 <translation id="7824665136384946951">A túa organización desactivou Navegación segura</translation>
-<translation id="7826342993930002256">Goza de Chrome en todas partes</translation>
+<translation id="7826342993930002256">Goza de Ultimatum en todas partes</translation>
 <translation id="7844171778363018843">Non se seleccionaron datos para sincronizalos</translation>
-<translation id="784453721355882533">Proba Gemini en Chrome para obter respostas, extraer puntos clave e moito máis.</translation>
+<translation id="784453721355882533">Proba Gemini en Ultimatum para obter respostas, extraer puntos clave e moito máis.</translation>
 <translation id="7846161022626028328">Produciuse un erro. Téntao de novo.</translation>
 <translation id="7846296061357476882">Servizos de Google</translation>
 <translation id="784652447248278262">Ventá actual</translation>
@@ -1709,10 +1709,10 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="7853202427316060426">Actividade</translation>
 <translation id="7859988229622350291">Non traducir nunca</translation>
 <translation id="7866213166286285359">Traduce páxinas aquí</translation>
-<translation id="7873610418439765081">Proba Gemini en Chrome para obter respostas, extraer puntos clave e moito máis desde o botón Máis opcións.</translation>
+<translation id="7873610418439765081">Proba Gemini en Ultimatum para obter respostas, extraer puntos clave e moito máis desde o botón Máis opcións.</translation>
 <translation id="7875915731392087153">Crea un correo electrónico</translation>
 <translation id="7876243839304621966">Eliminar todo</translation>
-<translation id="7886917304091689118">A páxina estase executando en Chrome</translation>
+<translation id="7886917304091689118">A páxina estase executando en Ultimatum</translation>
 <translation id="7887174313503389866">Realiza un percorrido guiado polos controis clave de privacidade e seguranza. Para obter máis opcións, vai á configuración individual.</translation>
 <translation id="7913993612870913335">{FILE_COUNT,plural, =1{1 bloqueada pola túa organización}other{# bloqueadas pola túa organización}}</translation>
 <translation id="7914399737746719723">Instalouse a aplicación</translation>
@@ -1721,7 +1721,7 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="7921782882718083488">Resumir esta páxina</translation>
 <translation id="7926975587469166629">Alcume da tarxeta</translation>
 <translation id="7927073875790626822">Realidade estendida</translation>
-<translation id="7929587383660661825">Chrome quita automaticamente os permisos de sitios que abusan das notificacións ou que non visitaches recentemente</translation>
+<translation id="7929587383660661825">Ultimatum quita automaticamente os permisos de sitios que abusan das notificacións ou que non visitaches recentemente</translation>
 <translation id="7934668619883965330">Produciuse un erro na descarga. O formato de ficheiro non é compatible.</translation>
 <translation id="7942131818088350342"><ph name="PRODUCT_NAME" /> está desactualizado.</translation>
 <translation id="7944772052836377867">A sincronización necesita verificar a túa identidade</translation>
@@ -1738,7 +1738,7 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="7971136598759319605">Dispositivo activo hai 1 día</translation>
 <translation id="7975379999046275268">Vista previa: páxina <ph name="BEGIN_NEW" />Novidade<ph name="END_NEW" /></translation>
 <translation id="7977451675950311423">Avísate cando usas un contrasinal vulnerado nunha violación da seguranza dos datos.</translation>
-<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Chrome quitou estes permisos porque levas tempo sen acceder</translation>
+<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Ultimatum quitou estes permisos porque levas tempo sen acceder</translation>
 <translation id="7995059495660416932">Verás o contido cando estea dispoñible</translation>
 <translation id="799576009106109668">Navegarás máis rápido porque o contido se cargará de maneira proactiva en función da túa visita á páxina web na que te atopes</translation>
 <translation id="7998918019931843664">Abre de novo a pestana pechada</translation>
@@ -1756,17 +1756,17 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="804335162455518893">Non se atopou a tarxeta SD</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> pestana do modo de incógnito}other{<ph name="TAB_COUNT_NORMAL" /> pestanas do modo de incógnito}}</translation>
 <translation id="8051695050440594747">Almacenamento dispoñible: <ph name="MEGABYTES" /> MB</translation>
-<translation id="8058746566562539958">Abrir na pestana de Chrome</translation>
+<translation id="8058746566562539958">Abrir na pestana de Ultimatum</translation>
 <translation id="8062594758852531064">Precarga ampliada:</translation>
 <translation id="8063895661287329888">Non se puido engadir o marcador.</translation>
 <translation id="8066816452984416180">Engade rapidamente esta páxina aos marcadores. Mantén premido este atallo para editalo.</translation>
-<translation id="8072436850275034464">Podes volver abrir as pestanas que pechaches recentemente desde calquera dispositivo no que uses Chrome</translation>
+<translation id="8072436850275034464">Podes volver abrir as pestanas que pechaches recentemente desde calquera dispositivo no que uses Ultimatum</translation>
 <translation id="8073388330009372546">Abrir imaxe na pestana nova</translation>
 <translation id="8076492880354921740">Pestanas</translation>
 <translation id="8078096376109663956">Comparte só o texto</translation>
 <translation id="8078348702936632821">Fixar este atallo</translation>
 <translation id="8084285576995584326">Controlar datos da túa Conta de Google</translation>
-<translation id="8084864785646838999">É posible que parte do teu historial non se mostre aquí. Para velo todo, abre o historial completo de Chrome. Ademais, a túa Conta de Google pode ter outro contido do historial de navegación en <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
+<translation id="8084864785646838999">É posible que parte do teu historial non se mostre aquí. Para velo todo, abre o historial completo de Ultimatum. Ademais, a túa Conta de Google pode ter outro contido do historial de navegación en <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="8088176524274673045">Para compartir contido coas persoas que estean preto, deixa que escaneen este código QR</translation>
 <translation id="8090732854597034573">Se necesitas axuda, pídella ao teu pai ou á túa nai</translation>
 <translation id="8101414242770404289">Non hai pestanas para o seguinte período de tempo: <ph name="TIME_PERIOD" /></translation>
@@ -1774,10 +1774,10 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="810433609302852">Mensaxe promocional da función de notificacións de consellos e panel inferior de pasos de uso</translation>
 <translation id="8105893657415066307"><ph name="DESCRIPTION" /> <ph name="SEPARATOR" /> <ph name="FILE_SIZE" /></translation>
 <translation id="8107530384992929318">Pechar opcións de ordenación</translation>
-<translation id="8110024788458304985">Axudar a mellorar o rendemento e as funcións de Chrome</translation>
-<translation id="8110087112193408731">Queres mostrar a túa actividade de Chrome en Benestar dixital?</translation>
+<translation id="8110024788458304985">Axudar a mellorar o rendemento e as funcións de Ultimatum</translation>
+<translation id="8110087112193408731">Queres mostrar a túa actividade de Ultimatum en Benestar dixital?</translation>
 <translation id="8118117428362942925">Se necesitas axuda, pídella ao teu pai ou á túa nai (<ph name="PARENT_NAME" />)</translation>
-<translation id="8118151008374483324">Para poder acceder ás túas pestanas e a outros datos en todos os teus dispositivos, inicia sesión en Chrome</translation>
+<translation id="8118151008374483324">Para poder acceder ás túas pestanas e a outros datos en todos os teus dispositivos, inicia sesión en Ultimatum</translation>
 <translation id="8120286190326371840">Non hai ningún contrasinal vulnerado neste dispositivo</translation>
 <translation id="8122623268651408616">Ordenando por máis recente</translation>
 <translation id="8127542551745560481">Editar páxina de inicio</translation>
@@ -1818,7 +1818,7 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="8260126382462817229">Proba a volver iniciar sesión</translation>
 <translation id="8261506727792406068">Eliminar</translation>
 <translation id="82619448491672958">Ver outras pestanas</translation>
-<translation id="8265730590513812063">Abre Menú de Chrome</translation>
+<translation id="8265730590513812063">Abre Menú de Ultimatum</translation>
 <translation id="8266753737658117282">Continúa con <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8266862848225348053">Localización das descargas</translation>
 <translation id="8271267069224406035">Informar de spam</translation>
@@ -1832,7 +1832,7 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="8317318757008452355">Abrir as opcións de impresión</translation>
 <translation id="8320212361750431956">Actividade recente</translation>
 <translation id="832514020744584629"><ph name="PREF_TITLE" />  <ph name="BEGIN_NEW" />Novidade<ph name="END_NEW" /></translation>
-<translation id="8342727528718219152">Chrome informarate se hai algún sitio que podería estar enviando demasiadas notificacións</translation>
+<translation id="8342727528718219152">Ultimatum informarate se hai algún sitio que podería estar enviando demasiadas notificacións</translation>
 <translation id="834313815369870491">Sitios que non quero que se traduzan nunca</translation>
 <translation id="8348215005712416247"><ph name="TAB_TITLE" />, pestana do modo de incógnito con gravación en curso fixada e multiseleccionada</translation>
 <translation id="8348430946834215779">Usa HTTPS sempre que sexa posible e recibe advertencias antes de cargar sitios que non admitan este protocolo</translation>
@@ -1846,12 +1846,12 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="8398389123831319859">Toca dúas veces o botón e manteno premido para cambiar ao modo de incógnito</translation>
 <translation id="8402673309244746971">Ir a Seguindo</translation>
 <translation id="8413126021676339697">Mostrar historial completo</translation>
-<translation id="8413795581997394485">Protéxete contra os sitios, as descargas e as extensións que se consideren perigosos. Cando visitas un sitio, Chrome envíalle unha parte confusa do URL a Google mediante un servidor de privacidade que oculta o teu enderezo IP. Se un sitio ten un comportamento sospeitoso, tamén se enviarán os URL completos e fragmentos do contido das páxinas.</translation>
+<translation id="8413795581997394485">Protéxete contra os sitios, as descargas e as extensións que se consideren perigosos. Cando visitas un sitio, Ultimatum envíalle unha parte confusa do URL a Google mediante un servidor de privacidade que oculta o teu enderezo IP. Se un sitio ten un comportamento sospeitoso, tamén se enviarán os URL completos e fragmentos do contido das páxinas.</translation>
 <translation id="8414396119627470038">Inicia sesión en <ph name="SITE_ETLD_PLUS_ONE" /> con <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8419144699778179708">Elimina o historial, tamén o da caixa de busca</translation>
 <translation id="8419244640277402268">Incluír</translation>
 <translation id="8422250855136581222">Non hai pestanas neste dispositivo</translation>
-<translation id="842386925677997438">Ferramentas de privacidade de Chrome</translation>
+<translation id="842386925677997438">Ferramentas de privacidade de Ultimatum</translation>
 <translation id="8427875596167638501">A pestana de vista previa abriuse ata a metade</translation>
 <translation id="8428213095426709021">Configuración</translation>
 <translation id="8430824733382774043">Compartir só captura de pantalla</translation>
@@ -1859,7 +1859,7 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="8438566539970814960">Mellorar as buscas e a navegación</translation>
 <translation id="8439974325294139057"><ph name="LANG" />: este idioma xa está preparado. Reinicia <ph name="APP_NAME" />.</translation>
 <translation id="8442258441309440798">Non hai ningunha historia dispoñible</translation>
-<translation id="8443209985646068659">Non se actualiza Chrome</translation>
+<translation id="8443209985646068659">Non se actualiza Ultimatum</translation>
 <translation id="8443600937324357591">Mover pestana a outra ventá</translation>
 <translation id="8445448999790540984">Non se puideron exportar os contrasinais</translation>
 <translation id="8446884382197647889">Máis información</translation>
@@ -1868,7 +1868,7 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="8455675988389029454">Accede aos teus marcadores, contrasinais e moito máis en todos os teus dispositivos</translation>
 <translation id="8458341576712814616">Atallo</translation>
 <translation id="8458413889418591446">Para volver rapidamente aos sitios que xa visitaches, sincroniza as pestanas e o historial</translation>
-<translation id="84594714173170813">Sigue usando os datos de Chrome na túa Conta de Google</translation>
+<translation id="84594714173170813">Sigue usando os datos de Ultimatum na túa Conta de Google</translation>
 <translation id="8460008946585880786">Arrastra e solta unha pestana sobre outra</translation>
 <translation id="8460448946170646641">Revisa os controis clave de privacidade e seguranza</translation>
 <translation id="8460932807646981183">Xestionar motores de busca e busca de sitios</translation>
@@ -1890,8 +1890,8 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="8540136935098276800">Pon un URL que teña un formato correcto</translation>
 <translation id="854522910157234410">Abrir esta páxina</translation>
 <translation id="8547466829003330976">Revisar PDF coa IA</translation>
-<translation id="8551513938758868521">Bloquear pestanas do modo de incógnito ao saír de Chrome</translation>
-<translation id="8559961053328923750">Chrome limita a cantidade total de datos que os sitios poden compartir a través do navegador para medir o rendemento dos anuncios</translation>
+<translation id="8551513938758868521">Bloquear pestanas do modo de incógnito ao saír de Ultimatum</translation>
+<translation id="8559961053328923750">Ultimatum limita a cantidade total de datos que os sitios poden compartir a través do navegador para medir o rendemento dos anuncios</translation>
 <translation id="8559990750235505898">Ofrece a tradución de páxinas noutros idiomas</translation>
 <translation id="8560602726703398413">Para acceder á lista de lectura, vai a Marcadores</translation>
 <translation id="85618473456579127">Toca o perfil na parte superior dereita</translation>
@@ -1904,12 +1904,12 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="859046281437143747">Facer seguimento do prezo desde o botón Máis opcións</translation>
 <translation id="859064343657890103"><ph name="TAB_GROUP_TITLE" /> grupo de pestanas eliminado</translation>
 <translation id="860043288473659153">Nome do titular da tarxeta</translation>
-<translation id="8602358303461588329">Panel Iniciar sesión en Chrome (pechado).</translation>
+<translation id="8602358303461588329">Panel Iniciar sesión en Ultimatum (pechado).</translation>
 <translation id="860282621117673749">Alertas de baixada de prezos</translation>
 <translation id="8611922158252451755">Calquera persoa que teña a ligazón poderá editar todas as pestanas, polo que che recomendamos que teñas coidado ao compartila. A ligazón caduca ás 48 horas.</translation>
 <translation id="8616006591992756292">É posible que a túa conta de Google teña outras formas do historial de navegación en <ph name="BEGIN_LINK" />history.google.com<ph name="END_LINK" />.</translation>
 <translation id="8617240290563765734">Queres abrir o URL específico suxerido no contido descargado?</translation>
-<translation id="8629093325209491835">Abre Menú de Chrome &gt; Configuración</translation>
+<translation id="8629093325209491835">Abre Menú de Ultimatum &gt; Configuración</translation>
 <translation id="8634050254805484913">Oculta en pantallas estreitas</translation>
 <translation id="8635399646025169806">Queres manter o grupo de pestanas?</translation>
 <translation id="8636825310635137004">Activa a sincronización para sincronizar as pestanas dos demais dispositivos.</translation>
@@ -1928,15 +1928,15 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="8715300232952757586">Pecharase <ph name="TAB_TITLE" /></translation>
 <translation id="8723453889042591629">Traduce rapidamente esta páxina. Para editar este atallo, mantén premido o botón.</translation>
 <translation id="8725066075913043281">Tentar de novo</translation>
-<translation id="8727043961453758442">Tira o máximo proveito de Chrome</translation>
+<translation id="8727043961453758442">Tira o máximo proveito de Ultimatum</translation>
 <translation id="8731268612289859741">Código de seguranza</translation>
 <translation id="8738163682604285902">Queres que se mostre o modo de lectura?</translation>
 <translation id="8746155870861185046">Compartir texto destacado</translation>
 <translation id="8748850008226585750">Contido oculto</translation>
 <translation id="8754448020583829686">Copiar sen ligazón</translation>
 <translation id="8756969031206844760">Queres actualizar o contrasinal?</translation>
-<translation id="8765470054473112089">Cando escribes algo na barra de enderezos ou na caixa de busca, Chrome envíallo ao motor de busca predeterminado para obter mellores suxestións. Esta opción está desactivada no modo de incógnito.</translation>
-<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Chrome encontrou un contrasinal pouco seguro que poderías mellorar}other{Chrome encontrou # contrasinais pouco seguros que poderías mellorar}}</translation>
+<translation id="8765470054473112089">Cando escribes algo na barra de enderezos ou na caixa de busca, Ultimatum envíallo ao motor de busca predeterminado para obter mellores suxestións. Esta opción está desactivada no modo de incógnito.</translation>
+<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Ultimatum encontrou un contrasinal pouco seguro que poderías mellorar}other{Ultimatum encontrou # contrasinais pouco seguros que poderías mellorar}}</translation>
 <translation id="8766529642647037772">Queres crear unha ligazón destacada coma esta?</translation>
 <translation id="8788265440806329501">O historial de navegación está pechado</translation>
 <translation id="8790193082819560975">Toca para buscar opcións de compra do produto nunha nova pestana.</translation>
@@ -1959,7 +1959,7 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="885480114717186641">Podes solicitar o sitio para ordenadores para o anfitrión <ph name="HOST_NAME" /></translation>
 <translation id="8856607253650333758">Obter descricións</translation>
 <translation id="8863714995118816041">Volvéronse conceder permisos a <ph name="SITE_NAME" /></translation>
-<translation id="8865415417596392024">Datos de Chrome na túa conta</translation>
+<translation id="8865415417596392024">Datos de Ultimatum na túa conta</translation>
 <translation id="8872506776304248286">Abrir na aplicación</translation>
 <translation id="8890668505403261809">Busca as pestanas do modo de incógnito</translation>
 <translation id="8892234476517513962">Xa tes a sesión iniciada</translation>
@@ -1971,7 +1971,7 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="8922289737868596582">Para ver as páxinas cando non teñas conexión, descárgaas a través do botón Máis opcións</translation>
 <translation id="8924575305646776101"><ph name="BEGIN_LINK" />Máis información<ph name="END_LINK" /></translation>
 <translation id="892496902842311796">O idioma (<ph name="LANG" />) está listo</translation>
-<translation id="8937772741022875483">Queres quitar a túa actividade de Chrome de Benestar dixital?</translation>
+<translation id="8937772741022875483">Queres quitar a túa actividade de Ultimatum de Benestar dixital?</translation>
 <translation id="8942627711005830162">Abrir noutra ventá</translation>
 <translation id="8945143127965743188"><ph name="LANG" />: non se puido descargar este idioma. Téntao de novo máis tarde.</translation>
 <translation id="8946759102391960088">Manter o acceso aos contrasinais</translation>
@@ -1983,12 +1983,12 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="8970887620466824814">Produciuse un erro.</translation>
 <translation id="8972098258593396643">Queres gardar a descarga no cartafol predeterminado?</translation>
 <translation id="8987736167266086032">Continúa onde o deixaches</translation>
-<translation id="8992769679401294069">Os teus datos están encriptados cunha frase de acceso. Escríbea para usar e gardar os datos de Chrome na túa Conta de Google.</translation>
+<translation id="8992769679401294069">Os teus datos están encriptados cunha frase de acceso. Escríbea para usar e gardar os datos de Ultimatum na túa Conta de Google.</translation>
 <translation id="8993760627012879038">Abrir unha nova pestana no modo de incógnito</translation>
 <translation id="8995521496079646922">As aplicacións que escolliches usaranse de forma predeterminada. Se hai algunha que non estea instalada neste dispositivo, descargarase en breve.</translation>
 <translation id="8996847606757455498">Escoller outro provedor</translation>
 <translation id="8998837250940831980">Non se puido minimizar a pestana. Téntao de novo máis tarde.</translation>
-<translation id="9001604755921395912">Abrir en incógnito en Chrome</translation>
+<translation id="9001604755921395912">Abrir en incógnito en Ultimatum</translation>
 <translation id="9012585441087414258">Protéxete contra os sitios, as descargas e as extensións que se consideren perigosos. Se algunha páxina leva a cabo unha acción sospeitosa, os URL e algúns fragmentos do contido da páxina enviaranse a Navegación segura de Google.</translation>
 <translation id="9019199799064251516">Queres continuar sen un bloqueo de perfil do coche?</translation>
 <translation id="9022774213089566801">Visitas frecuentes</translation>
@@ -1996,7 +1996,7 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="9027728231343310283">Desfacer <ph name="SITE" /></translation>
 <translation id="9035378196785279980">Mover a\u2026</translation>
 <translation id="9042893549633094279">Privacidade e seguranza</translation>
-<translation id="9047347135558855162">Inicia unha busca rápida en Chrome</translation>
+<translation id="9047347135558855162">Inicia unha busca rápida en Ultimatum</translation>
 <translation id="9050666287014529139">Frase de acceso</translation>
 <translation id="9055497320631373736">Sitio engadido de novo aos sitios potenciais</translation>
 <translation id="9057030985451135243">Máis información acerca dos grupos de pestanas compartidos</translation>
@@ -2004,7 +2004,7 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="9063400323119781058">Subscrición cancelada</translation>
 <translation id="9063523880881406963">Desactiva a opción Ver como ordenador</translation>
 <translation id="9065203028668620118">Editar</translation>
-<translation id="9065383040763568503">Datos almacenados que Chrome non considera importantes (por exemplo, de sitios sen configuración gardada ou que non visitas a miúdo)</translation>
+<translation id="9065383040763568503">Datos almacenados que Ultimatum non considera importantes (por exemplo, de sitios sen configuración gardada ou que non visitas a miúdo)</translation>
 <translation id="9067341854474068781">Non hai ningunha folla de claves de acceso aberta a altura completa</translation>
 <translation id="906781307897697745">en: <ph name="PRODUCT_NAME" /></translation>
 <translation id="9068568736932147490"><ph name="TAB_TITLE" />, pestana do modo de incógnito con son fixada e multiseleccionada</translation>
@@ -2014,8 +2014,8 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="9074739597929991885">Bluetooth</translation>
 <translation id="9081543426177426948">Os sitios que visitas non se gardan no modo de incógnito</translation>
 <translation id="9086455579313502267">Non se pode acceder á rede</translation>
-<translation id="9093915805850895575">Abrir nunha ventá de Chrome</translation>
-<translation id="909756639352028172">Para desfrutar da experiencia máis personalizada posible, inclúe Chrome en Actividade web e das aplicacións, e nos servizos de Google vinculados</translation>
+<translation id="9093915805850895575">Abrir nunha ventá de Ultimatum</translation>
+<translation id="909756639352028172">Para desfrutar da experiencia máis personalizada posible, inclúe Ultimatum en Actividade web e das aplicacións, e nos servizos de Google vinculados</translation>
 <translation id="9099220545925418560">En función do teu historial de navegación. Esta opción de configuración está desactivada.</translation>
 <translation id="9100610230175265781">Contrasinal obrigatorio</translation>
 <translation id="9101137867221042551">Xestión</translation>
@@ -2051,9 +2051,9 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="9218430445555521422">Establecer como predeterminado</translation>
 <translation id="9219103736887031265">Imaxes</translation>
 <translation id="9222198206152536936">Para poder acceder ás túas pestanas e a outros datos en todos os teus dispositivos, inicia sesión como <ph name="EMAIL" /></translation>
-<translation id="924447568950697217">Fai que Chrome sexa o teu navegador predeterminado</translation>
-<translation id="926205370408745186">Quitar a túa actividade de Chrome de Benestar dixital</translation>
-<translation id="927968626442779827">Usa o modo básico en Google Chrome</translation>
+<translation id="924447568950697217">Fai que Ultimatum sexa o teu navegador predeterminado</translation>
+<translation id="926205370408745186">Quitar a túa actividade de Ultimatum de Benestar dixital</translation>
+<translation id="927968626442779827">Usa o modo básico en Google Ultimatum</translation>
 <translation id="928550791203542716">Comezaches a seguir <ph name="SITE_NAME" /></translation>
 <translation id="930124987204876019">Elimina o historial, as cookies, os datos dos sitios, a memoria caché…</translation>
 <translation id="930834144334005936">Restablece o modo actual (<ph name="MODE_NAME" />) para a Busca</translation>
@@ -2061,7 +2061,7 @@ Para cambiar esta opción de configuración, <ph name="BEGIN_LINK" />elimina os 
 <translation id="939598580284253335">Introducir frase de acceso</translation>
 <translation id="94161319503679839"><ph name="TAB_TITLE" />, pestana dos modos de incógnito e pantalla superposta fixada</translation>
 <translation id="945522503751344254">Enviar comentarios</translation>
-<translation id="95817756606698420">Chrome pode utilizar <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> para a busca na China. Podes cambiar esta opción en <ph name="BEGIN_LINK" />Configuración<ph name="END_LINK" />.</translation>
+<translation id="95817756606698420">Ultimatum pode utilizar <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> para a busca na China. Podes cambiar esta opción en <ph name="BEGIN_LINK" />Configuración<ph name="END_LINK" />.</translation>
 <translation id="961856697154696964">Eliminar datos navegación</translation>
 <translation id="963246339335003378">Abrir xestor de tarefas</translation>
 <translation id="966131775676567255">Eliminando datos da conta</translation>

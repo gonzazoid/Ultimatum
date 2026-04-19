@@ -5,20 +5,20 @@
 <translation id="1036348656032585052">Inaktivera</translation>
 <translation id="1046742265332833834">Blått tema</translation>
 <translation id="1070329623210597193">Filer som webbplatsen kan visa eller redigera</translation>
-<translation id="1073417869336441572">Hjälp oss att förbättra Chrome genom att berätta varför du har tillåtit cookies från tredje part. <ph name="BEGIN_LINK" />Skicka feedback<ph name="END_LINK" /></translation>
+<translation id="1073417869336441572">Hjälp oss att förbättra Ultimatum genom att berätta varför du har tillåtit cookies från tredje part. <ph name="BEGIN_LINK" />Skicka feedback<ph name="END_LINK" /></translation>
 <translation id="1074758928858737435">Du kan begära att se webbplatsernas datorversion</translation>
 <translation id="1109482864356262001">Funktioner som kräver rörelse- eller ljussensorer kommer inte att fungera</translation>
-<translation id="1126523729897810826">Slutför de rekommenderade åtgärderna nedan så att du får ut mesta möjliga av Chrome</translation>
+<translation id="1126523729897810826">Slutför de rekommenderade åtgärderna nedan så att du får ut mesta möjliga av Ultimatum</translation>
 <translation id="113098737392899175">Navigera på sidor med en textmarkör när ett tangentbord är anslutet</translation>
 <translation id="1148624853678088576">Nu är det klart!</translation>
-<translation id="1149644372535087155">Spara lösenord i Chrome</translation>
+<translation id="1149644372535087155">Spara lösenord i Ultimatum</translation>
 <translation id="1178015372320901893">Ark på nedre delen av skärmen för Mina genvägar</translation>
 <translation id="1178581264944972037">Paus</translation>
 <translation id="1181037720776840403">Ta bort</translation>
 <translation id="1192844206376121885">All data och alla cookies som har sparats av <ph name="ORIGIN" /> raderas.</translation>
 <translation id="1199963004393929848">Grönt tema</translation>
 <translation id="1201402288615127009">Nästa</translation>
-<translation id="1240190568154816272">Chrome-tips</translation>
+<translation id="1240190568154816272">Ultimatum-tips</translation>
 <translation id="1242008676835033345">Inbäddad på <ph name="WEBSITE_URL" /></translation>
 <translation id="1263609676484797429">Tryck på Appar &gt; Standardappar</translation>
 <translation id="1272079795634619415">Stopp</translation>
@@ -38,7 +38,7 @@
 <translation id="1396327438254055134">Tillåt att webbplatsen använder V8-optimeraren.</translation>
 <translation id="1409338233051621926">Tryck på Appar och sedan på Standardappar</translation>
 <translation id="1415402041810619267">Webbadressen har trunkerats</translation>
-<translation id="1415855080660575082">Tillåt att Chrome delar dina senaste flikar med enheten så att du kan se dem i enhetens applista och sökresultat. Du kan aktivera eller inaktivera detta i Chrome-inställningarna.</translation>
+<translation id="1415855080660575082">Tillåt att Ultimatum delar dina senaste flikar med enheten så att du kan se dem i enhetens applista och sökresultat. Du kan aktivera eller inaktivera detta i Ultimatum-inställningarna.</translation>
 <translation id="1420688843103859429">Navigera framåt och bakåt genom att svepa med två fingrar på styrplattan</translation>
 <translation id="1432650420699700107">Webbplatser får begära tillstånd att ansluta till enheter i det lokala nätverket</translation>
 <translation id="1442081309487427303">Aktivera länkar i läsläget</translation>
@@ -52,7 +52,7 @@
 <translation id="1532175480576580256">Arket på nedre delen av skärmen för mina genvägar har öppnats över hela skärmen</translation>
 <translation id="1538031354170655462">Webbplatser använder vanligtvis närfältskommunikation (NFC) för att fungera med taggar eller enheter i närheten, till exempel för att skanna märken eller för kontaktlös betalning</translation>
 <translation id="1547123415014299762">Tredjepartscookies tillåts</translation>
-<translation id="1569054338208717605">Gör webbplatser snabbare med Chromes V8-motor men gör Chrome något mindre motståndskraftigt mot attacker</translation>
+<translation id="1569054338208717605">Gör webbplatser snabbare med Ultimatums V8-motor men gör Ultimatum något mindre motståndskraftigt mot attacker</translation>
 <translation id="1593426485665524382">Nya åtgärder visas högt upp på skärmen</translation>
 <translation id="1594521731409209842">Nyp på skärmen för att ändra storlek på fotot</translation>
 <translation id="1599268789440304082">Inställningsarket har öppnats</translation>
@@ -73,14 +73,14 @@
 <translation id="1717996979683942279">När detta är aktiverat kan webbplatser begära att hantera fönster på alla skärmar. När detta är inaktiverat kan inte webbplatser hantera fönster på alla skärmar.</translation>
 <translation id="1738912554587725807">Ark på nedre delen av skärmen för temasamlingar för utseende på sidan Ny flik</translation>
 <translation id="1743802530341753419">Fråga innan webbplatser tillåts ansluta till en enhet (rekommenderas)</translation>
-<translation id="1766455884659449403">Få aviseringar om Chrome-tips</translation>
+<translation id="1766455884659449403">Få aviseringar om Ultimatum-tips</translation>
 <translation id="1777815584158991902">Arket på nedre delen av skärmen för flödet Upptäck</translation>
 <translation id="1779089405699405702">Bildavkodare</translation>
 <translation id="1781533683087883868">Inaktivera länkar i läsläget</translation>
 <translation id="1785415724048343560">Rekommenderas för bästa upplevelse</translation>
 <translation id="1796588414813960292">Funktioner som kräver ljud slutar fungera</translation>
-<translation id="1799920918471566157">Chrome-tips</translation>
-<translation id="1816835383954230954">När den är aktiverad körs Chrome snabbare och funktioner som använder JavaScript bör fungera som de ska. När den är inaktiverad sänks prestandan men V8 blir mer motståndskraftig mot attacker.</translation>
+<translation id="1799920918471566157">Ultimatum-tips</translation>
+<translation id="1816835383954230954">När den är aktiverad körs Ultimatum snabbare och funktioner som använder JavaScript bör fungera som de ska. När den är inaktiverad sänks prestandan men V8 blir mer motståndskraftig mot attacker.</translation>
 <translation id="1818308510395330587">Om du vill att <ph name="APP_NAME" /> ska använda AR måste du även aktivera kameran i <ph name="BEGIN_LINK" />Android-inställningarna<ph name="END_LINK" />.</translation>
 <translation id="1822318649925991542">Ändra positionen för att anpassa surfupplevelsen</translation>
 <translation id="1848033246551405023">Font Sans Serif</translation>
@@ -135,7 +135,7 @@
 <translation id="2315043854645842844">Val av certifikat på klienten stöds inte av operativsystemet.</translation>
 <translation id="2347601491101454548">Arket på nedre delen av skärmen för mina genvägar har öppnats över halva skärmen</translation>
 <translation id="2359808026110333948">Fortsätt</translation>
-<translation id="2379925928934107488">Använd mörkt tema på webbplatser om Chrome använder mörkt tema, när det är möjligt</translation>
+<translation id="2379925928934107488">Använd mörkt tema på webbplatser om Ultimatum använder mörkt tema, när det är möjligt</translation>
 <translation id="2390272837142897736">Öka zoom</translation>
 <translation id="2397689164757137845">Tillåts • Exakt</translation>
 <translation id="2402980924095424747"><ph name="MEGABYTES" /> MB</translation>
@@ -147,7 +147,7 @@
 <translation id="2433507940547922241">Utseende</translation>
 <translation id="2434158240863470628">Nedladdningen är klar<ph name="SEPARATOR" /><ph name="BYTES_DOWNLOADED" /></translation>
 <translation id="2442870161001914531">Begär alltid datorversionen av webbplatsen</translation>
-<translation id="2445311670906052406">Chrome delar nu dina senaste flikar med enheten. Du ser dem i enhetens applista och sökresultat. Du kan inaktivera detta när som helst i Chrome-inställningarna.</translation>
+<translation id="2445311670906052406">Ultimatum delar nu dina senaste flikar med enheten. Du ser dem i enhetens applista och sökresultat. Du kan inaktivera detta när som helst i Ultimatum-inställningarna.</translation>
 <translation id="245322989586167203">Åtkomst till serieportar brukar kunna behövas för dataöverföring, t.ex. vid konfigurering av ett nätverk</translation>
 <translation id="2469312991797799607">När du gör detta raderas all data och alla cookies för <ph name="ORIGIN" /> och alla underordnade webbplatser</translation>
 <translation id="2482878487686419369">Aviseringar</translation>
@@ -159,7 +159,7 @@
 <translation id="2536779053640817375">Tillåts den här gången • Exakt</translation>
 <translation id="2544997614631598250">Temafärg: mörk</translation>
 <translation id="2546283357679194313">Cookies och webbplatsdata</translation>
-<translation id="2553552004849639664">Få det bästa skyddet i Chrome mot onlinehot</translation>
+<translation id="2553552004849639664">Få det bästa skyddet i Ultimatum mot onlinehot</translation>
 <translation id="2570922361219980984">Platsåtkomst har inaktiverats på enheten också. Aktivera det i <ph name="BEGIN_LINK" />Android-inställningarna<ph name="END_LINK" />.</translation>
 <translation id="257931822824936280">Vyn har expanderats. Komprimera den genom att klicka.</translation>
 <translation id="2586657967955657006">Urklipp</translation>
@@ -168,7 +168,7 @@
 <translation id="2606760465469169465">Verifiera automatiskt</translation>
 <translation id="2610903128639500624">Hantera i <ph name="BEGIN_LINK1" />Android-inställningarna<ph name="END_LINK1" />
 
-Avancerat skydd styr följande Chrome-inställningar:
+Avancerat skydd styr följande Ultimatum-inställningar:
 • Använd alltid en säker anslutning aktiveras.
 • JavaScript-optimering är inaktiverat. <ph name="BEGIN_LINK2" />Hantera webbplatsundantag<ph name="END_LINK2" /></translation>
 <translation id="2621115761605608342">Tillåt JavaScript på en specifik webbplats.</translation>
@@ -183,18 +183,18 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="2710883118091822664">Logga in för att fortsätta smidigt på alla dina enheter</translation>
 <translation id="2713106313042589954">Stäng av kameran</translation>
 <translation id="2717722538473713889">E-postadresser</translation>
-<translation id="2726059656860238749">Starta Chrome med adressfältet i fokus för att minska starttiden på mindre avancerade enheter.</translation>
+<translation id="2726059656860238749">Starta Ultimatum med adressfältet i fokus för att minska starttiden på mindre avancerade enheter.</translation>
 <translation id="2750481671343847896">Webbplatser får visa inloggningsmeddelanden från identitetstjänster.</translation>
 <translation id="2787357173144933081">Snabbstarta adressfältet</translation>
 <translation id="2789132527330338807">Webbplatser får begära tillstånd att skapa en 3D-karta över dina omgivningar eller registrera kamerans position</translation>
 <translation id="2790501146643349491">När detta är aktiverat kan nyligen stängda webbplatser fortsätta att skicka och ta emot data. När detta är inaktiverat får webbplatser som nyligen stängts inte skicka eller ta emot data.</translation>
-<translation id="2794551654724114396">Aktivera aviseringar om användbara tips som hjälper dig att få ut mesta möjliga av Chrome</translation>
+<translation id="2794551654724114396">Aktivera aviseringar om användbara tips som hjälper dig att få ut mesta möjliga av Ultimatum</translation>
 <translation id="2795716239552913152">Åtkomst till enhetens plats brukar kunna behövas för relevanta funktioner eller information som lokala nyheter eller affärer i närheten</translation>
 <translation id="2800760947029405028">Ladda upp en bild</translation>
 <translation id="2802908157808345702">Tillåt inte att webbplatser skickar popup-fönster eller omdirigerar dig</translation>
-<translation id="2814830417943086299">Chrome visar nu dina senaste flikar i enhetens applista och sökresultat. Du kan inaktivera detta när som helst i Chrome-inställningarna.</translation>
+<translation id="2814830417943086299">Ultimatum visar nu dina senaste flikar i enhetens applista och sökresultat. Du kan inaktivera detta när som helst i Ultimatum-inställningarna.</translation>
 <translation id="2822354292072154809">Vill du återställa alla webbplatsbehörigheter för <ph name="CHOSEN_OBJECT_NAME" />?</translation>
-<translation id="2848335882304088250">Nu får du ut mesta möjliga av Chrome på din enhet.</translation>
+<translation id="2848335882304088250">Nu får du ut mesta möjliga av Ultimatum på din enhet.</translation>
 <translation id="2850913818900871965">Begär mobilvy</translation>
 <translation id="2870560284913253234">Webbplats</translation>
 <translation id="2874939134665556319">Föregående spår</translation>
@@ -273,7 +273,7 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="3678318839615834650">Arket på nedre delen av skärmen för kort på sidan Ny flik har öppnats över hela skärmen</translation>
 <translation id="3697164069658504920">När detta är aktiverat kan webbplatser be om att få använda USB-enheter. När detta är inaktiverat får webbplatser inte använda USB-enheter.</translation>
 <translation id="3703430731944883733">Hantera ditt flöde</translation>
-<translation id="3707034683772193706">En webbplats du besöker kan spara mycket information med Chrome, främst för att kontrollera att du inte är en bot</translation>
+<translation id="3707034683772193706">En webbplats du besöker kan spara mycket information med Ultimatum, främst för att kontrollera att du inte är en bot</translation>
 <translation id="3708684582558000260">Tillåt inte att stängda webbplatser fortsätter skicka eller ta emot data</translation>
 <translation id="3709818294139939629">Tog bort webbplatsens åtkomst</translation>
 <translation id="3721953990244350188">Ignorera och visa nästa tillgängliga åtgärd</translation>
@@ -285,13 +285,13 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="3779154269823594982">Byt lösenord</translation>
 <translation id="3797520601150691162">Använd inte mörkt tema för en viss webbplats</translation>
 <translation id="3803367742635802571">Webbplatser du besöker kan sluta fungera som avsett</translation>
-<translation id="3816118180265633665">Färger i Chrome</translation>
+<translation id="3816118180265633665">Färger i Ultimatum</translation>
 <translation id="381841723434055211">Telefonnummer</translation>
 <translation id="3823453485268218808">Font med fast bredd</translation>
 <translation id="3826050100957962900">Tredjepartsinloggning</translation>
 <translation id="3831065134033923230">Kontrollera sparade lösenord</translation>
 <translation id="3835233591525155343">Enhetsanvändning</translation>
-<translation id="3843916486309149084">Cookies blockeras i Chrome igen i dag</translation>
+<translation id="3843916486309149084">Cookies blockeras i Ultimatum igen i dag</translation>
 <translation id="385051799172605136">Föregående</translation>
 <translation id="3859306556332390985">Sök framåt</translation>
 <translation id="389521680295183045">Webbplatser kan begära tillstånd att få veta om du använder enheten aktivt</translation>
@@ -318,7 +318,7 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="4046123991198612571">Nästa spår</translation>
 <translation id="4077310749977440510">Att läsa från Urklipp brukar kunna behövas till exempel för att bevara formateringen när du kopierar text på webbplatsen</translation>
 <translation id="4082080074595021446">Undantag för specifika webbplatser tillåts inte eftersom Android-enheten inte har tillräckligt med RAM-minne.</translation>
-<translation id="4089304748532599471">Vissa Chrome-inställningar har ändrats</translation>
+<translation id="4089304748532599471">Vissa Ultimatum-inställningar har ändrats</translation>
 <translation id="4149890623864272035">Vill du radera all lokal data, inklusive cookies, och återställa alla behörigheter för den här webbplatsen?</translation>
 <translation id="4149994727733219643">Förenklad vy för webbsidor</translation>
 <translation id="4151930093518524179">Standardzoom</translation>
@@ -342,13 +342,13 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="4340799661701629185">Tillåt inte att webbplatser skickar aviseringar</translation>
 <translation id="4341577178275615435">Aktivera eller inaktivera textmarkörläge med kortkommandot F7</translation>
 <translation id="4402755511846832236">Blockera webbplatser från att veta när du använder enheten aktivt</translation>
-<translation id="4412683424767388419">Ark på nedre delen av skärmen för Chrome-färger har öppnats över halva skärmen</translation>
+<translation id="4412683424767388419">Ark på nedre delen av skärmen för Ultimatum-färger har öppnats över halva skärmen</translation>
 <translation id="4412992751769744546">Tillåt cookies från tredje part</translation>
 <translation id="4425416282877905577">Font Serif</translation>
 <translation id="443121186588148776">Serieport</translation>
 <translation id="4434045419905280838">Popup-fönster och omdirigeringar</translation>
 <translation id="443552056913301231">Om du gör detta raderas all lokal data, inklusive cookies, och alla behörigheter för <ph name="ORIGIN" /> återställs</translation>
-<translation id="4441527683895888777">Ark på nedre delen av skärmen för Chrome-färger har öppnats över hela skärmen</translation>
+<translation id="4441527683895888777">Ark på nedre delen av skärmen för Ultimatum-färger har öppnats över hela skärmen</translation>
 <translation id="4468959413250150279">Stäng av ljudet för en webbplats.</translation>
 <translation id="4475912480633855319">{COOKIES,plural, =1{# cookie}other{# cookies}}</translation>
 <translation id="4478158430052450698">Gör det enklare att anpassa zoomen för olika webbplatser</translation>
@@ -370,7 +370,7 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="4655846733459137112">Tryck på Ja om du vill använda det här lösenordet nästa gång du loggar in</translation>
 <translation id="4663373278480897665">Kamera är tillåten</translation>
 <translation id="4670064810192446073">Virtuell verklighet</translation>
-<translation id="4672315773691449562">Tryck på webbläsarappen och sedan på Chrome</translation>
+<translation id="4672315773691449562">Tryck på webbläsarappen och sedan på Ultimatum</translation>
 <translation id="4676059169848868271">Om du vill att <ph name="APP_NAME" /> ska använda handspårning måste du även aktivera handspårning i <ph name="BEGIN_LINK" />systeminställningarna<ph name="END_LINK" />.</translation>
 <translation id="4688045258817337666">Hantera dina kort</translation>
 <translation id="4722332387043141878">Åtkomst till enhetens rörelse- och ljussensorer brukar kunna behövas för funktioner som virtuell verklighet eller för att registrera träning</translation>
@@ -391,7 +391,7 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="4953688446973710931">När detta är aktiverat kan webbplatser be om att ladda ned flera filer automatiskt. När detta är inaktiverat får webbplatser inte ladda ned flera filer automatiskt.</translation>
 <translation id="4962975101802056554">Återkalla alla behörigheter för enheten</translation>
 <translation id="4972737347717125191">Webbplatser får begära tillstånd att använda VR-enheter och VR-data</translation>
-<translation id="4973805849704516244">Ark på nedre delen av skärmen för Chrome-färger</translation>
+<translation id="4973805849704516244">Ark på nedre delen av skärmen för Ultimatum-färger</translation>
 <translation id="497421865427891073">Fortsätt</translation>
 <translation id="4976702386844183910">Besöktes senast <ph name="DATE" /></translation>
 <translation id="4978178243417029856">Läs mer om Förslag-flödet</translation>
@@ -409,7 +409,7 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="5091663350197390230">När detta är aktiverat kan webbplatser använda JavaScript. När detta är inaktiverat får webbplatser inte använda JavaScript.</translation>
 <translation id="5099358668261120049">All data och alla cookies som har sparats av <ph name="ORIGIN" /> eller motsvarande app på startskärmen raderas.</translation>
 <translation id="5100237604440890931">Vyn har komprimerats. Expandera den genom att klicka.</translation>
-<translation id="5116239826668864748">Du kan använda Chrome varje gång du trycker på länkar i meddelanden, dokument och andra appar</translation>
+<translation id="5116239826668864748">Du kan använda Ultimatum varje gång du trycker på länkar i meddelanden, dokument och andra appar</translation>
 <translation id="5123685120097942451">Inkognitoflik</translation>
 <translation id="512938610812707830">Arket på nedre delen av skärmen för temasamlingar för utseende på sidan Ny flik har öppnats över hela skärmen</translation>
 <translation id="5137460097045297858">Arket på nedre delen av skärmen för flödet Upptäck har öppnats över halva skärmen</translation>
@@ -446,7 +446,7 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="5516455585884385570">Öppna aviseringsinställningar</translation>
 <translation id="5527111080432883924">Fråga innan en webbplats ges läsbehörighet till text och bilder i Urklipp (rekommenderas)</translation>
 <translation id="5553374991681107062">Senaste</translation>
-<translation id="5555115555607204100">Öka inte webbplatsernas hastighet med Chromes V8-motor men gör Chrome något mer motståndskraftigt mot attacker</translation>
+<translation id="5555115555607204100">Öka inte webbplatsernas hastighet med Ultimatums V8-motor men gör Ultimatum något mer motståndskraftigt mot attacker</translation>
 <translation id="5556459405103347317">Hämta igen</translation>
 <translation id="5591840828808741583"><ph name="SITE_NAME" /> blockeras</translation>
 <translation id="560980142378233747">Detta innebär att webbplatsfunktionerna ska fungera som förväntat, men du kan ha mindre surfskydd. <ph name="BEGIN_LINK" />Skicka feedback<ph name="END_LINK" /></translation>
@@ -473,7 +473,7 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="5804241973901381774">Behörigheter</translation>
 <translation id="5817042798620209981">Webbplatsinformation, dialogruta</translation>
 <translation id="5822675474983796325">Arket på nedre delen av skärmen för att anpassa sidan ny flik har öppnats över hela skärmen</translation>
-<translation id="5826403277762134844">Ark på nedre delen av skärmen med anvisningar om att spara lösenord i Chrome</translation>
+<translation id="5826403277762134844">Ark på nedre delen av skärmen med anvisningar om att spara lösenord i Ultimatum</translation>
 <translation id="5833899990800318936">Tillåt inte att webbplatser använder JavaScript</translation>
 <translation id="583673505367439042">Webbplatser får begära tillstånd att redigera filer eller mappar på enheten</translation>
 <translation id="5844448279347999754">När detta är aktiverat kan webbplatser be om att få se text och bilder som har sparats i urklipp. När detta är inaktiverat får webbplatser inte läsa text och bilder som du har sparat i urklipp.</translation>
@@ -502,7 +502,7 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="6012967556075291653">Fäst genväg</translation>
 <translation id="6013003831291591200">Uppgiften har slutförts</translation>
 <translation id="6015775454662021376">Styr webbplatsens åtkomst till enheten</translation>
-<translation id="6022659036123304283">Anpassa Chrome</translation>
+<translation id="6022659036123304283">Anpassa Ultimatum</translation>
 <translation id="6040143037577758943">Stäng</translation>
 <translation id="6042308850641462728">Mer</translation>
 <translation id="6064125863973209585">Slutförda nedladdningar</translation>
@@ -510,20 +510,20 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="6085954183010297841">Vill du radera behörigheten för filredigering? <ph name="FILE" /></translation>
 <translation id="6104860901391833523">När detta är aktiverat kan webbplatser öppna bild-i-bild automatiskt. När detta är inaktiverat kan webbplatser inte öppna bild-i-bild automatiskt.</translation>
 <translation id="6120483543004435978">När detta är aktiverat kan webbplatser be om att få veta om du använder enheten aktivt. När detta är inaktiverat får webbplatser inte veta om du använder enheten aktivt.</translation>
-<translation id="6132075343662013154">Chrome frågar om du vill spara lösenordet</translation>
+<translation id="6132075343662013154">Ultimatum frågar om du vill spara lösenordet</translation>
 <translation id="615886654739818377">Tillåt inte att webbplatser hanterar fönster på alla skärmar</translation>
 <translation id="6165508094623778733">Läs mer</translation>
 <translation id="6171020522141473435">När detta är aktiverat kan webbplatser be om att få använda Bluetooth-enheter. När detta är inaktiverat får webbplatser inte använda Bluetooth-enheter.</translation>
 <translation id="6177128806592000436">Anslutningen till webbplatsen är inte säker</translation>
 <translation id="6181444274883918285">Lägg till en webbplats i undantagen</translation>
-<translation id="6194967801833346599">{DAYS,plural, =1{Cookies blockeras i Chrome igen i morgon}other{# dagar tills cookies blockeras igen}}</translation>
+<translation id="6194967801833346599">{DAYS,plural, =1{Cookies blockeras i Ultimatum igen i morgon}other{# dagar tills cookies blockeras igen}}</translation>
 <translation id="6196640612572343990">Blockera tredjepartscookies</translation>
 <translation id="6205314730813004066">Annonsintegritet</translation>
 <translation id="6207207788774442484">Radera data och återställ behörigheter</translation>
 <translation id="6211409961905616543">Webbplatser får använda rörelse- och ljussensorer</translation>
 <translation id="6218508144653756827">Rosalila tema</translation>
 <translation id="6231752747840485235">Vill du avinstallera <ph name="APP_NAME" />?</translation>
-<translation id="6234351944623978659">Tryck på Webbläsarapp &gt; Chrome</translation>
+<translation id="6234351944623978659">Tryck på Webbläsarapp &gt; Ultimatum</translation>
 <translation id="6260830281887654268">Arket på nedre delen av skärmen för temasamlingar för utseende på sidan Ny flik har öppnats över halva skärmen</translation>
 <translation id="6262191102408817757">Utifrån din senaste flik</translation>
 <translation id="6262279340360821358"><ph name="PERMISSION_1" /> och <ph name="PERMISSION_2" /> blockeras</translation>
@@ -573,7 +573,7 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="6787751205395685251">Välj ett alternativ för <ph name="SITE_NAME" /></translation>
 <translation id="6790428901817661496">Spela</translation>
 <translation id="6818926723028410516">Välj objekt</translation>
-<translation id="6838525730752203626">Använd Chrome som standard</translation>
+<translation id="6838525730752203626">Använd Ultimatum som standard</translation>
 <translation id="6840760312327750441">Gruppera flikar genom att trycka länge på en flik. Dra sedan fliken ovanpå en annan flik.</translation>
 <translation id="6842868554183332230">Webbplatser kan normalt se om du använder din enhet aktivt för att ange din tillgänglighet i chattappar</translation>
 <translation id="6864395892908308021">Enheten kan inte läsa NFC</translation>
@@ -591,7 +591,7 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="6992014788289743568">Öka säkerheten och skydda din data genom att kontrollera dina lösenord</translation>
 <translation id="6992289844737586249">Fråga innan webbplatser tillåts att använda mikrofonen (rekommenderas)</translation>
 <translation id="7000754031042624318">Inaktiverad i Android-inställningarna</translation>
-<translation id="702275896380648118">Den här webbplatsen avgör vad du gillar och föreslår sedan annonser till andra webbplatser. Webbplatsen hämtar dessutom dina annonsämnen från Chrome för att visa mer relevanta annonser för dig.</translation>
+<translation id="702275896380648118">Den här webbplatsen avgör vad du gillar och föreslår sedan annonser till andra webbplatser. Webbplatsen hämtar dessutom dina annonsämnen från Ultimatum för att visa mer relevanta annonser för dig.</translation>
 <translation id="7036823721811529709">Spela upp i bakgrunden</translation>
 <translation id="7044081119134178347">Kameran tillåts den här gången</translation>
 <translation id="7053983685419859001">Blockera</translation>
@@ -649,7 +649,7 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="7658239707568436148">Avbryt</translation>
 <translation id="7667547420449112975">Trollkarlen från Oz</translation>
 <translation id="7681597159868843240">Åtkomst till enhetens rörelsesensorer brukar kunna behövas för funktioner som virtuell verklighet eller att hålla koll på träningen</translation>
-<translation id="7688240020069572972">Dölj kortet med tips om Chrome</translation>
+<translation id="7688240020069572972">Dölj kortet med tips om Ultimatum</translation>
 <translation id="7719367874908701697">Sidzoom</translation>
 <translation id="775043444390799886">Återkalla behörighet</translation>
 <translation id="7758789811447313947">Lila tema</translation>
@@ -681,7 +681,7 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="8033047164036749181">Prenumerera på aviseringar från den här webbplatsen</translation>
 <translation id="8042586301629853791">Sortera efter:</translation>
 <translation id="8051193500142930381">Funktioner som kräver en kamera slutar fungera</translation>
-<translation id="8056330801132235235">Standard i Chrome</translation>
+<translation id="8056330801132235235">Standard i Ultimatum</translation>
 <translation id="8067883171444229417">Spela upp video</translation>
 <translation id="8068648041423924542">Det går inte att välja certifikat.</translation>
 <translation id="8077120325605624147">Alla webbplatser du besöker kan visa alla annonser för dig</translation>
@@ -735,10 +735,10 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="8514955299594277296">Tillåt inte att webbplatser sparar data på din enhet (rekommenderas inte)</translation>
 <translation id="851751545965956758">Förhindra att webbplatser ansluter till enheter</translation>
 <translation id="8525306231823319788">Helskärm</translation>
-<translation id="8541410041357371550">Webbplatsen hämtar dina annonsämnen från Chrome för att visa mer relevanta annonser för dig</translation>
+<translation id="8541410041357371550">Webbplatsen hämtar dina annonsämnen från Ultimatum för att visa mer relevanta annonser för dig</translation>
 <translation id="854876774113449365">Webbplatser du besöker kan bädda in innehåll från andra webbplatser, till exempel bilder, annonser och text. Dessa andra webbplatser kan begära tillstånd att använda uppgifter som de har sparat om dig när du surfar på webbplatsen. <ph name="BEGIN_LINK" />Läs mer om inbäddat innehåll<ph name="END_LINK" /></translation>
 <translation id="8549127125482561383">Så här visar du begäranden</translation>
-<translation id="8558480467877843976">Nu kan du använda Chrome varje gång du surfar eller trycker på länkar i meddelanden, dokument och andra appar.</translation>
+<translation id="8558480467877843976">Nu kan du använda Ultimatum varje gång du surfar eller trycker på länkar i meddelanden, dokument och andra appar.</translation>
 <translation id="857943718398505171">Tillåten (rekommenderas)</translation>
 <translation id="8593422116412089302">När detta är aktiverat kan webbplatser be om att få använda uppgifter som de har sparat om dig. När detta är inaktiverat får webbplatser inte be dig om att använda uppgifter som de har sparat om dig.</translation>
 <translation id="8609465669617005112">Flytta upp</translation>
@@ -755,7 +755,7 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="8719283222052720129">Aktivera behörigheten för <ph name="APP_NAME" /> i <ph name="BEGIN_LINK" />Android-inställningarna<ph name="END_LINK" />.</translation>
 <translation id="8721719390026067591">När detta är aktiverat kan webbplatser be om att få söka efter Bluetooth-enheter. När detta är inaktiverat får webbplatser inte söka efter Bluetooth-enheter.</translation>
 <translation id="8725066075913043281">Försök igen</translation>
-<translation id="8727043961453758442">Få ut mesta möjliga av Chrome</translation>
+<translation id="8727043961453758442">Få ut mesta möjliga av Ultimatum</translation>
 <translation id="8730621377337864115">Klart</translation>
 <translation id="8737426583868847403">Webbplatser som du har sparat en anpassad zoomnivå för visas här</translation>
 <translation id="8748714929822124637">Tillåt inte att webbplatser får åtkomst till andra enheter i det lokala nätverket</translation>
@@ -763,13 +763,13 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="8775741625735357092">Du kan aktivera bokmärkesfältet i Inställningar &gt; Utseende</translation>
 <translation id="8800034312320686233">Fungerar inte webbplatsen?</translation>
 <translation id="8801436777607969138">Blockera JavaScript på en enskild webbplats.</translation>
-<translation id="8801657293260363985">V8 är Chromes JavaScript- och WebAssembly-motor som används för att förbättra webbplatsens prestanda</translation>
+<translation id="8801657293260363985">V8 är Ultimatums JavaScript- och WebAssembly-motor som används för att förbättra webbplatsens prestanda</translation>
 <translation id="8803526663383843427">När funktionen är aktiverad</translation>
 <translation id="8805385115381080995">Du kan surfa snabbare eftersom det blir mindre sannolikt att en webbplats ber dig att verifiera att du är en riktig person</translation>
 <translation id="881644524232657178">När detta är aktiverat kan webbplatser använda enhetens rörelse- och ljussensorer. När detta är inaktiverat får webbplatser inte använda sensorer.</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">Testa att tillfälligt tillåta tredjepartscookies, vilket innebär mindre skydd när du surfar men större sannolikhet att webbplatsfunktionerna fungerar som förväntat.</translation>
-<translation id="8889294078294184559">När du fortsätter surfa kan webbplatser kontrollera informationen med Chrome och verifiera med den föregående webbplatsen du besökte att du troligen är en riktig person.</translation>
+<translation id="8889294078294184559">När du fortsätter surfa kan webbplatser kontrollera informationen med Ultimatum och verifiera med den föregående webbplatsen du besökte att du troligen är en riktig person.</translation>
 <translation id="8899807382908246773">Påträngande annonser</translation>
 <translation id="8903921497873541725">Zooma in</translation>
 <translation id="8919911527569629802">Logga in på vilken webbplats som helst</translation>
@@ -795,7 +795,7 @@ Avancerat skydd styr följande Chrome-inställningar:
 <translation id="9138037198177304356">Aviseringar tillåts</translation>
 <translation id="9138217887606523162">Nuvarande zoom är <ph name="ZOOM_LEVEL" /> %%</translation>
 <translation id="915112772806845021">Webbplatser använder den här funktionen för att öppna bild-i-bild automatiskt. På så sätt kan du fortsätta titta på en video samtidigt som du frigör skärmen för andra uppgifter.</translation>
-<translation id="9156722768168878035">Tillåt att Chrome visar dina senaste flikar i enhetens applista och sökresultat. Du kan inaktivera detta när som helst i Chrome-inställningarna.</translation>
+<translation id="9156722768168878035">Tillåt att Ultimatum visar dina senaste flikar i enhetens applista och sökresultat. Du kan inaktivera detta när som helst i Ultimatum-inställningarna.</translation>
 <translation id="9162462602695099906">Den här sidan är farlig</translation>
 <translation id="9182556968660520230">Tillåt inte att webbplatser spelar upp skyddat innehåll</translation>
 <translation id="947156494302904893">Webbplatser du besöker kan verifiera att du är en riktig person och inte en bot</translation>

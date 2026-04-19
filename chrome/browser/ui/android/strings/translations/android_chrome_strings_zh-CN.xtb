@@ -24,9 +24,9 @@
 <translation id="1089606299949659462">查看完毕！</translation>
 <translation id="1094555143448724771">如需查看您在其他设备中打开的标签页，请同步您的标签页和历史记录</translation>
 <translation id="1095761715416917775">确保您可以随时访问自己的同步数据</translation>
-<translation id="1096091316906284742">Chrome 查找功能选择启用底部动作条</translation>
+<translation id="1096091316906284742">Ultimatum 查找功能选择启用底部动作条</translation>
 <translation id="1100066534610197918">在分组内的新标签页中打开</translation>
-<translation id="1103142993930332957">帮助改进 Chrome？</translation>
+<translation id="1103142993930332957">帮助改进 Ultimatum？</translation>
 <translation id="1105960400813249514">屏幕截图</translation>
 <translation id="1108214977745280468">查看网页数据洞见</translation>
 <translation id="1108938384783527433">历史记录同步</translation>
@@ -34,20 +34,20 @@
 <translation id="1123537484474186311"><ph name="TAB_TITLE" />，画中画标签页</translation>
 <translation id="1126696498560056882">管理此设备上的账号</translation>
 <translation id="1135018701024399762">无痕模式可实现私密浏览，与您共用设备的其他人无法知晓您浏览了什么内容</translation>
-<translation id="113752097246673894">如需在您的所有设备上获取书签等信息，请以 <ph name="EMAIL" /> 的身份登录 Chrome</translation>
+<translation id="113752097246673894">如需在您的所有设备上获取书签等信息，请以 <ph name="EMAIL" /> 的身份登录 Ultimatum</translation>
 <translation id="1138458427267715730">当网络中任一网站上的商品降价时，您会收到提醒</translation>
 <translation id="1140317858355046628">如果删除，所有人将立即失去对标签页分组“<ph name="GROUP_NAME" />”的访问权限，并且该分组将从所有设备中删除。</translation>
 <translation id="1142732900304639782">不询问是否翻译这些网站</translation>
 <translation id="1143193470214071120">关闭窗口或管理窗口</translation>
 <translation id="1149725087019908252">正在扫描 <ph name="FILE_NAME" /></translation>
-<translation id="1150263420752757504"><ph name="APP_NAME" />将在 Chrome 中打开。继续操作即表示您同意接受 <ph name="BEGIN_LINK1" />Google 服务条款<ph name="END_LINK1" />以及 <ph name="BEGIN_LINK2" />Google Chrome 和 Chrome 操作系统附加服务条款<ph name="END_LINK2" />。</translation>
+<translation id="1150263420752757504"><ph name="APP_NAME" />将在 Ultimatum 中打开。继续操作即表示您同意接受 <ph name="BEGIN_LINK1" />Google 服务条款<ph name="END_LINK1" />以及 <ph name="BEGIN_LINK2" />Ultimatum 和 Ultimatum 操作系统附加服务条款<ph name="END_LINK2" />。</translation>
 <translation id="1154555449933432029">您未在 Google 密码管理工具中保存任何密码。</translation>
 <translation id="115483310321669804">使用密码 <ph name="PASSWORD" /></translation>
 <translation id="1161065531352634524">同步标签页和历史记录</translation>
 <translation id="1165109137568919258">拍张照片，或从图库中选择图片进行搜索</translation>
 <translation id="1173894706177603556">重命名</translation>
-<translation id="1174479719160874822">当屏幕较窄时，Chrome 会请求改用移动网站</translation>
-<translation id="1175241315203286684">您的管理员可以远程更改您的个人资料和浏览器设置，通过报告分析浏览器的相关信息，以及执行其他必要的任务。此设备上的活动可能也在接受 Chrome 外部的管理。</translation>
+<translation id="1174479719160874822">当屏幕较窄时，Ultimatum 会请求改用移动网站</translation>
+<translation id="1175241315203286684">您的管理员可以远程更改您的个人资料和浏览器设置，通过报告分析浏览器的相关信息，以及执行其他必要的任务。此设备上的活动可能也在接受 Ultimatum 外部的管理。</translation>
 <translation id="1177863135347784049">自定义</translation>
 <translation id="1181037720776840403">移除</translation>
 <translation id="1183189057400844278">为了确保您可以一直使用 Google 账号中的密码，请验证是您本人在操作</translation>
@@ -85,13 +85,13 @@
 <translation id="1318262688555255786">分享指向“<ph name="PAGE_TITLE" />”网页的链接。来源：<ph name="PAGE_URL" /></translation>
 <translation id="1320912611264252795">书签保存流程文件夹已全屏打开</translation>
 <translation id="1327257854815634930">导航历史记录已打开</translation>
-<translation id="1331212799747679585">Chrome 无法更新。更多选项</translation>
-<translation id="1332501820983677155">Google Chrome 功能快捷键</translation>
+<translation id="1331212799747679585">Ultimatum 无法更新。更多选项</translation>
+<translation id="1332501820983677155">Ultimatum 功能快捷键</translation>
 <translation id="1333491156693005331">近期检查过</translation>
 <translation id="1336996151357442890">已退订 <ph name="SITE_NAME" />。当您下次访问时，系统会再次询问您。</translation>
 <translation id="1340839264183302272">退出分组</translation>
 <translation id="1342886103232377846">若要检查是否存在已泄露的密码，请前往 Google 密码管理工具</translation>
-<translation id="1343830902827845050">登录 Chrome</translation>
+<translation id="1343830902827845050">登录 Ultimatum</translation>
 <translation id="1344653310988386453">包含指向突出显示的内容的链接</translation>
 <translation id="1355088659320425659">历史记录和标签页</translation>
 <translation id="1360432990279830238">退出账号并关闭同步功能？</translation>
@@ -101,16 +101,16 @@
 <translation id="1373696734384179344">内存不足，无法下载所选内容。</translation>
 <translation id="137496472437646183">选择“增强型保护”</translation>
 <translation id="1376578503827013741">正在计算…</translation>
-<translation id="1381838868249179644">为保护您的安全，Chrome 已移除某些网站的权限</translation>
+<translation id="1381838868249179644">为保护您的安全，Ultimatum 已移除某些网站的权限</translation>
 <translation id="1383876407941801731">搜索</translation>
 <translation id="1384704387250346179">使用 Google 智能镜头翻译图片<ph name="BEGIN_NEW" />新<ph name="END_NEW" /></translation>
 <translation id="1386674309198842382"><ph name="LAST_UPDATED" /> 天前曾有活动</translation>
-<translation id="1390418506739274310">您可能会看到在 Chrome 中打开了链接的其他应用的历史记录。您的 Google 账号在 <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> 上可能有其他形式的浏览记录。</translation>
+<translation id="1390418506739274310">您可能会看到在 Ultimatum 中打开了链接的其他应用的历史记录。您的 Google 账号在 <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> 上可能有其他形式的浏览记录。</translation>
 <translation id="139752016751285248">显示价格分析的底部动作条已全屏打开</translation>
 <translation id="1397811292916898096">使用 <ph name="PRODUCT_NAME" /> 进行搜索</translation>
-<translation id="1398057416966591719">您可以<ph name="BEGIN_LINK1" />管理要将哪些 Chrome 数据保存<ph name="END_LINK1" />到您的 Google 账号。
+<translation id="1398057416966591719">您可以<ph name="BEGIN_LINK1" />管理要将哪些 Ultimatum 数据保存<ph name="END_LINK1" />到您的 Google 账号。
 
-如需更多使用数据来提升 Chrome 体验的设置，请前往 <ph name="BEGIN_LINK2" />Google 服务<ph name="END_LINK2" />。</translation>
+如需更多使用数据来提升 Ultimatum 体验的设置，请前往 <ph name="BEGIN_LINK2" />Google 服务<ph name="END_LINK2" />。</translation>
 <translation id="1407069428457324124">深色主题</translation>
 <translation id="1407135791313364759">全部打开</translation>
 <translation id="1409879593029778104">系统已阻止下载 <ph name="FILE_NAME" />，因为文件已存在。</translation>
@@ -124,10 +124,10 @@
 <translation id="1448440926884431741">在“书签”页面中整理您跟踪的商品</translation>
 <translation id="1455845192930279203">您仍要从 <ph name="DOWNLOAD_DOMAIN" /> 下载“<ph name="FILE_NAME" />”(<ph name="FILE_SIZE" />) 吗？</translation>
 <translation id="1460751212339734034">减少输入，节省时间</translation>
-<translation id="1466383950273130737">选择要让 Chrome 采用的语言</translation>
+<translation id="1466383950273130737">选择要让 Ultimatum 采用的语言</translation>
 <translation id="1477626028522505441">未能成功下载 <ph name="FILE_NAME" />，因为服务器出现了问题。</translation>
 <translation id="147982357559798527">已更改</translation>
-<translation id="1480287803138246127">您的部分历史记录可能不会在此处显示。如需查看您的所有 Chrome 历史记录，请打开完整的 Chrome 历史记录。</translation>
+<translation id="1480287803138246127">您的部分历史记录可能不会在此处显示。如需查看您的所有 Ultimatum 历史记录，请打开完整的 Ultimatum 历史记录。</translation>
 <translation id="1493287004536771723">您已关注 <ph name="SITE_NAME" /></translation>
 <translation id="1495677929897281669">返回到标签页</translation>
 <translation id="1496514951988037011">用户名</translation>
@@ -137,14 +137,14 @@
 <translation id="1515901671075971249">标签页导航快捷键</translation>
 <translation id="1516966594427080024">在无痕模式下打开新窗口</translation>
 <translation id="1521774566618522728">今天曾有活动</translation>
-<translation id="153446405401665083">有新版 Chrome 可用</translation>
+<translation id="153446405401665083">有新版 Ultimatum 可用</translation>
 <translation id="1540012742443808215">地址栏目前位于顶部</translation>
-<translation id="1544084554881119930">付款方式和地址不会加密。Chrome 中的浏览记录不会同步。
-只有知道您口令的人能读取您的加密数据。该口令不会发送给 Google，也不会被 Google 存储。如果您忘记了该口令或想更改此设置，请<ph name="BEGIN_LINK" />清除您账号中的 Chrome 数据<ph name="END_LINK" />。</translation>
+<translation id="1544084554881119930">付款方式和地址不会加密。Ultimatum 中的浏览记录不会同步。
+只有知道您口令的人能读取您的加密数据。该口令不会发送给 Google，也不会被 Google 存储。如果您忘记了该口令或想更改此设置，请<ph name="BEGIN_LINK" />清除您账号中的 Ultimatum 数据<ph name="END_LINK" />。</translation>
 <translation id="1544826120773021464">要管理您的 Google 账号，请点按“管理账号”按钮</translation>
 <translation id="1549000191223877751">移至其他窗口</translation>
-<translation id="1553358976309200471">更新 Chrome</translation>
-<translation id="1554532453982918912">可协助改进 Chrome，让所有像您这样使用 Chrome 的用户都能够获享更好的体验</translation>
+<translation id="1553358976309200471">更新 Ultimatum</translation>
+<translation id="1554532453982918912">可协助改进 Ultimatum，让所有像您这样使用 Ultimatum 的用户都能够获享更好的体验</translation>
 <translation id="1568636008098739136">读出此网页的内容。如要修改此快捷方式，请轻触并按住这里。</translation>
 <translation id="1571041387761170095">没有安全系数低或重复使用的密码</translation>
 <translation id="1578591621182011812">{NUM_PASSWORDS,plural, =1{此设备上有 1 个已泄露的密码}other{此设备上有 # 个已泄露的密码}}</translation>
@@ -171,24 +171,24 @@
 <translation id="1702907158640575240">受管理的浏览器</translation>
 <translation id="170478069042229393"><ph name="TAB_TITLE" />，固定无痕式标签页</translation>
 <translation id="1718835860248848330">过去 1 小时</translation>
-<translation id="1726477445370128854">如果 Chrome 预加载它认为您可能会访问的网页，您便可更快速地浏览和搜索</translation>
+<translation id="1726477445370128854">如果 Ultimatum 预加载它认为您可能会访问的网页，您便可更快速地浏览和搜索</translation>
 <translation id="1728803206919861584">要在无痕模式以外保存通行密钥吗？</translation>
 <translation id="1732514748744806741">如果您的密码遭外泄，我们会通知您</translation>
-<translation id="1737694586321018892">获享 Chrome 的最强安全防护</translation>
+<translation id="1737694586321018892">获享 Ultimatum 的最强安全防护</translation>
 <translation id="1747593111377567311">{NUM_SITES,plural, =1{1 个网站近期发送了大量通知}other{# 个网站近期发送了大量通知}}</translation>
 <translation id="1749561566933687563">同步您的书签</translation>
 <translation id="1750238553597293878">请继续使用您的 Google 账号的密码</translation>
 <translation id="17513872634828108">打开的标签页</translation>
 <translation id="1753744496844366747">Aa</translation>
 <translation id="1760873718737761808">{FILE_COUNT,plural, =1{页面，列表中有 1 个页面}other{页面，列表中有 # 个页面}}</translation>
-<translation id="1771929606532798550">系统会向 Google 发送与您的 Chrome 使用情况相关的信息，但这些信息未关联到您\n\n如果 Chrome 崩溃了，崩溃事件的相关详情可能会包含一些个人信息\n\n如果您将历史记录同步到 Google 账号，相关指标可能也会包含与您访问的网址有关的信息</translation>
+<translation id="1771929606532798550">系统会向 Google 发送与您的 Ultimatum 使用情况相关的信息，但这些信息未关联到您\n\n如果 Ultimatum 崩溃了，崩溃事件的相关详情可能会包含一些个人信息\n\n如果您将历史记录同步到 Google 账号，相关指标可能也会包含与您访问的网址有关的信息</translation>
 <translation id="1778457539567749232">标记为未读</translation>
 <translation id="1779766957982586368">关闭窗口</translation>
 <translation id="1780023393214832643">密码已保存到 <ph name="USERNAME" /> 中</translation>
 <translation id="1791662854739702043">安装位置</translation>
 <translation id="1792959175193046959">随时更改默认的下载内容保存位置</translation>
 <translation id="1796666869097395659">将标签页最小化以便稍后返回</translation>
-<translation id="1799920918471566157">Chrome 提示</translation>
+<translation id="1799920918471566157">Ultimatum 提示</translation>
 <translation id="1807246157184219062">浅色调</translation>
 <translation id="1807709131360304325">打开新窗口</translation>
 <translation id="1810845389119482123">未完成初始同步设置</translation>
@@ -197,13 +197,13 @@
 <translation id="1820408774134375111">用于选择登录账号的底部动作条</translation>
 <translation id="1823492026305965829">以<ph name="USER_FULL_NAME" />的身份登录</translation>
 <translation id="1824902652744048041">点按“删除浏览数据”</translation>
-<translation id="1825772852827001597">Google Pay 中的付款方式和地址不会加密。Chrome 中的浏览记录不会同步。
-只有知道您口令的人能读取您的加密数据。该口令不会发送给 Google，也不会被 Google 存储。如果您忘记了该口令或想更改此设置，请<ph name="BEGIN_LINK" />删除您账号中的 Chrome 数据<ph name="END_LINK" />。</translation>
+<translation id="1825772852827001597">Google Pay 中的付款方式和地址不会加密。Ultimatum 中的浏览记录不会同步。
+只有知道您口令的人能读取您的加密数据。该口令不会发送给 Google，也不会被 Google 存储。如果您忘记了该口令或想更改此设置，请<ph name="BEGIN_LINK" />删除您账号中的 Ultimatum 数据<ph name="END_LINK" />。</translation>
 <translation id="1829244130665387512">在网页中查找</translation>
 <translation id="1832459821645506983">立即开启</translation>
-<translation id="1845958458910716240">为保护您的数据，对于您近期未访问的网站，请允许 Chrome 撤消网站权限</translation>
-<translation id="1871098866036088250">在 Chrome 浏览器中打开</translation>
-<translation id="1877026089748256423">Chrome 版本太旧</translation>
+<translation id="1845958458910716240">为保护您的数据，对于您近期未访问的网站，请允许 Ultimatum 撤消网站权限</translation>
+<translation id="1871098866036088250">在 Ultimatum 浏览器中打开</translation>
+<translation id="1877026089748256423">Ultimatum 版本太旧</translation>
 <translation id="1877073879466606884">您登录的个人资料是受管个人资料。您的管理员可以远程更改您的个人资料设置，通过报告分析浏览器的相关信息，以及执行其他必要的任务。</translation>
 <translation id="1879904908408734349">已关闭用于选择登录账号的底部动作条</translation>
 <translation id="1883903952484604915">我的文件</translation>
@@ -215,7 +215,7 @@
 <translation id="1910950723001426294">分享选项列表已关闭。</translation>
 <translation id="191726024256261717">查看权限</translation>
 <translation id="1917766536967060661">您将立即失去对标签页分组“<ph name="GROUP_NAME" />”的访问权限，并且<ph name="BLOCKED_MEMBER_FULL_NAME" /> (<ph name="BLOCKED_MEMBER_EMAIL" />) 将无法再在各项 Google 服务中与您互动。</translation>
-<translation id="1919130412786645364">允许登录 Chrome</translation>
+<translation id="1919130412786645364">允许登录 Ultimatum</translation>
 <translation id="1922362554271624559">建议的语言</translation>
 <translation id="1924255092154549435">标签页已展开</translation>
 <translation id="1925021887439448749">输入自定义网址</translation>
@@ -225,11 +225,11 @@
 <translation id="1944535645109964458">没有可用的通行密钥</translation>
 <translation id="1957557050935255529">正在加载 PDF…</translation>
 <translation id="1959679933317802873">正在等待内容</translation>
-<translation id="1960290143419248813">此版本的 Android 不再支持 Chrome 更新</translation>
+<translation id="1960290143419248813">此版本的 Android 不再支持 Ultimatum 更新</translation>
 <translation id="1962061488333185936"><ph name="TAB_TITLE" />，已选择的多个标签页之一，正在播放音频</translation>
 <translation id="1963976881984600709">标准保护</translation>
 <translation id="1966710179511230534">请更新您的登录详细信息。</translation>
-<translation id="1969037871259811890">删除浏览数据不会导致您退出 Google 账号。若要退出账号，请<ph name="BEGIN_LINK1" />从 Chrome 中退出账号<ph name="END_LINK1" />。</translation>
+<translation id="1969037871259811890">删除浏览数据不会导致您退出 Google 账号。若要退出账号，请<ph name="BEGIN_LINK1" />从 Ultimatum 中退出账号<ph name="END_LINK1" />。</translation>
 <translation id="197288927597451399">保留</translation>
 <translation id="1973912524893600642">保留数据</translation>
 <translation id="1974060860693918893">高级</translation>
@@ -242,7 +242,7 @@
 <translation id="2021896219286479412">全屏网站控件</translation>
 <translation id="2029669011553795746">提示通知选择启用底部动作条已以一半高度显示</translation>
 <translation id="2038563949887743358">开启“请求切换到桌面版网站”</translation>
-<translation id="204321170514947529">Chrome 中也有<ph name="APP_NAME" />的数据</translation>
+<translation id="204321170514947529">Ultimatum 中也有<ph name="APP_NAME" />的数据</translation>
 <translation id="2047378580182589770">轻触并按住即可退出无痕模式</translation>
 <translation id="2049574241039454490"><ph name="FILE_SIZE_OF_TOTAL" /> <ph name="SEPARATOR" /> <ph name="DESCRIPTION" /></translation>
 <translation id="2051669996101374349">尽可能使用 HTTPS，并在加载不支持 HTTPS 的网站前收到警告。您无法更改此设置，因为您已启用“高级保护”。</translation>
@@ -265,9 +265,9 @@
 <translation id="2138283760993967204">“管理”图标</translation>
 <translation id="2138632817776076519"><ph name="TAB_TITLE" />，已选择的标签页，正在录制内容</translation>
 <translation id="2141396931810938595">根据您的使用情况</translation>
-<translation id="2145315049852051678">Chrome 会定期检查，确保您的浏览器采用了最优安全设置。如需审核任何事项，我们会通知您。</translation>
+<translation id="2145315049852051678">Ultimatum 会定期检查，确保您的浏览器采用了最优安全设置。如需审核任何事项，我们会通知您。</translation>
 <translation id="2149973817440762519">修改书签</translation>
-<translation id="2163089732491971196">如要将 Chrome 数据保存在您的 Google 账号中并使用这些数据，请输入您的口令</translation>
+<translation id="2163089732491971196">如要将 Ultimatum 数据保存在您的 Google 账号中并使用这些数据，请输入您的口令</translation>
 <translation id="2166228530126694506">版本 <ph name="VERSION_NUMBER" /></translation>
 <translation id="2172688499998841696">“图片说明”功能已关闭</translation>
 <translation id="2172905120685242547">关闭窗口？</translation>
@@ -280,7 +280,7 @@
 <translation id="2194856509914051091">注意事项</translation>
 <translation id="2205701497928406883"><ph name="TAB_TITLE" />，已固定的标签页，正在共享内容</translation>
 <translation id="22091350895006575">添加用户名</translation>
-<translation id="221494669172414749">如果在不设置个人资料锁定的情况下打开 Chrome，您已保存的密码和付款方式将会从这部车载设备中移除。使用个人资料锁定功能可确保此类数据安全。</translation>
+<translation id="221494669172414749">如果在不设置个人资料锁定的情况下打开 Ultimatum，您已保存的密码和付款方式将会从这部车载设备中移除。使用个人资料锁定功能可确保此类数据安全。</translation>
 <translation id="2226826835915474236">未使用的快捷字词</translation>
 <translation id="2227179592712503583">移除推荐内容</translation>
 <translation id="2227444325776770048">以<ph name="USER_FULL_NAME" />的身份继续</translation>
@@ -311,7 +311,7 @@
 <translation id="2332515770639153015">“增强型安全浏览”已开启</translation>
 <translation id="233375395665273385">删除数据并退出账号</translation>
 <translation id="2341410551640223969">无法安装 <ph name="WEBAPK_NAME" />。</translation>
-<translation id="2349710944427398404">Chrome 所使用的数据总量，包括账号、书签和已保存的设置</translation>
+<translation id="2349710944427398404">Ultimatum 所使用的数据总量，包括账号、书签和已保存的设置</translation>
 <translation id="235789365079050412">Google 隐私权政策</translation>
 <translation id="2359808026110333948">继续</translation>
 <translation id="2362083820973145409">您已使用<ph name="USER_NAME" />的身份登录。<ph name="USER_EMAIL" />。打开设置。</translation>
@@ -333,7 +333,7 @@
 <translation id="2427025860753516072">{FILE_COUNT,plural, =1{视频，列表中有 1 个视频}other{视频，列表中有 # 个视频}}</translation>
 <translation id="2433507940547922241">外观</translation>
 <translation id="2439153523196674349"><ph name="SITE_NAME" />预览</translation>
-<translation id="2449931042095204989">当某个 Google 网站或应用请求以私密方式预加载其网页上的链接时，Chrome 会通过 Google 服务器（而不使用 Cookie）加密和预加载网页。这样一来，预加载的网站便无法得知您的身份。</translation>
+<translation id="2449931042095204989">当某个 Google 网站或应用请求以私密方式预加载其网页上的链接时，Ultimatum 会通过 Google 服务器（而不使用 Cookie）加密和预加载网页。这样一来，预加载的网站便无法得知您的身份。</translation>
 <translation id="2450019289047528273">Google 钱包中的支付方式和其他信息</translation>
 <translation id="2450083983707403292">要重新开始下载 <ph name="FILE_NAME" /> 吗？</translation>
 <translation id="2451607499823206582">正在跟踪</translation>
@@ -342,17 +342,17 @@
 <translation id="2466378451804467735"><ph name="TAB_TITLE" />，已选择的多个标签页之一，已设为静音</translation>
 <translation id="2468444275314013497">您的浏览器很安全</translation>
 <translation id="2471632347767899461">尝试搜索帮助中心</translation>
-<translation id="2472163211318554013">登录即可充分利用 Chrome</translation>
+<translation id="2472163211318554013">登录即可充分利用 Ultimatum</translation>
 <translation id="247737702124049222">“图片说明”功能已开启</translation>
 <translation id="2479148705183875116">前往“设置”</translation>
 <translation id="2482878487686419369">通知</translation>
 <translation id="2496180316473517155">浏览记录</translation>
 <translation id="2497852260688568942">您的管理员已停用同步</translation>
-<translation id="250020030759455918">您会在 Chrome 中看到自己的 <ph name="SITE_NAME" /> 登录状态、浏览数据和网站数据</translation>
+<translation id="250020030759455918">您会在 Ultimatum 中看到自己的 <ph name="SITE_NAME" /> 登录状态、浏览数据和网站数据</translation>
 <translation id="2510106555128151389">正在安装“<ph name="WEBAPK_NAME" />”…</translation>
 <translation id="2512234228327349533">搜索购买选项</translation>
 <translation id="2513403576141822879">若想了解更多与隐私、安全和数据收集相关的设置，请参阅<ph name="BEGIN_LINK" />同步功能和 Google 服务<ph name="END_LINK" /></translation>
-<translation id="2515921719039583189">要从此设备中删除您的 Chrome 数据吗？</translation>
+<translation id="2515921719039583189">要从此设备中删除您的 Ultimatum 数据吗？</translation>
 <translation id="2517113738956581680">完整尺寸的动作条</translation>
 <translation id="2523184218357549926">将您访问的网页网址发送给 Google</translation>
 <translation id="2524132927880411790">在 Google 应用中打开语音搜索</translation>
@@ -374,9 +374,9 @@
 <translation id="2569733278091928697">您将能轻松管理媒体控件、无痕式会话、下载内容等等</translation>
 <translation id="2571711316400087311">询问是否要在其他语言的网页上显示 Google 翻译</translation>
 <translation id="2571834852878229351">创建我自己的密码</translation>
-<translation id="2574249610672786438">要查看您在其他设备上用 Chrome 打开的标签页，请在所有设备上登录</translation>
+<translation id="2574249610672786438">要查看您在其他设备上用 Ultimatum 打开的标签页，请在所有设备上登录</translation>
 <translation id="2577981599306533385"><ph name="MEMBER_FULL_NAME" /> (<ph name="EMAIL" />) 将立即失去对标签页分组“<ph name="GROUP_NAME" />”的访问权限，并且将无法再在各项 Google 服务中与您互动。</translation>
-<translation id="2581165646603367611">这会清除 Chrome 认为不重要的网站的 Cookie、缓存和其他数据。</translation>
+<translation id="2581165646603367611">这会清除 Ultimatum 认为不重要的网站的 Cookie、缓存和其他数据。</translation>
 <translation id="2587052924345400782">新版本已推出</translation>
 <translation id="2593272815202181319">等宽</translation>
 <translation id="260403163289591229">已关注</translation>
@@ -415,8 +415,8 @@
 <translation id="2779651927720337254">失败</translation>
 <translation id="2781151931089541271">还剩 1 秒</translation>
 <translation id="2789486458103222910">确定</translation>
-<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Chrome 发现了 1 个重复使用的密码，建议您改进}other{Chrome 发现了 # 个重复使用的密码，建议您改进}}</translation>
-<translation id="2794551654724114396">开启通知，获取实用提示，尽享 Chrome 的出色功能</translation>
+<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Ultimatum 发现了 1 个重复使用的密码，建议您改进}other{Ultimatum 发现了 # 个重复使用的密码，建议您改进}}</translation>
+<translation id="2794551654724114396">开启通知，获取实用提示，尽享 Ultimatum 的出色功能</translation>
 <translation id="2805210243313393104">在您的所有设备上获取书签等信息</translation>
 <translation id="2805756323405976993">应用</translation>
 <translation id="2819849308549746319">全部退订</translation>
@@ -433,7 +433,7 @@
 <translation id="2842985007712546952">父文件夹</translation>
 <translation id="2854916915045135148">轻触并按住即可切换到无痕模式</translation>
 <translation id="2860954141821109167">请确保已在此设备上启用了一款电话应用</translation>
-<translation id="2861923151411510142">部分 Chrome 功能将不再可用</translation>
+<translation id="2861923151411510142">部分 Ultimatum 功能将不再可用</translation>
 <translation id="286473047976978798">要应用外观偏好设置吗？</translation>
 <translation id="2869416538780777323">{OTHER_TAB_COUNT,plural, =1{<ph name="URL" /> 及另外 1 个标签页}other{<ph name="URL" /> 及另外 <ph name="TAB_COUNT_MANY" /> 个标签页}}</translation>
 <translation id="2869430948265924908">为了保护您在车载系统上存放的敏感内容，您必须设置一种车载系统个人资料锁定方式。为此，您可以使用 PIN 码、验证码或密码。</translation>
@@ -441,10 +441,10 @@
 <translation id="2871733351037274014">预加载网页</translation>
 <translation id="2876136027428473467"><ph name="CHILD_NAME" />请求您批准访问此网站：</translation>
 <translation id="2876556152483133018">网站搜索</translation>
-<translation id="2876628302275096482">详细了解 <ph name="BEGIN_LINK" />Chrome 如何确保您数据的私密性<ph name="END_LINK" /></translation>
+<translation id="2876628302275096482">详细了解 <ph name="BEGIN_LINK" />Ultimatum 如何确保您数据的私密性<ph name="END_LINK" /></translation>
 <translation id="2878607776582720720"><ph name="TAB_TITLE" />，已选择的多个无痕式标签页之一，正在共享内容</translation>
 <translation id="2885355868600171871">跳转到地址栏</translation>
-<translation id="2888126860611144412">关于 Chrome</translation>
+<translation id="2888126860611144412">关于 Ultimatum</translation>
 <translation id="2891154217021530873">停止加载网页</translation>
 <translation id="2893168226686371498">默认浏览器</translation>
 <translation id="2894821468041866720">不会显著减慢浏览器或设备的运行速度。</translation>
@@ -463,14 +463,14 @@
 <translation id="2923908459366352541">名称无效</translation>
 <translation id="2932150158123903946">Google <ph name="APP_NAME" /> 存储数据</translation>
 <translation id="2932222164150889403">您的键盘不会有变化</translation>
-<translation id="2936980480904111527">Chrome 通知让一切更轻松</translation>
+<translation id="2936980480904111527">Ultimatum 通知让一切更轻松</translation>
 <translation id="2940075786175545812">选项表单，用于批准/禁止访问某个网站</translation>
 <translation id="2942036813789421260">预览标签页已关闭</translation>
 <translation id="2951071800649516099">将网页添加到阅读清单以供日后阅读</translation>
 <translation id="2954586176076923855">将地址栏移到顶部</translation>
 <translation id="2961208450284224863">{READING_LIST_UNREAD_PAGE_COUNT,plural, =1{<ph name="READING_LIST_UNREAD_PAGE_COUNT_ONE" /> 个未读页面}other{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> 个未读页面}}</translation>
 <translation id="2972109037780336501">自动撤消权限</translation>
-<translation id="2976550651269220761">部分 Chrome 数据尚未保存到您的 Google 账号。\n请尝试等待几分钟再退出账号。如果现在就退出账号，这些数据将被删除。</translation>
+<translation id="2976550651269220761">部分 Ultimatum 数据尚未保存到您的 Google 账号。\n请尝试等待几分钟再退出账号。如果现在就退出账号，这些数据将被删除。</translation>
 <translation id="2977350910003566746">按上次打开时间排序</translation>
 <translation id="297771753501244313">按上次打开时间排序</translation>
 <translation id="2979639724566107830">在新窗口中打开</translation>
@@ -493,15 +493,15 @@
 <translation id="3035527385626181784"><ph name="TAB_TITLE" />，已选择的标签页，正在共享内容</translation>
 <translation id="3036750288708366620"><ph name="BEGIN_LINK" />获取帮助<ph name="END_LINK" /></translation>
 <translation id="3037177537145227281">正在跟踪价格</translation>
-<translation id="3037517125981011456">显示 Chrome 登录提示</translation>
+<translation id="3037517125981011456">显示 Ultimatum 登录提示</translation>
 <translation id="3038272154009688107">查看所有网站</translation>
 <translation id="3057938290530993634">按住即可固定最常用的网站，方便以后访问</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> 个书签}other{<ph name="BOOKMARKS_COUNT_MANY" /> 个书签}}</translation>
-<translation id="3062802207422175757">Chrome 可提供您感兴趣的报道</translation>
+<translation id="3062802207422175757">Ultimatum 可提供您感兴趣的报道</translation>
 <translation id="3066573403916685335">下移</translation>
 <translation id="3067505415088964188">价格低</translation>
 <translation id="3070005020161560471">自动翻译</translation>
-<translation id="3072980200212375806"><ph name="APP_NAME" />将在 Chrome 中打开。继续操作即表示您同意接受 <ph name="BEGIN_LINK1" />Google 服务条款<ph name="END_LINK1" />以及 <ph name="BEGIN_LINK2" />Google Chrome 和 Chrome 操作系统附加服务条款<ph name="END_LINK2" />。您也必须遵守<ph name="BEGIN_LINK3" />隐私权政策<ph name="END_LINK3" />。</translation>
+<translation id="3072980200212375806"><ph name="APP_NAME" />将在 Ultimatum 中打开。继续操作即表示您同意接受 <ph name="BEGIN_LINK1" />Google 服务条款<ph name="END_LINK1" />以及 <ph name="BEGIN_LINK2" />Ultimatum 和 Ultimatum 操作系统附加服务条款<ph name="END_LINK2" />。您也必须遵守<ph name="BEGIN_LINK3" />隐私权政策<ph name="END_LINK3" />。</translation>
 <translation id="3080525922482950719">您可保存网页以供日后阅读或离线阅读</translation>
 <translation id="3087734570205094154">底部</translation>
 <translation id="3091010850649238832">显示剪贴板内容</translation>
@@ -511,7 +511,7 @@
 <translation id="3123734510202723619">通告</translation>
 <translation id="3134385238404760368">近期没有打开标签页</translation>
 <translation id="3135655388926735587">点按“最近打开的标签页”</translation>
-<translation id="314939179385989105">Chrome 主页</translation>
+<translation id="314939179385989105">Ultimatum 主页</translation>
 <translation id="3158667104057012316">手动排序</translation>
 <translation id="3159335509547415276">了解被屏蔽的账号</translation>
 <translation id="3161699713309727585"><ph name="BUTTON_TEXT" />，在新标签页中打开</translation>
@@ -531,7 +531,7 @@
 <translation id="3236059992281584593">还剩 1 分钟</translation>
 <translation id="3237087289225714896">标准预加载：</translation>
 <translation id="3244271242291266297">MM</translation>
-<translation id="3245429137663807393">如果您还共享了 Chrome 使用情况报告，这些报告会包含您访问过的网址</translation>
+<translation id="3245429137663807393">如果您还共享了 Ultimatum 使用情况报告，这些报告会包含您访问过的网址</translation>
 <translation id="3250563604907490871">当您连接到 Wi-Fi 后，“图片说明”功能将会恢复运作</translation>
 <translation id="3254409185687681395">为此页添加书签</translation>
 <translation id="3265093782546847662"><ph name="DOMAIN" /> 的所有网页</translation>
@@ -568,22 +568,22 @@
 <translation id="3435575784518354875">如需继续使用您的密码，请立即将其导出，更新 Google Play 服务，然后将其重新导入 Google 密码管理工具。<ph name="BEGIN_LINK" />查看完整说明<ph name="END_LINK" />。</translation>
 <translation id="3435738964857648380">安全</translation>
 <translation id="3435914367318771664">向新分组添加标签页</translation>
-<translation id="3438681572027105609">如需将密码等信息同步到您的所有设备上，请登录 Chrome</translation>
+<translation id="3438681572027105609">如需将密码等信息同步到您的所有设备上，请登录 Ultimatum</translation>
 <translation id="3439276997620616816">此处会显示您近期关闭的标签页</translation>
 <translation id="3443221991560634068">重新加载当前网页</translation>
 <translation id="3444179773590444986">针对为网站开启深色主题分享反馈？</translation>
 <translation id="3448874648066942074">利用 AI 总结页面</translation>
-<translation id="3452832259067974318">为保护您的隐私，Chrome 不会在此字段中自动填充您的密码。</translation>
+<translation id="3452832259067974318">为保护您的隐私，Ultimatum 不会在此字段中自动填充您的密码。</translation>
 <translation id="3474624961160222204">以“<ph name="NAME" />”的身份继续</translation>
 <translation id="3478363558367712427">您可自行选择要使用的搜索引擎</translation>
 <translation id="3482805106082349287">使用键盘、语音、无痕模式或相机进行搜索</translation>
-<translation id="3487903178221457900">其他人（包括应用）可能会有权访问导出的文件。导出后，系统会从 Chrome 中删除您的密码。</translation>
+<translation id="3487903178221457900">其他人（包括应用）可能会有权访问导出的文件。导出后，系统会从 Ultimatum 中删除您的密码。</translation>
 <translation id="3488199663160411179">姓名</translation>
 <translation id="3493531032208478708"><ph name="BEGIN_LINK" />详细了解<ph name="END_LINK" />推荐内容</translation>
 <translation id="3499246418971111862">chrome_qrcode_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="350276055892098337">按从旧到新排序</translation>
 <translation id="3507132249039706973">已开启标准保护</translation>
-<translation id="3509330069915219067">设备已离线。Chrome 无法检查是否有更新。</translation>
+<translation id="3509330069915219067">设备已离线。Ultimatum 无法检查是否有更新。</translation>
 <translation id="3513019849832307207">加入并打开</translation>
 <translation id="3513704683820682405">增强现实</translation>
 <translation id="3516053221628030540">前往 Google Play</translation>
@@ -615,10 +615,10 @@
 <translation id="3623240789707551553">{DOMAIN_COUNT,plural, =1{+ 1 个网站}other{+ # 个网站}}</translation>
 <translation id="3625870480639975468">重置缩放</translation>
 <translation id="3631987586758005671">正在分享给<ph name="DEVICE_NAME" /></translation>
-<translation id="3635073343384702370">您需要先保存密码，然后才能使用 Chrome 的密码检查功能</translation>
+<translation id="3635073343384702370">您需要先保存密码，然后才能使用 Ultimatum 的密码检查功能</translation>
 <translation id="3636940436873918441">首选语言</translation>
-<translation id="3637744895182738742">如果您忘记了口令或想更改此设置，请<ph name="BEGIN_LINK" />删除您账号中的 Chrome 数据<ph name="END_LINK" />。</translation>
-<translation id="3641581193271938629">已关闭 Chrome 查找功能选择启用选项</translation>
+<translation id="3637744895182738742">如果您忘记了口令或想更改此设置，请<ph name="BEGIN_LINK" />删除您账号中的 Ultimatum 数据<ph name="END_LINK" />。</translation>
+<translation id="3641581193271938629">已关闭 Ultimatum 查找功能选择启用选项</translation>
 <translation id="3647019414263135904">打开或关闭上下文弹出式窗口</translation>
 <translation id="3653111872753786013"><ph name="WEBSITE_TITLE" />：<ph name="WEBSITE_URL" /></translation>
 <translation id="3674208116086565128">在 Google 应用中打开“首页”标签页</translation>
@@ -636,7 +636,7 @@
 <translation id="3710501561113687889">如果您继续操作，<ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> 会将您的<ph name="FIELDS_STRING" />分享给此网站。</translation>
 <translation id="3710560693796335511">协作</translation>
 <translation id="3714430408451673233">标签页底部动作条已半屏打开。</translation>
-<translation id="3718765429352682176">您可能会看到在 Chrome 中打开了链接的其他应用的历史记录。</translation>
+<translation id="3718765429352682176">您可能会看到在 Ultimatum 中打开了链接的其他应用的历史记录。</translation>
 <translation id="3721119614952978349">您与 Google</translation>
 <translation id="3727000368239390918">登录后即可将标签页等信息同步到您的所有设备上</translation>
 <translation id="3737319253362202215">翻译设置</translation>
@@ -690,8 +690,8 @@
 <translation id="3943322906274039960"><ph name="TAB_TITLE" />，固定的画中画标签页</translation>
 <translation id="3950820424414687140">登录</translation>
 <translation id="395377504920307820">在不登录账号的情况下使用</translation>
-<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{待准备就绪后，Chrome 即会加载您的网页}other{待准备就绪后，Chrome 即会加载您的网页}}</translation>
-<translation id="3969142555815019568">Chrome 无法检查您的密码</translation>
+<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{待准备就绪后，Ultimatum 即会加载您的网页}other{待准备就绪后，Ultimatum 即会加载您的网页}}</translation>
+<translation id="3969142555815019568">Ultimatum 无法检查您的密码</translation>
 <translation id="3969863827134279083">上移</translation>
 <translation id="397105322502079400">正在计算...</translation>
 <translation id="397583555483684758">同步功能已停止工作</translation>
@@ -702,10 +702,10 @@
 <translation id="3987993985790029246">复制链接</translation>
 <translation id="3994236846568425219">在设备开启深色主题时启用深色主题</translation>
 <translation id="4000212216660919741">离线版首页</translation>
-<translation id="4000670338830950598">通过突出显示的项目自定义和控制 Google Chrome</translation>
+<translation id="4000670338830950598">通过突出显示的项目自定义和控制 Ultimatum</translation>
 <translation id="4015643064997321279">{NUM_PASSWORDS,plural, =1{您的 Google 账号中有 1 个密码已泄露}other{您的 Google 账号中有 # 个密码已泄露}}</translation>
 <translation id="4016425174436051808">无法关注。出了点问题。</translation>
-<translation id="4023638601467301498">如需在您的所有设备上获取书签等信息，请登录 Chrome</translation>
+<translation id="4023638601467301498">如需在您的所有设备上获取书签等信息，请登录 Ultimatum</translation>
 <translation id="4024768890073681126">您的浏览器由您的家长管理</translation>
 <translation id="4027569221211770437">“<ph name="FOLDER_TITLE" />”文件夹</translation>
 <translation id="4034817413553209278">{HOURS,plural, =1{# 小时}other{# 小时}}</translation>
@@ -745,13 +745,13 @@
 <translation id="4180726336228139707">仅在此设备上</translation>
 <translation id="4181841719683918333">语言</translation>
 <translation id="4188221736490993796">按从 Z 到 A 排序</translation>
-<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{Chrome 已阻止此网站发送通知，因为其包含网络垃圾或欺骗性内容}other{Chrome 已阻止这些网站发送通知，因为其包含网络垃圾或欺骗性内容}}</translation>
+<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{Ultimatum 已阻止此网站发送通知，因为其包含网络垃圾或欺骗性内容}other{Ultimatum 已阻止这些网站发送通知，因为其包含网络垃圾或欺骗性内容}}</translation>
 <translation id="4195643157523330669">在新标签页中打开</translation>
 <translation id="4197828496439691735">{NUM_TABS,plural, =1{此设备上的 1 个标签页}other{此设备上的 # 个标签页}}</translation>
 <translation id="4198268995694216131">更多网站</translation>
 <translation id="4198423547019359126">没有可用的下载内容保存位置</translation>
 <translation id="4209029522667123437"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> • 您曾通过该账号访问此网站</translation>
-<translation id="4214315110991671325">如果您允许使用 Cookie，Chrome 便可能会使用 Cookie 进行预加载。</translation>
+<translation id="4214315110991671325">如果您允许使用 Cookie，Ultimatum 便可能会使用 Cookie 进行预加载。</translation>
 <translation id="421517251707893998">点按“固定此快捷方式”</translation>
 <translation id="4216511743389425832">读出此网页的内容</translation>
 <translation id="4217657297368492684"><ph name="TAB_TITLE" />，选中的且固定的画中画无痕式标签页</translation>
@@ -759,7 +759,7 @@
 <translation id="4225895483398857530">工具栏中的快捷方式</translation>
 <translation id="4232376164796433044">密码和自动填充</translation>
 <translation id="4242533952199664413">打开“设置”</translation>
-<translation id="424864128008805179">要在 Chrome 中退出账号吗？</translation>
+<translation id="424864128008805179">要在 Ultimatum 中退出账号吗？</translation>
 <translation id="4249955472157341256">按新近度排序</translation>
 <translation id="4255841059940367080">根据系统向 Google 发送的浏览数据，实时提供 AI 赋能的保护，防范危险的网站、下载内容和扩展程序</translation>
 <translation id="4256782883801055595">开源许可</translation>
@@ -768,7 +768,7 @@
 <translation id="4270730597186910506">跟踪或取消跟踪商品。</translation>
 <translation id="4277529130885813215">换一部设备</translation>
 <translation id="427987768447457592">新标签页分组</translation>
-<translation id="4282440837784183472">您的组织 (<ph name="MANAGED_DOMAIN" />) 负责管理您登录的账号和 Chrome 的使用方式。您的管理员可以设置或限制某些功能。</translation>
+<translation id="4282440837784183472">您的组织 (<ph name="MANAGED_DOMAIN" />) 负责管理您登录的账号和 Ultimatum 的使用方式。您的管理员可以设置或限制某些功能。</translation>
 <translation id="4283234489712362947"><ph name="TAB_TITLE" />，画中画无痕式标签页</translation>
 <translation id="4285498937028063278">取消固定</translation>
 <translation id="4285846616383034558">Cookie、缓存和其他网站数据</translation>
@@ -784,10 +784,10 @@
 <translation id="4311652497846705514">打开 PDF 文件？</translation>
 <translation id="4313895677475587452">{NUM_SUSPICIOUS_NOTIFICATIONS,plural, =1{疑似垃圾内容}other{疑似垃圾内容 (#)}}</translation>
 <translation id="4320177379694898372">未连接到互联网</translation>
-<translation id="4326079409704643112">如要将 Chrome 数据保存在您的 Google 账号中并使用这些数据，请验证是您本人在操作</translation>
+<translation id="4326079409704643112">如要将 Ultimatum 数据保存在您的 Google 账号中并使用这些数据，请验证是您本人在操作</translation>
 <translation id="433213510553688132">正在关注…</translation>
 <translation id="4335835283689002019">“安全浏览”功能已关闭</translation>
-<translation id="4343250402091037179">若要在某一特定网站或 Chrome 的某个部分中进行搜索，请先在地址栏中输入相应的快捷字词，然后按您的首选键盘快捷键。</translation>
+<translation id="4343250402091037179">若要在某一特定网站或 Ultimatum 的某个部分中进行搜索，请先在地址栏中输入相应的快捷字词，然后按您的首选键盘快捷键。</translation>
 <translation id="4351244548802238354">关闭对话框</translation>
 <translation id="4352287748243729941">要使用您的 <ph name="PROVIDER" /> 密码吗？</translation>
 <translation id="4355272626458588338">您可为重要网页添加书签以便返回查看</translation>
@@ -800,7 +800,7 @@
 <translation id="4384468725000734951">目前使用的搜索引擎是搜狗</translation>
 <translation id="4387647248986092471">设置车载系统个人资料锁定方式</translation>
 <translation id="4387817230000841154">打开下载内容页面</translation>
-<translation id="4395046795145457714">已全屏打开 Chrome 查找功能选择启用底部动作条</translation>
+<translation id="4395046795145457714">已全屏打开 Ultimatum 查找功能选择启用底部动作条</translation>
 <translation id="4398561997852463382"><ph name="TAB_TITLE" />，已选择的固定无痕式标签页，正在录制内容</translation>
 <translation id="4402611456429872546"><ph name="LANG" /> - 正在下载…</translation>
 <translation id="4404568932422911380">没有书签</translation>
@@ -822,16 +822,16 @@
 <translation id="4460822871039013969"><ph name="TAB_TITLE" />，已选择的固定标签页，正在录制内容</translation>
 <translation id="4460861538906892109">{ITEMS_COUNT,plural, =1{1 个书签}other{# 个书签}}</translation>
 <translation id="4478161224666880173">您可以在此网站上使用 <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> 账号。如需继续，请登录 <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />。</translation>
-<translation id="4479972344484327217">正在为 Chrome 安装<ph name="MODULE" />…</translation>
+<translation id="4479972344484327217">正在为 Ultimatum 安装<ph name="MODULE" />…</translation>
 <translation id="4484496141267039529">无网络连接。请稍后再试。</translation>
-<translation id="4487967297491345095">Chrome 的所有应用数据都将被永久删除，其中包括所有文件、设置、账号、数据库等。</translation>
+<translation id="4487967297491345095">Ultimatum 的所有应用数据都将被永久删除，其中包括所有文件、设置、账号、数据库等。</translation>
 <translation id="4494315997125191493">选择“管理”即可查看所有窗口</translation>
 <translation id="4494806687727322324">您的管理员已开启密码保存功能</translation>
 <translation id="4508528996305412043">动态卡片上的菜单已打开</translation>
 <translation id="4509741852167209430">为了衡量各自的广告效果，网站之间会分享有限类型的数据，例如您在访问某个网站后是否购买了商品。</translation>
 <translation id="4513387527876475750">{DAYS,plural, =1{# 天前}other{# 天前}}</translation>
 <translation id="451872707440238414">搜索书签</translation>
-<translation id="4521489764227272523">所选数据已从 Chrome 和同步的设备中移除。
+<translation id="4521489764227272523">所选数据已从 Ultimatum 和同步的设备中移除。
 
 不过，您的 Google 账号在 <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> 上可能还有其他形式的浏览记录（例如，在其他 Google 服务中的搜索记录和活动记录）。</translation>
 <translation id="4523326818319942067">过去 1 小时</translation>
@@ -853,10 +853,10 @@
 <translation id="4595276580892809760">附加图库中的图片</translation>
 <translation id="4595805675102978678">Google 账号错误</translation>
 <translation id="4601095002996233687">深入扫描可疑的下载内容。</translation>
-<translation id="4606559747793337066">当某个网站或应用请求以私密方式预加载其网页上的链接时，Chrome 会通过 Google 服务器（而不使用 Cookie）加密和预加载网页。这样一来，预加载的网站便无法得知您的身份。</translation>
+<translation id="4606559747793337066">当某个网站或应用请求以私密方式预加载其网页上的链接时，Ultimatum 会通过 Google 服务器（而不使用 Cookie）加密和预加载网页。这样一来，预加载的网站便无法得知您的身份。</translation>
 <translation id="4616150815774728855">打开<ph name="WEBAPK_NAME" /></translation>
 <translation id="4619564267100705184">请验证是您本人在操作</translation>
-<translation id="4624065194742029982">Chrome 无痕模式</translation>
+<translation id="4624065194742029982">Ultimatum 无痕模式</translation>
 <translation id="4634124774493850572">使用密码</translation>
 <translation id="463471994228293091">{PASSWORDS_COUNT,plural, =1{有 1 个密码和其他内容只保存到此设备上。若要在其他设备上使用它们，请将它们保存到您的 Google 账号中。}other{有 # 个密码和其他内容只保存到此设备上。若要在其他设备上使用它们，请将它们保存到您的 Google 账号中。}}</translation>
 <translation id="4640331037679501949">{NUM_PASSWORDS,plural, =1{有 1 个密码已遭泄露}other{有 # 个密码已遭泄露}}</translation>
@@ -871,7 +871,7 @@
 <translation id="4668347365065281350">网站存储的所有数据，包括 Cookie 及其他本地存储的数据</translation>
 <translation id="4673702426794876519">无痕式窗口</translation>
 <translation id="4675298276894277358">此网站不会再显示</translation>
-<translation id="4678082183394354975">Chrome 中已为网站开启深色主题</translation>
+<translation id="4678082183394354975">Ultimatum 中已为网站开启深色主题</translation>
 <translation id="4682306524980568490">只能显示 <ph name="MAX_INSTANCE_COUNT" /> 个窗口</translation>
 <translation id="4684427112815847243">同步所有数据</translation>
 <translation id="4685741273709472646">从下拉列表中选择</translation>
@@ -893,7 +893,7 @@
 <translation id="4738836084190194332">上次同步时间：<ph name="WHEN" /></translation>
 <translation id="474121291218385686">按应用过滤</translation>
 <translation id="4741753828624614066">您会在地址栏中获得经过改进的建议</translation>
-<translation id="4742795653798179840">已删除 Chrome 数据</translation>
+<translation id="4742795653798179840">已删除 Ultimatum 数据</translation>
 <translation id="4742970037960872810">撤消突出显示</translation>
 <translation id="4749960740855309258">打开新标签页</translation>
 <translation id="4753600213727157212">您已使用<ph name="USER_NAME" />的身份登录。<ph name="USER_EMAIL" />。Google 账号错误，打开设置。</translation>
@@ -911,21 +911,21 @@
 <translation id="4782929588435725897"><ph name="SEARCH_ENGINE" />是默认搜索引擎</translation>
 <translation id="4784349455504343791"><ph name="WEBSITE_ORIGIN" /> 想使用您数字钱包中的个人信息。</translation>
 <translation id="4787736314074622408">是否要删除 <ph name="ITEM_TITLE" />？</translation>
-<translation id="4793679854893018356">了解 Chrome 如何保障您的安全</translation>
+<translation id="4793679854893018356">了解 Ultimatum 如何保障您的安全</translation>
 <translation id="4794291718671962615">(<ph name="MEGABYTES" />) <ph name="URL" /></translation>
 <translation id="4807098396393229769">持卡人姓名</translation>
 <translation id="480990236307250886">打开主页</translation>
 <translation id="4822710610088666676">已关闭并保存“<ph name="TAB_GROUP_TITLE" />”标签页分组</translation>
 <translation id="482405935591409882">搜索标签页和标签页分组</translation>
 <translation id="4834250788637067901">Google Pay 中存储的支付方式、优惠和地址信息</translation>
-<translation id="4835385943915508971">Chrome 无权访问请求的资源。</translation>
+<translation id="4835385943915508971">Ultimatum 无权访问请求的资源。</translation>
 <translation id="483742037940503070">{TAB_COUNT,plural, =1{将包含 <ph name="TAB_COUNT_ONE" /> 个标签页（颜色为<ph name="COLOR_NAME" />）的标签页分组恢复为新的背景标签页分组。}other{将包含 <ph name="TAB_COUNT_MANY" /> 个标签页（颜色为<ph name="COLOR_NAME" />）的标签页分组恢复为新的背景标签页分组。}}</translation>
 <translation id="4849731766219625109">使用您的 <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> 账号</translation>
 <translation id="4850886885716139402">查看</translation>
 <translation id="4852014461738377247">正在登录\u2026</translation>
 <translation id="4860895144060829044">致电</translation>
 <translation id="4864369630010738180">正在登录…</translation>
-<translation id="4866368707455379617">无法为 Chrome 安装<ph name="MODULE" /></translation>
+<translation id="4866368707455379617">无法为 Ultimatum 安装<ph name="MODULE" /></translation>
 <translation id="4871568871368204250">关闭同步功能</translation>
 <translation id="487567923005969537">启用 AI 模式</translation>
 <translation id="4875775213178255010">内容建议</translation>
@@ -934,27 +934,27 @@
 <translation id="4880127995492972015">翻译…</translation>
 <translation id="4881695831933465202">打开</translation>
 <translation id="488187801263602086">重命名文件</translation>
-<translation id="4885273946141277891">Chrome 实例数量已超出上限。</translation>
+<translation id="4885273946141277891">Ultimatum 实例数量已超出上限。</translation>
 <translation id="4890973535105146893">您的 Google 账号中没有保存任何密码</translation>
 <translation id="4905823827770127520">包含页面链接</translation>
 <translation id="4908869848243824489">Google 探索</translation>
 <translation id="4910889077668685004">付款应用</translation>
 <translation id="4911042367886397055"><ph name="USER_NAME" />，欢迎回来！</translation>
 <translation id="4913169188695071480">停止刷新</translation>
-<translation id="4921224083091001889">如需在您的所有设备上获取密码等信息，请以 <ph name="EMAIL" /> 的身份登录 Chrome</translation>
+<translation id="4921224083091001889">如需在您的所有设备上获取密码等信息，请以 <ph name="EMAIL" /> 的身份登录 Ultimatum</translation>
 <translation id="4923173329789776645">您的组织不建议下载</translation>
 <translation id="4925120120285606924">屏幕截图 <ph name="CURRENT_DATE_ISO" /></translation>
 <translation id="4926901776383726965">您可保存图片和文件以供离线查看或在其他应用中分享</translation>
 <translation id="492699891214363151">{BOOKMARKS_COUNT,plural, =1{有 1 个书签和其他内容只保存到此设备上。若要在其他设备上使用它们，请将它们保存到您的 Google 账号中。}other{有 # 个书签和其他内容只保存到此设备上。若要在其他设备上使用它们，请将它们保存到您的 Google 账号中。}}</translation>
-<translation id="4932247056774066048">您将要退出由 <ph name="DOMAIN_NAME" /> 管理的账号，因此您的 Chrome 数据将会从这部设备中删除，但仍会保留在您的 Google 账号中。</translation>
+<translation id="4932247056774066048">您将要退出由 <ph name="DOMAIN_NAME" /> 管理的账号，因此您的 Ultimatum 数据将会从这部设备中删除，但仍会保留在您的 Google 账号中。</translation>
 <translation id="4943703118917034429">虚拟现实</translation>
 <translation id="4943872375798546930">找不到结果</translation>
 <translation id="4957722034734105353">了解详情...</translation>
 <translation id="4959115606310463263">已打开用于选择登录账号的底部动作条，并以一半高度显示</translation>
 <translation id="4961107849584082341">将此页面翻译成任何语言</translation>
-<translation id="4964614743143953889">在检测到不安全的网站和下载内容时，Chrome 会向您发出警告</translation>
+<translation id="4964614743143953889">在检测到不安全的网站和下载内容时，Ultimatum 会向您发出警告</translation>
 <translation id="496607651705915226">若要将新密码保存到您的 Google 账号中并使用新密码，请更新 Google Play 服务</translation>
-<translation id="4971753085054504448">请尝试搜索其他内容，或打开完整的 Chrome 历史记录以查看更多结果。</translation>
+<translation id="4971753085054504448">请尝试搜索其他内容，或打开完整的 Ultimatum 历史记录以查看更多结果。</translation>
 <translation id="497421865427891073">前进</translation>
 <translation id="497983151715419057">在此处查看闲置标签页和分组</translation>
 <translation id="498624032394115435">知道链接的任何人都能修改所有标签页。</translation>
@@ -981,7 +981,7 @@
 <translation id="506254248375231072">没有任何标签页</translation>
 <translation id="5075939510584558547">直接保存，不加密</translation>
 <translation id="5078638979202084724">为所有标签页添加书签</translation>
-<translation id="5085038751173179818">登录此网站和 Chrome，即可在所有设备上获取保存的书签及其他信息</translation>
+<translation id="5085038751173179818">登录此网站和 Ultimatum，即可在所有设备上获取保存的书签及其他信息</translation>
 <translation id="5088347662971855383">固定 Gemini</translation>
 <translation id="5091199029769593641">不久之后，当打开新标签页时，您将看到来自<ph name="SITE_NAME" />的故事。您关注的网站会保存在您的 Google 账号中。您可在“探索”设置中管理它们。</translation>
 <translation id="509429900233858213">出现错误。</translation>
@@ -989,7 +989,7 @@
 <translation id="510275257476243843">还剩 1 小时</translation>
 <translation id="5114895953710637392">应用过滤器工作表已关闭。</translation>
 <translation id="5115811374190515607">已移至<ph name="PRODUCT_NAME" /></translation>
-<translation id="5116239826668864748">当您点按消息、文档和其他应用中的链接时，可以随时使用 Chrome 打开链接</translation>
+<translation id="5116239826668864748">当您点按消息、文档和其他应用中的链接时，可以随时使用 Ultimatum 打开链接</translation>
 <translation id="5118713593561876160">兴趣</translation>
 <translation id="5122378528687922675">如需帮助，请找家长（<ph name="PARENT_NAME_1" />或<ph name="PARENT_NAME_2" />）帮忙</translation>
 <translation id="5123685120097942451">无痕式标签页</translation>
@@ -1012,11 +1012,11 @@
 <translation id="5206168361184759344">{FILE_COUNT,plural, =1{正在下载文件…}other{正在下载 # 个文件…}}</translation>
 <translation id="5210286577605176222">跳转到上一个标签页</translation>
 <translation id="5210365745912300556">关闭标签页</translation>
-<translation id="5212800876504289412">重启 Chrome 即可完成此更改。重启后，标签页会自动重新打开。</translation>
+<translation id="5212800876504289412">重启 Ultimatum 即可完成此更改。重启后，标签页会自动重新打开。</translation>
 <translation id="5213114823401215820">重新打开已关闭的群组</translation>
 <translation id="5215957675041756913">控制您的数据和账号</translation>
 <translation id="5218324087477576825">卡号（必填）</translation>
-<translation id="5221437554987713282"><ph name="PERMISSION_1" />、<ph name="PERMISSION_2" />等 <ph name="SEPARATOR" /> 由于您近期未访问过此网站，Chrome 已移除这些权限</translation>
+<translation id="5221437554987713282"><ph name="PERMISSION_1" />、<ph name="PERMISSION_2" />等 <ph name="SEPARATOR" /> 由于您近期未访问过此网站，Ultimatum 已移除这些权限</translation>
 <translation id="5222676887888702881">退出</translation>
 <translation id="5226378907213531272">每次使用车载系统时，您都需要解锁屏幕</translation>
 <translation id="5227554086496586518">点按即可查看搜索结果</translation>
@@ -1036,7 +1036,7 @@
 <translation id="5313967007315987356">添加网站</translation>
 <translation id="5316947901395241499">您的管理员已关闭密码保存功能</translation>
 <translation id="5317780077021120954">保存</translation>
-<translation id="5319359161174645648">Google 推荐使用 Chrome</translation>
+<translation id="5319359161174645648">Google 推荐使用 Ultimatum</translation>
 <translation id="5326246328175179736">您无法使用此账号登录</translation>
 <translation id="5327248766486351172">名称</translation>
 <translation id="5328542107300944283">通过 <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> 账号使用</translation>
@@ -1049,7 +1049,7 @@
 <translation id="5375374982898812658">您将立即失去对标签页分组“<ph name="GROUP_NAME" />”的访问权限，并且该分组将从您的所有设备中删除</translation>
 <translation id="5375577065097716013">使用 Google 智能镜头搜索图片<ph name="BEGIN_NEW" />新<ph name="END_NEW" /></translation>
 <translation id="5390367025924544771"><ph name="WEBSITE_ORIGIN" /> 想使用您数字钱包中的个人信息。除非您信任此网站，否则请勿继续操作。危险网站可能会诱骗您泄露法定全名或身份证号码等信息。</translation>
-<translation id="5395376160638294582">请确保您可以一直使用 Google 账号中的 Chrome 数据</translation>
+<translation id="5395376160638294582">请确保您可以一直使用 Google 账号中的 Ultimatum 数据</translation>
 <translation id="539881862970320163">建议使用安全系数高的密码。键盘已隐藏。</translation>
 <translation id="5409881200985013443">将“<ph name="ONE_TIME_CODE" />”提交至“<ph name="CLIENT_NAME" />”？</translation>
 <translation id="5410300144953132176"><ph name="OWNER_FULL_NAME" /> (<ph name="OWNER_EMAIL" />) 邀请您加入一个标签页分组。知道链接的任何人都能修改所有标签页，因此请谨慎加入。链接将在 48 小时后失效。</translation>
@@ -1061,7 +1061,7 @@
 <translation id="543271133149552180"><ph name="TAB_TITLE" />，多选状态下的画中画无痕式标签页</translation>
 <translation id="5436928407363358055">同步历史记录和标签页，无缝衔接浏览体验</translation>
 <translation id="5438292632479953702">再次下载</translation>
-<translation id="5439191312780166229">基于比“标准保护”更全面的网站数据进行分析，针对危险网站（甚至是 Google 之前未知的网站）向您发出警告。您可以选择忽略 Chrome 警告。</translation>
+<translation id="5439191312780166229">基于比“标准保护”更全面的网站数据进行分析，针对危险网站（甚至是 Google 之前未知的网站）向您发出警告。您可以选择忽略 Ultimatum 警告。</translation>
 <translation id="5441137934526263133">网站无法正常运行？这是因为第三方 Cookie 已被屏蔽</translation>
 <translation id="5441466871879044658">翻译成所选语言</translation>
 <translation id="5444999712122199445">返回网站</translation>
@@ -1072,7 +1072,7 @@
 <translation id="5469852975082458401">您可以使用文本光标浏览网页。按 F7 可关闭。</translation>
 <translation id="5471273988133666918">无法移动标签页“<ph name="TAB_TITLE" />”</translation>
 <translation id="548278423535722844">在地图应用中打开</translation>
-<translation id="5489222148748465285">要让 Chrome 继续查找吗？</translation>
+<translation id="5489222148748465285">要让 Ultimatum 继续查找吗？</translation>
 <translation id="5490848366863949315"><ph name="TAB_TITLE" />，多选状态下的画中画标签页</translation>
 <translation id="5494920125229734069">全选</translation>
 <translation id="549660026907543296">以<ph name="MEMBER_FULL_NAME" />的身份加入</translation>
@@ -1080,7 +1080,7 @@
 <translation id="5526281268548144413">无法在多个窗口中关闭</translation>
 <translation id="5532536403031755365">借助增强型保护功能，再添一层保障，有效抵御在线威胁</translation>
 <translation id="5548606607480005320">安全检查</translation>
-<translation id="5554520618550346933">如果 Chrome 发现您使用的某个密码已被发布到网上，就会发出警告。在这个过程中，您的密码和用户名始终加密，任何人员/任何一方（包括 Google）都无法读取。</translation>
+<translation id="5554520618550346933">如果 Ultimatum 发现您使用的某个密码已被发布到网上，就会发出警告。在这个过程中，您的密码和用户名始终加密，任何人员/任何一方（包括 Google）都无法读取。</translation>
 <translation id="5555525474779371165">选择所需的“安全浏览”功能保护级别</translation>
 <translation id="5556459405103347317">重新加载</translation>
 <translation id="555671485580955310">同步历史记录和标签页</translation>
@@ -1093,10 +1093,10 @@
 <translation id="5578795271662203820">在<ph name="SEARCH_ENGINE" />中搜索此图片</translation>
 <translation id="5596627076506792578">更多选项</translation>
 <translation id="5599455543593328020">无痕模式</translation>
-<translation id="5601180634394228718">如需更多使用数据来提升 Chrome 体验的设置，请前往 <ph name="BEGIN_LINK" />Google 服务<ph name="END_LINK" />。</translation>
+<translation id="5601180634394228718">如需更多使用数据来提升 Ultimatum 体验的设置，请前往 <ph name="BEGIN_LINK" />Google 服务<ph name="END_LINK" />。</translation>
 <translation id="5601924940067278327">在您的所有设备上获取标签页等信息</translation>
 <translation id="5611398002774823980">保存到账号</translation>
-<translation id="5613381935190035031">如需在您的所有设备上获取标签页等信息，请以 <ph name="EMAIL" /> 的身份登录 Chrome</translation>
+<translation id="5613381935190035031">如需在您的所有设备上获取标签页等信息，请以 <ph name="EMAIL" /> 的身份登录 Ultimatum</translation>
 <translation id="5614625640221885312">登录后即可在任何设备上使用您的书签、密码等信息</translation>
 <translation id="5619633276517849615">您的组织已开启“安全浏览”功能</translation>
 <translation id="5620163320393916465">尚未保存任何密码</translation>
@@ -1112,21 +1112,21 @@
 <translation id="5657871969392618475">为确保您的信息安全，已为您开启个人资料锁定</translation>
 <translation id="5659593005791499971">邮箱</translation>
 <translation id="5665379678064389456">在<ph name="APP_NAME" />中创建活动</translation>
-<translation id="5683547024293500885">Chrome 无法检查是否有更新</translation>
+<translation id="5683547024293500885">Ultimatum 无法检查是否有更新</translation>
 <translation id="5683916195767086779">标签页分组</translation>
 <translation id="5686790454216892815">文件名过长</translation>
 <translation id="569536719314091526">通过“更多选项”按钮将此页面翻译成任何语言</translation>
-<translation id="5696597120588531049">Chrome 有助于保护您免受数据泄露、不安全网站等问题的影响</translation>
+<translation id="5696597120588531049">Ultimatum 有助于保护您免受数据泄露、不安全网站等问题的影响</translation>
 <translation id="5698878456427040674">检查所选账号是否受支持。</translation>
 <translation id="5709213329446699338"><ph name="SITE" /> 想连接到串行端口</translation>
 <translation id="5715150588940290235">要删除已保存的安全码吗？</translation>
-<translation id="571930967925877633">您的书签、历史记录和其他 Chrome 数据将不再同步到您的 Google 账号中</translation>
+<translation id="571930967925877633">您的书签、历史记录和其他 Ultimatum 数据将不再同步到您的 Google 账号中</translation>
 <translation id="572328651809341494">最近打开的标签页</translation>
 <translation id="5728072125198221967">关联的 Google 服务</translation>
 <translation id="5734658507307260911"><ph name="TAB_TITLE" />，已固定的无痕式标签页，正在播放音频</translation>
 <translation id="5744751019568455640">您可以在这里选择系统朗读网页内容时要使用的声音。如果您喜欢这个声音，并且希望我继续使用它，只要点按声音名称就可以了。</translation>
 <translation id="574845902699630049">以<ph name="OWNER_FULL_NAME" />的身份分享</translation>
-<translation id="5749068826913805084">Chrome 需要具备存储空间使用权限，才能下载文件。</translation>
+<translation id="5749068826913805084">Ultimatum 需要具备存储空间使用权限，才能下载文件。</translation>
 <translation id="5749237766298580851">已关闭 <ph name="SEPARATOR" /> 不推荐</translation>
 <translation id="5752232708629533680">仅分享 GIF 图片</translation>
 <translation id="5753570386948603678">从下载记录中删除</translation>
@@ -1145,14 +1145,14 @@
 <translation id="5811144606237321538"><ph name="TAB_TITLE" />，已选择的多个固定标签页之一，已设为静音</translation>
 <translation id="5814749351757353073">随时掌握您最喜爱的网站的最新动态</translation>
 <translation id="5823093032261493462">您仍要从 <ph name="DOWNLOAD_DOMAIN" /> 下载“<ph name="FILE_NAME" />”吗？</translation>
-<translation id="5825135637446025843">Chrome 重新启动后，系统将使用您在新提供商处保存的信息自动填充密码、通行密钥、地址、支付方式和其他信息。</translation>
-<translation id="5828921839638612740">您可以在 Chrome 的“设置”页面中删除数据</translation>
+<translation id="5825135637446025843">Ultimatum 重新启动后，系统将使用您在新提供商处保存的信息自动填充密码、通行密钥、地址、支付方式和其他信息。</translation>
+<translation id="5828921839638612740">您可以在 Ultimatum 的“设置”页面中删除数据</translation>
 <translation id="5829586821381540080">已保存至“<ph name="FOLDER_NAME" />”</translation>
 <translation id="583281660410589416">未知</translation>
 <translation id="5833984609253377421">分享链接</translation>
-<translation id="5839058148541733625">Chrome 恐龙</translation>
+<translation id="5839058148541733625">Ultimatum 恐龙</translation>
 <translation id="5841444063256914865">您仍要下载“<ph name="FILE_NAME" />”吗？</translation>
-<translation id="5847265694842662173">Chrome 已阻止存在滥用行为以及您未使用的网站发送通知</translation>
+<translation id="5847265694842662173">Ultimatum 已阻止存在滥用行为以及您未使用的网站发送通知</translation>
 <translation id="5848257610304005265">要使用“<ph name="APP_NAME" />”打开 PDF 文件吗？</translation>
 <translation id="5849288995120328556">要停止分享吗？</translation>
 <translation id="5853623416121554550">已暂停</translation>
@@ -1166,8 +1166,8 @@
 <translation id="5865733239029070421">自动将使用情况统计信息和崩溃报告发送给 Google</translation>
 <translation id="5869522115854928033">已保存的密码</translation>
 <translation id="5870416898561279542">重复的标签页和分组或已闲置 <ph name="DAYS_INACTIVE" /> 天的标签页和分组会移至此处，<ph name="AUTODELETE_SECTION" />。您随时可在<ph name="DECLUTTER_SETTINGS_TITLE" />中更改此设置。</translation>
-<translation id="587735546353481577">若要关注某个网站，请转到该网站，打开 Chrome 菜单，然后点按“关注”。</translation>
-<translation id="5885378508678660271">通知 <ph name="SEPARATOR" /> Chrome 撤消了这些权限，因为此网站具有危险性</translation>
+<translation id="587735546353481577">若要关注某个网站，请转到该网站，打开 Ultimatum 菜单，然后点按“关注”。</translation>
+<translation id="5885378508678660271">通知 <ph name="SEPARATOR" /> Ultimatum 撤消了这些权限，因为此网站具有危险性</translation>
 <translation id="5899667542927581604">未关闭任何通行密钥表格</translation>
 <translation id="5907542076239273525">书签已保存到“<ph name="FOLDER_NAME" />”中。</translation>
 <translation id="5911301511366365629"><ph name="TAB_TITLE" />，已选择的无痕式标签页，正在播放音频</translation>
@@ -1178,23 +1178,23 @@
 <translation id="5942872142862698679">目前使用的搜索引擎是 Google</translation>
 <translation id="5945035219773565305">当前建议：<ph name="RECOMMENDATION" /></translation>
 <translation id="5951119116059277034">目前查看的是实际网页</translation>
-<translation id="5956665950594638604">在新标签页中打开 Chrome 帮助中心</translation>
+<translation id="5956665950594638604">在新标签页中打开 Ultimatum 帮助中心</translation>
 <translation id="59577092665511740">选择一个账号。</translation>
 <translation id="5958275228015807058">在“下载内容”中查找您的文件和网页</translation>
-<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{Chrome 已阻止您近期未访问过的网站向您发送通知}other{Chrome 已阻止您近期未访问过的网站向您发送通知}}</translation>
+<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{Ultimatum 已阻止您近期未访问过的网站向您发送通知}other{Ultimatum 已阻止您近期未访问过的网站向您发送通知}}</translation>
 <translation id="5962718611393537961">点按即可收起</translation>
 <translation id="5964869237734432770">停止获取图片说明</translation>
 <translation id="5972844218283131174">取消全选</translation>
 <translation id="5975083100439434680">缩小</translation>
 <translation id="5977976211062815271">在这部设备上</translation>
 <translation id="5978661847409534366">{ITEMS_COUNT,plural, =1{您的阅读清单中有 1 个页面}other{您的阅读清单中有 # 个页面}}</translation>
-<translation id="5992182727984874868"><ph name="PERMISSION_1" />、<ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> 由于您近期未访问过此网站，Chrome 已移除这些权限</translation>
+<translation id="5992182727984874868"><ph name="PERMISSION_1" />、<ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> 由于您近期未访问过此网站，Ultimatum 已移除这些权限</translation>
 <translation id="5995726099713306770">再次下载此页面？</translation>
 <translation id="6000066717592683814">继续使用 Google</translation>
 <translation id="6000203700195075278">重新关注</translation>
 <translation id="6011308810877101166">改进搜索建议</translation>
 <translation id="6013305291643746595">按从旧到新排序</translation>
-<translation id="6022659036123304283">定制您的专属 Chrome</translation>
+<translation id="6022659036123304283">定制您的专属 Ultimatum</translation>
 <translation id="6026538407078977628">展开为全屏</translation>
 <translation id="6030719887161080597">管理网站用于衡量广告效果的信息</translation>
 <translation id="6039379616847168523">跳转到下一个标签页</translation>
@@ -1223,7 +1223,7 @@
 <translation id="6125864963080902918"><ph name="BEGIN_LINK" />更多详情<ph name="END_LINK" /></translation>
 <translation id="6127860394906721547">打开<ph name="COLOR_NAME" />的“<ph name="TITLE_OF_GROUP" />”标签页分组，其中包含网站 <ph name="URL_LIST" />。</translation>
 <translation id="6130303040046284160">最小化标签页</translation>
-<translation id="6132075343662013154">Chrome 会询问您是否保存密码</translation>
+<translation id="6132075343662013154">Ultimatum 会询问您是否保存密码</translation>
 <translation id="6134168885321518274">打开查找栏</translation>
 <translation id="6135608400322377268">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> 个标签页}other{<ph name="TAB_COUNT_MANY" /> 个标签页}}</translation>
 <translation id="6137022273846704445"><ph name="APP_NAME" /> 的语言</translation>
@@ -1234,10 +1234,10 @@
 <translation id="6146563240635539929">视频</translation>
 <translation id="614890671148262506">始终允许此网站发送通知</translation>
 <translation id="6150320133806434356">书签已保存</translation>
-<translation id="6150706324143004339">如要将 Chrome 数据保存在您的 Google 账号中并使用这些数据，请更新 Chrome</translation>
+<translation id="6150706324143004339">如要将 Ultimatum 数据保存在您的 Google 账号中并使用这些数据，请更新 Ultimatum</translation>
 <translation id="6154478581116148741">需在“设置”部分中开启屏幕锁定功能，才能从此设备中导出您的密码</translation>
 <translation id="6156323911414505561">显示书签栏</translation>
-<translation id="6162892189396105610">预加载 Chrome 认为您可能会访问的网页。</translation>
+<translation id="6162892189396105610">预加载 Ultimatum 认为您可能会访问的网页。</translation>
 <translation id="6165508094623778733">了解详情</translation>
 <translation id="6170675927290506430">前往通知设置页面</translation>
 <translation id="6184972259157699660"><ph name="TAB_TITLE" />，已设为静音的无痕式标签页</translation>
@@ -1246,7 +1246,7 @@
 <translation id="6193448654517602979">选择标签页</translation>
 <translation id="6196315980958524839">系统会将密码保存到此设备上的 Google 密码管理工具中</translation>
 <translation id="6202812185118613467">重新登录即可开始同步</translation>
-<translation id="6204781143409202534">Chrome 检测到 <ph name="DOMAIN" /> 可能发送了垃圾内容。</translation>
+<translation id="6204781143409202534">Ultimatum 检测到 <ph name="DOMAIN" /> 可能发送了垃圾内容。</translation>
 <translation id="6205314730813004066">广告隐私权设置</translation>
 <translation id="6210282067670792090">在地址栏中，将此键盘快捷键与用于搜索引擎和网站搜索的快捷字词结合使用</translation>
 <translation id="6210748933810148297">不是 <ph name="EMAIL" />？</translation>
@@ -1260,12 +1260,12 @@
 <translation id="6247557882553405851">Google 密码管理工具</translation>
 <translation id="6248988683584659830">搜索设置</translation>
 <translation id="6250847299079540062"><ph name="TAB_TITLE" />，已多选的固定无痕式标签页</translation>
-<translation id="6251449557817521191">在此处查看您的 Chrome 历史记录</translation>
+<translation id="6251449557817521191">在此处查看您的 Ultimatum 历史记录</translation>
 <translation id="6254139308321626268">您正在查看 PDF 文件</translation>
-<translation id="6255809143828972562">借助 Chrome 中的工具，您可以安全地浏览并掌控个人数据的安全</translation>
+<translation id="6255809143828972562">借助 Ultimatum 中的工具，您可以安全地浏览并掌控个人数据的安全</translation>
 <translation id="6264376385120300461">仍然下载</translation>
 <translation id="6264485186158353794">返回安全连接</translation>
-<translation id="6267106249090587268">通知 <ph name="SEPARATOR" /> Chrome 撤销了这些权限，因为此网站包含网络垃圾或欺骗性内容</translation>
+<translation id="6267106249090587268">通知 <ph name="SEPARATOR" /> Ultimatum 撤销了这些权限，因为此网站包含网络垃圾或欺骗性内容</translation>
 <translation id="6276708887952587684">查看网页源代码</translation>
 <translation id="6277522088822131679">打印该页面时出现问题，请重试。</translation>
 <translation id="6278428485366576908">主题</translation>
@@ -1281,7 +1281,7 @@
 <translation id="6312687380483398334">Web 应用（安静）</translation>
 <translation id="6315386555979018699">删除并继续</translation>
 <translation id="6316139424528454185">Android 版本不受支持</translation>
-<translation id="631839948975905034">退出 Chrome 时锁定无痕式窗口</translation>
+<translation id="631839948975905034">退出 Ultimatum 时锁定无痕式窗口</translation>
 <translation id="6324916366299863871">修改快捷方式</translation>
 <translation id="6324977638108296054">无法创建指向突出显示的内容的链接</translation>
 <translation id="6333140779060797560">通过<ph name="APPLICATION" />分享</translation>
@@ -1297,13 +1297,13 @@
 <translation id="6356893102071098867">确保您选择的是正确的账号</translation>
 <translation id="6363990818884053551">若要开始同步，请验证是您本人在操作</translation>
 <translation id="6364438453358674297">要从历史记录中移除建议吗？</translation>
-<translation id="6380100320871303656">更频繁地预加载 Chrome 认为您可能会访问的网页。此设置可能会消耗更多数据流量。</translation>
+<translation id="6380100320871303656">更频繁地预加载 Ultimatum 认为您可能会访问的网页。此设置可能会消耗更多数据流量。</translation>
 <translation id="6382848304055775421">正在导出</translation>
 <translation id="6388152137132427505">请务必谨慎分享。链接将在 48 小时后失效。</translation>
 <translation id="6394791151443660613">搜索：<ph name="SEARCH_QUERY" /></translation>
 <translation id="6397616442223433927">已恢复在线状态</translation>
 <translation id="6399363707848566877">您现在可以在此处轻松地为分组添加标签页</translation>
-<translation id="6401458660421980302">若要将此标签页发送到另一设备，请在该设备上登录 Chrome</translation>
+<translation id="6401458660421980302">若要将此标签页发送到另一设备，请在该设备上登录 Ultimatum</translation>
 <translation id="6404511346730675251">修改书签</translation>
 <translation id="6406506848690869874">同步</translation>
 <translation id="6408370409308816490"><ph name="TAB_TITLE" />，已选择的固定无痕式标签页，正在共享内容</translation>
@@ -1323,24 +1323,24 @@
 <translation id="6452534462676960500">新活动</translation>
 <translation id="6459045781120991510">调查问卷</translation>
 <translation id="6461962085415701688">无法打开文件</translation>
-<translation id="6464977750820128603">您可以查看自己在 Chrome 中访问的网站并为这些网站设置计时器。\n\nGoogle 会获取这些设有计时器的网站的相关信息以及您对这些网站的访问时长。这些信息会被用于改进“数字健康”应用。</translation>
+<translation id="6464977750820128603">您可以查看自己在 Ultimatum 中访问的网站并为这些网站设置计时器。\n\nGoogle 会获取这些设有计时器的网站的相关信息以及您对这些网站的访问时长。这些信息会被用于改进“数字健康”应用。</translation>
 <translation id="6468703991511753953">地址栏目前位于底部</translation>
-<translation id="6470181189905173055">您使用“<ph name="APP_LABEL" />”在 Chrome 中打开的网页将显示在此处。</translation>
+<translation id="6470181189905173055">您使用“<ph name="APP_LABEL" />”在 Ultimatum 中打开的网页将显示在此处。</translation>
 <translation id="6473086018775716761">分享选项列表已半屏打开。</translation>
 <translation id="6475951671322991020">下载视频</translation>
 <translation id="6477928892249167417">这些网站似乎对您很重要：</translation>
-<translation id="6479881432656947268">访问 Chrome 应用商店</translation>
-<translation id="6481963882741794338">关联 Chrome 和其他 Google 服务，以便获得个性化体验和实现其他用途</translation>
+<translation id="6479881432656947268">访问 Ultimatum 应用商店</translation>
+<translation id="6481963882741794338">关联 Ultimatum 和其他 Google 服务，以便获得个性化体验和实现其他用途</translation>
 <translation id="6482749332252372425">未能成功下载 <ph name="FILE_NAME" />，因为存储空间不足。</translation>
 <translation id="6486420406192123355">此 PDF 文件来自使用不安全连接的网站</translation>
 <translation id="650224091954855786">{FILE_COUNT,plural, =1{文件已下载完毕}other{# 个文件已下载完毕}}</translation>
-<translation id="6508722015517270189">重新启动 Chrome</translation>
+<translation id="6508722015517270189">重新启动 Ultimatum</translation>
 <translation id="6513924416597632811">复制指向以下搜索查询的搜索结果页的链接：<ph name="SEARCH_QUERY" />。来源：<ph name="PAGE_URL" /></translation>
 <translation id="6518133107902771759">验证</translation>
 <translation id="6521218807522232085">您可以创建、保存和管理密码，以便轻松登录</translation>
 <translation id="6527303717912515753">分享</translation>
-<translation id="652948702951888897">Chrome 历史记录</translation>
-<translation id="6532866250404780454">您在 Chrome 中访问的网站不会显示。所有网站计时器都会被删除。</translation>
+<translation id="652948702951888897">Ultimatum 历史记录</translation>
+<translation id="6532866250404780454">您在 Ultimatum 中访问的网站不会显示。所有网站计时器都会被删除。</translation>
 <translation id="6539092367496845964">出了点问题。请稍后重试。</translation>
 <translation id="6541983376925655882">{NUM_HOURS,plural, =1{1 小时前检查过}other{# 小时前检查过}}</translation>
 <translation id="6545017243486555795">清除所有数据</translation>
@@ -1355,7 +1355,7 @@
 <translation id="6569373978618239158">现在，当打开新标签页时，您会看到来自<ph name="SITE_NAME" />的故事。您关注的网站会保存在您的 Google 账号中。您可在“探索”设置中管理它们。</translation>
 <translation id="657177046675873214">如要将书签同步到所有设备上，请在设置中开启“书签”</translation>
 <translation id="6573096386450695060">一律允许</translation>
-<translation id="6573431926118603307">您在其他设备上的 Chrome 中打开的标签页将列在此处。</translation>
+<translation id="6573431926118603307">您在其他设备上的 Ultimatum 中打开的标签页将列在此处。</translation>
 <translation id="6583199322650523874">为当前网页添加书签</translation>
 <translation id="6588043302623806746">使用安全 DNS</translation>
 <translation id="6590471736817333463">节省高达 60% 的数据流量</translation>
@@ -1363,28 +1363,28 @@
 <translation id="6594347733515723558">与排序和查看相关的选项</translation>
 <translation id="6595046016124923392">系统会将图片发送给 Google 以便为您改进说明。</translation>
 <translation id="661266467055912436">为您和网络上的所有人提供更好的安全保障。</translation>
-<translation id="6621391692573306628">若要将此标签页发送到另一设备，请在这两部设备上都登录 Chrome</translation>
+<translation id="6621391692573306628">若要将此标签页发送到另一设备，请在这两部设备上都登录 Ultimatum</translation>
 <translation id="6627583120233659107">修改文件夹</translation>
 <translation id="6633067410344541938">解锁无痕模式</translation>
 <translation id="6636623428211296678">探索下方的更多设置，或立即结束</translation>
-<translation id="6637100877383020115">为帮助改进应用，Chrome 会向 Google 发送使用情况和崩溃数据。<ph name="BEGIN_UMA_LINK" />管理<ph name="END_UMA_LINK" /></translation>
+<translation id="6637100877383020115">为帮助改进应用，Ultimatum 会向 Google 发送使用情况和崩溃数据。<ph name="BEGIN_UMA_LINK" />管理<ph name="END_UMA_LINK" /></translation>
 <translation id="6641780377503683465">移除“<ph name="INTEREST" />”</translation>
 <translation id="6642299196749785472">附加标签页</translation>
 <translation id="6647441008198474441">系统会将您访问过的网址发送给 Google，以预测您接下来可能会访问的网站</translation>
 <translation id="6648977384226967773">{CONTACT,plural, =1{<ph name="CONTACT_PREVIEW" />\u2026以及另外 <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" /> 个联系人}other{<ph name="CONTACT_PREVIEW" />\u2026以及另外 <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" /> 个联系人}}</translation>
 <translation id="6649642165559792194">预览图片<ph name="BEGIN_NEW" />新<ph name="END_NEW" /></translation>
 <translation id="6659594942844771486">Tab 键</translation>
-<translation id="6661521899577697780">已半屏打开 Chrome 查找功能选择启用底部动作条</translation>
+<translation id="6661521899577697780">已半屏打开 Ultimatum 查找功能选择启用底部动作条</translation>
 <translation id="666731172850799929">在 <ph name="APP_NAME" />中打开</translation>
 <translation id="6669390930482049506">通知我</translation>
-<translation id="6670767097276846646">某些扩展程序可以向 Chrome 添加搜索引擎</translation>
+<translation id="6670767097276846646">某些扩展程序可以向 Ultimatum 添加搜索引擎</translation>
 <translation id="6671495933530132209">复制图片</translation>
 <translation id="6672697278890207089">请输入口令</translation>
 <translation id="6672917148207387131">添加 <ph name="DOMAIN" /></translation>
 <translation id="6674571176963658787">若要开始同步，请输入您的密码</translation>
-<translation id="6676927815633975364">登录此网站和 Chrome</translation>
+<translation id="6676927815633975364">登录此网站和 Ultimatum</translation>
 <translation id="6684262542644248484">登录相应网站</translation>
-<translation id="6684809838922667136">帮助改善 Chrome</translation>
+<translation id="6684809838922667136">帮助改善 Ultimatum</translation>
 <translation id="6689436252814043643">无法使用阅读模式</translation>
 <translation id="669971068476817798">点按“保存”</translation>
 <translation id="6700279777779583398">已保存选择</translation>
@@ -1408,18 +1408,18 @@
 <translation id="6764137532716892442">有新活动的共享“<ph name="GROUP_TITLE" />”标签页分组</translation>
 <translation id="6767294960381293877">要与之分享标签页的设备的列表已半屏打开。</translation>
 <translation id="6783664456110886353">{TAB_COUNT,plural, =1{系统将会关闭 <ph name="INCOGNITO_TAB_COUNT" /> 个无痕式标签页以及另外 <ph name="TAB_COUNT_ONE" /> 个标签页}other{系统将会关闭 <ph name="INCOGNITO_TAB_COUNT" /> 个无痕式标签页以及另外 <ph name="TAB_COUNT_MANY" /> 个标签页}}</translation>
-<translation id="6785476624617658922">Chrome 和 Chrome 操作系统附加服务条款</translation>
+<translation id="6785476624617658922">Ultimatum 和 Ultimatum 操作系统附加服务条款</translation>
 <translation id="6786747875388722282">扩展程序</translation>
 <translation id="6787600234697426339">打开的窗口数已达 <ph name="MAX_INSTANCE_COUNT" /> 个上限</translation>
 <translation id="6795633245022906657">快速打开一个新标签页。若要修改该快捷方式，请前往“设置”部分。</translation>
-<translation id="679588508577699489">将 Chrome 设为默认浏览器</translation>
+<translation id="679588508577699489">将 Ultimatum 设为默认浏览器</translation>
 <translation id="679956319013005046">如需设置首选的自动填充服务，请先在 <ph name="BEGIN_LINK" />Android 设置<ph name="END_LINK" />中添加该服务。</translation>
 <translation id="6802555630140434547">系统将会关闭此窗口</translation>
 <translation id="6803791793483522764">查看通知</translation>
 <translation id="6809470175540814047">在无痕式窗口中打开</translation>
 <translation id="6811034713472274749">页面已可供查看</translation>
 <translation id="6813359536773993594">{FILE_COUNT,plural, =1{图片，列表中有 1 张图片}other{图片，列表中有 # 张图片}}</translation>
-<translation id="6813446258015311409">登录 Chrome，已打开。</translation>
+<translation id="6813446258015311409">登录 Ultimatum，已打开。</translation>
 <translation id="6815692190508268848">已应用外观偏好设置</translation>
 <translation id="6817747507826986771">快速分享此页面。若要修改此快捷方式，请轻触并按住这里。</translation>
 <translation id="6820686453637990663">CVC</translation>
@@ -1428,7 +1428,7 @@
 <translation id="6828070228333235514">停止跟踪价格</translation>
 <translation id="6830728435402077660">不安全</translation>
 <translation id="6831043979455480757">翻译</translation>
-<translation id="6835182496791325827">您离开后，Chrome 会继续为您寻找最佳搜索结果，并及时通知您。</translation>
+<translation id="6835182496791325827">您离开后，Ultimatum 会继续为您寻找最佳搜索结果，并及时通知您。</translation>
 <translation id="6846298663435243399">正在加载…</translation>
 <translation id="6850409657436465440">您的下载仍在进行中</translation>
 <translation id="6850830437481525139">已关闭 <ph name="TAB_COUNT" /> 个标签页</translation>
@@ -1451,7 +1451,7 @@
 <translation id="6886500155621657325">{ITEMS_COUNT,plural, =1{1 个密码}other{# 个密码}}</translation>
 <translation id="688730033107341407">当您退出 Google 账号后，该账号中的书签、密码等信息都将从此设备中移除。</translation>
 <translation id="6896758677409633944">复制</translation>
-<translation id="6898797562238201317">使用您自己的口令加密您 Google 账号中的所有 Chrome 数据</translation>
+<translation id="6898797562238201317">使用您自己的口令加密您 Google 账号中的所有 Ultimatum 数据</translation>
 <translation id="6900532703269623216">增强型保护</translation>
 <translation id="6903907808598579934">开启同步功能</translation>
 <translation id="6906448540340261898">请确保您可以一直使用 Google 账号的密码</translation>
@@ -1461,7 +1461,7 @@
 <translation id="6910211073230771657">已删除</translation>
 <translation id="6916590542764765824">管理扩展程序</translation>
 <translation id="6918398787259831832">如果此问题仍然存在，请从 <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> 处<ph name="BEGIN_LINK" />获取更多信息<ph name="END_LINK" />。</translation>
-<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> 由于您近期未访问过此网站，Chrome 已移除这一权限</translation>
+<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> 由于您近期未访问过此网站，Ultimatum 已移除这一权限</translation>
 <translation id="6927821422725196292">{TABS_COUNT,plural, =1{1 个标签页}other{<ph name="NUMBER_OF_TABS" /> 个标签页}}</translation>
 <translation id="6929224077895306814">您的设备和 Google 账号中保存的所有安全码都将删除</translation>
 <translation id="6933180670536678127"><ph name="TAB_TITLE" />，已选择的固定标签页，正在播放音频</translation>
@@ -1490,30 +1490,30 @@
 <translation id="7020741890149022655">添加到阅读清单<ph name="BEGIN_NEW" />新功能<ph name="END_NEW" /></translation>
 <translation id="7022756207310403729">在浏览器中打开</translation>
 <translation id="7029809446516969842">密码</translation>
-<translation id="7037994709569287156">将 Chrome 设为默认浏览器</translation>
+<translation id="7037994709569287156">将 Ultimatum 设为默认浏览器</translation>
 <translation id="7053256416619638731">强化此设备上的密码</translation>
 <translation id="7053983685419859001">屏蔽</translation>
 <translation id="7054588988317389591">获取图片说明？</translation>
-<translation id="7057969023583258980">打开完整的 Chrome 历史记录</translation>
+<translation id="7057969023583258980">打开完整的 Ultimatum 历史记录</translation>
 <translation id="7063006564040364415">无法连接到同步服务器。</translation>
 <translation id="7063106218165698546">自定义标签页分组，然后点按“完成”</translation>
 <translation id="7071521146534760487">管理账号</translation>
 <translation id="707155805709242880">请在下方选择要同步的内容</translation>
 <translation id="7072949719501323344"><ph name="TAB_TITLE" />，多选状态下固定的画中画无痕式标签页</translation>
 <translation id="7077143737582773186">SD 卡</translation>
-<translation id="7078916049958741685">同时从此设备中删除您的 Chrome 数据</translation>
+<translation id="7078916049958741685">同时从此设备中删除您的 Ultimatum 数据</translation>
 <translation id="7080145768121641840"><ph name="TAB_TITLE" />，已选择的固定标签页，已设为静音</translation>
 <translation id="7084115944294706056">选择地址栏位置</translation>
-<translation id="7085332316435785646">选择是否要包含 Chrome 历史记录以便在各款 Google 服务中获享更个性化的体验</translation>
-<translation id="7088681679121566888">Chrome 已是最新版本</translation>
+<translation id="7085332316435785646">选择是否要包含 Ultimatum 历史记录以便在各款 Google 服务中获享更个性化的体验</translation>
+<translation id="7088681679121566888">Ultimatum 已是最新版本</translation>
 <translation id="7098100324909062850"><ph name="TAB_TITLE" />，已选择的多个无痕式标签页之一，已设为静音</translation>
 <translation id="7106762743910369165">您的浏览器由贵单位管理</translation>
-<translation id="7111394291981742152">在 Chrome 中，您可以更有效地控制自己看到的广告，并限制网站能根据哪些个人信息向您展示个性化广告。</translation>
+<translation id="7111394291981742152">在 Ultimatum 中，您可以更有效地控制自己看到的广告，并限制网站能根据哪些个人信息向您展示个性化广告。</translation>
 <translation id="7111822978084196600">为此窗口命名</translation>
 <translation id="7115358764509798967">系统默认设置</translation>
 <translation id="7117485132243600300">管理您关注的内容以及建议的主题和搜索查询</translation>
 <translation id="7119984597597798764">关闭“<ph name="INSTANCE_TITLE" />”</translation>
-<translation id="7121179479711575744">登录 Chrome</translation>
+<translation id="7121179479711575744">登录 Ultimatum</translation>
 <translation id="7136694880210472378">设为默认选项</translation>
 <translation id="7136902389402789299">{NUM_SITES,plural, =1{已审核 1 个网站的权限}other{已审核 # 个网站的权限}}</translation>
 <translation id="7138678301420049075">其他</translation>
@@ -1521,8 +1521,8 @@
 <translation id="7146622961999026732">这些网站和应用似乎对您很重要：</translation>
 <translation id="7148400116894863598">从 <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> 处<ph name="BEGIN_LINK" />获取更多信息<ph name="END_LINK" />。</translation>
 <translation id="7149893636342594995">过去 24 小时</translation>
-<translation id="71503698506017927">口令加密不涵盖 Google Pay 中的付款方式和地址。如要更改此设置，请<ph name="BEGIN_LINK" />删除您账号中的 Chrome 数据<ph name="END_LINK" />。</translation>
-<translation id="7165972437814027679">详细了解 Chrome 为何屏蔽某些文件</translation>
+<translation id="71503698506017927">口令加密不涵盖 Google Pay 中的付款方式和地址。如要更改此设置，请<ph name="BEGIN_LINK" />删除您账号中的 Ultimatum 数据<ph name="END_LINK" />。</translation>
+<translation id="7165972437814027679">详细了解 Ultimatum 为何屏蔽某些文件</translation>
 <translation id="7168323970702333693">您已使用<ph name="USER_NAME" />的身份登录。打开设置。</translation>
 <translation id="7170930892977483182">您的设备和 Google 钱包中保存的所有安全码都将删除</translation>
 <translation id="7173114856073700355">打开“设置”</translation>
@@ -1542,7 +1542,7 @@
 <translation id="7197682514647286393">快速删除浏览数据</translation>
 <translation id="719791532916917144">键盘快捷键</translation>
 <translation id="7207760545532569765">将 <ph name="TAB_COUNT" /> 个标签页恢复为新的背景标签页。</translation>
-<translation id="7217781228893594884">当您退出 Chrome 时，无痕式标签页将被锁定</translation>
+<translation id="7217781228893594884">当您退出 Ultimatum 时，无痕式标签页将被锁定</translation>
 <translation id="7221869452894271364">重新加载此页</translation>
 <translation id="722681077040152344">不再接收 <ph name="COUNT" /> 个网站的通知</translation>
 <translation id="7227218174981371415">{FILE_COUNT,plural, =1{有 1 项下载尚待处理}other{有 # 项下载尚待处理}}</translation>
@@ -1552,12 +1552,12 @@
 <translation id="724510009481365878">无法打印此页面</translation>
 <translation id="7248671827512403053">应用</translation>
 <translation id="7253951228444156601">正在检查密码…</translation>
-<translation id="7260367682327802201">您的 Android 设备可能包含类似的设置。如果您在 Chrome 中和 Android 设备上开启了“广告衡量”，相关公司或许就能在您访问的网站和使用的应用中衡量广告的效果。</translation>
+<translation id="7260367682327802201">您的 Android 设备可能包含类似的设置。如果您在 Ultimatum 中和 Android 设备上开启了“广告衡量”，相关公司或许就能在您访问的网站和使用的应用中衡量广告的效果。</translation>
 <translation id="727288900855680735">将 <ph name="ONE_TIME_CODE" /> 提交至 <ph name="ORIGIN" />？</translation>
 <translation id="7274013316676448362">禁止访问的网站</translation>
 <translation id="7276868533747677875">如果您之前导出了密码，请在设备上查找 CSV 文件，然后将其导入您首选的密码管理工具。</translation>
 <translation id="728377807486816582">点按地址栏</translation>
-<translation id="7289049772085228972">您已获享 Chrome 的最强安全保护</translation>
+<translation id="7289049772085228972">您已获享 Ultimatum 的最强安全保护</translation>
 <translation id="7289303553784750393">如果您已联网，但此问题仍然存在，您可以尝试在 <ph name="SITE_ETLD_PLUS_ONE" /> 上通过其他方法继续操作。</translation>
 <translation id="7290209999329137901">不可重命名</translation>
 <translation id="7291910923717764901">已为此网页添加图片说明</translation>
@@ -1590,12 +1590,12 @@
 <translation id="7400003506822844357">{FILE_COUNT,plural, =1{其他，列表中有 1 个文件}other{其他，列表中有 # 个文件}}</translation>
 <translation id="7400418766976504921">网址</translation>
 <translation id="7400424692675800399">如需打开新窗口，请将活跃窗口和非活跃窗口的总数减少到 <ph name="MAX_WINDOW_COUNT_MINUS_ONE" /> 个或更少。</translation>
-<translation id="7403691278183511381">Chrome 首次运行体验</translation>
+<translation id="7403691278183511381">Ultimatum 首次运行体验</translation>
 <translation id="7411224099004328643">Google 账号用户</translation>
 <translation id="7419565702166471774">一律使用安全连接</translation>
 <translation id="7421293530411019405">要退出标签页分组吗？</translation>
 <translation id="7435356471928173109">已被您的管理员关闭</translation>
-<translation id="7437998757836447326">在 Chrome 中退出账号</translation>
+<translation id="7437998757836447326">在 Ultimatum 中退出账号</translation>
 <translation id="7439467816829380878">将标签页移至分组</translation>
 <translation id="7439749340204407129">打开书签管理器</translation>
 <translation id="7453810262525006706">合拢为侧边视图</translation>
@@ -1629,7 +1629,7 @@
 <translation id="7525248386620136756">已关闭并保存 <ph name="TAB_GROUPS_AND_TABS_PART" /></translation>
 <translation id="7545347190366646170">有访问权限的人</translation>
 <translation id="7553482318994371148">重新打开上次关闭的标签页</translation>
-<translation id="7554643625247105821">无法检查 Chrome 版本</translation>
+<translation id="7554643625247105821">无法检查 Ultimatum 版本</translation>
 <translation id="7557508262441527045">已退出账号</translation>
 <translation id="7573665567024262965">选择默认应用</translation>
 <translation id="757855969265046257">{FILES,plural, =1{已下载 <ph name="FILES_DOWNLOADED_ONE" /> 个文件}other{已下载 <ph name="FILES_DOWNLOADED_MANY" /> 个文件}}</translation>
@@ -1645,7 +1645,7 @@
 <translation id="7612619742409846846">已使用以下账号登录 Google：</translation>
 <translation id="7612989789287281429">正在登录…</translation>
 <translation id="7619072057915878432">未能成功下载 <ph name="FILE_NAME" />，因为出现了网络故障。</translation>
-<translation id="7626032353295482388">欢迎使用 Chrome</translation>
+<translation id="7626032353295482388">欢迎使用 Ultimatum</translation>
 <translation id="7628417132421583481">前往密码管理工具</translation>
 <translation id="7630202231528827509">提供商网址</translation>
 <translation id="7638584964844754484">密码不正确</translation>
@@ -1660,7 +1660,7 @@
 <translation id="7666185984446444960">已关闭 <ph name="TAB_GROUPS_AND_TABS_PART" /></translation>
 <translation id="7682724950699840886">请尝试按以下提示操作：确保您的设备上有足够的空间，然后重新尝试导出。</translation>
 <translation id="7686086654630106285">详细了解网站建议的广告</translation>
-<translation id="7690596512217303514">您的设备无法打开 Chrome。若要解决此问题，请从应用商店下载最新的 Chrome 更新。</translation>
+<translation id="7690596512217303514">您的设备无法打开 Ultimatum。若要解决此问题，请从应用商店下载最新的 Ultimatum 更新。</translation>
 <translation id="7691043218961417207">探索值得关注的内容</translation>
 <translation id="7692761875510935111">快速在浏览器中打开。若要修改此快捷方式，请轻触并按住这里。</translation>
 <translation id="7697383401610880082">拖动手柄</translation>
@@ -1668,7 +1668,7 @@
 <translation id="7702420606070050505">显示近期活动的底部动作条已全屏打开</translation>
 <translation id="7707922173985738739">使用移动数据</translation>
 <translation id="7708994397325774423">获取您的所有密码</translation>
-<translation id="7714077993070342304">打开 Chrome 菜单</translation>
+<translation id="7714077993070342304">打开 Ultimatum 菜单</translation>
 <translation id="7733878270780732638">设备上的存储空间不足。</translation>
 <translation id="7740287852186792672">搜索结果</translation>
 <translation id="774403695779169686"><ph name="TAB_TITLE" />，已选择的无痕式标签页，正在共享内容</translation>
@@ -1695,9 +1695,9 @@
 <translation id="7821130663268546430">您可在标签页切换器中找到所有打开的标签页</translation>
 <translation id="7822705602465980873">当您登录后，这些数据将与您的 Google 账号关联，以便在各种 Google 服务中保护您，例如：在安全事件发生后加强 Gmail 的保护力度。</translation>
 <translation id="7824665136384946951">您的组织已关闭“安全浏览”功能</translation>
-<translation id="7826342993930002256">您的专属 Chrome 浏览器，走到哪带到哪</translation>
+<translation id="7826342993930002256">您的专属 Ultimatum 浏览器，走到哪带到哪</translation>
 <translation id="7844171778363018843">未选择任何要同步的数据</translation>
-<translation id="784453721355882533">试用 Chrome 中的 Gemini，轻松获取答案、要点总结等。</translation>
+<translation id="784453721355882533">试用 Ultimatum 中的 Gemini，轻松获取答案、要点总结等。</translation>
 <translation id="7846161022626028328">出错了，请重试。</translation>
 <translation id="7846296061357476882">Google 服务</translation>
 <translation id="784652447248278262">当前窗口</translation>
@@ -1707,10 +1707,10 @@
 <translation id="7853202427316060426">活动</translation>
 <translation id="7859988229622350291">一律不翻译</translation>
 <translation id="7866213166286285359">翻译此处显示的网页</translation>
-<translation id="7873610418439765081">通过“更多选项”按钮试用 Chrome 中的 Gemini，轻松获取答案、要点总结等。</translation>
+<translation id="7873610418439765081">通过“更多选项”按钮试用 Ultimatum 中的 Gemini，轻松获取答案、要点总结等。</translation>
 <translation id="7875915731392087153">创建电子邮件</translation>
 <translation id="7876243839304621966">全部删除</translation>
-<translation id="7886917304091689118">正在 Chrome 中运行</translation>
+<translation id="7886917304091689118">正在 Ultimatum 中运行</translation>
 <translation id="7887174313503389866">观看导览，了解重要的隐私控制设置和安全控件。如需查看更多选项，请转到各项设置。</translation>
 <translation id="7913993612870913335">{FILE_COUNT,plural, =1{1 个下载项已被您的组织屏蔽}other{# 个下载项已被您的组织屏蔽}}</translation>
 <translation id="7914399737746719723">已安装应用</translation>
@@ -1719,7 +1719,7 @@
 <translation id="7921782882718083488">总结此页面</translation>
 <translation id="7926975587469166629">卡的别名</translation>
 <translation id="7927073875790626822">XR</translation>
-<translation id="7929587383660661825">对于滥用通知的网站或您近期未访问的网站，Chrome 会自动移除其权限</translation>
+<translation id="7929587383660661825">对于滥用通知的网站或您近期未访问的网站，Ultimatum 会自动移除其权限</translation>
 <translation id="7934668619883965330">无法下载此文件。文件格式不受支持。</translation>
 <translation id="7942131818088350342"><ph name="PRODUCT_NAME" /> 不是最新版本。</translation>
 <translation id="7944772052836377867">同步功能需要验证您的身份</translation>
@@ -1736,7 +1736,7 @@
 <translation id="7971136598759319605">1 天前曾有活动</translation>
 <translation id="7975379999046275268">预览网页<ph name="BEGIN_NEW" />新<ph name="END_NEW" /></translation>
 <translation id="7977451675950311423">若您使用的密码遭遇了数据泄露，向您发出警告。</translation>
-<translation id="7987499071758862048"><ph name="PERMISSION_1" />、<ph name="PERMISSION_2" />、<ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> 由于您近期未访问过此网站，Chrome 已移除这些权限</translation>
+<translation id="7987499071758862048"><ph name="PERMISSION_1" />、<ph name="PERMISSION_2" />、<ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> 由于您近期未访问过此网站，Ultimatum 已移除这些权限</translation>
 <translation id="7995059495660416932">待内容可显示后，您即会看到相应内容</translation>
 <translation id="799576009106109668">您的浏览速度会更快，因为系统会根据您当前访问的网页主动加载内容</translation>
 <translation id="7998918019931843664">重新打开关闭的标签页</translation>
@@ -1754,17 +1754,17 @@
 <translation id="804335162455518893">找不到 SD 卡</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> 个无痕式标签页}other{<ph name="TAB_COUNT_NORMAL" /> 个无痕式标签页}}</translation>
 <translation id="8051695050440594747"><ph name="MEGABYTES" /> MB 可用</translation>
-<translation id="8058746566562539958">在新的 Chrome 标签页中打开</translation>
+<translation id="8058746566562539958">在新的 Ultimatum 标签页中打开</translation>
 <translation id="8062594758852531064">扩展型预加载：</translation>
 <translation id="8063895661287329888">无法添加书签。</translation>
 <translation id="8066816452984416180">快速为此页添加书签。若要修改此快捷方式，请轻触并按住这里。</translation>
-<translation id="8072436850275034464">在任何使用 Chrome 的设备上，您都可以重新打开最近关闭的标签页</translation>
+<translation id="8072436850275034464">在任何使用 Ultimatum 的设备上，您都可以重新打开最近关闭的标签页</translation>
 <translation id="8073388330009372546">在新标签页中打开图片</translation>
 <translation id="8076492880354921740">标签页</translation>
 <translation id="8078096376109663956">只能分享文本</translation>
 <translation id="8078348702936632821">固定此快捷方式</translation>
 <translation id="8084285576995584326">控制您的 Google 账号数据</translation>
-<translation id="8084864785646838999">您的部分历史记录可能不会在此处显示。如需查看您的所有 Chrome 历史记录，请打开完整的 Chrome 历史记录。此外，您的 Google 账号在 <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> 上可能有其他形式的浏览记录。</translation>
+<translation id="8084864785646838999">您的部分历史记录可能不会在此处显示。如需查看您的所有 Ultimatum 历史记录，请打开完整的 Ultimatum 历史记录。此外，您的 Google 账号在 <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> 上可能有其他形式的浏览记录。</translation>
 <translation id="8088176524274673045">若要与附近的人分享，请让他们扫描此二维码</translation>
 <translation id="8090732854597034573">如需帮助，请找家长帮忙</translation>
 <translation id="8101414242770404289"><ph name="TIME_PERIOD" />内没有要关闭的标签页</translation>
@@ -1772,10 +1772,10 @@
 <translation id="810433609302852">提示通知功能宣传内容和使用步骤底部动作条</translation>
 <translation id="8105893657415066307"><ph name="DESCRIPTION" /> <ph name="SEPARATOR" /> <ph name="FILE_SIZE" /></translation>
 <translation id="8107530384992929318">关闭排序选项</translation>
-<translation id="8110024788458304985">帮助改进 Chrome 的功能和性能</translation>
-<translation id="8110087112193408731">在“数字健康”应用中显示您的 Chrome 活动记录？</translation>
+<translation id="8110024788458304985">帮助改进 Ultimatum 的功能和性能</translation>
+<translation id="8110087112193408731">在“数字健康”应用中显示您的 Ultimatum 活动记录？</translation>
 <translation id="8118117428362942925">如需帮助，请找家长（<ph name="PARENT_NAME" />）帮忙</translation>
-<translation id="8118151008374483324">如需在您的所有设备上获取标签页等信息，请登录 Chrome</translation>
+<translation id="8118151008374483324">如需在您的所有设备上获取标签页等信息，请登录 Ultimatum</translation>
 <translation id="8120286190326371840">此设备上没有任何已泄露的密码</translation>
 <translation id="8122623268651408616">按从新到旧排序</translation>
 <translation id="8127542551745560481">修改主页</translation>
@@ -1816,7 +1816,7 @@
 <translation id="8260126382462817229">请尝试重新登录</translation>
 <translation id="8261506727792406068">删除</translation>
 <translation id="82619448491672958">查看其他标签页</translation>
-<translation id="8265730590513812063">打开 Chrome 菜单</translation>
+<translation id="8265730590513812063">打开 Ultimatum 菜单</translation>
 <translation id="8266753737658117282">使用 <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> 继续</translation>
 <translation id="8266862848225348053">下载内容保存位置</translation>
 <translation id="8271267069224406035">举报垃圾信息</translation>
@@ -1830,7 +1830,7 @@
 <translation id="8317318757008452355">打开打印网页的选项</translation>
 <translation id="8320212361750431956">近期活动</translation>
 <translation id="832514020744584629"><ph name="PREF_TITLE" />  <ph name="BEGIN_NEW" />新<ph name="END_NEW" /></translation>
-<translation id="8342727528718219152">Chrome 会通知您哪些网站可能发送了过多通知</translation>
+<translation id="8342727528718219152">Ultimatum 会通知您哪些网站可能发送了过多通知</translation>
 <translation id="834313815369870491">一律不翻译网站</translation>
 <translation id="8348215005712416247"><ph name="TAB_TITLE" />，已选择的多个固定无痕式标签页之一，正在录制内容</translation>
 <translation id="8348430946834215779">尽可能使用 HTTPS，并在加载不支持 HTTPS 的网站前收到警告</translation>
@@ -1844,12 +1844,12 @@
 <translation id="8398389123831319859">点按两次并按住即可切换到无痕模式</translation>
 <translation id="8402673309244746971">前往“已关注”</translation>
 <translation id="8413126021676339697">显示全部历史记录</translation>
-<translation id="8413795581997394485">防范已知危险的网站、下载内容和扩展程序。当您访问某个网站时，Chrome 会通过可隐藏 IP 地址的隐私保护服务器将经过混淆处理的网址片段发送给 Google。如果网站有可疑行为，系统也会发送完整网址和少量网页内容。</translation>
+<translation id="8413795581997394485">防范已知危险的网站、下载内容和扩展程序。当您访问某个网站时，Ultimatum 会通过可隐藏 IP 地址的隐私保护服务器将经过混淆处理的网址片段发送给 Google。如果网站有可疑行为，系统也会发送完整网址和少量网页内容。</translation>
 <translation id="8414396119627470038">使用 <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> 账号登录 <ph name="SITE_ETLD_PLUS_ONE" /></translation>
 <translation id="8419144699778179708">删除历史记录，包括搜索框中的历史记录</translation>
 <translation id="8419244640277402268">纳入</translation>
 <translation id="8422250855136581222">此设备上没有要关闭的标签页</translation>
-<translation id="842386925677997438">Chrome 的安全工具</translation>
+<translation id="842386925677997438">Ultimatum 的安全工具</translation>
 <translation id="8427875596167638501">预览标签页已在下半屏中打开</translation>
 <translation id="8428213095426709021">设置</translation>
 <translation id="8430824733382774043">仅分享屏幕截图</translation>
@@ -1857,7 +1857,7 @@
 <translation id="8438566539970814960">改善搜索和浏览体验</translation>
 <translation id="8439974325294139057"><ph name="LANG" /> - 可以使用此语言了，请重启 <ph name="APP_NAME" />。</translation>
 <translation id="8442258441309440798">没有可显示的报道</translation>
-<translation id="8443209985646068659">Chrome 无法更新</translation>
+<translation id="8443209985646068659">Ultimatum 无法更新</translation>
 <translation id="8443600937324357591">将标签页移至另一个窗口</translation>
 <translation id="8445448999790540984">无法导出密码</translation>
 <translation id="8446884382197647889">了解详情</translation>
@@ -1866,7 +1866,7 @@
 <translation id="8455675988389029454">在所有设备上获取保存的书签、密码等信息</translation>
 <translation id="8458341576712814616">快捷字词</translation>
 <translation id="8458413889418591446">如果想快速重新访问浏览过的网站，请同步您的历史记录和标签页</translation>
-<translation id="84594714173170813">请继续使用您的 Google 账号中的 Chrome 数据</translation>
+<translation id="84594714173170813">请继续使用您的 Google 账号中的 Ultimatum 数据</translation>
 <translation id="8460008946585880786">将一个标签页拖放到另一个标签页上</translation>
 <translation id="8460448946170646641">检查重要的隐私控制设置和安全控件</translation>
 <translation id="8460932807646981183">管理搜索引擎和网站搜索</translation>
@@ -1888,8 +1888,8 @@
 <translation id="8540136935098276800">请输入格式正确的网址</translation>
 <translation id="854522910157234410">打开此网页</translation>
 <translation id="8547466829003330976">利用 AI 审核 PDF 文件</translation>
-<translation id="8551513938758868521">在您退出 Chrome 时锁定无痕式标签页</translation>
-<translation id="8559961053328923750">Chrome 会限制网站为衡量广告效果而通过浏览器分享的数据总量</translation>
+<translation id="8551513938758868521">在您退出 Ultimatum 时锁定无痕式标签页</translation>
+<translation id="8559961053328923750">Ultimatum 会限制网站为衡量广告效果而通过浏览器分享的数据总量</translation>
 <translation id="8559990750235505898">询问是否翻译其他语言版本的网页</translation>
 <translation id="8560602726703398413">您可在“书签”界面中找到自己的阅读清单</translation>
 <translation id="85618473456579127">点按右上角的个人资料</translation>
@@ -1902,12 +1902,12 @@
 <translation id="859046281437143747">通过“更多选项”按钮跟踪价格</translation>
 <translation id="859064343657890103">已删除“<ph name="TAB_GROUP_TITLE" />”标签页分组</translation>
 <translation id="860043288473659153">持卡人姓名</translation>
-<translation id="8602358303461588329">登录 Chrome，已关闭。</translation>
+<translation id="8602358303461588329">登录 Ultimatum，已关闭。</translation>
 <translation id="860282621117673749">降价提醒</translation>
 <translation id="8611922158252451755">知道链接的任何人都能修改所有标签页，因此请谨慎分享。链接将在 48 小时后失效。</translation>
 <translation id="8616006591992756292">您的 Google 账号在 <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> 上可能有其他形式的浏览记录。</translation>
 <translation id="8617240290563765734">要打开下载的内容中指定的建议网址吗？</translation>
-<translation id="8629093325209491835">依次打开 Chrome 菜单 &gt;“设置”</translation>
+<translation id="8629093325209491835">依次打开 Ultimatum 菜单 &gt;“设置”</translation>
 <translation id="8634050254805484913">在窄屏设备上隐藏</translation>
 <translation id="8635399646025169806">要保留标签页分组吗？</translation>
 <translation id="8636825310635137004">要访问您从其他设备打开的标签页，请开启同步功能。</translation>
@@ -1926,15 +1926,15 @@
 <translation id="8715300232952757586">“<ph name="TAB_TITLE" />”将被关闭</translation>
 <translation id="8723453889042591629">快速翻译该页面。若要修改此快捷方式，请轻触并按住这里。</translation>
 <translation id="8725066075913043281">重试</translation>
-<translation id="8727043961453758442">充分利用 Chrome</translation>
+<translation id="8727043961453758442">充分利用 Ultimatum</translation>
 <translation id="8731268612289859741">安全码</translation>
 <translation id="8738163682604285902">要在阅读模式下查看吗？</translation>
 <translation id="8746155870861185046">分享突出显示的内容</translation>
 <translation id="8748850008226585750">内容已隐藏</translation>
 <translation id="8754448020583829686">复制但不含链接</translation>
 <translation id="8756969031206844760">要更新密码吗？</translation>
-<translation id="8765470054473112089">当您在地址栏或搜索框中输入内容时，Chrome 会将您输入的内容发送给默认搜索引擎，以便为您提供更好的建议。在无痕模式下，此设置处于关闭状态。</translation>
-<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Chrome 发现了 1 个安全系数低的密码，建议您改进}other{Chrome 发现了 # 个安全系数低的密码，建议您改进}}</translation>
+<translation id="8765470054473112089">当您在地址栏或搜索框中输入内容时，Ultimatum 会将您输入的内容发送给默认搜索引擎，以便为您提供更好的建议。在无痕模式下，此设置处于关闭状态。</translation>
+<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Ultimatum 发现了 1 个安全系数低的密码，建议您改进}other{Ultimatum 发现了 # 个安全系数低的密码，建议您改进}}</translation>
 <translation id="8766529642647037772">创建一个像这样指向突出显示的文本的链接？</translation>
 <translation id="8788265440806329501">导航历史记录已关闭</translation>
 <translation id="8790193082819560975">点按即可在新标签页中搜索该商品的购买选项。</translation>
@@ -1957,7 +1957,7 @@
 <translation id="885480114717186641">您可以请求访问 <ph name="HOST_NAME" /> 的桌面版网站</translation>
 <translation id="8856607253650333758">获取说明</translation>
 <translation id="8863714995118816041">已重新为 <ph name="SITE_NAME" /> 授予权限</translation>
-<translation id="8865415417596392024">您账号中的 Chrome 数据</translation>
+<translation id="8865415417596392024">您账号中的 Ultimatum 数据</translation>
 <translation id="8872506776304248286">在应用中打开</translation>
 <translation id="8890668505403261809">搜索无痕式标签页</translation>
 <translation id="8892234476517513962">您已登录</translation>
@@ -1969,7 +1969,7 @@
 <translation id="8922289737868596582">通过“更多选项”按钮下载网页以供离线查看</translation>
 <translation id="8924575305646776101"><ph name="BEGIN_LINK" />了解详情<ph name="END_LINK" /></translation>
 <translation id="892496902842311796">可以使用<ph name="LANG" />了</translation>
-<translation id="8937772741022875483">从“数字健康”应用中移除您的 Chrome 活动记录？</translation>
+<translation id="8937772741022875483">从“数字健康”应用中移除您的 Ultimatum 活动记录？</translation>
 <translation id="8942627711005830162">在其他窗口中打开</translation>
 <translation id="8945143127965743188"><ph name="LANG" /> - 无法下载此语言。请稍后再试。</translation>
 <translation id="8946759102391960088">继续使用您的密码</translation>
@@ -1981,12 +1981,12 @@
 <translation id="8970887620466824814">出了点问题。</translation>
 <translation id="8972098258593396643">是否下载到默认文件夹？</translation>
 <translation id="8987736167266086032">从上次停下的地方继续</translation>
-<translation id="8992769679401294069">系统将使用您的口令加密您的数据。请输入该口令，以便将 Chrome 数据保存在您的 Google 账号中并使用这些数据。</translation>
+<translation id="8992769679401294069">系统将使用您的口令加密您的数据。请输入该口令，以便将 Ultimatum 数据保存在您的 Google 账号中并使用这些数据。</translation>
 <translation id="8993760627012879038">在无痕模式下打开新标签页</translation>
 <translation id="8995521496079646922">系统将默认使用您选择的应用。如果此设备上尚未安装某个应用，系统会很快下载该应用。</translation>
 <translation id="8996847606757455498">另选一个提供商</translation>
 <translation id="8998837250940831980">无法将标签页最小化。请稍后再试。</translation>
-<translation id="9001604755921395912">在 Chrome 无痕式标签页中打开</translation>
+<translation id="9001604755921395912">在 Ultimatum 无痕式标签页中打开</translation>
 <translation id="9012585441087414258">防范已知危险的网站、下载内容和扩展程序。如果发现某个网页有可疑之处，系统会将相应网址连同少量网页内容发送到“Google 安全浏览”功能进行检查。</translation>
 <translation id="9019199799064251516">不设置车载设备个人资料锁定就继续吗？</translation>
 <translation id="9022774213089566801">经常访问</translation>
@@ -1994,7 +1994,7 @@
 <translation id="9027728231343310283">重新授权 <ph name="SITE" /></translation>
 <translation id="9035378196785279980">移至\u2026</translation>
 <translation id="9042893549633094279">隐私与安全</translation>
-<translation id="9047347135558855162">在 Chrome 中快速发起搜索</translation>
+<translation id="9047347135558855162">在 Ultimatum 中快速发起搜索</translation>
 <translation id="9050666287014529139">密码</translation>
 <translation id="9055497320631373736">已将此网站恢复为能够建议广告的潜在网站</translation>
 <translation id="9057030985451135243">了解分享的标签页分组</translation>
@@ -2002,7 +2002,7 @@
 <translation id="9063400323119781058">已退订</translation>
 <translation id="9063523880881406963">关闭“请求切换到桌面版网站”</translation>
 <translation id="9065203028668620118">修改</translation>
-<translation id="9065383040763568503">Chrome 认为不重要的网站（例如未保存任何设置的网站或您不常访问的网站）存储的数据</translation>
+<translation id="9065383040763568503">Ultimatum 认为不重要的网站（例如未保存任何设置的网站或您不常访问的网站）存储的数据</translation>
 <translation id="9067341854474068781">没有已全屏打开的通行密钥表格</translation>
 <translation id="906781307897697745">在 <ph name="PRODUCT_NAME" /> 中</translation>
 <translation id="9068568736932147490"><ph name="TAB_TITLE" />，已选择的多个固定无痕式标签页之一，正在播放音频</translation>
@@ -2012,8 +2012,8 @@
 <translation id="9074739597929991885">蓝牙</translation>
 <translation id="9081543426177426948">在无痕模式下，系统不会保存您访问过的网站</translation>
 <translation id="9086455579313502267">无法访问网络</translation>
-<translation id="9093915805850895575">在 Chrome 窗口中打开</translation>
-<translation id="909756639352028172">若要获得最具个性化的体验，请在“网络与应用活动记录”和关联的 Google 服务中包括 Chrome</translation>
+<translation id="9093915805850895575">在 Ultimatum 窗口中打开</translation>
+<translation id="909756639352028172">若要获得最具个性化的体验，请在“网络与应用活动记录”和关联的 Google 服务中包括 Ultimatum</translation>
 <translation id="9099220545925418560">根据您的浏览记录。此设置已关闭。</translation>
 <translation id="9100610230175265781">必须提供密码</translation>
 <translation id="9101137867221042551">管理</translation>
@@ -2049,9 +2049,9 @@
 <translation id="9218430445555521422">设为默认</translation>
 <translation id="9219103736887031265">图片</translation>
 <translation id="9222198206152536936">如需在您的所有设备上获取标签页等信息，请以 <ph name="EMAIL" /> 的身份登录</translation>
-<translation id="924447568950697217">将 Chrome 设置为您的默认浏览器</translation>
-<translation id="926205370408745186">从“数字健康”应用中移除您的 Chrome 活动记录</translation>
-<translation id="927968626442779827">使用 Google Chrome 的精简模式</translation>
+<translation id="924447568950697217">将 Ultimatum 设置为您的默认浏览器</translation>
+<translation id="926205370408745186">从“数字健康”应用中移除您的 Ultimatum 活动记录</translation>
+<translation id="927968626442779827">使用 Ultimatum 的精简模式</translation>
 <translation id="928550791203542716">已关注<ph name="SITE_NAME" /></translation>
 <translation id="930124987204876019">删除历史记录、Cookie、网站数据、缓存内容…</translation>
 <translation id="930834144334005936">将当前模式“<ph name="MODE_NAME" />”重置为“搜索”</translation>
@@ -2059,7 +2059,7 @@
 <translation id="939598580284253335">输入口令</translation>
 <translation id="94161319503679839"><ph name="TAB_TITLE" />，固定的画中画无痕式标签页</translation>
 <translation id="945522503751344254">发送反馈</translation>
-<translation id="95817756606698420">在中国，Chrome 可以使用<ph name="BEGIN_BOLD" />搜狗<ph name="END_BOLD" />作为搜索引擎。如果需要，您可以在<ph name="BEGIN_LINK" />设置<ph name="END_LINK" />中进行更改。</translation>
+<translation id="95817756606698420">在中国，Ultimatum 可以使用<ph name="BEGIN_BOLD" />搜狗<ph name="END_BOLD" />作为搜索引擎。如果需要，您可以在<ph name="BEGIN_LINK" />设置<ph name="END_LINK" />中进行更改。</translation>
 <translation id="961856697154696964">删除浏览数据</translation>
 <translation id="963246339335003378">打开任务管理器</translation>
 <translation id="966131775676567255">正在删除账号数据</translation>

@@ -24,9 +24,9 @@
 <translation id="1089606299949659462">සමාලෝචනය සම්පූර්ණයි!</translation>
 <translation id="1094555143448724771">ඔබේ අනෙකුත් උපාංගවලින් පටිති බැලීම සඳහා, ඔබේ පටිති සහ ඉතිහාසය සමමුහූර්ත කරන්න</translation>
 <translation id="1095761715416917775">ඔබට සැම විට ඔබගේ සමමුහුර්ත දත්ත වෙත ප්‍රවේශ විය හැකි බව සහතික කර ගන්න</translation>
-<translation id="1096091316906284742">Chrome සොයා ගැනීම් තේරීම් පහළ පත්‍රය</translation>
+<translation id="1096091316906284742">Ultimatum සොයා ගැනීම් තේරීම් පහළ පත්‍රය</translation>
 <translation id="1100066534610197918">කණ්ඩායම තුළ නව පටිත්ත තුළ විවෘත කරන්න</translation>
-<translation id="1103142993930332957">Chrome වැඩිදියුණු කිරීමට උදව් කරන්නද?</translation>
+<translation id="1103142993930332957">Ultimatum වැඩිදියුණු කිරීමට උදව් කරන්නද?</translation>
 <translation id="1105960400813249514">තිර ග්‍රහණය</translation>
 <translation id="1108214977745280468">පිටු ඇතුළාන්තයන් බලන්න</translation>
 <translation id="1108938384783527433">ඉතිහාසය සමමුහුර්ත කිරීම</translation>
@@ -34,20 +34,20 @@
 <translation id="1123537484474186311"><ph name="TAB_TITLE" />, පින්තූරය තුළ පින්තූර පටිත්ත</translation>
 <translation id="1126696498560056882">මෙම උපාංගය මත ගිණුම් කළමනා කරන්න</translation>
 <translation id="1135018701024399762">අප්‍රසිද්ධ ප්‍රකාරය ඔබේ බ්‍රවුස් කිරීම ඔබේ උපාංගය භාවිතා කරන අන් අයගෙන් පෞද්ගලිකව තබා ගනී</translation>
-<translation id="113752097246673894">ඔබේ සියලු උපාංග මත ඔබේ පිටුසන් සහ තවත් දේ ලබා ගැනීමට, Chrome වෙත <ph name="EMAIL" /> ලෙස පුරන්න</translation>
+<translation id="113752097246673894">ඔබේ සියලු උපාංග මත ඔබේ පිටුසන් සහ තවත් දේ ලබා ගැනීමට, Ultimatum වෙත <ph name="EMAIL" /> ලෙස පුරන්න</translation>
 <translation id="1138458427267715730">වෙබය පුරා ඕනෑම අඩවියක මිල පහත වැටෙන විට ඇඟවීම් ලබා ගන්න</translation>
 <translation id="1140317858355046628">ඔබ එය මකා දැමුවහොත්, සෑම කෙනෙකුටම වහාම "<ph name="GROUP_NAME" />" පටිති සමූහයට ප්‍රවේශය අහිමි වනු ඇති අතර, එය සියලු උපාංගවලින් මකා දැමෙනු ඇත.</translation>
 <translation id="1142732900304639782">මෙම අඩවි පරිවර්තනය කිරීමට පිරිනමන්න එපා</translation>
 <translation id="1143193470214071120">කවුළුවක් වසන්න හෝ කවුළු කළමනාකරණය කරන්න</translation>
 <translation id="1149725087019908252"><ph name="FILE_NAME" /> ස්කෑන් කිරීම</translation>
-<translation id="1150263420752757504"><ph name="APP_NAME" /> Chrome තුළ විවෘත වනු ඇත. ඉදිරියට යාමෙන්, ඔබ <ph name="BEGIN_LINK1" />Google සේවා නියම<ph name="END_LINK1" /> සහ <ph name="BEGIN_LINK2" />Google Chrome සහ ChromeOS අතිරේක සේවා නියම<ph name="END_LINK2" /> සමග එකඟ වේ.</translation>
+<translation id="1150263420752757504"><ph name="APP_NAME" /> Ultimatum තුළ විවෘත වනු ඇත. ඉදිරියට යාමෙන්, ඔබ <ph name="BEGIN_LINK1" />Google සේවා නියම<ph name="END_LINK1" /> සහ <ph name="BEGIN_LINK2" />Ultimatum සහ UltimatumOS අතිරේක සේවා නියම<ph name="END_LINK2" /> සමග එකඟ වේ.</translation>
 <translation id="1154555449933432029">ඔබ Google මුරපද කළමනාකරු තුළ සුරකින ලද මුරපද නොමැත.</translation>
 <translation id="115483310321669804"><ph name="PASSWORD" /> මුරපදය භාවිත කරන්න</translation>
 <translation id="1161065531352634524">පටිති සහ ඉතිහාසය සමමුහුර්ත කරන්න</translation>
 <translation id="1165109137568919258">සෙවීමට ඔබේ ඡායාරූප ගැලරියෙන් ඡායාරූපයක් ගන්න හෝ රූපයක් එක් කරන්න</translation>
 <translation id="1173894706177603556">ප්‍රතිනම්</translation>
-<translation id="1174479719160874822">තිරය පටු වූ විට Chrome ජංගම අඩවිය ඉල්ලනු ඇත</translation>
-<translation id="1175241315203286684">ඔබේ පරිපාලකයාට දුරස්ථව ඔබේ පැතිකඩ සහ බ්‍රවුසරය වෙත වෙනස්කම් කිරීමට, වාර්තා කිරීම හරහා බ්‍රවුසරය ගැන තොරතුරු විශ්ලේෂණ කිරීමට, සහ වෙනත් අත්‍යවශ්‍ය කාර්යභාර ඉටු කිරීමට හැකි ය. මෙම උපාංගය මත ක්‍රියාකාරකම Chrome හට පිටතින් ද කළමනා කරනු ලැබිය හැක.</translation>
+<translation id="1174479719160874822">තිරය පටු වූ විට Ultimatum ජංගම අඩවිය ඉල්ලනු ඇත</translation>
+<translation id="1175241315203286684">ඔබේ පරිපාලකයාට දුරස්ථව ඔබේ පැතිකඩ සහ බ්‍රවුසරය වෙත වෙනස්කම් කිරීමට, වාර්තා කිරීම හරහා බ්‍රවුසරය ගැන තොරතුරු විශ්ලේෂණ කිරීමට, සහ වෙනත් අත්‍යවශ්‍ය කාර්යභාර ඉටු කිරීමට හැකි ය. මෙම උපාංගය මත ක්‍රියාකාරකම Ultimatum හට පිටතින් ද කළමනා කරනු ලැබිය හැක.</translation>
 <translation id="1177863135347784049">සැකසුම්</translation>
 <translation id="1181037720776840403">ඉවත් කරන්න</translation>
 <translation id="1183189057400844278">ඔබට සැම විටම ඔබේ Google ගිණුමේ ඇති මුරපද භාවිත කළ හැකි බව සහතික කර ගැනීමට, ඒ ඔබ බව සත්‍යාපනය කරන්න.</translation>
@@ -85,13 +85,13 @@
 <translation id="1318262688555255786"><ph name="PAGE_TITLE" /> වෙබ් පිටුවට සබැඳිය බෙදා ගන්න. මූලාශ්‍රය: <ph name="PAGE_URL" /></translation>
 <translation id="1320912611264252795">පිටුසන් සුරැකීම් ප්‍රවාහ ෆෝල්ඩර පූර්ණ උසකදී විවෘතයි</translation>
 <translation id="1327257854815634930">සංචලන ඉතිහාසය විවෘතයි</translation>
-<translation id="1331212799747679585">Chrome යාවත්කාලීන කළ නොහැක. තවත් විකල්ප</translation>
-<translation id="1332501820983677155">Google Chrome විශේෂාංග කෙටි මං</translation>
+<translation id="1331212799747679585">Ultimatum යාවත්කාලීන කළ නොහැක. තවත් විකල්ප</translation>
+<translation id="1332501820983677155">Ultimatum විශේෂාංග කෙටි මං</translation>
 <translation id="1333491156693005331">මෑතක දී පරීක්ෂා කරන ලදි</translation>
 <translation id="1336996151357442890"><ph name="SITE_NAME" /> වෙතින් ග්‍රාහක නොවන ලදි. ඔබේ මීළඟ පැමිණීමේ දී නැවත ඔබෙන් අසනු ඇත.</translation>
 <translation id="1340839264183302272">සමූහය හැර යන්න</translation>
 <translation id="1342886103232377846">සමථයට පත් වූ මුරපද පරීක්ෂා කිරීමට, Google මුරපද කළමනාකරු වෙත යන්න</translation>
-<translation id="1343830902827845050">Chrome වෙත පුරනය වන්න</translation>
+<translation id="1343830902827845050">Ultimatum වෙත පුරනය වන්න</translation>
 <translation id="1344653310988386453">උද්දීපනයට සබැඳිය ඇතුළත් කරන්න</translation>
 <translation id="1355088659320425659">ඉතිහාසය සහ පටිති</translation>
 <translation id="1360432990279830238">වැරී, සමමුහුර්ත කිරීම අක්‍රිය කරන්නේද?</translation>
@@ -105,12 +105,12 @@
 <translation id="1383876407941801731">සොයන්න</translation>
 <translation id="1384704387250346179">Google Lens සමග රූපය පරිවර්තනය ක. <ph name="BEGIN_NEW" />නව<ph name="END_NEW" /></translation>
 <translation id="1386674309198842382">දින <ph name="LAST_UPDATED" /> කට පෙර ක්‍රියාත්මකයි</translation>
-<translation id="1390418506739274310">ඔබ Chrome තුළ සබැඳි විවෘත කරන වෙනත් යෙදුම්වලින් ඉතිහාසය දකීවි. ඔබේ Google ගිණුමට <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> තුළ බ්‍රවුස් කිරීමේ ඉතිහාසයේ වෙනත් ආකාර තිබේවි.</translation>
+<translation id="1390418506739274310">ඔබ Ultimatum තුළ සබැඳි විවෘත කරන වෙනත් යෙදුම්වලින් ඉතිහාසය දකීවි. ඔබේ Google ගිණුමට <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> තුළ බ්‍රවුස් කිරීමේ ඉතිහාසයේ වෙනත් ආකාර තිබේවි.</translation>
 <translation id="139752016751285248">මිල ඇතුළාන්ත පහළ පත්‍රය සම්පූර්ණ උසින් විවෘත විය</translation>
 <translation id="1397811292916898096"><ph name="PRODUCT_NAME" /> සමඟ සොයන්න</translation>
-<translation id="1398057416966591719">ඔබට ඔබේ Google ගිණුම තුළ <ph name="BEGIN_LINK1" />සුරැකි Chrome දත්ත කළමනා<ph name="END_LINK1" /> කළ හැක.
+<translation id="1398057416966591719">ඔබට ඔබේ Google ගිණුම තුළ <ph name="BEGIN_LINK1" />සුරැකි Ultimatum දත්ත කළමනා<ph name="END_LINK1" /> කළ හැක.
 
-ඔබේ Chrome අත්දැකීම දියුණු කිරීමට දත්ත භාවිත කරන තව සැකසීම් සඳහා, <ph name="BEGIN_LINK2" />Google සේවා<ph name="END_LINK2" /> වෙත යන්න.</translation>
+ඔබේ Ultimatum අත්දැකීම දියුණු කිරීමට දත්ත භාවිත කරන තව සැකසීම් සඳහා, <ph name="BEGIN_LINK2" />Google සේවා<ph name="END_LINK2" /> වෙත යන්න.</translation>
 <translation id="1407069428457324124">අඳුරු තේමාව</translation>
 <translation id="1407135791313364759">සියල්ල විවෘත කරන්න</translation>
 <translation id="1409879593029778104">ගොනුව දැනටමත් තිබෙන නිසා <ph name="FILE_NAME" /> බාගැනීම වළක්වන ලදි.</translation>
@@ -124,10 +124,10 @@
 <translation id="1448440926884431741">Bookmarks තුළ ඔබගේ හඹා ගිය නිෂ්පාදන සංවිධානය කරන්න</translation>
 <translation id="1455845192930279203">ඔබට කෙසේ හෝ <ph name="DOWNLOAD_DOMAIN" /> වෙතින් "<ph name="FILE_NAME" />" (<ph name="FILE_SIZE" />) බාගත කිරීමට අවශ්‍ය ද?</translation>
 <translation id="1460751212339734034">කාලය ඉතිරි කරන්න, අඩුවෙන් ටයිප් කරන්න</translation>
-<translation id="1466383950273130737">Chrome හි භාෂාව තෝරන්න</translation>
+<translation id="1466383950273130737">Ultimatum හි භාෂාව තෝරන්න</translation>
 <translation id="1477626028522505441">සේවාදායකයේ දෝෂ නිසා <ph name="FILE_NAME" /> බාගැනීම අසාර්ථක විය.</translation>
 <translation id="147982357559798527">වෙනස් කළා</translation>
-<translation id="1480287803138246127">ඔබේ සමහර වෙබ් ඉතිහාසය මෙහි දින් නොවීමට ඉඩ ඇත. ඔබේ සියලුම Chrome ඉතිහාසය බැලීමට, සම්පූර්ණ Chrome ඉතිහාසය විවෘත කරන්න.</translation>
+<translation id="1480287803138246127">ඔබේ සමහර වෙබ් ඉතිහාසය මෙහි දින් නොවීමට ඉඩ ඇත. ඔබේ සියලුම Ultimatum ඉතිහාසය බැලීමට, සම්පූර්ණ Ultimatum ඉතිහාසය විවෘත කරන්න.</translation>
 <translation id="1493287004536771723">ඔබ <ph name="SITE_NAME" /> අනුගමනය කරයි</translation>
 <translation id="1495677929897281669">ආපසු පටිත්ත වෙත</translation>
 <translation id="1496514951988037011">පරිශීලක නාමය</translation>
@@ -137,14 +137,14 @@
 <translation id="1515901671075971249">පටිති සංචාලන කෙටිමං</translation>
 <translation id="1516966594427080024">අප්‍රසිද්ධ ප්‍රකාරයේ නව කවුළුවක් විවෘත කරන්න</translation>
 <translation id="1521774566618522728">අද ක්‍රියාත්මකයි</translation>
-<translation id="153446405401665083">Chrome හි නව අනුවාදය ලබා ගත හැක</translation>
+<translation id="153446405401665083">Ultimatum හි නව අනුවාදය ලබා ගත හැක</translation>
 <translation id="1540012742443808215">ලිපින තීරුව දැනට ඉහළින් ඇත</translation>
-<translation id="1544084554881119930">ගෙවීමේ ක්‍රම සහ ලිපින සංකේතන නොකෙරේ Chrome වෙතින් ලැබෙන බ්‍රවුස් කිරීමේ ඉතිහාසය සමමුහූර්ත නොවේ.
-ඔබේ සංකේතිත දත්ත කියවිය හැක්කේ ඔබේ මුර වැකිකඩ සහිත කෙනෙකුට පමණි. මුර වැකිකඩ Google වෙත යවන්නේ හෝ ගබඩා කරන්නේ නැත. ඔබට ඔබේ මුර-වැකිකඩ අමතක වුවහොත් හෝ මෙම සැකසීම වෙනස් කිරීමට අවශ්‍ය නම්, <ph name="BEGIN_LINK" />ඔබේ ගිණුමේ ඇති Chrome දත්ත හිස් කරන්න<ph name="END_LINK" />.</translation>
+<translation id="1544084554881119930">ගෙවීමේ ක්‍රම සහ ලිපින සංකේතන නොකෙරේ Ultimatum වෙතින් ලැබෙන බ්‍රවුස් කිරීමේ ඉතිහාසය සමමුහූර්ත නොවේ.
+ඔබේ සංකේතිත දත්ත කියවිය හැක්කේ ඔබේ මුර වැකිකඩ සහිත කෙනෙකුට පමණි. මුර වැකිකඩ Google වෙත යවන්නේ හෝ ගබඩා කරන්නේ නැත. ඔබට ඔබේ මුර-වැකිකඩ අමතක වුවහොත් හෝ මෙම සැකසීම වෙනස් කිරීමට අවශ්‍ය නම්, <ph name="BEGIN_LINK" />ඔබේ ගිණුමේ ඇති Ultimatum දත්ත හිස් කරන්න<ph name="END_LINK" />.</translation>
 <translation id="1544826120773021464">ඔබේ Google ගිණුම කළමනා කිරීමට, "ගිණුම කළමනා කරන්න" බොත්තමට තට්ටු කරන්න</translation>
 <translation id="1549000191223877751">වෙනත් කවුළුවක් වෙත යන්න</translation>
-<translation id="1553358976309200471">Chrome යාවත් කරන්න</translation>
-<translation id="1554532453982918912">ඔබ කරන ආකාරයට Chrome භාවිත කරන පුද්ගලයින් සඳහා එය වඩා හොඳ කිරීමට උදවු කරන්න</translation>
+<translation id="1553358976309200471">Ultimatum යාවත් කරන්න</translation>
+<translation id="1554532453982918912">ඔබ කරන ආකාරයට Ultimatum භාවිත කරන පුද්ගලයින් සඳහා එය වඩා හොඳ කිරීමට උදවු කරන්න</translation>
 <translation id="1568636008098739136">මෙම පිටුවට සවන් දෙන්න. මෙම කෙටිමඟ සංස්කරණ කිරීමට, ස්පර්ශ කර අල්ලා සිටින්න.</translation>
 <translation id="1571041387761170095">දුර්වල හෝ නැවත භාවිත කළ මුරපද නැත</translation>
 <translation id="1578591621182011812">{NUM_PASSWORDS,plural, =1{මෙම උපාංගයෙහි අවදානමට ලක් වූ 1 මුරපදයක් තිබේ}one{මෙම උපාංගයෙහි අවදානමට ලක් වූ මුරපද #ක් ඇත}other{මෙම උපාංගයෙහි අවදානමට ලක් වූ මුරපද #ක් ඇත}}</translation>
@@ -171,24 +171,24 @@
 <translation id="1702907158640575240">කළමනාකරණය කළ බ්‍රවුසරය</translation>
 <translation id="170478069042229393"><ph name="TAB_TITLE" /> අප්‍රකට පටිත්ත අමුණන ලදි</translation>
 <translation id="1718835860248848330">පසුගිය පැය</translation>
-<translation id="1726477445370128854">Chrome ඔබ පිවිසිය හැකි යැයි සිතන පිටු පූර්ව පූරණය කරන විට ඔබට වඩා වේගයෙන් බ්‍රවුස් කිරීමට සහ සෙවීමට හැකිය</translation>
+<translation id="1726477445370128854">Ultimatum ඔබ පිවිසිය හැකි යැයි සිතන පිටු පූර්ව පූරණය කරන විට ඔබට වඩා වේගයෙන් බ්‍රවුස් කිරීමට සහ සෙවීමට හැකිය</translation>
 <translation id="1728803206919861584">මුරයතුර අප්‍රසිද්ධියෙන් පිටත සුරකින්න ද?</translation>
 <translation id="1732514748744806741">ඔබේ මුරපද අවදානමට ලක් වී ඇත්නම්, අපි ඔබට දන්වන්නෙමු</translation>
-<translation id="1737694586321018892">Chrome හි ශක්තිමත්ම ආරක්ෂාව ලබා ගන්න</translation>
+<translation id="1737694586321018892">Ultimatum හි ශක්තිමත්ම ආරක්ෂාව ලබා ගන්න</translation>
 <translation id="1747593111377567311">{NUM_SITES,plural, =1{1 අඩවියක් මෑතක දී දැනුම්දීම් රැසක් එවා ඇත}one{අඩවි #ක් මෑතක දී දැනුම්දීම් රැසක් එවා ඇත}other{අඩවි #ක් මෑතක දී දැනුම්දීම් රැසක් එවා ඇත}}</translation>
 <translation id="1749561566933687563">ඔබගේ පොත් සලකුණු සමමුහුර්ත කරන්න</translation>
 <translation id="1750238553597293878">ඔබේ Google ගිණුමේ ඇති මුරපද දිගටම භාවිතා කරන්න</translation>
 <translation id="17513872634828108">පටිති විවෘත කරන්න</translation>
 <translation id="1753744496844366747">Aa</translation>
 <translation id="1760873718737761808">{FILE_COUNT,plural, =1{පිටු, ලැයිස්තුවේ 1 පිටුවක්}one{පිටු, ලැයිස්තුවේ පිටු #ක්}other{පිටු, ලැයිස්තුවේ පිටු #ක්}}</translation>
-<translation id="1771929606532798550">ඔබේ Chrome භාවිතය පිළිබඳ තතු Google වෙත යවනු ලැබේ, නමුත් එය ඔබ හා බැඳී නැත\n\nChrome බිඳ වැටුණහොත්, බිඳවැටීම පිළිබඳ විස්තරවල යම් පුද්ගලික තතු ඇතුළත් විය හැක\n\nඔබ ඔබේ ඉතිහාසය ඔබේ Google ගිණුමට සමමුහුර්ත කරන්නේ නම්, ප්‍රමිතිකවල ද ඔබ පිවිසෙන URL පිළිබඳ තතු ඇතුළත් විය හැක</translation>
+<translation id="1771929606532798550">ඔබේ Ultimatum භාවිතය පිළිබඳ තතු Google වෙත යවනු ලැබේ, නමුත් එය ඔබ හා බැඳී නැත\n\nUltimatum බිඳ වැටුණහොත්, බිඳවැටීම පිළිබඳ විස්තරවල යම් පුද්ගලික තතු ඇතුළත් විය හැක\n\nඔබ ඔබේ ඉතිහාසය ඔබේ Google ගිණුමට සමමුහුර්ත කරන්නේ නම්, ප්‍රමිතිකවල ද ඔබ පිවිසෙන URL පිළිබඳ තතු ඇතුළත් විය හැක</translation>
 <translation id="1778457539567749232">නොකියවූ ලෙස ලකුණු කරන්න</translation>
 <translation id="1779766957982586368">කවුළුව වසන්න</translation>
 <translation id="1780023393214832643">මුරපද <ph name="USERNAME" /> වෙත සුරකින ලදි</translation>
 <translation id="1791662854739702043">ස්ථාපිත</translation>
 <translation id="1792959175193046959">ඕනෑම වේලාවක පෙරනිමි බාගැනීමේ ස්ථානය වෙනස් කරන්න</translation>
 <translation id="1796666869097395659">පසුව එය වෙත ආපසු යාමට පටිත්ත අවම කරන්න</translation>
-<translation id="1799920918471566157">Chrome ඉඟි</translation>
+<translation id="1799920918471566157">Ultimatum ඉඟි</translation>
 <translation id="1807246157184219062">එළිය</translation>
 <translation id="1807709131360304325">නව කවුළුවක් විවෘත කරන්න</translation>
 <translation id="1810845389119482123">මූලික සමමුහූර්ත සැකසීම අවසන් වී නැත</translation>
@@ -197,13 +197,13 @@
 <translation id="1820408774134375111">පිරීමේ පහළ පත්‍රය</translation>
 <translation id="1823492026305965829"><ph name="USER_FULL_NAME" /> ලෙස පුරන්න</translation>
 <translation id="1824902652744048041">බ්‍රවුස් කිරීමේ දත්ත මකන්න තට්ටු කරන්න</translation>
-<translation id="1825772852827001597">Google Pay වෙතින් ලැබෙන ගෙවීම් ක්‍රම සහ ලිපින සංකේතන නොකෙරේ. Chrome වෙතින් ලැබෙන බ්‍රවුස් කිරීමේ ඉතිහාසය සමමුහූර්ත නොවේ.
-ඔබේ සංකේතිත දත්ත කියවිය හැක්කේ ඔබේ මුර වැකිකඩ සහිත කෙනෙකුට පමණි. මුර වැකිකඩ Google වෙත යවන්නේ හෝ ගබඩා කරන්නේ නැත. ඔබට ඔබේ මුර-වැකිකඩ අමතක වුවහොත් හෝ මෙම සැකසීම වෙනස් කිරීමට අවශ්‍ය නම්, <ph name="BEGIN_LINK" />ඔබේ ගිණුමේ ඇති Chrome දත්ත මකන්න<ph name="END_LINK" />.</translation>
+<translation id="1825772852827001597">Google Pay වෙතින් ලැබෙන ගෙවීම් ක්‍රම සහ ලිපින සංකේතන නොකෙරේ. Ultimatum වෙතින් ලැබෙන බ්‍රවුස් කිරීමේ ඉතිහාසය සමමුහූර්ත නොවේ.
+ඔබේ සංකේතිත දත්ත කියවිය හැක්කේ ඔබේ මුර වැකිකඩ සහිත කෙනෙකුට පමණි. මුර වැකිකඩ Google වෙත යවන්නේ හෝ ගබඩා කරන්නේ නැත. ඔබට ඔබේ මුර-වැකිකඩ අමතක වුවහොත් හෝ මෙම සැකසීම වෙනස් කිරීමට අවශ්‍ය නම්, <ph name="BEGIN_LINK" />ඔබේ ගිණුමේ ඇති Ultimatum දත්ත මකන්න<ph name="END_LINK" />.</translation>
 <translation id="1829244130665387512">පිටුවෙහි සොයන්න</translation>
 <translation id="1832459821645506983">ඔව්, මමත් එනවා</translation>
-<translation id="1845958458910716240">ඔබේ දත්ත ආරක්ෂා කිරීමට, ඔබ මෑතක දී නොපැමිණි අඩවි වලින් අවසර ඉවත් කිරීමට Chrome හට ඉඩ දෙන්න</translation>
-<translation id="1871098866036088250">Chrome බ්‍රව්සරය තුළ විවෘත කරන්න</translation>
-<translation id="1877026089748256423">Chrome යල් පැන ගොස් ඇත</translation>
+<translation id="1845958458910716240">ඔබේ දත්ත ආරක්ෂා කිරීමට, ඔබ මෑතක දී නොපැමිණි අඩවි වලින් අවසර ඉවත් කිරීමට Ultimatum හට ඉඩ දෙන්න</translation>
+<translation id="1871098866036088250">Ultimatum බ්‍රව්සරය තුළ විවෘත කරන්න</translation>
+<translation id="1877026089748256423">Ultimatum යල් පැන ගොස් ඇත</translation>
 <translation id="1877073879466606884">ඔබ පුරනය වී ඇති පැතිකඩ අධීක්‍ෂිත පැතිකඩකි. ඔබේ පරිපාලකයාට දුරස්ථව ඔබේ පැතිකඩ සැකසිම් වෙත වෙනස්කම් කිරීමට, වාර්තා කිරීම හරහා බ්‍රවුසරය ගැන තොරතුරු විශ්ලේෂණ කිරීමට, සහ වෙනත් අත්‍යවශ්‍ය කාර්යභාර ඉටු කිරීමට හැකි ය.</translation>
 <translation id="1879904908408734349">පිරීමේ පහළ පත්‍රය වසා ඇත</translation>
 <translation id="1883903952484604915">මගේ ගොනු</translation>
@@ -215,7 +215,7 @@
 <translation id="1910950723001426294">බෙදා ගැනීමේ විකල්ප ලැයිස්තුව වසා ඇත.</translation>
 <translation id="191726024256261717">අවසර සමාලෝචනය කරන්න</translation>
 <translation id="1917766536967060661">ඔබට වහාම “<ph name="GROUP_NAME" />” පටිති සමූහයට ප්‍රවේශය අහිමි වනු ඇති අතර, <ph name="BLOCKED_MEMBER_FULL_NAME" /> (<ph name="BLOCKED_MEMBER_EMAIL" />) හට තවදුරටත් Google සේවා හරහා ඔබ සමග අන්තර් ක්‍රියා කිරීමට නොහැකි වනු ඇත.</translation>
-<translation id="1919130412786645364">Chrome පුරනයට ඉඩ දෙන්න</translation>
+<translation id="1919130412786645364">Ultimatum පුරනයට ඉඩ දෙන්න</translation>
 <translation id="1922362554271624559">යෝජිත භාෂා</translation>
 <translation id="1924255092154549435">පටිත්ත පුළුල් කර ඇත</translation>
 <translation id="1925021887439448749">අභිරුචි වෙබ් ලිපිනය ඇතුළු කරන්න</translation>
@@ -225,11 +225,11 @@
 <translation id="1944535645109964458">මුරයතුරු කිසිවක් නොලැබේ</translation>
 <translation id="1957557050935255529">PDF පූරණ කිරීම…</translation>
 <translation id="1959679933317802873">අන්තර්ගතය සඳහා රැඳී සිටීම</translation>
-<translation id="1960290143419248813">Android හි මෙම අනුවාදය සඳහා Chrome යාවත්කාලීන කිරීම් තව දුරටත් සහය නොදක්වයි.</translation>
+<translation id="1960290143419248813">Android හි මෙම අනුවාදය සඳහා Ultimatum යාවත්කාලීන කිරීම් තව දුරටත් සහය නොදක්වයි.</translation>
 <translation id="1962061488333185936"><ph name="TAB_TITLE" />, බහු-තේරූ ශ්‍රව්‍ය පටිත්ත</translation>
 <translation id="1963976881984600709">සම්මත ආරක්ෂාව</translation>
 <translation id="1966710179511230534">කරුණාකර ඔබේ පිවිසුම් විස්තර යාවත්කාලීන කරන්න.</translation>
-<translation id="1969037871259811890">ඔබේ බ්‍රවුස් කිරීමේ දත්ත මැකීම ඔබව ඔබේ Google ගිණුමෙන් වරන්නේ නැත. එසේ කිරීමට, <ph name="BEGIN_LINK1" />Chrome වෙතින් වරන්න<ph name="END_LINK1" />.</translation>
+<translation id="1969037871259811890">ඔබේ බ්‍රවුස් කිරීමේ දත්ත මැකීම ඔබව ඔබේ Google ගිණුමෙන් වරන්නේ නැත. එසේ කිරීමට, <ph name="BEGIN_LINK1" />Ultimatum වෙතින් වරන්න<ph name="END_LINK1" />.</translation>
 <translation id="197288927597451399">තබාගන්න</translation>
 <translation id="1973912524893600642">දත්ත තබා ගන්න</translation>
 <translation id="1974060860693918893">උසස් කළ</translation>
@@ -242,7 +242,7 @@
 <translation id="2021896219286479412">පූර්ණ තිර අඩවි පාලන</translation>
 <translation id="2029669011553795746">ඉඟි දැනුම්දීම් තෝරා ගැනීම අඩ උසින් විවෘත කර ඇත</translation>
 <translation id="2038563949887743358">ඩෙස්ක්ටොප් අඩවිය ඉල්ලීම ක්‍රියාත්මක කරන්න</translation>
-<translation id="204321170514947529"><ph name="APP_NAME" /> හට ද Chrome හි දත්ත තිබේ</translation>
+<translation id="204321170514947529"><ph name="APP_NAME" /> හට ද Ultimatum හි දත්ත තිබේ</translation>
 <translation id="2047378580182589770">අප්‍රකට වෙතින් ඉවත් වීමට ස්පර්ශ කර සිටින්න</translation>
 <translation id="2049574241039454490"><ph name="FILE_SIZE_OF_TOTAL" /> <ph name="SEPARATOR" /> <ph name="DESCRIPTION" /></translation>
 <translation id="2051669996101374349">හැකි සෑම විට ම HTTPS භාවිතා කර එයට සහය නොදක්වන අඩවි පූරණය කිරීමට පෙර අනතුරු අඟවන්න. ඔබ උසස් ආරක්ෂණය සබල කර ඇති නිසා ඔබට මෙම සැකසීම වෙනස් කළ නොහැක.</translation>
@@ -265,9 +265,9 @@
 <translation id="2138283760993967204">කළමනාකරණ නිරූපකය</translation>
 <translation id="2138632817776076519"><ph name="TAB_TITLE" />, තෝරා ගත් පටිගත කිරීමේ පටිත්ත</translation>
 <translation id="2141396931810938595">ඔබගේ භාවිතය මත පදනම්ව</translation>
-<translation id="2145315049852051678">Chrome ඔබේ බ්‍රවුසරයට ආරක්‍ෂිතම සැකසීම් ඇති බව තහවුරු කිරීමට නිතිපතා පරීක්‍ෂා කරයි. අපි සමාලෝචනය අවශ්‍ය කිසිවක් තිබේ නම් ඔබට දන්වමු.</translation>
+<translation id="2145315049852051678">Ultimatum ඔබේ බ්‍රවුසරයට ආරක්‍ෂිතම සැකසීම් ඇති බව තහවුරු කිරීමට නිතිපතා පරීක්‍ෂා කරයි. අපි සමාලෝචනය අවශ්‍ය කිසිවක් තිබේ නම් ඔබට දන්වමු.</translation>
 <translation id="2149973817440762519">පිටු සලකුණු සංස්කරණය කරන්න</translation>
-<translation id="2163089732491971196">ඔබේ Google ගිණුමේ Chrome දත්ත භාවිත කිරීමට සහ සුරැකීමට, ඔබේ මුර වැකිකඩ ඇතුළත් කරන්න.</translation>
+<translation id="2163089732491971196">ඔබේ Google ගිණුමේ Ultimatum දත්ත භාවිත කිරීමට සහ සුරැකීමට, ඔබේ මුර වැකිකඩ ඇතුළත් කරන්න.</translation>
 <translation id="2166228530126694506">අනුවාදය <ph name="VERSION_NUMBER" /></translation>
 <translation id="2172688499998841696">රූප විස්තර ක්‍රියාවිරහිතයි</translation>
 <translation id="2172905120685242547">කවුළුව වසන්නද?</translation>
@@ -280,7 +280,7 @@
 <translation id="2194856509914051091">සලකා බැලිය යුතු කරුණු</translation>
 <translation id="2205701497928406883"><ph name="TAB_TITLE" />, අමුණන ලද බෙදා ගැනීමේ පටිත්ත</translation>
 <translation id="22091350895006575">පරිශීලක නාමය එක් කරන්න</translation>
-<translation id="221494669172414749">පැතිකඩ අගුලක් නොමැතිව Chrome විවෘත කිරීම ඔබේ සුරකින ලද මුරපද සහ ගෙවීම් ක්‍රම මෝටර් රථයෙන් ඉවත් කරනු ඇත. පැතිකඩ අගුලක් භාවිතා කිරීම මෙම දත්ත සුරක්ෂිතව තබා ගනී.</translation>
+<translation id="221494669172414749">පැතිකඩ අගුලක් නොමැතිව Ultimatum විවෘත කිරීම ඔබේ සුරකින ලද මුරපද සහ ගෙවීම් ක්‍රම මෝටර් රථයෙන් ඉවත් කරනු ඇත. පැතිකඩ අගුලක් භාවිතා කිරීම මෙම දත්ත සුරක්ෂිතව තබා ගනී.</translation>
 <translation id="2226826835915474236">අක්‍රිය කෙටි මං</translation>
 <translation id="2227179592712503583">යෝජනාව ඉවත් කරන්න</translation>
 <translation id="2227444325776770048"><ph name="USER_FULL_NAME" /> ලෙස දිගටම කර ගෙන යන්න</translation>
@@ -311,7 +311,7 @@
 <translation id="2332515770639153015">ඉහළ නැංවූ සුරක්ෂිත බ්‍රවුස් කිරීම ක්‍රියාත්මකයි</translation>
 <translation id="233375395665273385">මකා දමා වරන්න</translation>
 <translation id="2341410551640223969"><ph name="WEBAPK_NAME" /> ස්ථාපනය කළ නොහැකි විය.</translation>
-<translation id="2349710944427398404">ගිණුම්, පිටුසන්, සහ සුරැකි සැකසීම් ඇතුළුව, Chrome භාවිතා කළ මුළු දත්ත</translation>
+<translation id="2349710944427398404">ගිණුම්, පිටුසන්, සහ සුරැකි සැකසීම් ඇතුළුව, Ultimatum භාවිතා කළ මුළු දත්ත</translation>
 <translation id="235789365079050412">Google පෞද්ගලිකත්ව ප්‍රතිපත්තිය</translation>
 <translation id="2359808026110333948">කරගෙන යන්න</translation>
 <translation id="2362083820973145409"><ph name="USER_NAME" /> ලෙස පුරනය වී ඇත. <ph name="USER_EMAIL" />. සැකසීම් විවෘත කරයි.</translation>
@@ -333,7 +333,7 @@
 <translation id="2427025860753516072">{FILE_COUNT,plural, =1{වීඩියෝ, ලැයිස්තුවේ 1 වීඩියෝවක්}one{වීඩියෝ, ලැයිස්තුවේ වීඩියෝ #ක්}other{වීඩියෝ, ලැයිස්තුවේ වීඩියෝ #ක්}}</translation>
 <translation id="2433507940547922241">පෙනුම</translation>
 <translation id="2439153523196674349"><ph name="SITE_NAME" /> පෙරදසුන</translation>
-<translation id="2449931042095204989">Google අඩවියක් හෝ යෙදුමක් ඔවුන්ගේ පිටුවේ සබැඳි පුද්ගලිකව පූර්ව පූරණය කිරීමට ඉල්ලා සිටින විට, Chrome කුකීස් නොමැතිව Google සේවාදායක හරහා පිටු සංකේතනය කර පූර්ව පූරණය කරයි. මෙය පූර්ව පූරණය කර ඇති අඩවියෙන් ඔබගේ අනන්‍යතාව සඟවයි.</translation>
+<translation id="2449931042095204989">Google අඩවියක් හෝ යෙදුමක් ඔවුන්ගේ පිටුවේ සබැඳි පුද්ගලිකව පූර්ව පූරණය කිරීමට ඉල්ලා සිටින විට, Ultimatum කුකීස් නොමැතිව Google සේවාදායක හරහා පිටු සංකේතනය කර පූර්ව පූරණය කරයි. මෙය පූර්ව පූරණය කර ඇති අඩවියෙන් ඔබගේ අනන්‍යතාව සඟවයි.</translation>
 <translation id="2450019289047528273">Google Wallet වෙතින් ගෙවීම් ක්‍රම සහ අනෙකුත් තතු</translation>
 <translation id="2450083983707403292">ඔබට නැවත <ph name="FILE_NAME" /> බාගැනීම ආරම්භ කිරීමට අවශ්‍යද?</translation>
 <translation id="2451607499823206582">හඹා යමින්</translation>
@@ -342,17 +342,17 @@
 <translation id="2466378451804467735"><ph name="TAB_TITLE" />, බහු-තේරූ නිහඬ කළ පටිත්ත</translation>
 <translation id="2468444275314013497">ඔබේ බ්‍රවුසරය හොඳ බව පෙනේ</translation>
 <translation id="2471632347767899461">උදවු මධ්‍යස්ථානය සෙවීමට උත්සාහ කරන්න</translation>
-<translation id="2472163211318554013">Chrome වෙතින් උපරිම ප්‍රයෝජන ලබා ගැනීමට පුරන්න</translation>
+<translation id="2472163211318554013">Ultimatum වෙතින් උපරිම ප්‍රයෝජන ලබා ගැනීමට පුරන්න</translation>
 <translation id="247737702124049222">රූප විස්තර ක්‍රියාත්මකයි</translation>
 <translation id="2479148705183875116">සැකසීම් වෙත යන්න</translation>
 <translation id="2482878487686419369">දැනුම්දීම්</translation>
 <translation id="2496180316473517155">බ්‍රවුස් ඉතිහාසය</translation>
 <translation id="2497852260688568942">සමමුහුර්ත කිරීම ඔබේ පරිපාලක විසින් අබල කර ඇත</translation>
-<translation id="250020030759455918">ඔබ Chrome තුළ ඔබේ <ph name="SITE_NAME" /> පුරන තත්ත්‍වය, බ්‍රවුස් කිරීමේ දත්ත, සහ අඩවි දත්ත දකිනු ඇත</translation>
+<translation id="250020030759455918">ඔබ Ultimatum තුළ ඔබේ <ph name="SITE_NAME" /> පුරන තත්ත්‍වය, බ්‍රවුස් කිරීමේ දත්ත, සහ අඩවි දත්ත දකිනු ඇත</translation>
 <translation id="2510106555128151389"><ph name="WEBAPK_NAME" /> ස්ථාපනය කරමින්...</translation>
 <translation id="2512234228327349533">මිල දී ගැනීමේ විකල්ප සොයන්න</translation>
 <translation id="2513403576141822879">රහස්‍යතාව, ආරක්ෂාව, සහ දත්ත රැස් කිරීමට අදාළ තවත් සැකසීම් සඳහා, <ph name="BEGIN_LINK" />සමමුහුර්තකරණය සහ Google සේවා<ph name="END_LINK" /> බලන්න</translation>
-<translation id="2515921719039583189">මෙම උපාංගයෙන් ඔබේ Chrome දත්ත මකන්නද?</translation>
+<translation id="2515921719039583189">මෙම උපාංගයෙන් ඔබේ Ultimatum දත්ත මකන්නද?</translation>
 <translation id="2517113738956581680">පූර්ණ තරමේ පත්‍රය</translation>
 <translation id="2523184218357549926">Google වෙත ඔබ පිවිසෙන පිටු URL යවයි</translation>
 <translation id="2524132927880411790">Google යෙදුම් හඬ සෙවීම වෙත යන්න</translation>
@@ -374,9 +374,9 @@
 <translation id="2569733278091928697">ඔබට මාධ්‍ය පාලන, අප්‍රකට සැසි, බාගැනීම් සහ තවත් දේ පහසුවෙන් කළමනාකරණය කිරීමට හැකි වනු ඇත</translation>
 <translation id="2571711316400087311">Google පරිවර්තනය වෙත වෙනත් භාෂාවලින් පිටු යැවීමට පිරිනමන්න</translation>
 <translation id="2571834852878229351">මගේම එකක් තනන්න</translation>
-<translation id="2574249610672786438">ඔබ Chrome භාවිත කරන ඕනෑම ස්ථානයක සිට ඔබේ ටැබ බැලීමට, ඔබේ සියලු උපාංගවල පුරන්න</translation>
+<translation id="2574249610672786438">ඔබ Ultimatum භාවිත කරන ඕනෑම ස්ථානයක සිට ඔබේ ටැබ බැලීමට, ඔබේ සියලු උපාංගවල පුරන්න</translation>
 <translation id="2577981599306533385"><ph name="MEMBER_FULL_NAME" /> (<ph name="EMAIL" />) හට “<ph name="GROUP_NAME" />” පටිති සමූහයට වහාම ප්‍රවේශය අහිමි වනු ඇති අතර, තවදුරටත් Google සේවා හරහා ඔබ සමග අන්තර් ක්‍රියා කිරීමට නොහැකි වනු ඇත.</translation>
-<translation id="2581165646603367611">මෙය Chrome වැදගත් යැයි නොසිතන කුකීස්, හැඹිලිය, සහ අඩවිවල අනෙකුත් දත්ත හිස් කරනු ඇත.</translation>
+<translation id="2581165646603367611">මෙය Ultimatum වැදගත් යැයි නොසිතන කුකීස්, හැඹිලිය, සහ අඩවිවල අනෙකුත් දත්ත හිස් කරනු ඇත.</translation>
 <translation id="2587052924345400782">වඩා අලුත් අනුවාදයක් තිබේ</translation>
 <translation id="2593272815202181319">Monospace</translation>
 <translation id="260403163289591229">අනුගමනය කරයි</translation>
@@ -415,8 +415,8 @@
 <translation id="2779651927720337254">අසාර්ථකයි</translation>
 <translation id="2781151931089541271">තත්පර 1ක් ඉතිරියි</translation>
 <translation id="2789486458103222910">හරි</translation>
-<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{ඔබට වැඩි දියුණු කළ හැකි යළි භාවිත කළ මුරපදයක් Chrome සොයා ගත්තේ ය}one{ඔබට වැඩි දියුණු කළ හැකි යළි භාවිත කළ මුරපද # Chrome සොයා ගත්තේ ය}other{ඔබට වැඩි දියුණු කළ හැකි යළි භාවිත කළ මුරපද # Chrome සොයා ගත්තේ ය}}</translation>
-<translation id="2794551654724114396">ඔබට Chrome හි හොඳම දේ ලබා ගැනීමට උදවු කිරීමට ප්‍රයෝජනවත් ඉඟි සඳහා දැනුම්දීම් ක්‍රියාත්මක කරන්න</translation>
+<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{ඔබට වැඩි දියුණු කළ හැකි යළි භාවිත කළ මුරපදයක් Ultimatum සොයා ගත්තේ ය}one{ඔබට වැඩි දියුණු කළ හැකි යළි භාවිත කළ මුරපද # Ultimatum සොයා ගත්තේ ය}other{ඔබට වැඩි දියුණු කළ හැකි යළි භාවිත කළ මුරපද # Ultimatum සොයා ගත්තේ ය}}</translation>
+<translation id="2794551654724114396">ඔබට Ultimatum හි හොඳම දේ ලබා ගැනීමට උදවු කිරීමට ප්‍රයෝජනවත් ඉඟි සඳහා දැනුම්දීම් ක්‍රියාත්මක කරන්න</translation>
 <translation id="2805210243313393104">ඔබේ සියලු උපාංගවල ඔබේ පිටු සලකුණු සහ තවත් දේ ලබා ගන්න</translation>
 <translation id="2805756323405976993">යෙදුම්</translation>
 <translation id="2819849308549746319">සියලු ග්‍රාහකත්ව වෙතින් ඉවත් වන්න</translation>
@@ -433,7 +433,7 @@
 <translation id="2842985007712546952">මූලික ෆෝල්ඩරය</translation>
 <translation id="2854916915045135148">අප්‍රකට වෙත මාරු වීමට ස්පර්ශ කර සිටින්න</translation>
 <translation id="2860954141821109167">මෙම උපාංගය මත දුරකථන යෙදුමක් සබල කර තිබීම තහවුරු කර ගන්න</translation>
-<translation id="2861923151411510142">සමහර Chrome විශේෂාංග තවදුරටත් ලබා ගත නොහැකිය</translation>
+<translation id="2861923151411510142">සමහර Ultimatum විශේෂාංග තවදුරටත් ලබා ගත නොහැකිය</translation>
 <translation id="286473047976978798">ඔබේ පෙනුම් මනාප යොදන්න ද?</translation>
 <translation id="2869416538780777323">{OTHER_TAB_COUNT,plural, =1{<ph name="URL" /> සහ තව 1 පටිත්තක්}one{<ph name="URL" /> සහ තව පටිති <ph name="TAB_COUNT_MANY" />ක්}other{<ph name="URL" /> සහ තව පටිති <ph name="TAB_COUNT_MANY" />ක්}}</translation>
 <translation id="2869430948265924908">මෝටර් රථය තුළ ඔබේ සංවේදී අන්තර්ගතය ආරක්ෂා කිරීම සඳහා, ඔබ මෝටර් රථ පැතිකඩ අගුලක් තැනිය යුතු යි.  ඔබට මෙය pin එකක්, කේතයක්, හෝ මුරපදයක් සමගින් කළ හැක.</translation>
@@ -441,10 +441,10 @@
 <translation id="2871733351037274014">පිටු පූර්ව පූරණය කරන්න</translation>
 <translation id="2876136027428473467"><ph name="CHILD_NAME" /> හට ඔබ ලවා මෙම වෙබ් අඩවිය අනුමත කිරීමට අවශ්‍යයි:</translation>
 <translation id="2876556152483133018">අඩවි සෙවීම</translation>
-<translation id="2876628302275096482"><ph name="BEGIN_LINK" />Chrome ඔබේ දත්ත පෞද්ගලිකව තබා ගන්නා ආකාරය<ph name="END_LINK" /> පිළිබඳව තව දැන ගන්න</translation>
+<translation id="2876628302275096482"><ph name="BEGIN_LINK" />Ultimatum ඔබේ දත්ත පෞද්ගලිකව තබා ගන්නා ආකාරය<ph name="END_LINK" /> පිළිබඳව තව දැන ගන්න</translation>
 <translation id="2878607776582720720"><ph name="TAB_TITLE" />, බහු-තේරූ බෙදා ගැනීමේ අප්‍රකට පටිත්ත</translation>
 <translation id="2885355868600171871">ලිපින තීරුවට පනින්න</translation>
-<translation id="2888126860611144412">Chrome ගැන</translation>
+<translation id="2888126860611144412">Ultimatum ගැන</translation>
 <translation id="2891154217021530873">පිටුව පූරණය නවත්වන්න</translation>
 <translation id="2893168226686371498">පෙරනිමි බ්‍රව්සරය</translation>
 <translation id="2894821468041866720">ඔබේ බ්‍රව්සරය හෝ උපාංගය සැලකිය යුතු ලෙස මන්දගාමී නොකරයි.</translation>
@@ -463,14 +463,14 @@
 <translation id="2923908459366352541">නම අවලංගුයි</translation>
 <translation id="2932150158123903946">Google <ph name="APP_NAME" /> ආචයනය</translation>
 <translation id="2932222164150889403">ඔබගේ යතුරු පුවරුව වෙනස් නොවනු ඇත</translation>
-<translation id="2936980480904111527">Chrome දැනුම්දීම් දේවල් වඩා පහසු කරයි</translation>
+<translation id="2936980480904111527">Ultimatum දැනුම්දීම් දේවල් වඩා පහසු කරයි</translation>
 <translation id="2940075786175545812">වෙබ් අඩවියක් අනුමත කිරීමට හෝ අනුමත නොකිරීමට ඇති විකල්පය</translation>
 <translation id="2942036813789421260">පෙරදසුන් පටිත්ත වසා ඇත</translation>
 <translation id="2951071800649516099">පසුව ලබා ගැනීම සඳහා ඔබගේ කියවීම් ලැයිස්තුවට පිටු එක් කරන්න</translation>
 <translation id="2954586176076923855">ලිපින තීරුව ඉහළට ගෙන යන්න</translation>
 <translation id="2961208450284224863">{READING_LIST_UNREAD_PAGE_COUNT,plural, =1{නොකියවූ පිටු <ph name="READING_LIST_UNREAD_PAGE_COUNT_ONE" />}one{නොකියවූ පිටු <ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" />}other{නොකියවූ පිටු <ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" />}}</translation>
 <translation id="2972109037780336501">අවසර ස්වයංක්‍රීයව ඉවත් කරන්න</translation>
-<translation id="2976550651269220761">ඔබේ Chrome දත්ත සමහරක් තවම ඔබේ Google ගිණුම තුළ සුරැකී නැත.\nවැරීමට පෙර විනාඩි කිහිපයක් රැඳී සිටීමට උත්සාහ කරන්න. ඔබ දැන් වරන්නේ නම් මෙම දත්ත මකනු ලැබේ.</translation>
+<translation id="2976550651269220761">ඔබේ Ultimatum දත්ත සමහරක් තවම ඔබේ Google ගිණුම තුළ සුරැකී නැත.\nවැරීමට පෙර විනාඩි කිහිපයක් රැඳී සිටීමට උත්සාහ කරන්න. ඔබ දැන් වරන්නේ නම් මෙම දත්ත මකනු ලැබේ.</translation>
 <translation id="2977350910003566746">අවසන් වරට විවෘත කළ අනුව වර්ග කිරීම</translation>
 <translation id="297771753501244313">අවසන් විවෘත අනුව සුබෙදීම</translation>
 <translation id="2979639724566107830">නව කවුළුවක විවෘත කරන්න</translation>
@@ -493,15 +493,15 @@
 <translation id="3035527385626181784"><ph name="TAB_TITLE" />, තෝරා ගත් බෙදා ගැනීමේ පටිත්ත</translation>
 <translation id="3036750288708366620"><ph name="BEGIN_LINK" />උදවු ගන්න<ph name="END_LINK" /></translation>
 <translation id="3037177537145227281">මිල හඹා යාම</translation>
-<translation id="3037517125981011456">Chrome වෙත පිරීමට ප්‍රේරණ පෙන්වයි</translation>
+<translation id="3037517125981011456">Ultimatum වෙත පිරීමට ප්‍රේරණ පෙන්වයි</translation>
 <translation id="3038272154009688107">සියලු අඩවි බලන්න</translation>
 <translation id="3057938290530993634">මීළඟ වතාවේ පහසු ප්‍රවේශය සඳහා ඔබ නිතරම පිවිසෙන වෙබ් අඩවි ඇමිණීමට තට්ටු කර අල්ලාගෙන සිටින්න</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> පිටුසනක්}one{පිටුසන් <ph name="BOOKMARKS_COUNT_MANY" />ක්}other{පිටුසන් <ph name="BOOKMARKS_COUNT_MANY" />ක්}}</translation>
-<translation id="3062802207422175757">Chrome හි ඔබේ රුචිකත්ව ගැන ලිපි</translation>
+<translation id="3062802207422175757">Ultimatum හි ඔබේ රුචිකත්ව ගැන ලිපි</translation>
 <translation id="3066573403916685335">පහළට ගෙන යන්න</translation>
 <translation id="3067505415088964188">මිල අඩුයි</translation>
 <translation id="3070005020161560471">ස්වයංක්‍රියව පරිවර්තනය කරන්න</translation>
-<translation id="3072980200212375806"><ph name="APP_NAME" /> Chrome තුළ විවෘත වනු ඇත. ඉදිරියට යාමෙන්, ඔබ <ph name="BEGIN_LINK1" />Google සේවා නියම<ph name="END_LINK1" /> සහ <ph name="BEGIN_LINK2" />Google Chrome සහ ChromeOS අතිරේක සේවා නියම<ph name="END_LINK2" /> සමග එකඟ වේ. <ph name="BEGIN_LINK3" />පෞද්ගලිකත්ව ප්‍රතිපත්තිය<ph name="END_LINK3" /> ද අදාළ වේ.</translation>
+<translation id="3072980200212375806"><ph name="APP_NAME" /> Ultimatum තුළ විවෘත වනු ඇත. ඉදිරියට යාමෙන්, ඔබ <ph name="BEGIN_LINK1" />Google සේවා නියම<ph name="END_LINK1" /> සහ <ph name="BEGIN_LINK2" />Ultimatum සහ UltimatumOS අතිරේක සේවා නියම<ph name="END_LINK2" /> සමග එකඟ වේ. <ph name="BEGIN_LINK3" />පෞද්ගලිකත්ව ප්‍රතිපත්තිය<ph name="END_LINK3" /> ද අදාළ වේ.</translation>
 <translation id="3080525922482950719">ඔබට පසුව හෝ නොබැඳිව කියවීමට පිටු සුරැකිය හැකිය</translation>
 <translation id="3087734570205094154">පතුල</translation>
 <translation id="3091010850649238832">පසුරු පුවරු අන්තර්ගතය පෙන්වන්න</translation>
@@ -511,7 +511,7 @@
 <translation id="3123734510202723619">නිවේදන</translation>
 <translation id="3134385238404760368">මෑත පටිති නැත</translation>
 <translation id="3135655388926735587">මෑත පටිති තට්ටු කරන්න</translation>
-<translation id="314939179385989105">Chrome හි මුල් පිටුව</translation>
+<translation id="314939179385989105">Ultimatum හි මුල් පිටුව</translation>
 <translation id="3158667104057012316">හස්තීය අනුපිළිවෙල අනුව වර්ග කිරීම</translation>
 <translation id="3159335509547415276">අවහිර කළ ගිණුම් පිළිබඳව දැන ගන්න</translation>
 <translation id="3161699713309727585"><ph name="BUTTON_TEXT" />, නව පටිත්තක විවෘත වේ</translation>
@@ -531,7 +531,7 @@
 <translation id="3236059992281584593">මිනිත්තු 1ක් ඉතිරියි</translation>
 <translation id="3237087289225714896">සම්මත පූර්ව පූරණය:</translation>
 <translation id="3244271242291266297">MM</translation>
-<translation id="3245429137663807393">ඔබ Chrome පරිශීලන වාර්තාද බෙදා ගතහොත්, එම වාර්තාවලට ඔබ පිවිසෙන URL ඇතුළත් වේ</translation>
+<translation id="3245429137663807393">ඔබ Ultimatum පරිශීලන වාර්තාද බෙදා ගතහොත්, එම වාර්තාවලට ඔබ පිවිසෙන URL ඇතුළත් වේ</translation>
 <translation id="3250563604907490871">ඔබ Wi-Fi වෙත සම්බන්ධ වූ විට රූප විස්තර නැවත ආරම්භ වනු ඇත</translation>
 <translation id="3254409185687681395">මෙම පිටුව පිටු සලකුණු කරන්න</translation>
 <translation id="3265093782546847662"><ph name="DOMAIN" /> හි සියලු පිටු</translation>
@@ -568,22 +568,22 @@
 <translation id="3435575784518354875">ඔබේ මුරපද වෙත ප්‍රවේශය තබා ගැනීමට, ඒවා දැන් නිර්යාත කරන්න, Google Play සේවා යාවත්කාලීන කරන්න, ඉන්පසු ඒවා නැවත Google මුරපද කළමනාකරු වෙත ආයාත කරන්න. <ph name="BEGIN_LINK" />සම්පූර්ණ උපදෙස් බලන්න<ph name="END_LINK" />.</translation>
 <translation id="3435738964857648380">ආරක්ෂක</translation>
 <translation id="3435914367318771664">නව සමූහයට පටිත්ත එක් කරන්න</translation>
-<translation id="3438681572027105609">ඔබේ සියලු උපාංග මත ඔබේ මුරපද සහ තවත් දේ ලබා ගැනීමට, Chrome වෙත පුරන්න</translation>
+<translation id="3438681572027105609">ඔබේ සියලු උපාංග මත ඔබේ මුරපද සහ තවත් දේ ලබා ගැනීමට, Ultimatum වෙත පුරන්න</translation>
 <translation id="3439276997620616816">ඔබ ඔබේ මෑත පටිති මෙහි සොයා ගනියි</translation>
 <translation id="3443221991560634068">වත්මන් පිටුව නැවත පූරණය කරන්න</translation>
 <translation id="3444179773590444986">අඩවි සඳහා අඳුරු තේමාව පිළිබඳ ප්‍රතිපෝෂණ බෙදා ගන්නද?</translation>
 <translation id="3448874648066942074">AI සමග පිටුව සාරාංශ කරන්න</translation>
-<translation id="3452832259067974318">ඔබේ පෞද්ගලිකත්වය ආරක්ෂා කිරීම සඳහා, Chrome මෙම ක්ෂේත්‍රය තුළ ඔබේ මුරපදය ස්වයං පිරවුම නොකරනු ඇත.</translation>
+<translation id="3452832259067974318">ඔබේ පෞද්ගලිකත්වය ආරක්ෂා කිරීම සඳහා, Ultimatum මෙම ක්ෂේත්‍රය තුළ ඔබේ මුරපදය ස්වයං පිරවුම නොකරනු ඇත.</translation>
 <translation id="3474624961160222204"><ph name="NAME" /> ලෙස දිගටම කර ගෙන යන්න</translation>
 <translation id="3478363558367712427">ඔබට ඔබේ සෙවීම් එන්ජිම තෝරා ගත හැකිය</translation>
 <translation id="3482805106082349287">යතුරුපුවරුව, හඬ, අප්‍රසිද්ධ, හෝ කැමරාව භාවිතයෙන් සොයන්න</translation>
-<translation id="3487903178221457900">නිර්යාත කළ ගොනුව යෙදුම් ඇතුළුව අනෙක් අයට ප්‍රවේශ විය හැක. ඔබ නිර්යාත කළ පසු, ඔබේ මුරපද Chrome වෙතින් මකා දමනු ලැබේ.</translation>
+<translation id="3487903178221457900">නිර්යාත කළ ගොනුව යෙදුම් ඇතුළුව අනෙක් අයට ප්‍රවේශ විය හැක. ඔබ නිර්යාත කළ පසු, ඔබේ මුරපද Ultimatum වෙතින් මකා දමනු ලැබේ.</translation>
 <translation id="3488199663160411179">නම‍</translation>
 <translation id="3493531032208478708">යෝජිත අන්තර්ගතය ගැන <ph name="BEGIN_LINK" />තවත් දැනගන්න<ph name="END_LINK" /></translation>
 <translation id="3499246418971111862">chrome_qrcode_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="350276055892098337">පැරණිම අනුව වර්ග කරන්න</translation>
 <translation id="3507132249039706973">සම්මත ආරක්ෂව සක්‍රීයයි</translation>
-<translation id="3509330069915219067">නොබැඳිය. Chrome හට යාවත්කාලීන සඳහා පරීක්ෂා කළ නොහැකිය.</translation>
+<translation id="3509330069915219067">නොබැඳිය. Ultimatum හට යාවත්කාලීන සඳහා පරීක්ෂා කළ නොහැකිය.</translation>
 <translation id="3513019849832307207">එකතු වී විවෘත කරන්න</translation>
 <translation id="3513704683820682405">ආවර්ධිත යථාර්තය</translation>
 <translation id="3516053221628030540">Google Play වෙත යන්න</translation>
@@ -615,10 +615,10 @@
 <translation id="3623240789707551553">{DOMAIN_COUNT,plural, =1{+ 1 අඩවියක්}one{අඩවි + #}other{අඩවි + #}}</translation>
 <translation id="3625870480639975468">විශාලනය නැවත සකසන්න</translation>
 <translation id="3631987586758005671"><ph name="DEVICE_NAME" /> වෙත බෙදා ගැනීම</translation>
-<translation id="3635073343384702370">ඔබ ඒවා සුරකින විට Chrome හට ඔබේ මුරපද පරීක්ෂා කළ හැක</translation>
+<translation id="3635073343384702370">ඔබ ඒවා සුරකින විට Ultimatum හට ඔබේ මුරපද පරීක්ෂා කළ හැක</translation>
 <translation id="3636940436873918441">මනාප භාෂා</translation>
-<translation id="3637744895182738742">ඔබට ඔබේ මුර වැකිකඩ අමතක වුවහොත් හෝ මෙම සැකසීම වෙනස් කිරීමට අවශ්‍ය නම්, <ph name="BEGIN_LINK" />ඔබේ ගිණුමේ ඇති Chrome දත්ත මකන්න<ph name="END_LINK" />.</translation>
-<translation id="3641581193271938629">Chrome සොයා ගැනීම් තෝරා ගැනීම වසා ඇත</translation>
+<translation id="3637744895182738742">ඔබට ඔබේ මුර වැකිකඩ අමතක වුවහොත් හෝ මෙම සැකසීම වෙනස් කිරීමට අවශ්‍ය නම්, <ph name="BEGIN_LINK" />ඔබේ ගිණුමේ ඇති Ultimatum දත්ත මකන්න<ph name="END_LINK" />.</translation>
+<translation id="3641581193271938629">Ultimatum සොයා ගැනීම් තෝරා ගැනීම වසා ඇත</translation>
 <translation id="3647019414263135904">සන්දර්භ උත්පතනය විවෘත කරන්න හෝ වසන්න</translation>
 <translation id="3653111872753786013"><ph name="WEBSITE_TITLE" />: <ph name="WEBSITE_URL" /></translation>
 <translation id="3674208116086565128">Google යෙදුම් මුල් පිටුවට යන්න</translation>
@@ -636,7 +636,7 @@
 <translation id="3710501561113687889">ඉදිරියට යාමට, <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> ඔබේ <ph name="FIELDS_STRING" /> මෙම අඩවිය සමග බෙදා ගනු ඇත.</translation>
 <translation id="3710560693796335511">සහයෝගිතාවය</translation>
 <translation id="3714430408451673233">පටිති පහළ පත්‍රය අඩක් උසින්.</translation>
-<translation id="3718765429352682176">ඔබ Chrome තුළ සබැඳි විවෘත කරන වෙනත් යෙදුම්වලින් ඉතිහාසය දකීවි.</translation>
+<translation id="3718765429352682176">ඔබ Ultimatum තුළ සබැඳි විවෘත කරන වෙනත් යෙදුම්වලින් ඉතිහාසය දකීවි.</translation>
 <translation id="3721119614952978349">ඔබ සහ Google</translation>
 <translation id="3727000368239390918">ඔබේ සියලු උපාංග මත ඔබේ පටිති සහ තවත් දේ ලබා ගැනීමට පුරන්න</translation>
 <translation id="3737319253362202215">පරිවර්තන සැකසීම්</translation>
@@ -690,8 +690,8 @@
 <translation id="3943322906274039960"><ph name="TAB_TITLE" />, ඇමිණූ පින්තූරය තුළ පින්තූර පටිත්ත</translation>
 <translation id="3950820424414687140">පුරන්න</translation>
 <translation id="395377504920307820">ගිණුමක් නොමැතිව භාවිත කරන්න</translation>
-<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{සූදානම් වූ විට Chrome ඔබේ පිටුව පූරණ කරයි}one{සූදානම් වූ විට Chrome ඔබේ පිටු පූරණ කරයි}other{සූදානම් වූ විට Chrome ඔබේ පිටු පූරණ කරයි}}</translation>
-<translation id="3969142555815019568">Chrome හට ඔබේ මුරපද පරීක්ෂා කළ නොහැකිය</translation>
+<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{සූදානම් වූ විට Ultimatum ඔබේ පිටුව පූරණ කරයි}one{සූදානම් වූ විට Ultimatum ඔබේ පිටු පූරණ කරයි}other{සූදානම් වූ විට Ultimatum ඔබේ පිටු පූරණ කරයි}}</translation>
+<translation id="3969142555815019568">Ultimatum හට ඔබේ මුරපද පරීක්ෂා කළ නොහැකිය</translation>
 <translation id="3969863827134279083">ඉහලට යන්න</translation>
 <translation id="397105322502079400">ගණනය කරමින්...</translation>
 <translation id="397583555483684758">සමමුහුර්ත වීම වැඩ කිරීම නැවතී ඇත</translation>
@@ -702,10 +702,10 @@
 <translation id="3987993985790029246">සබැඳිය පිටපත් කරන්න</translation>
 <translation id="3994236846568425219">ඔබේ උපාංගයේ අඳුරු තේමාව ක්‍රියාත්මක වූ විට අඳුරු තේමාව ක්‍රියාත්මක කරන්න</translation>
 <translation id="4000212216660919741">නොබැඳි මුල්පිටුව</translation>
-<translation id="4000670338830950598">උද්දීපනය කළ අයිතමයක් සමග Google Chrome අභිරුචිකරණය කර පාලනය කරන්න</translation>
+<translation id="4000670338830950598">උද්දීපනය කළ අයිතමයක් සමග Ultimatum අභිරුචිකරණය කර පාලනය කරන්න</translation>
 <translation id="4015643064997321279">{NUM_PASSWORDS,plural, =1{ඔබේ Google ගිණුමේ 1 අවදානමට ලක් වූ මුරපදයක් ඇත}one{ඔබේ Google ගිණුමේ අවදානමට ලක් වූ මුරපද #ක් ඇත}other{ඔබේ Google ගිණුමේ අවදානමට ලක් වූ මුරපද #ක් ඇත}}</translation>
 <translation id="4016425174436051808">අනුගමනය කළ නොහැකිය. යම් දෙයක් වැරදිණි.</translation>
-<translation id="4023638601467301498">ඔබේ සියලු උපාංග මත ඔබේ පිටුසන් සහ තවත් දේ ලබා ගැනීමට, Chrome වෙත පුරන්න</translation>
+<translation id="4023638601467301498">ඔබේ සියලු උපාංග මත ඔබේ පිටුසන් සහ තවත් දේ ලබා ගැනීමට, Ultimatum වෙත පුරන්න</translation>
 <translation id="4024768890073681126">ඔබේ බ්‍රවුසරය ඔබේ මාපියවරු විසින් කළමනා කරනු ලැබේ</translation>
 <translation id="4027569221211770437"><ph name="FOLDER_TITLE" /> ෆෝල්ඩරය</translation>
 <translation id="4034817413553209278">{HOURS,plural, =1{පැය #}one{පැය #}other{පැය #}}</translation>
@@ -745,13 +745,13 @@
 <translation id="4180726336228139707">මෙම උපාංගය මත පමණි</translation>
 <translation id="4181841719683918333">භාෂා</translation>
 <translation id="4188221736490993796">Z සිට A දක්වා වර්ග කරන්න</translation>
-<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{අයාචිත හෝ රැවටිලිකාර අන්තර්ගතය නිසා Chrome මෙම අඩවියෙන් දැනුම්දීම් යැවීම නතර කර ඇත}one{අයාචිත හෝ රැවටිලිකාර අන්තර්ගතය නිසා Chrome මෙම අඩවිවලට දැනුම්දීම් යැවීම නතර කර ඇත}other{අයාචිත හෝ රැවටිලිකාර අන්තර්ගතය නිසා Chrome මෙම අඩවිවලට දැනුම්දීම් යැවීම නතර කර ඇත}}</translation>
+<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{අයාචිත හෝ රැවටිලිකාර අන්තර්ගතය නිසා Ultimatum මෙම අඩවියෙන් දැනුම්දීම් යැවීම නතර කර ඇත}one{අයාචිත හෝ රැවටිලිකාර අන්තර්ගතය නිසා Ultimatum මෙම අඩවිවලට දැනුම්දීම් යැවීම නතර කර ඇත}other{අයාචිත හෝ රැවටිලිකාර අන්තර්ගතය නිසා Ultimatum මෙම අඩවිවලට දැනුම්දීම් යැවීම නතර කර ඇත}}</translation>
 <translation id="4195643157523330669">නව ටැබයක විවෘත කරන්න</translation>
 <translation id="4197828496439691735">{NUM_TABS,plural, =1{මෙම උපාංගයෙහි 1 පටිත්තක්}one{මෙම උපාංගයෙහි පටිති #ක්}other{මෙම උපාංගයෙහි පටිති #ක්}}</translation>
 <translation id="4198268995694216131">අතිරේක අඩවි</translation>
 <translation id="4198423547019359126">බාගැනීම් ස්ථාන කිසිවක් නැත</translation>
 <translation id="4209029522667123437"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> • ඔබ මෙම අඩවියෙහි භාවිතා කළා</translation>
-<translation id="4214315110991671325">ඔබ කුකිවලට ඉඩ දුනහොත්, Chrome ඒවා පූර්ව පූරණය සඳහා භාවිත කළ හැකිය.</translation>
+<translation id="4214315110991671325">ඔබ කුකිවලට ඉඩ දුනහොත්, Ultimatum ඒවා පූර්ව පූරණය සඳහා භාවිත කළ හැකිය.</translation>
 <translation id="421517251707893998">මෙම කෙටිමඟ අමුණන්න තට්ටු කරන්න</translation>
 <translation id="4216511743389425832">මෙම පිටුවට සවන් දෙන්න</translation>
 <translation id="4217657297368492684"><ph name="TAB_TITLE" />, තෝරා ගත් අමුණන ලද පින්තූරය තුළ පින්තූරය අප්‍රකට පටිත්ත</translation>
@@ -759,7 +759,7 @@
 <translation id="4225895483398857530">මෙවලම් තීරු කෙටිමඟ</translation>
 <translation id="4232376164796433044">මුරපද සහ ස්වයං පිරවීම</translation>
 <translation id="4242533952199664413">සැකසීම් විවෘත කරන්න</translation>
-<translation id="424864128008805179">Chrome වෙතින් වරන්න</translation>
+<translation id="424864128008805179">Ultimatum වෙතින් වරන්න</translation>
 <translation id="4249955472157341256">නවතම අනුව පිළිවෙලට සකසන්න</translation>
 <translation id="4255841059940367080">ඔබේ බ්‍රවුස් කිරීමේ දත්ත Google වෙත යැවීම මත පදනම් වූ අනතුරුදායක අඩවි, බාගැනීම්, සහ දිගුවලට එරෙහිව තත්‍ය කාලීන, AI-බලගන්වන ලද ආරක්ෂාව</translation>
 <translation id="4256782883801055595">විවෘත කේත බලපත්</translation>
@@ -768,7 +768,7 @@
 <translation id="4270730597186910506">නිෂ්පාදනයක් ලුහුබඳින්න හෝ ලුහුනොබඳින්න.</translation>
 <translation id="4277529130885813215">වෙනත් උපාංගයක් භාවිතා කරන්න</translation>
 <translation id="427987768447457592">නව පටිති සමූහය</translation>
-<translation id="4282440837784183472">ඔබේ සංවිධානය, <ph name="MANAGED_DOMAIN" />, ඔබ පුරනය වන ගිණුම සහ Chrome භාවිතා කළ හැකි ආකාරය කළමනාකරණය කරයි. ඔබේ පරිපාලකයාට ඇතැම් විශේෂාංග පිහිටුවීමට හෝ සීමා කිරීමට හැක.</translation>
+<translation id="4282440837784183472">ඔබේ සංවිධානය, <ph name="MANAGED_DOMAIN" />, ඔබ පුරනය වන ගිණුම සහ Ultimatum භාවිතා කළ හැකි ආකාරය කළමනාකරණය කරයි. ඔබේ පරිපාලකයාට ඇතැම් විශේෂාංග පිහිටුවීමට හෝ සීමා කිරීමට හැක.</translation>
 <translation id="4283234489712362947"><ph name="TAB_TITLE" />, පින්තූරය තුළ පින්තූරය අප්‍රකට පටිත්ත</translation>
 <translation id="4285498937028063278">ගලවන්න</translation>
 <translation id="4285846616383034558">කුකීස්, කෑෂය, සහ අනෙකුත් අඩවි දත්ත</translation>
@@ -784,10 +784,10 @@
 <translation id="4311652497846705514">PDF විවෘත කරන්න ද?</translation>
 <translation id="4313895677475587452">{NUM_SUSPICIOUS_NOTIFICATIONS,plural, =1{අයාචිත වීමට හැක}one{අයාචිත වීමට හැක (#)}other{අයාචිත වීමට හැක (#)}}</translation>
 <translation id="4320177379694898372">අන්තර්ජාල සබැඳුම නැත</translation>
-<translation id="4326079409704643112">ඔබේ Google ගිණුමේ Chrome දත්ත භාවිත කිරීමට සහ සුරැකීමට, ඒ ඔබ බව සත්‍යාපනය කරන්න.</translation>
+<translation id="4326079409704643112">ඔබේ Google ගිණුමේ Ultimatum දත්ත භාවිත කිරීමට සහ සුරැකීමට, ඒ ඔබ බව සත්‍යාපනය කරන්න.</translation>
 <translation id="433213510553688132">අනුගමනය කරමින්...</translation>
 <translation id="4335835283689002019">සුරක්ෂිත බ්‍රවුස් කිරීම ක්‍රියාවිරහිතයි</translation>
-<translation id="4343250402091037179">නිශ්චිත වෙබ් අඩවියක් හෝ Chrome හි කොටසක් සෙවීමට, ලිපින තීරුවේ එහි කෙටි මග සහ ඉන්පසු ඔබ කැමති යතුරු පුවරු කෙටි මග ටයිප් කරන්න.</translation>
+<translation id="4343250402091037179">නිශ්චිත වෙබ් අඩවියක් හෝ Ultimatum හි කොටසක් සෙවීමට, ලිපින තීරුවේ එහි කෙටි මග සහ ඉන්පසු ඔබ කැමති යතුරු පුවරු කෙටි මග ටයිප් කරන්න.</translation>
 <translation id="4351244548802238354">සංවාදය වසන්න</translation>
 <translation id="4352287748243729941">ඔබේ <ph name="PROVIDER" /> මුරපදය භාවිත කරන්න ද?</translation>
 <translation id="4355272626458588338">පිටුසනක් එක් කිරීමෙන් ඔබට වැදගත් වන පිටුවකට ආපසු පැමිණීමට ඔබට හැක</translation>
@@ -800,7 +800,7 @@
 <translation id="4384468725000734951">සෙවීම සඳහා Sogou භාවිත කරමින්</translation>
 <translation id="4387647248986092471">මෝටර් රථයේ පැතිකඩ අගුලක් තනන්න</translation>
 <translation id="4387817230000841154">බාගැනීම් විවෘත කරන්න</translation>
-<translation id="4395046795145457714">Chrome සොයා ගැනීම් තෝරා ගැනීම සම්පූර්ණ උසින් විවෘත විය</translation>
+<translation id="4395046795145457714">Ultimatum සොයා ගැනීම් තෝරා ගැනීම සම්පූර්ණ උසින් විවෘත විය</translation>
 <translation id="4398561997852463382"><ph name="TAB_TITLE" />, තෝරා ගත් ඇමිණූ පටිගත කිරීමේ අප්‍රකට පටිත්ත</translation>
 <translation id="4402611456429872546"><ph name="LANG" /> - බාගනිමින්…</translation>
 <translation id="4404568932422911380">පිටුසන් නැත</translation>
@@ -822,16 +822,16 @@
 <translation id="4460822871039013969"><ph name="TAB_TITLE" />, තෝරා ගත් ඇමිණූ පටිගත කිරීමේ පටිත්ත</translation>
 <translation id="4460861538906892109">{ITEMS_COUNT,plural, =1{1 පිටුසනක්}one{පිටුසන් #ක්}other{පිටුසන් #ක්}}</translation>
 <translation id="4478161224666880173">ඔබට මෙම අඩවියෙහි ඔබේ <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> ගිණුම භාවිතා කළ හැක. ඉදිරියට යාම සඳහා, <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> වෙත පුරනය වන්න.</translation>
-<translation id="4479972344484327217">Chrome සඳහා <ph name="MODULE" /> ස්ථාපන කිරීම…</translation>
+<translation id="4479972344484327217">Ultimatum සඳහා <ph name="MODULE" /> ස්ථාපන කිරීම…</translation>
 <translation id="4484496141267039529">සම්බන්ධතාව නැත. පසුව නැවත උත්සාහ කරන්න.</translation>
-<translation id="4487967297491345095">Chrome හි සියලු යෙදුම් දත්ත ස්ථිරවම මකනු ඇත. මෙහි සියලු ගොනු, සැකසීම්, ගිණුම්, දත්ත සමුදායන්, ආදිය ඇතුළත් වේ.</translation>
+<translation id="4487967297491345095">Ultimatum හි සියලු යෙදුම් දත්ත ස්ථිරවම මකනු ඇත. මෙහි සියලු ගොනු, සැකසීම්, ගිණුම්, දත්ත සමුදායන්, ආදිය ඇතුළත් වේ.</translation>
 <translation id="4494315997125191493">සියලු කවුළු බැලීමට කළමනාකරණය තෝරන්න</translation>
 <translation id="4494806687727322324">මුරපද සුරැකීම ඔබේ පරිපාලක විසින් ක්‍රියාත්මක කර ඇත</translation>
 <translation id="4508528996305412043">සංග්‍රහ කාඩ්පත් මෙනුව විවෘත කර ඇත</translation>
 <translation id="4509741852167209430">ඔබ වෙබ් අඩවියකට පිවිසීමෙන් පසු මිලදී ගැනීමක් සිදු කළේද යන්න වැනි සීමිත දත්ත වර්ග ඔවුන්ගේ දැන්වීම්වල කාර්යසාධනය මැනීමට අඩවි අතර බෙදා ගනියි</translation>
 <translation id="4513387527876475750">{DAYS,plural, =1{දින #කට පෙර}one{දින #කට පෙර}other{දින #කට පෙර}}</translation>
 <translation id="451872707440238414">ඔබගේ පිටුසන් සොයන්න</translation>
-<translation id="4521489764227272523">තෝරා ගත් දත්ත Chrome සහ ඔබේ සමමුහුර්ත කළ උපාංග වෙතින් ඉවත් කර ඇත.
+<translation id="4521489764227272523">තෝරා ගත් දත්ත Ultimatum සහ ඔබේ සමමුහුර්ත කළ උපාංග වෙතින් ඉවත් කර ඇත.
 
 ඔබගේ Google ගිණුමට සෙවීම් සහ <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> හි වෙනත් Google සේවා වෙතින් වන ක්‍රියාකාරකම් වැනි බ්‍රවුස් කිරීමේ ඉතිහාසයේ වෙනත් ආකාර තිබිය හැකිය.</translation>
 <translation id="4523326818319942067">අවසන් පැය</translation>
@@ -853,10 +853,10 @@
 <translation id="4595276580892809760">ගැලරියෙන් රූප අමුණන්න</translation>
 <translation id="4595805675102978678">Google ගිණුම් දෝෂයකි</translation>
 <translation id="4601095002996233687">සැක සහිත බාගැනීම් සඳහා ගැඹුරු ස්කෑන් කිරීම්.</translation>
-<translation id="4606559747793337066">අඩවියක් හෝ යෙදුමක් ඔවුන්ගේ පිටුවේ සබැඳි පුද්ගලිකව පූර්ව පූරණය කිරීමට ඉල්ලන විට, Chrome කුකි නොමැතිව Google සේවාදායක හරහා පිටු සංකේතනය කර පූර්ව පූරණය කරයි. මෙය පූර්ව පූරණය කර ඇති අඩවියෙන් ඔබගේ අනන්‍යතාව සඟවයි.</translation>
+<translation id="4606559747793337066">අඩවියක් හෝ යෙදුමක් ඔවුන්ගේ පිටුවේ සබැඳි පුද්ගලිකව පූර්ව පූරණය කිරීමට ඉල්ලන විට, Ultimatum කුකි නොමැතිව Google සේවාදායක හරහා පිටු සංකේතනය කර පූර්ව පූරණය කරයි. මෙය පූර්ව පූරණය කර ඇති අඩවියෙන් ඔබගේ අනන්‍යතාව සඟවයි.</translation>
 <translation id="4616150815774728855"><ph name="WEBAPK_NAME" /> විවෘත කරන්න</translation>
 <translation id="4619564267100705184">ඒ ඔබ බව සත්‍යාපනය කරන්න</translation>
-<translation id="4624065194742029982">Chrome අප්‍රසිද්ධ</translation>
+<translation id="4624065194742029982">Ultimatum අප්‍රසිද්ධ</translation>
 <translation id="4634124774493850572">මුරපදය භාවිත කරන්න</translation>
 <translation id="463471994228293091">{PASSWORDS_COUNT,plural, =1{1 මුරපදයක් සහ අනෙකුත් අයිතම මෙම උපාංගයට පමණක් සුරැකේ. ඒවා ඔබේ අනෙකුත් උපාංගවල භාවිතා කිරීම සඳහා, ඒවා ඔබේ Google ගිණුමේ සුරකින්න.}one{මුරපද #ක් සහ අනෙකුත් අයිතම මෙම උපාංගයට පමණක් සුරැකේ. ඒවා ඔබේ අනෙකුත් උපාංගවල භාවිතා කිරීම සඳහා, ඒවා ඔබේ Google ගිණුමේ සුරකින්න.}other{මුරපද #ක් සහ අනෙකුත් අයිතම මෙම උපාංගයට පමණක් සුරැකේ. ඒවා ඔබේ අනෙකුත් උපාංගවල භාවිතා කිරීම සඳහා, ඒවා ඔබේ Google ගිණුමේ සුරකින්න.}}</translation>
 <translation id="4640331037679501949">{NUM_PASSWORDS,plural, =1{අවදානමට පත් වූ මුරපද 1}one{අවදානමට පත් වූ මුරපද #}other{අවදානමට පත් වූ මුරපද #}}</translation>
@@ -871,7 +871,7 @@
 <translation id="4668347365065281350">කුකි සහ වෙනත් ස්ථානීයව ගබඩා කර ඇති දත්ත ඇතුළුව, අඩවි විසින් ගබඩා කර ඇති සියලු දත්ත මකනු ඇත</translation>
 <translation id="4673702426794876519">අප්‍රසිද්ධ කවුළුව</translation>
 <translation id="4675298276894277358">මෙම අඩවිය නැවත නොපෙන්වනු ඇත</translation>
-<translation id="4678082183394354975">Chrome හි අඩවි සඳහා අඳුරු තේමාව සක්‍රියයි</translation>
+<translation id="4678082183394354975">Ultimatum හි අඩවි සඳහා අඳුරු තේමාව සක්‍රියයි</translation>
 <translation id="4682306524980568490">කවුළු <ph name="MAX_INSTANCE_COUNT" />ක් පමණක් පෙන්විය හැක</translation>
 <translation id="4684427112815847243">සියල්ල සම්මුහුර්ත කරන්න</translation>
 <translation id="4685741273709472646">පතන ලැයිස්තුවෙන් තෝරන්න</translation>
@@ -893,7 +893,7 @@
 <translation id="4738836084190194332">අවසන් වරට සමමුහුර්ත කළේ: <ph name="WHEN" /></translation>
 <translation id="474121291218385686">යෙදුම අනුව පෙරන්න</translation>
 <translation id="4741753828624614066">ලිපින තීරුව තුළ ඔබට වැඩිදියුණු කළ යෝජනා ලැබෙනු ඇත</translation>
-<translation id="4742795653798179840">මකන ලද Chrome දත්ත</translation>
+<translation id="4742795653798179840">මකන ලද Ultimatum දත්ත</translation>
 <translation id="4742970037960872810">උද්දීපනය ඉවත් කරන්න</translation>
 <translation id="4749960740855309258">නව ටැබයක් විවෘත කරන්න</translation>
 <translation id="4753600213727157212"><ph name="USER_NAME" /> ලෙස පුරනය වී ඇත. <ph name="USER_EMAIL" />. Google ගිණුමේ දෝෂයකි. සැකසීම් විවෘත කරයි.</translation>
@@ -911,21 +911,21 @@
 <translation id="4782929588435725897"><ph name="SEARCH_ENGINE" /> ඔබේ පෙරනිමි සෙවීම් යන්ත්‍රය වේ</translation>
 <translation id="4784349455504343791"><ph name="WEBSITE_ORIGIN" /> හට ඔබේ ඩිජිටල් මුදල් පසුම්බියේ පුද්ගලික තතු භාවිතා කිරීමට අවශ්‍ය වේ.</translation>
 <translation id="4787736314074622408">ඔබට <ph name="ITEM_TITLE" /> මැකීමට අවශ්‍ය ද?</translation>
-<translation id="4793679854893018356">Chrome ඔබව සුරක්ෂිතව තබන ආකාරය ඉගෙන ගන්න</translation>
+<translation id="4793679854893018356">Ultimatum ඔබව සුරක්ෂිතව තබන ආකාරය ඉගෙන ගන්න</translation>
 <translation id="4794291718671962615">(<ph name="MEGABYTES" />) <ph name="URL" /></translation>
 <translation id="4807098396393229769">කාඩ්පතෙහි නම</translation>
 <translation id="480990236307250886">මුල් පිටුව විවෘත කරන්න</translation>
 <translation id="4822710610088666676"><ph name="TAB_GROUP_TITLE" /> පටිති සමූහයක් වසා දමා සුරකින ලදි</translation>
 <translation id="482405935591409882">ඔබේ පටිති සහ සමූහ සොයන්න</translation>
 <translation id="4834250788637067901">Google Pay භාවිතයෙන් ගෙවීමේ ක්‍රම, දීමනා සහ ලිපින</translation>
-<translation id="4835385943915508971">Chrome හට ඉල්ලන ලද සම්පත් වෙත ප්‍රවේශය නැත.</translation>
+<translation id="4835385943915508971">Ultimatum හට ඉල්ලන ලද සම්පත් වෙත ප්‍රවේශය නැත.</translation>
 <translation id="483742037940503070">{TAB_COUNT,plural, =1{නව පසුබිම් පටිති සමූහයක් ලෙස, <ph name="TAB_COUNT_ONE" /> පටිත්තක පටිති සමූහය, <ph name="COLOR_NAME" /> වර්ණය ප්‍රතිසාධනය කරන්න.}one{නව පසුබිම් පටිති සමූහයක් ලෙස, පටිති <ph name="TAB_COUNT_MANY" />ක පටිති සමූහය, <ph name="COLOR_NAME" /> වර්ණය ප්‍රතිසාධනය කරන්න.}other{නව පසුබිම් පටිති සමූහයක් ලෙස, පටිති <ph name="TAB_COUNT_MANY" />ක පටිති සමූහය, <ph name="COLOR_NAME" /> වර්ණය ප්‍රතිසාධනය කරන්න.}}</translation>
 <translation id="4849731766219625109">ඔබේ <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> ගිණුම භාවිතා කරන්න</translation>
 <translation id="4850886885716139402">දසුන</translation>
 <translation id="4852014461738377247">පුරමින්…</translation>
 <translation id="4860895144060829044">අමතන්න</translation>
 <translation id="4864369630010738180">පුරමින්...</translation>
-<translation id="4866368707455379617">Chrome සඳහා <ph name="MODULE" /> ස්ථාපන කළ නොහැක</translation>
+<translation id="4866368707455379617">Ultimatum සඳහා <ph name="MODULE" /> ස්ථාපන කළ නොහැක</translation>
 <translation id="4871568871368204250">සමමුහුර්තය ක්‍රියා විරහිත කරන්න</translation>
 <translation id="487567923005969537">AI ප්‍රකාරය සබල කරන්න</translation>
 <translation id="4875775213178255010">අන්තර්ගත යෝජනා</translation>
@@ -934,27 +934,27 @@
 <translation id="4880127995492972015">පරිවර්තන කරන්න…</translation>
 <translation id="4881695831933465202">විවෘත කරන්න</translation>
 <translation id="488187801263602086">ගොනුව නැවත නම් කරන්න</translation>
-<translation id="4885273946141277891">සහාය නොදක්වන Chrome අවස්ථා සංඛ්‍යාව.</translation>
+<translation id="4885273946141277891">සහාය නොදක්වන Ultimatum අවස්ථා සංඛ්‍යාව.</translation>
 <translation id="4890973535105146893">ඔබේ Google ගිණුමේ සුරැකි මුරපද නොමැත</translation>
 <translation id="4905823827770127520">පිටුවට සබැඳියක් ඇතුළු කරන්න</translation>
 <translation id="4908869848243824489">Google වෙතින් Discover</translation>
 <translation id="4910889077668685004">ගෙවීම් යෙදුම්</translation>
 <translation id="4911042367886397055">ආපසු සාදරයෙන් පිළිගනිමු, <ph name="USER_NAME" />!</translation>
 <translation id="4913169188695071480">නැවුම් කිරීම නවත්වන්න</translation>
-<translation id="4921224083091001889">ඔබේ සියලු උපාංග මත ඔබේ මුරපද සහ තවත් දේ ලබා ගැනීමට, Chrome වෙත <ph name="EMAIL" /> ලෙස පුරන්න</translation>
+<translation id="4921224083091001889">ඔබේ සියලු උපාංග මත ඔබේ මුරපද සහ තවත් දේ ලබා ගැනීමට, Ultimatum වෙත <ph name="EMAIL" /> ලෙස පුරන්න</translation>
 <translation id="4923173329789776645">ඔබේ සංවිධානය විසින් බාගැනීම නිර්දේශ නොකරයි</translation>
 <translation id="4925120120285606924"><ph name="CURRENT_DATE_ISO" /> තිර රුව</translation>
 <translation id="4926901776383726965">ඔබට නොබැඳිව බැලීමට හෝ වෙනත් යෙදුම්වල බෙදා ගැනීමට රූප සහ ගොනු සුරැකිය හැක</translation>
 <translation id="492699891214363151">{BOOKMARKS_COUNT,plural, =1{1 පිටුසනක් සහ අනෙකුත් අයිතම මෙම උපාංගයට පමණක් සුරැකේ. ඒවා ඔබේ අනෙකුත් උපාංගවල භාවිතා කිරීම සඳහා, ඒවා ඔබේ Google ගිණුමේ සුරකින්න.}one{පිටුසන් #ක් සහ අනෙකුත් අයිතම මෙම උපාංගයට පමණක් සුරැකේ. ඒවා ඔබේ අනෙකුත් උපාංගවල භාවිතා කිරීම සඳහා, ඒවා ඔබේ Google ගිණුමේ සුරකින්න.}other{පිටුසන් #ක් සහ අනෙකුත් අයිතම මෙම උපාංගයට පමණක් සුරැකේ. ඒවා ඔබේ අනෙකුත් උපාංගවල භාවිතා කිරීම සඳහා, ඒවා ඔබේ Google ගිණුමේ සුරකින්න.}}</translation>
-<translation id="4932247056774066048">ඔබ <ph name="DOMAIN_NAME" /> විසින් කළමනා කරනු ලබන ගිණුමකින් වැරෙන බැවින්, ඔබේ Chrome දත්ත මෙම උපාංගයෙන් මකනු ලැබේ. එය ඔබේ Google ගිණුම තුළ පවතියි.</translation>
+<translation id="4932247056774066048">ඔබ <ph name="DOMAIN_NAME" /> විසින් කළමනා කරනු ලබන ගිණුමකින් වැරෙන බැවින්, ඔබේ Ultimatum දත්ත මෙම උපාංගයෙන් මකනු ලැබේ. එය ඔබේ Google ගිණුම තුළ පවතියි.</translation>
 <translation id="4943703118917034429">අතථ්‍ය යථාර්ථය</translation>
 <translation id="4943872375798546930">ප්‍රතිඵල නැත</translation>
 <translation id="4957722034734105353">තව දැන ගන්න..</translation>
 <translation id="4959115606310463263">පිරීමේ පහළ පත්‍රය අර්ධ උසින් විවෘත විය</translation>
 <translation id="4961107849584082341">මෙම පිටුව ඕනෑම භාෂාවකට පරිවර්තන කරන්න</translation>
-<translation id="4964614743143953889">Chrome ඔබට අනාරක්ෂිත අඩවි සහ බාගැනීම් ගැන අනතුරු අඟවයි</translation>
+<translation id="4964614743143953889">Ultimatum ඔබට අනාරක්ෂිත අඩවි සහ බාගැනීම් ගැන අනතුරු අඟවයි</translation>
 <translation id="496607651705915226">ඔබේ Google ගිණුමේ නව මුරපද සුරැකීමට සහ භාවිතා කිරීමට, Google Play සේවාවන් යාවත්කාලීන කරන්න</translation>
-<translation id="4971753085054504448">වෙන දෙයක් සෙවීමට උත්සාහ කරන්න, නැති නම් තව ප්‍රතිඵල බැලීමට සම්පූර්ණ Chrome ඉතිහාසය විවෘත කරන්න.</translation>
+<translation id="4971753085054504448">වෙන දෙයක් සෙවීමට උත්සාහ කරන්න, නැති නම් තව ප්‍රතිඵල බැලීමට සම්පූර්ණ Ultimatum ඉතිහාසය විවෘත කරන්න.</translation>
 <translation id="497421865427891073">ඉදිරියට යන්න</translation>
 <translation id="497983151715419057">ඔබේ අක්‍රිය පටිති සහ සමූහ මෙතැනින් සමාලෝචනය කරන්න</translation>
 <translation id="498624032394115435">සබැඳිය සහිත ඕනෑම අයෙකුට සියලු පටිති සංස්කරණය කළ හැක.</translation>
@@ -981,7 +981,7 @@
 <translation id="506254248375231072">ටැබ නැත</translation>
 <translation id="5075939510584558547">කේතනයෙන් තොරව සුරකින්න</translation>
 <translation id="5078638979202084724">සියලු ටැබ පිටුසලකුණු කරන්න</translation>
-<translation id="5085038751173179818">ඔබේ සියලුම උපාංග මත ඔබේ පිටුසන් සහ තවත් ඒවා ලබා ගැනීමට මෙම අඩවියට සහ Chrome වෙත පුරන්න</translation>
+<translation id="5085038751173179818">ඔබේ සියලුම උපාංග මත ඔබේ පිටුසන් සහ තවත් ඒවා ලබා ගැනීමට මෙම අඩවියට සහ Ultimatum වෙත පුරන්න</translation>
 <translation id="5088347662971855383">Gemini අමුණන්න</translation>
 <translation id="5091199029769593641">ළඟදීම, ඔබ නව ටැබයක් විවෘත කරන විට <ph name="SITE_NAME" /> වෙතින් නව කතන්දර දකිනු ඇත. ඔබ අනුගමනය කරන අඩවි ඔබගේ Google ගිණුමේ සුරැකේ. ඔබට ඒවා Discover සැකසීම් තුළ කළමනාකරණය කළ හැකිය.</translation>
 <translation id="509429900233858213">දෝශයක් ඇතිවිය.</translation>
@@ -989,7 +989,7 @@
 <translation id="510275257476243843">පැය 1ක් ඉතිරියි</translation>
 <translation id="5114895953710637392">යෙදුම් පෙරහන් පත්‍රය වසා ඇත.</translation>
 <translation id="5115811374190515607"><ph name="PRODUCT_NAME" /> දක්වා</translation>
-<translation id="5116239826668864748">පණිවිඩ, ලේඛන සහ වෙනත් යෙදුම්වල සබැඳි තට්ටු කරන ඕනෑම වේලාවක ඔබට Chrome භාවිත කළ හැක</translation>
+<translation id="5116239826668864748">පණිවිඩ, ලේඛන සහ වෙනත් යෙදුම්වල සබැඳි තට්ටු කරන ඕනෑම වේලාවක ඔබට Ultimatum භාවිත කළ හැක</translation>
 <translation id="5118713593561876160">රුචිකත්ව</translation>
 <translation id="5122378528687922675">ඔබට උදව් අවශ්‍ය නම්, ඔබේ දෙමාපියන්ගෙන් විමසන්න (<ph name="PARENT_NAME_1" /> හෝ <ph name="PARENT_NAME_2" />)</translation>
 <translation id="5123685120097942451">අප්‍රකට පටිත්ත</translation>
@@ -1012,11 +1012,11 @@
 <translation id="5206168361184759344">{FILE_COUNT,plural, =1{ගොනුව බාගනිමින්…}one{ගොනු #ක් බාගනිමින්…}other{ගොනු #ක් බාගනිමින්…}}</translation>
 <translation id="5210286577605176222">පෙර ටැබය වෙත පනින්න</translation>
 <translation id="5210365745912300556">ටැබය වසන්න</translation>
-<translation id="5212800876504289412">මෙම වෙනස අවසන් කිරීමට Chrome නැවත ආරම්භ කරන්න. ඔබ නැවත ආරම්භ කරන විට පටිති ස්වයංක්‍රීයව නැවත විවෘත වේ.</translation>
+<translation id="5212800876504289412">මෙම වෙනස අවසන් කිරීමට Ultimatum නැවත ආරම්භ කරන්න. ඔබ නැවත ආරම්භ කරන විට පටිති ස්වයංක්‍රීයව නැවත විවෘත වේ.</translation>
 <translation id="5213114823401215820">සංවෘත සමූහය යළි විවෘත කරන්න</translation>
 <translation id="5215957675041756913">ඔබේ දත්ත සහ ගිණුම පාලන කරන්න</translation>
 <translation id="5218324087477576825">කාඩ්පත් අංකය, අවශ්‍යයි</translation>
-<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, සහ තවත් <ph name="SEPARATOR" /> ඔබ මෑතක දී නොපැමිණි නිසා Chrome මෙම අවසර ඉවත් කරන ලදි</translation>
+<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, සහ තවත් <ph name="SEPARATOR" /> ඔබ මෑතක දී නොපැමිණි නිසා Ultimatum මෙම අවසර ඉවත් කරන ලදි</translation>
 <translation id="5222676887888702881">පිටවීම</translation>
 <translation id="5226378907213531272">ඔබ මෝටර් රථය භාවිතා කරන සෑම අවස්ථාවකම ඔබ ඔබේ තිරය අගුළු හරිනු ඇත</translation>
 <translation id="5227554086496586518">සෙවීම් ප්‍රතිඵල බැලීමට තට්ටු කරන්න</translation>
@@ -1036,7 +1036,7 @@
 <translation id="5313967007315987356">අඩවිය එක් කරන්න</translation>
 <translation id="5316947901395241499">මුරපද සුරැකීම ඔබේ පරිපාලක විසින් ක්‍රියා විරහිත කර ඇත</translation>
 <translation id="5317780077021120954">සුරකින්න</translation>
-<translation id="5319359161174645648">Google විසින් Chrome නිර්දේශ කරයි</translation>
+<translation id="5319359161174645648">Google විසින් Ultimatum නිර්දේශ කරයි</translation>
 <translation id="5326246328175179736">ඔබට මෙම ගිණුම භාවිතයෙන් පුරනය විය නොහැක</translation>
 <translation id="5327248766486351172">නම</translation>
 <translation id="5328542107300944283"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> සමග භාවිතා කරන්න</translation>
@@ -1049,7 +1049,7 @@
 <translation id="5375374982898812658">ඔබට වහාම “<ph name="GROUP_NAME" />” පටිති සමූහයට ප්‍රවේශය අහිමි වනු ඇති අතර, එය ඔබේ සියලු උපාංගවලින් මකනු ඇත</translation>
 <translation id="5375577065097716013">Google Lens සමග රූපය සොයන්න <ph name="BEGIN_NEW" />නව<ph name="END_NEW" /></translation>
 <translation id="5390367025924544771"><ph name="WEBSITE_ORIGIN" /> හට ඔබේ ඩිජිටල් මුදල් පසුම්බියේ පුද්ගලික තතු භාවිතා කිරීමට අවශ්‍ය වේ. ඔබ මෙම අඩවිය විශ්වාස කරන්නේ නම් පමණක් ඉදිරියට යන්න. භයානක වෙබ් අඩවි ඔබේ නීත්‍යානුකූල නම හෝ ID අංකය වැනි දේවල් හෙළි කිරීමට ඔබව රවටා ගත හැක.</translation>
-<translation id="5395376160638294582">ඔබට සැම විටම ඔබේ Google ගිණුමේ Chrome දත්ත භාවිතා කළ හැකි බව සහතික කර ගන්න</translation>
+<translation id="5395376160638294582">ඔබට සැම විටම ඔබේ Google ගිණුමේ Ultimatum දත්ත භාවිතා කළ හැකි බව සහතික කර ගන්න</translation>
 <translation id="539881862970320163">ශක්තිමත් මුරපදයක් යෝජනා කර ඇත. යතුරු පුවරුව සැඟවී ඇත.</translation>
 <translation id="5409881200985013443"><ph name="ONE_TIME_CODE" /> <ph name="CLIENT_NAME" /> හි ඉදිරිපත් කරන්නද?</translation>
 <translation id="5410300144953132176"><ph name="OWNER_FULL_NAME" /> (<ph name="OWNER_EMAIL" />) හට ඔබ පටිති සමූහයකට එකතු වීමට අවශ්‍යයි. සබැඳිය සහිත ඕනෑම අයෙකුට සියලු පටිති සංස්කරණය කළ හැක, එබැවින් ප්‍රවේශමෙන් එකතු වන්න. සබැඳිය පැය 48කින් කල් ඉකුත් වේ.</translation>
@@ -1061,7 +1061,7 @@
 <translation id="543271133149552180"><ph name="TAB_TITLE" />, බහු-තේරූ පින්තූරය තුළ පින්තූරය අප්‍රකට පටිත්ත</translation>
 <translation id="5436928407363358055">ඔබ නතර කළ තැනින් පහසුවෙන් පටන් ගැනීමට, ඔබේ ඉතිහාසය සහ පටිති සමමුහුර්ත කරන්න</translation>
 <translation id="5438292632479953702">නැවත බාගන්න</translation>
-<translation id="5439191312780166229">සම්මත ආරක්ෂණයට වඩා අඩවිවලින් වැඩිපුර දත්ත විශ්ලේෂණය කිරීමෙන්, Google කලින් නොදැන සිටි ඒවා පවා, භයානක අඩවි පිළිබඳව ඔබට අනතුරු අඟවයි. ඔබට Chrome අනතුරු ඇඟවීම් මඟ හැරීමට තේරිය හැක.</translation>
+<translation id="5439191312780166229">සම්මත ආරක්ෂණයට වඩා අඩවිවලින් වැඩිපුර දත්ත විශ්ලේෂණය කිරීමෙන්, Google කලින් නොදැන සිටි ඒවා පවා, භයානක අඩවි පිළිබඳව ඔබට අනතුරු අඟවයි. ඔබට Ultimatum අනතුරු ඇඟවීම් මඟ හැරීමට තේරිය හැක.</translation>
 <translation id="5441137934526263133">වෙබ් අඩවිය ක්‍රියා නොකරන්නේද? තෙවන පාර්ශ්ව කුකී අවහිර කරනු ලැබේ</translation>
 <translation id="5441466871879044658">මෙම භාෂාවට පරිවර්තනය කරන්න</translation>
 <translation id="5444999712122199445">අඩවියට ආපසු යන්න</translation>
@@ -1072,7 +1072,7 @@
 <translation id="5469852975082458401">ඔබට පෙළ කර්සරයක් සමගින් පිටුවල සංචාලනය කළ හැකිය. ක්‍රියාවිරහිත කිරීමට F7 ඔබන්න.</translation>
 <translation id="5471273988133666918">පටිත්ත <ph name="TAB_TITLE" /> ගෙන යා නොහැක.</translation>
 <translation id="548278423535722844">සිතියම් යෙදුම තුළ විවෘත කරන්න</translation>
-<translation id="5489222148748465285">Chrome දිගටම බැලීමට ඉඩ දෙන්න ද?</translation>
+<translation id="5489222148748465285">Ultimatum දිගටම බැලීමට ඉඩ දෙන්න ද?</translation>
 <translation id="5490848366863949315"><ph name="TAB_TITLE" />, බහු-තේරූ පින්තූරය තුළ පින්තූර පටිත්ත</translation>
 <translation id="5494920125229734069">සියල්ල තෝරන්න</translation>
 <translation id="549660026907543296"><ph name="MEMBER_FULL_NAME" /> ලෙස එක්වන්න</translation>
@@ -1080,7 +1080,7 @@
 <translation id="5526281268548144413">බහු කවුළු පුරා වැසිය නොහැක</translation>
 <translation id="5532536403031755365">වැඩි දියුණු කළ ආරක්ෂාවක් සමගින් සබැඳි තර්ජනවලට එරෙහිව අමතර ආරක්ෂක තට්ටුවක් එක් කරන්න</translation>
 <translation id="5548606607480005320">ආරක්‍ෂක පරීක්‍ෂාව</translation>
-<translation id="5554520618550346933">ඔබ මුරපදයක් භාවිතා කරන විට, එය සබැඳිව ප්‍රකාශයට පත් කර ඇත්නම් Chrome ඔබට අනතුරු අඟවයි. මෙය සිදු කරන විට, ඔබේ මුරපද සහ පරිශීලක නාම සංකේතනය කරන බැවින්, Google ඇතුළුව, කිසිවෙකුට ඒවා කියවීමට නොහැකි වේ.</translation>
+<translation id="5554520618550346933">ඔබ මුරපදයක් භාවිතා කරන විට, එය සබැඳිව ප්‍රකාශයට පත් කර ඇත්නම් Ultimatum ඔබට අනතුරු අඟවයි. මෙය සිදු කරන විට, ඔබේ මුරපද සහ පරිශීලක නාම සංකේතනය කරන බැවින්, Google ඇතුළුව, කිසිවෙකුට ඒවා කියවීමට නොහැකි වේ.</translation>
 <translation id="5555525474779371165">ඔබගේ සුරක්ෂිත බ්‍රවුස් කිරීම් ආරක්ෂාව තෝරන්න</translation>
 <translation id="5556459405103347317">නැවත</translation>
 <translation id="555671485580955310">ඉතිහාසය සහ පටිති සමමුහූර්ත කරන්න</translation>
@@ -1093,10 +1093,10 @@
 <translation id="5578795271662203820">මෙම රූපය සඳහා <ph name="SEARCH_ENGINE" /> සොයන්න</translation>
 <translation id="5596627076506792578">තවත් විකල්ප</translation>
 <translation id="5599455543593328020">අප්‍රසිද්ධ ප්‍රකාරය</translation>
-<translation id="5601180634394228718">ඔබේ Chrome අත්දැකීම වැඩි දියුණු කිරීමට දත්ත භාවිතා කරන තවත් සැකසීම් සඳහා, <ph name="BEGIN_LINK" />Google සේවා<ph name="END_LINK" /> වෙත යන්න.</translation>
+<translation id="5601180634394228718">ඔබේ Ultimatum අත්දැකීම වැඩි දියුණු කිරීමට දත්ත භාවිතා කරන තවත් සැකසීම් සඳහා, <ph name="BEGIN_LINK" />Google සේවා<ph name="END_LINK" /> වෙත යන්න.</translation>
 <translation id="5601924940067278327">ඔබේ සියලු උපාංග මත ඔබේ පටිති සහ තවත් දේ ලබා ගන්න</translation>
 <translation id="5611398002774823980">ගිණුමේ සුරකින්න</translation>
-<translation id="5613381935190035031">ඔබේ සියලු උපාංග මත ඔබේ පටිති සහ තවත් දේ ලබා ගැනීමට, Chrome වෙත <ph name="EMAIL" /> ලෙස පුරන්න</translation>
+<translation id="5613381935190035031">ඔබේ සියලු උපාංග මත ඔබේ පටිති සහ තවත් දේ ලබා ගැනීමට, Ultimatum වෙත <ph name="EMAIL" /> ලෙස පුරන්න</translation>
 <translation id="5614625640221885312">ඔබේ සියලු උපාංග මත ඔබේ පිටුසන්, මුරපද, සහ තවත් දේ ලබා ගැනීමට පුරන්න</translation>
 <translation id="5619633276517849615">ඔබේ සංවිධානය ආරක්ෂිත බ්‍රවුස් කිරීම ක්‍රියාත්මක කර ඇත</translation>
 <translation id="5620163320393916465">සුරැකි මුරපද නැත</translation>
@@ -1112,21 +1112,21 @@
 <translation id="5657871969392618475">ඔබේ තතු පැතිකඩ අගුලක් සමගින් සුරක්ෂිත කර ඇත</translation>
 <translation id="5659593005791499971">ඊතැපෑල</translation>
 <translation id="5665379678064389456"><ph name="APP_NAME" /> තුළ සිදුවීමක් සාදන්න</translation>
-<translation id="5683547024293500885">Chrome හට යාවත්කාලීන සඳහා පරීක්ෂා කළ නොහැකිය</translation>
+<translation id="5683547024293500885">Ultimatum හට යාවත්කාලීන සඳහා පරීක්ෂා කළ නොහැකිය</translation>
 <translation id="5683916195767086779">පටිති සමූහය</translation>
 <translation id="5686790454216892815">ගොනු නාමය දිග වැඩිය</translation>
 <translation id="569536719314091526">තවත් විකල්ප බොත්තමෙන් මෙම පිටුව ඕනෑම භාෂාවකට පරිවර්තන කරන්න</translation>
-<translation id="5696597120588531049">Chrome දත්ත කඩ කිරීම්, අනාරක්ෂිත වෙබ් අඩවි, සහ තවත් ඒවාවලින් ඔබව ආරක්ෂිතව තබා ගැනීමට උදවු කළ හැකිය</translation>
+<translation id="5696597120588531049">Ultimatum දත්ත කඩ කිරීම්, අනාරක්ෂිත වෙබ් අඩවි, සහ තවත් ඒවාවලින් ඔබව ආරක්ෂිතව තබා ගැනීමට උදවු කළ හැකිය</translation>
 <translation id="5698878456427040674">තෝරන ලද ගිණුමට සහාය දක්වන්නේ දැයි පරීක්ෂා කරන්න.</translation>
 <translation id="5709213329446699338"><ph name="SITE" /> හට අනුක්‍රමික තොටකට සම්බන්ධ වීමට අවශ්‍යයි</translation>
 <translation id="5715150588940290235">සුරැකි ආරක්‍ෂක කේත මකන්නද?</translation>
-<translation id="571930967925877633">ඔබේ පිටුසන්, ඉතිහාසය සහ අනෙකුත් Chrome දත්ත තවදුරටත් ඔබේ Google ගිණුමට සමමුහූර්ත නොවේ</translation>
+<translation id="571930967925877633">ඔබේ පිටුසන්, ඉතිහාසය සහ අනෙකුත් Ultimatum දත්ත තවදුරටත් ඔබේ Google ගිණුමට සමමුහූර්ත නොවේ</translation>
 <translation id="572328651809341494">මෑතකාලීන පටිති</translation>
 <translation id="5728072125198221967">සම්බන්ධ කරන ලද Google සේවා</translation>
 <translation id="5734658507307260911"><ph name="TAB_TITLE" />, අමුණන ලද ශ්‍රව්‍ය අප්‍රකට පටිත්ත</translation>
 <translation id="5744751019568455640">ඔබේ වෙබ් පිටු කියවීම සඳහා ඔබට තෝරා ගත හැකි හඬවල් මෙන්න. ඔබ මෙම හඬට කැමති නම් සහ මට එය දිගටම භාවිතා කිරීමට අවශ්‍ය නම් හඬ නම තට්ටු කරන්න.</translation>
 <translation id="574845902699630049"><ph name="OWNER_FULL_NAME" /> ලෙස බෙදා ගන්න</translation>
-<translation id="5749068826913805084">Chrome හට ගොනු බාගැනීමට ආචයන ප්‍රවේශය අවශ්‍යයි.</translation>
+<translation id="5749068826913805084">Ultimatum හට ගොනු බාගැනීමට ආචයන ප්‍රවේශය අවශ්‍යයි.</translation>
 <translation id="5749237766298580851">ක්‍රියාවිරහිත <ph name="SEPARATOR" /> නිර්දේශ නොකෙරේ</translation>
 <translation id="5752232708629533680">GIF පමණක් බෙදා ගන්න</translation>
 <translation id="5753570386948603678">ඉතිහාසයෙන් මකන්න</translation>
@@ -1145,14 +1145,14 @@
 <translation id="5811144606237321538"><ph name="TAB_TITLE" />, බහු-තේරූ ඇමිණූ නිහඬ කළ පටිත්ත</translation>
 <translation id="5814749351757353073">ඔබගේ ප්‍රියතම අඩවි සමග කටයුතු කරන්න</translation>
 <translation id="5823093032261493462">ඔබට කෙසේ හෝ <ph name="DOWNLOAD_DOMAIN" /> වෙතින් "<ph name="FILE_NAME" />" බාගත කිරීමට අවශ්‍ය ද?</translation>
-<translation id="5825135637446025843">Chrome නැවත ආරම්භ වූ පසු, ඔබේ නව සැපයුම්කරුගෙන් සුරකින ලද ඔබේ තතු මුරපද, මුරයතුරු, ලිපින, ගෙවීම් ක්‍රම සහ අනෙකුත් තතු ස්වයංව පිරවීමට භාවිතා කරනු ඇත.</translation>
-<translation id="5828921839638612740">ඔබට Chrome සැකසීම් තුළින් දත්ත මැකිය හැක</translation>
+<translation id="5825135637446025843">Ultimatum නැවත ආරම්භ වූ පසු, ඔබේ නව සැපයුම්කරුගෙන් සුරකින ලද ඔබේ තතු මුරපද, මුරයතුරු, ලිපින, ගෙවීම් ක්‍රම සහ අනෙකුත් තතු ස්වයංව පිරවීමට භාවිතා කරනු ඇත.</translation>
+<translation id="5828921839638612740">ඔබට Ultimatum සැකසීම් තුළින් දත්ත මැකිය හැක</translation>
 <translation id="5829586821381540080"><ph name="FOLDER_NAME" /> තුළ සුරැකිණි</translation>
 <translation id="583281660410589416">නොදනී</translation>
 <translation id="5833984609253377421">සබැඳිය බෙදා ගන්න</translation>
-<translation id="5839058148541733625">Chrome Dino</translation>
+<translation id="5839058148541733625">Ultimatum Dino</translation>
 <translation id="5841444063256914865">ඔබට කෙසේ හෝ "<ph name="FILE_NAME" />" බාගත කිරීමට අවශ්‍ය ද?</translation>
-<translation id="5847265694842662173">Chrome අපවාදාත්මක සහ භාවිතයට නොගත් අඩවි දැනුම්දීම් යැවීමෙන් නතර කර ඇත</translation>
+<translation id="5847265694842662173">Ultimatum අපවාදාත්මක සහ භාවිතයට නොගත් අඩවි දැනුම්දීම් යැවීමෙන් නතර කර ඇත</translation>
 <translation id="5848257610304005265"><ph name="APP_NAME" /> සමග PDF විවෘත කරන්න ද?</translation>
 <translation id="5849288995120328556">බෙදා ගැනීම නවත්වන්න ද?</translation>
 <translation id="5853623416121554550">විරාම කළා</translation>
@@ -1166,8 +1166,8 @@
 <translation id="5865733239029070421">භාවිතා සංඛ්‍යාල්ඛන සහ සහ බිඳ වැටීම් වාර්තා ස්වයංක්‍රියව Google වෙත යවයි</translation>
 <translation id="5869522115854928033">සුරැකි රහස්වචන</translation>
 <translation id="5870416898561279542">අනුපත් පටිති සහ සමූහ හෝ දින <ph name="DAYS_INACTIVE" />ක් භාවිත නොකළ ඒවා මෙතැනට ගෙන යනු ලැබේ<ph name="AUTODELETE_SECTION" />. ඔබට මෙය ඕනෑම වේලාවක <ph name="DECLUTTER_SETTINGS_TITLE" /> තුළ වෙනස් කළ හැක.</translation>
-<translation id="587735546353481577">අඩවියක් අනුගමනය කිරීමට, අඩවියට ගොස්, Chrome මෙනුව විවෘත කර, අනුගමනය කරන්න තට්ටු කරන්න.</translation>
-<translation id="5885378508678660271">දැනුම්දීම් <ph name="SEPARATOR" /> මෙම වෙබ් අඩවිය අනතුරුදායක බැවින් Chrome මෙම අවසර ඉවත් කර ඇත</translation>
+<translation id="587735546353481577">අඩවියක් අනුගමනය කිරීමට, අඩවියට ගොස්, Ultimatum මෙනුව විවෘත කර, අනුගමනය කරන්න තට්ටු කරන්න.</translation>
+<translation id="5885378508678660271">දැනුම්දීම් <ph name="SEPARATOR" /> මෙම වෙබ් අඩවිය අනතුරුදායක බැවින් Ultimatum මෙම අවසර ඉවත් කර ඇත</translation>
 <translation id="5899667542927581604">මුරයතුරු පත්‍රයක් වසා නොතිබුණි</translation>
 <translation id="5907542076239273525">පිටුසන <ph name="FOLDER_NAME" /> වෙත සුරකින ලදි</translation>
 <translation id="5911301511366365629"><ph name="TAB_TITLE" />, තෝරා ගත් ශ්‍රව්‍ය අප්‍රකට පටිත්ත</translation>
@@ -1178,23 +1178,23 @@
 <translation id="5942872142862698679">සෙවීම සඳහා Google භාවිත කරමින්</translation>
 <translation id="5945035219773565305">වත්මන් නිර්දේශය:  <ph name="RECOMMENDATION" /></translation>
 <translation id="5951119116059277034">සජීවී පිටුව නරඹමින්</translation>
-<translation id="5956665950594638604">Chrome උදවු මධ්‍යස්ථානය නව ටැබයක විවෘත කරන්න</translation>
+<translation id="5956665950594638604">Ultimatum උදවු මධ්‍යස්ථානය නව ටැබයක විවෘත කරන්න</translation>
 <translation id="59577092665511740">ගිණුමක් තෝරන්න.</translation>
 <translation id="5958275228015807058">බාගැනීම් තුළ ඔබේ ගොනු සහ පිටු සොයා ගන්න</translation>
-<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{ඔබ මෑතක දී නොපිවිසි අඩවියක් ඔබට දැනුම්දීම් යැවීම Chrome නතර කර ඇත}one{ඔබ මෑතක දී නොපිවිසි අඩවි ඔබට දැනුම්දීම් යැවීම Chrome නතර කර ඇත}other{ඔබ මෑතක දී නොපිවිසි අඩවි ඔබට දැනුම්දීම් යැවීම Chrome නතර කර ඇත}}</translation>
+<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{ඔබ මෑතක දී නොපිවිසි අඩවියක් ඔබට දැනුම්දීම් යැවීම Ultimatum නතර කර ඇත}one{ඔබ මෑතක දී නොපිවිසි අඩවි ඔබට දැනුම්දීම් යැවීම Ultimatum නතර කර ඇත}other{ඔබ මෑතක දී නොපිවිසි අඩවි ඔබට දැනුම්දීම් යැවීම Ultimatum නතර කර ඇත}}</translation>
 <translation id="5962718611393537961">හැකිළවීමට තට්ටු කරන්න</translation>
 <translation id="5964869237734432770">රූප විස්තර නවත්වන්න</translation>
 <translation id="5972844218283131174">සියල්ල තේරීමෙන් ඉවත් කරන්න</translation>
 <translation id="5975083100439434680">විශාලනය අඩු කරන්න</translation>
 <translation id="5977976211062815271">මෙම උපාංගය මත</translation>
 <translation id="5978661847409534366">{ITEMS_COUNT,plural, =1{ඔබේ කියවීම් ලැයිස්තුවෙහි 1 පිටුවක්}one{ඔබේ කියවීම් ලැයිස්තුවෙහි පිටු #ක්}other{ඔබේ කියවීම් ලැයිස්තුවෙහි පිටු #ක්}}</translation>
-<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> ඔබ මෑතක දී නොපැමිණි නිසා Chrome මෙම අවසර ඉවත් කරන ලදි</translation>
+<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> ඔබ මෑතක දී නොපැමිණි නිසා Ultimatum මෙම අවසර ඉවත් කරන ලදි</translation>
 <translation id="5995726099713306770">නැවත පිටුව බාගන්නද?</translation>
 <translation id="6000066717592683814">Keep Google</translation>
 <translation id="6000203700195075278">නැවත අනුගමනය කරන්න</translation>
 <translation id="6011308810877101166">සෙවීම් යෝජනා වැඩි දියුණු කරන්න</translation>
 <translation id="6013305291643746595">පැරණිම අනුව වර්ග කිරීම</translation>
-<translation id="6022659036123304283">Chrome ඔබේම කර ගන්න</translation>
+<translation id="6022659036123304283">Ultimatum ඔබේම කර ගන්න</translation>
 <translation id="6026538407078977628">පූර්ණ තිරයට දිග හරින්න</translation>
 <translation id="6030719887161080597">දැන්වීම් කාර්ය සාධනය මැනීමට අඩවි විසින් භාවිතා කරන තතු කළමනාකරණය කරන්න</translation>
 <translation id="6039379616847168523">ඊළඟ ටැබය වෙත පනින්න</translation>
@@ -1223,7 +1223,7 @@
 <translation id="6125864963080902918"><ph name="BEGIN_LINK" />වැඩි විස්තර<ph name="END_LINK" /></translation>
 <translation id="6127860394906721547"><ph name="TITLE_OF_GROUP" /> පටිති සමූහය, වර්ණය <ph name="COLOR_NAME" />, අඩවි <ph name="URL_LIST" /> සමග විවෘත කරන්න.</translation>
 <translation id="6130303040046284160">පටිත්ත අවම කරන්න</translation>
-<translation id="6132075343662013154">ඔබේ මුරපදය සුරැකීමට Chrome ඉදිරිපත් වනු ඇත</translation>
+<translation id="6132075343662013154">ඔබේ මුරපදය සුරැකීමට Ultimatum ඉදිරිපත් වනු ඇත</translation>
 <translation id="6134168885321518274">සෙවීම් තීරුව විවෘත කරන්න</translation>
 <translation id="6135608400322377268">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> පටිත්තක්}one{පටිති <ph name="TAB_COUNT_MANY" />ක්}other{පටිති <ph name="TAB_COUNT_MANY" />ක්}}</translation>
 <translation id="6137022273846704445"><ph name="APP_NAME" /> හි භාෂාව</translation>
@@ -1234,10 +1234,10 @@
 <translation id="6146563240635539929">වීඩියෝ</translation>
 <translation id="614890671148262506">මෙම අඩවියෙන් සැම විටම දැනුම්දීම්වලට ඉඩ දෙන්න</translation>
 <translation id="6150320133806434356">පිටුසන සුරකින ලදි</translation>
-<translation id="6150706324143004339">ඔබේ Google ගිණුමේ Chrome දත්ත භාවිත කිරීමට සහ සුරැකීමට, Chrome යාවත්කාලීන කරන්න</translation>
+<translation id="6150706324143004339">ඔබේ Google ගිණුමේ Ultimatum දත්ත භාවිත කිරීමට සහ සුරැකීමට, Ultimatum යාවත්කාලීන කරන්න</translation>
 <translation id="6154478581116148741">මෙම උපාංගයෙන් ඔබේ මුරපද නිර්යාත කිරීමට සැකසීම් තුළ තිර අගුල ක්‍රියාත්මක කරන්න</translation>
 <translation id="6156323911414505561">පිටුසන් තීරුව පෙන්වන්න</translation>
-<translation id="6162892189396105610">ඔබ පැමිණිය හැකි යැයි Chrome සිතන පිටු පූර්ව පූරණය කරයි.</translation>
+<translation id="6162892189396105610">ඔබ පැමිණිය හැකි යැයි Ultimatum සිතන පිටු පූර්ව පූරණය කරයි.</translation>
 <translation id="6165508094623778733">තව දැන ගන්න</translation>
 <translation id="6170675927290506430">දැනුම්දීම් සැකසීම් වෙත යන්න</translation>
 <translation id="6184972259157699660"><ph name="TAB_TITLE" />, නිහඬ කළ අප්‍රකට පටිත්ත</translation>
@@ -1246,7 +1246,7 @@
 <translation id="6193448654517602979">පටිති තෝරන්න</translation>
 <translation id="6196315980958524839">මුරපද මෙම උපාංගයේ Google මුරපද කළමනාකරු තුළ සුරැකේ</translation>
 <translation id="6202812185118613467">සමමුහුර්ත කිරීම ආරම්භ කිරීමට නැවත පුරන්න</translation>
-<translation id="6204781143409202534"><ph name="DOMAIN" /> වෙතින් අයාචිත වීමට හැකි දේ Chrome විසින් අනාවරණය කර ගන්නා ලදි.</translation>
+<translation id="6204781143409202534"><ph name="DOMAIN" /> වෙතින් අයාචිත වීමට හැකි දේ Ultimatum විසින් අනාවරණය කර ගන්නා ලදි.</translation>
 <translation id="6205314730813004066">දැන්වීම් පෞද්ගලිකත්වය</translation>
 <translation id="6210282067670792090">ලිපින තීරුව තුළ, සෙවීම් යන්ත්‍ර සහ අඩවි සෙවීම සඳහා කෙටි මං සහිත මෙම යතුරු පුවරු කෙටි මඟ භාවිත කරන්න</translation>
 <translation id="6210748933810148297"><ph name="EMAIL" /> නොවේද?</translation>
@@ -1260,12 +1260,12 @@
 <translation id="6247557882553405851">Google මුරපද කළමනාකරු</translation>
 <translation id="6248988683584659830">සැකසුම් සොයන්න</translation>
 <translation id="6250847299079540062"><ph name="TAB_TITLE" />, බහු-තේරූ ඇමිණූ අප්‍රකට පටිත්ත</translation>
-<translation id="6251449557817521191">මෙතැනින් ඔබේ Chrome ඉතිහාසය බලන්න</translation>
+<translation id="6251449557817521191">මෙතැනින් ඔබේ Ultimatum ඉතිහාසය බලන්න</translation>
 <translation id="6254139308321626268">ඔබ PDF ගොනුවක් බලමින් සිටී</translation>
-<translation id="6255809143828972562">Chrome වෙතින් මෙවලම් සමගින්, ඔබට සුරක්ෂිතව බ්‍රවුස් කර පාලනයේ සිටිය හැක</translation>
+<translation id="6255809143828972562">Ultimatum වෙතින් මෙවලම් සමගින්, ඔබට සුරක්ෂිතව බ්‍රවුස් කර පාලනයේ සිටිය හැක</translation>
 <translation id="6264376385120300461">කෙසේ වුවත් බාගන්න</translation>
 <translation id="6264485186158353794">ආරක්ෂාව වෙත ආපසු</translation>
-<translation id="6267106249090587268">දැනුම්දීම් <ph name="SEPARATOR" /> අයාචිත හෝ රැවටිලිකාර අන්තර්ගත නිසා Chrome මෙම අවසර ඉවත් කර ඇත</translation>
+<translation id="6267106249090587268">දැනුම්දීම් <ph name="SEPARATOR" /> අයාචිත හෝ රැවටිලිකාර අන්තර්ගත නිසා Ultimatum මෙම අවසර ඉවත් කර ඇත</translation>
 <translation id="6276708887952587684">පිටු මූලාශ්‍රය බලන්න</translation>
 <translation id="6277522088822131679">මෙම පිටුව මුද්‍රණය කිරීමේ ගැටලුවක් විය. කරුණාකර නැවත උත්සාහ කරන්න.</translation>
 <translation id="6278428485366576908">තේමාව</translation>
@@ -1281,7 +1281,7 @@
 <translation id="6312687380483398334">වෙබ් යෙදුම් (නිහඬ)</translation>
 <translation id="6315386555979018699">මකා ඉදිරියට යන්න</translation>
 <translation id="6316139424528454185">Android අනුවාදයට සහය දක්වනු නොලැබේ</translation>
-<translation id="631839948975905034">ඔබ Chrome හැර යන විට අප්‍රසිද්ධ කවුළු අගුලු දමන්න</translation>
+<translation id="631839948975905034">ඔබ Ultimatum හැර යන විට අප්‍රසිද්ධ කවුළු අගුලු දමන්න</translation>
 <translation id="6324916366299863871">කෙටිමඟ සංස්කරණය</translation>
 <translation id="6324977638108296054">උද්දීපනයට සබැඳිය තැනිය නොහැකිය</translation>
 <translation id="6333140779060797560"><ph name="APPLICATION" /> හරහා බෙදාගන්න</translation>
@@ -1297,13 +1297,13 @@
 <translation id="6356893102071098867">ඔබ නිවැරදි ගිණුම තෝරා ගෙන තිබේ දැයි පරීක්ෂා කරන්න</translation>
 <translation id="6363990818884053551">සමමුහුර්ත කිරීම ආරම්භ කිරීමට, ඒ ඔබ බව සත්‍යාපනය කරන්න</translation>
 <translation id="6364438453358674297">යෝජනාව ඉතිහාසය වෙතින් ඉවත් කරන්නද?</translation>
-<translation id="6380100320871303656">ඔබ පිවිසීමට ඉඩ ඇතැයි Chrome සිතන පිටු වඩාත් නිතර පූර්ව පූරණය කරයි. මෙම සැකසීම දත්ත භාවිතය වැඩි වීමට හේතු විය හැකිය.</translation>
+<translation id="6380100320871303656">ඔබ පිවිසීමට ඉඩ ඇතැයි Ultimatum සිතන පිටු වඩාත් නිතර පූර්ව පූරණය කරයි. මෙම සැකසීම දත්ත භාවිතය වැඩි වීමට හේතු විය හැකිය.</translation>
 <translation id="6382848304055775421">නිර්යාත කරමින්</translation>
 <translation id="6388152137132427505">සෑම විට ම බුද්ධිමත්ව බෙදා ගන්න. සබැඳි පැය 48කින් කල් ඉකුත් වේ.</translation>
 <translation id="6394791151443660613">සොයන්න: <ph name="SEARCH_QUERY" /></translation>
 <translation id="6397616442223433927">ආපසු සබැඳියි</translation>
 <translation id="6399363707848566877">ඔබට දැන් මෙහි කණ්ඩායම් වලට පහසුවෙන් පටිති එක් කළ හැක.</translation>
-<translation id="6401458660421980302">මෙම පටිත්ත වෙනත් උපාංගයකට යැවීමට, එයින් Chrome වෙත පුරන්න</translation>
+<translation id="6401458660421980302">මෙම පටිත්ත වෙනත් උපාංගයකට යැවීමට, එයින් Ultimatum වෙත පුරන්න</translation>
 <translation id="6404511346730675251">පිටු සලකුණ සංස්කරණය කරන්න</translation>
 <translation id="6406506848690869874">සමමුහුව</translation>
 <translation id="6408370409308816490"><ph name="TAB_TITLE" />, තෝරා ගත් ඇමිණූ බෙදා ගැනීමේ අප්‍රකට පටිත්ත</translation>
@@ -1323,24 +1323,24 @@
 <translation id="6452534462676960500">නව ක්‍රියාකාරකම්</translation>
 <translation id="6459045781120991510">සමීක්ෂණ</translation>
 <translation id="6461962085415701688">ගොනුව විවෘත කළ නොහැක</translation>
-<translation id="6464977750820128603">ඔබට ඔබ Chrome තුළ පිවිසෙන අඩවි බැලීමට සහ ඒවා සඳහා මුහුර්තක සැකසීමට හැකිය.\n\nGoogle ඔබ මුහුර්තක සකසන අඩවි සහ ඔබ ඒවාට කොපමණ කාලයක් පිවිසෙන්නේ ද යන්න පිළිබඳ තතු ලබා ගනී. මෙම තතු ඩිජිටල් සුවතාව වඩා හොඳ කිරීමට භාවිතා කරයි.</translation>
+<translation id="6464977750820128603">ඔබට ඔබ Ultimatum තුළ පිවිසෙන අඩවි බැලීමට සහ ඒවා සඳහා මුහුර්තක සැකසීමට හැකිය.\n\nGoogle ඔබ මුහුර්තක සකසන අඩවි සහ ඔබ ඒවාට කොපමණ කාලයක් පිවිසෙන්නේ ද යන්න පිළිබඳ තතු ලබා ගනී. මෙම තතු ඩිජිටල් සුවතාව වඩා හොඳ කිරීමට භාවිතා කරයි.</translation>
 <translation id="6468703991511753953">ලිපින තීරුව දැනට පහළින් ඇත</translation>
-<translation id="6470181189905173055">ඔබ <ph name="APP_LABEL" /> භාවිත කරන අතරතුර Chrome තුළ විවෘත කර ඇති පිටු හෙමි දිස් වෙයි.</translation>
+<translation id="6470181189905173055">ඔබ <ph name="APP_LABEL" /> භාවිත කරන අතරතුර Ultimatum තුළ විවෘත කර ඇති පිටු හෙමි දිස් වෙයි.</translation>
 <translation id="6473086018775716761">අර්ධ උසකදී විවෘත වන බෙදා ගැනීමේ විකල්ප ලැයිස්තුව.</translation>
 <translation id="6475951671322991020">වීඩියෝව බාගන්න</translation>
 <translation id="6477928892249167417">මෙම අඩවි ඔබට වැදගත් බව පෙනේ:</translation>
-<translation id="6479881432656947268">Chrome Web Store වෙත පිවිසෙන්න</translation>
-<translation id="6481963882741794338">පුද්ගලායන සහ වෙනත් අරමුණු සඳහා Chrome සහ වෙනත් Google සේවා සම්බන්‍ධ කරන්න</translation>
+<translation id="6479881432656947268">Ultimatum Web Store වෙත පිවිසෙන්න</translation>
+<translation id="6481963882741794338">පුද්ගලායන සහ වෙනත් අරමුණු සඳහා Ultimatum සහ වෙනත් Google සේවා සම්බන්‍ධ කරන්න</translation>
 <translation id="6482749332252372425">ආචනය ඉඩ නොමැති වීම නිසා <ph name="FILE_NAME" /> බාගැනීම අසාර්ථක විය.</translation>
 <translation id="6486420406192123355">මෙම PDF ගොනුව අනාරක්ෂිත සම්බන්ධතාවයක් භාවිත කරන වෙබ් අඩවියකි</translation>
 <translation id="650224091954855786">{FILE_COUNT,plural, =1{ගොනුව බාගන්නා ලදී}one{බාගැනීම් #ක් සම්පූර්ණයි}other{බාගැනීම් #ක් සම්පූර්ණයි}}</translation>
-<translation id="6508722015517270189">Chrome යළි අරඹන්න</translation>
+<translation id="6508722015517270189">Ultimatum යළි අරඹන්න</translation>
 <translation id="6513924416597632811">මේ සඳහා සෙවීම් ප්‍රතිඵල පිටුවට සබැඳිය පිටපත් කරන්න: <ph name="SEARCH_QUERY" />. මූලාශ්‍රය: <ph name="PAGE_URL" /></translation>
 <translation id="6518133107902771759">තහවුරු කරන්න</translation>
 <translation id="6521218807522232085">ඔබට පහසුවෙන් පුරනය වීමට හැකි වන පරිදි ඔබේ මුරපද තනන්න, සුරකින්න, සහ කළමනාකරණය කරන්න</translation>
 <translation id="6527303717912515753">බෙදාගන්න</translation>
-<translation id="652948702951888897">Chrome ඉතිහාසය</translation>
-<translation id="6532866250404780454">ඔබ Chrome තුළ පිවිසෙන අඩවි පෙන්වනු නොලැබේ. සියලුම අඩවි මුහුර්තක මකනු ඇත.</translation>
+<translation id="652948702951888897">Ultimatum ඉතිහාසය</translation>
+<translation id="6532866250404780454">ඔබ Ultimatum තුළ පිවිසෙන අඩවි පෙන්වනු නොලැබේ. සියලුම අඩවි මුහුර්තක මකනු ඇත.</translation>
 <translation id="6539092367496845964">යම් දෙයක් වැරදිණි. පසුව නැවත උත්සාහ කරන්න.</translation>
 <translation id="6541983376925655882">{NUM_HOURS,plural, =1{පැය 1කට පෙර පරීක්ෂා කරන ලදි}one{පැය #කට පෙර පරීක්ෂා කරන ලදි}other{පැය #කට පෙර පරීක්ෂා කරන ලදි}}</translation>
 <translation id="6545017243486555795">සියලු දත්ත හිස් කරන්න</translation>
@@ -1355,7 +1355,7 @@
 <translation id="6569373978618239158">ඔබ දැන් නව ටැබයක් විවෘත කරන විට <ph name="SITE_NAME" /> වෙතින් නව කතන්දර දකිනු ඇත. ඔබ අනුගමනය කරන අඩවි ඔබගේ Google ගිණුමේ සුරැකේ. ඔබට ඒවා Discover සැකසීම් තුළ කළමනාකරණය කළ හැකිය.</translation>
 <translation id="657177046675873214">ඔබේ සියලු උපාංගවල ඔබේ පිටුසන් ලබා ගැනීම සඳහා, සැකසීම් තුළ “පිටුසන්” ක්‍රියාත්මක කරන්න</translation>
 <translation id="6573096386450695060">සැමවිටම ඉඩ දෙන්න</translation>
-<translation id="6573431926118603307">ඔබේ වෙනත් උපාංගවල ඔබ Chrome හි විවෘත කර ඇති ටැබ මෙහි දිස් වනු ඇත.</translation>
+<translation id="6573431926118603307">ඔබේ වෙනත් උපාංගවල ඔබ Ultimatum හි විවෘත කර ඇති ටැබ මෙහි දිස් වනු ඇත.</translation>
 <translation id="6583199322650523874">වත්මන් පිටුව පිටුසන් කරන්න</translation>
 <translation id="6588043302623806746">සුරක්‍ෂිත DNS භාවිත කරන්න</translation>
 <translation id="6590471736817333463">දත්ත 60%ක් දක්වා සුරකින්න</translation>
@@ -1363,28 +1363,28 @@
 <translation id="6594347733515723558">සුබෙදීම සහ බැලීම් විකල්ප</translation>
 <translation id="6595046016124923392">ඔබ සඳහා විස්තර වැඩි දියුණු කිරීම සඳහා පින්තූර Google වෙත යවනු ලැබේ.</translation>
 <translation id="661266467055912436">ඔබේ සහ වෙබය මත සියලු දෙනාගේම ආරක්‍ෂාව වැඩිදියුණු කරයි.</translation>
-<translation id="6621391692573306628">මෙම පටිත්ත වෙනත් උපාංගයකට යැවීමට, උපාංග දෙකම මත Chrome වෙත පුරන්න</translation>
+<translation id="6621391692573306628">මෙම පටිත්ත වෙනත් උපාංගයකට යැවීමට, උපාංග දෙකම මත Ultimatum වෙත පුරන්න</translation>
 <translation id="6627583120233659107">ෆෝල්ඩරය සංස්කරණය කරන්න</translation>
 <translation id="6633067410344541938">අප්‍රසිද්ධ සැසිය අගුලු හරින්න</translation>
 <translation id="6636623428211296678">පහත තවත් සැකසීම් ගවේෂණය කරන්න හෝ දැන් අවසන් කරන්න</translation>
-<translation id="6637100877383020115">යෙදුම වැඩිදියුණු කිරීමට උදවු කිරීමට, Chrome පරිශීලන සහ බිඳ වැටීම් දත්ත Google වෙත යවයි. <ph name="BEGIN_UMA_LINK" />කළමනාකරණය කරන්න<ph name="END_UMA_LINK" /></translation>
+<translation id="6637100877383020115">යෙදුම වැඩිදියුණු කිරීමට උදවු කිරීමට, Ultimatum පරිශීලන සහ බිඳ වැටීම් දත්ත Google වෙත යවයි. <ph name="BEGIN_UMA_LINK" />කළමනාකරණය කරන්න<ph name="END_UMA_LINK" /></translation>
 <translation id="6641780377503683465"><ph name="INTEREST" /> ඉවත් කරන්න</translation>
 <translation id="6642299196749785472">පටිති අමුණන්න</translation>
 <translation id="6647441008198474441">ඔබ පිවිසෙන URL ඔබ මීළඟට පිවිසිය හැකි අඩවි මොනවාදැයි පුරෝකථනය කිරීමට Google වෙත යවනු ලැබේ</translation>
 <translation id="6648977384226967773">{CONTACT,plural, =1{<ph name="CONTACT_PREVIEW" />... සහ තවත් <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" />}one{<ph name="CONTACT_PREVIEW" />... සහ තවත් <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" />}other{<ph name="CONTACT_PREVIEW" />... සහ තවත් <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" />}}</translation>
 <translation id="6649642165559792194">රූපය පෙරදකින්න <ph name="BEGIN_NEW" />නව<ph name="END_NEW" /></translation>
 <translation id="6659594942844771486">පටිත්ත</translation>
-<translation id="6661521899577697780">Chrome සොයා ගැනීම් තෝරා ගැනීම අඩ උසින් විවෘත විය</translation>
+<translation id="6661521899577697780">Ultimatum සොයා ගැනීම් තෝරා ගැනීම අඩ උසින් විවෘත විය</translation>
 <translation id="666731172850799929"><ph name="APP_NAME" /> තුළ විවෘත කරන්න</translation>
 <translation id="6669390930482049506">මට දන්වන්න</translation>
-<translation id="6670767097276846646">සමහර දිගුවලට Chrome වෙත සෙවීම් යන්ත්‍ර එක් කළ හැකිය</translation>
+<translation id="6670767097276846646">සමහර දිගුවලට Ultimatum වෙත සෙවීම් යන්ත්‍ර එක් කළ හැකිය</translation>
 <translation id="6671495933530132209">රූපය පිටපත් කරන්න</translation>
 <translation id="6672697278890207089">ඔබේ මුර-වැකිකඩ ඇතුළු කරන්න</translation>
 <translation id="6672917148207387131"><ph name="DOMAIN" /> එක් කරන්න</translation>
 <translation id="6674571176963658787">සමමුහුර්ත කිරීම ආරම්භ කිරීමට, ඔබගේ මුර-වැකිකඩ ඇතුළත් කරන්න</translation>
-<translation id="6676927815633975364">මෙම අඩවිය සහ Chrome වෙත පුරන්න</translation>
+<translation id="6676927815633975364">මෙම අඩවිය සහ Ultimatum වෙත පුරන්න</translation>
 <translation id="6684262542644248484">වෙබ් අඩවියකට පුරන්න</translation>
-<translation id="6684809838922667136">Chrome වඩාත් යහපත් කරන්න</translation>
+<translation id="6684809838922667136">Ultimatum වඩාත් යහපත් කරන්න</translation>
 <translation id="6689436252814043643">කියවීමේ මාදිලිය නොමැත</translation>
 <translation id="669971068476817798">සුරකින්න තට්ටු කරන්න</translation>
 <translation id="6700279777779583398">තේරීම් සුරැකිණි</translation>
@@ -1408,18 +1408,18 @@
 <translation id="6764137532716892442">නව ක්‍රියාකාරකම් සහිත බෙදා ගත් <ph name="GROUP_TITLE" /> පටිති සමූහය</translation>
 <translation id="6767294960381293877">අර්ධ උසකින් විවෘත කර ඇති පටිත්තක් බෙදා ගැනීම සඳහා වන උපාංග ලැයිස්තුව.</translation>
 <translation id="6783664456110886353">{TAB_COUNT,plural, =1{<ph name="INCOGNITO_TAB_COUNT" /> අප්‍රකට සහ තව <ph name="TAB_COUNT_ONE" /> පටිත්තක් වැසෙනු ඇත}one{<ph name="INCOGNITO_TAB_COUNT" /> අප්‍රකට සහ තව පටිති <ph name="TAB_COUNT_MANY" />ක් වැසෙනු ඇත}other{<ph name="INCOGNITO_TAB_COUNT" /> අප්‍රකට සහ තව පටිති <ph name="TAB_COUNT_MANY" />ක් වැසෙනු ඇත}}</translation>
-<translation id="6785476624617658922">Chrome සහ ChromeOS අතිරේක සේවා නියම</translation>
+<translation id="6785476624617658922">Ultimatum සහ UltimatumOS අතිරේක සේවා නියම</translation>
 <translation id="6786747875388722282">දිගු</translation>
 <translation id="6787600234697426339">කවුළු <ph name="MAX_INSTANCE_COUNT" /> සීමාවට ළඟා විය</translation>
 <translation id="6795633245022906657">ඉක්මනින් නව ටැබයක් විවෘත කරන්න. මෙම කෙටිමඟ සංස්කරණය කිරීමට, සැකසීම් වෙත යන්න.</translation>
-<translation id="679588508577699489">Chrome ඔබේ පෙරනිමි කරන්න</translation>
+<translation id="679588508577699489">Ultimatum ඔබේ පෙරනිමි කරන්න</translation>
 <translation id="679956319013005046">ස්වයං පිරවීම සඳහා ඔබ කැමති සේවාව සැකසීමට, පළමුව <ph name="BEGIN_LINK" />Android සැකසීම්<ph name="END_LINK" /> තුළ සේවාව එක් කරන්න.</translation>
 <translation id="6802555630140434547">කවුළුව වැසෙනු ඇත</translation>
 <translation id="6803791793483522764">දැනුම්දීම් සමාලෝචනය කරන්න</translation>
 <translation id="6809470175540814047">අප්‍රසිද්ධ කවුළුවේ විවෘත කරන්න</translation>
 <translation id="6811034713472274749">පිටුව බැලීමට සූදානම්</translation>
 <translation id="6813359536773993594">{FILE_COUNT,plural, =1{රූප, ලැයිස්තුවේ 1 රූපයක්}one{රූප, ලැයිස්තුවේ රූප #ක්}other{රූප, ලැයිස්තුවේ රූප #ක්}}</translation>
-<translation id="6813446258015311409">Chrome වෙත පුරන්න, විවෘතයි.</translation>
+<translation id="6813446258015311409">Ultimatum වෙත පුරන්න, විවෘතයි.</translation>
 <translation id="6815692190508268848">ඔබේ පෙනුම් මනාප යොදන ලදි</translation>
 <translation id="6817747507826986771">මෙම පිටුව ඉක්මනින් බෙදා ගන්න. මෙම කෙටිමඟ සංස්කරණය කිරීමට, ස්පර්ශ කර අල්ලාගෙන සිටින්න.</translation>
 <translation id="6820686453637990663">CVC</translation>
@@ -1428,7 +1428,7 @@
 <translation id="6828070228333235514">මිල හඹා යාම නවත්වන්න</translation>
 <translation id="6830728435402077660">සුරක්ෂිත නැත</translation>
 <translation id="6831043979455480757">පරිවර්තනය කරන්න</translation>
-<translation id="6835182496791325827">ඔබ නොමැති විට Chrome ඔබේ සෙවීම් සඳහා හොඳම ප්‍රතිඵල සොයා ගත් විට දැනුම් දෙන්න.</translation>
+<translation id="6835182496791325827">ඔබ නොමැති විට Ultimatum ඔබේ සෙවීම් සඳහා හොඳම ප්‍රතිඵල සොයා ගත් විට දැනුම් දෙන්න.</translation>
 <translation id="6846298663435243399">පූර්ණය වෙමින්...</translation>
 <translation id="6850409657436465440">ඔබේ බාගැනීම තවමත් සිදු වෙමින් පවතී</translation>
 <translation id="6850830437481525139">පටිති <ph name="TAB_COUNT" /> ක් වසන ලදී</translation>
@@ -1451,7 +1451,7 @@
 <translation id="6886500155621657325">{ITEMS_COUNT,plural, =1{1 මුරපදයක්}one{මුරපද #ක්}other{මුරපද #ක්}}</translation>
 <translation id="688730033107341407">ඔබ වැරීමෙන් පසු, ඔබේ Google ගිණුම තුළ ඇති පිටුසන්, මුරපද, සහ තවත් ඒවා මෙම උපාංගයෙන් ඉවත් කරනු ලැබේ.</translation>
 <translation id="6896758677409633944">පිටපත්</translation>
-<translation id="6898797562238201317">ඔබේ Google ගිණුමේ ඇති සියලුම Chrome දත්ත සංකේතනය කිරීමට ඔබේම මුර-වැකිකඩක් භාවිත කරන්න</translation>
+<translation id="6898797562238201317">ඔබේ Google ගිණුමේ ඇති සියලුම Ultimatum දත්ත සංකේතනය කිරීමට ඔබේම මුර-වැකිකඩක් භාවිත කරන්න</translation>
 <translation id="6900532703269623216">වැඩිදියුණු කළ ආරක්ෂාව</translation>
 <translation id="6903907808598579934">සමමුහුර්තය ක්‍රියාත්මක කරන්න</translation>
 <translation id="6906448540340261898">ඔබට සැම විටම ඔබේ Google ගිණුමේ ඇති මුරපද භාවිතා කළ හැකි බවට වග බලා ගන්න</translation>
@@ -1461,7 +1461,7 @@
 <translation id="6910211073230771657">මකාදැමූ</translation>
 <translation id="6916590542764765824">දිගු පාලනය කරන්න</translation>
 <translation id="6918398787259831832">මෙම ගැටලුව දිගටම සිදු වන්නේ නම්, <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> වෙතින් <ph name="BEGIN_LINK" />වැඩිදුර තොරතුරු ලබා ගන්න<ph name="END_LINK" />.</translation>
-<translation id="6922812712751566567"><ph name="PERMISSION" />, <ph name="SEPARATOR" /> ඔබ මෑතක දී නොපැමිණි නිසා Chrome මෙම අවසර ඉවත් කරන ලදි</translation>
+<translation id="6922812712751566567"><ph name="PERMISSION" />, <ph name="SEPARATOR" /> ඔබ මෑතක දී නොපැමිණි නිසා Ultimatum මෙම අවසර ඉවත් කරන ලදි</translation>
 <translation id="6927821422725196292">{TABS_COUNT,plural, =1{1 පටිත්තක්}one{පටිති <ph name="NUMBER_OF_TABS" />ක්}other{පටිති <ph name="NUMBER_OF_TABS" />ක්}}</translation>
 <translation id="6929224077895306814">ඔබේ උපාංගයේ සහ ඔබේ Google ගිණුමේ සුරකින ලද සියලු ආරක්ෂක කේත මකනු ඇත</translation>
 <translation id="6933180670536678127"><ph name="TAB_TITLE" />, තෝරා ගත් ඇමිණූ ශ්‍රව්‍ය පටිත්ත</translation>
@@ -1490,30 +1490,30 @@
 <translation id="7020741890149022655"><ph name="BEGIN_NEW" />නව<ph name="END_NEW" /> කියවීම් ලැයිස්තුවට එක් කර.</translation>
 <translation id="7022756207310403729">බ්‍රවුසරය තුළ විවෘත කරන්න</translation>
 <translation id="7029809446516969842">මුරපද</translation>
-<translation id="7037994709569287156">Chrome පෙරනිමි කරන්න</translation>
+<translation id="7037994709569287156">Ultimatum පෙරනිමි කරන්න</translation>
 <translation id="7053256416619638731">මෙම උපාංගයෙහි ඔබේ මුරපද ශක්තිමත් කරන්න</translation>
 <translation id="7053983685419859001">අවහිර කරන්න</translation>
 <translation id="7054588988317389591">රූප විස්තර ලබා ගන්නද?</translation>
-<translation id="7057969023583258980">පූර්ණ Chrome ඉතිහාසය විවෘත කරන්න</translation>
+<translation id="7057969023583258980">පූර්ණ Ultimatum ඉතිහාසය විවෘත කරන්න</translation>
 <translation id="7063006564040364415">සමමු සර්වරයට සම්බන්ධ විය නොහැකි විය.</translation>
 <translation id="7063106218165698546">පටිති සමූහය අභිරුචි කර නිමයි ඔබන්න</translation>
 <translation id="7071521146534760487">ගිණුම කළමනා කරන්න</translation>
 <translation id="707155805709242880">පහත කුමක් සම්මුහුර්ත කරන්නේදැයි තෝරන්න</translation>
 <translation id="7072949719501323344"><ph name="TAB_TITLE" />, බහු-තේරූ අමුණන ලද පින්තූරය තුළ පින්තූරය අප්‍රකට පටිත්ත</translation>
 <translation id="7077143737582773186">SD පත</translation>
-<translation id="7078916049958741685">මෙම උපාංගයෙන් ඔබගේ Chrome දත්ත මකන්නද?</translation>
+<translation id="7078916049958741685">මෙම උපාංගයෙන් ඔබගේ Ultimatum දත්ත මකන්නද?</translation>
 <translation id="7080145768121641840"><ph name="TAB_TITLE" />, තෝරා ගත් ඇමිණූ නිහඬ පටිත්ත</translation>
 <translation id="7084115944294706056">ලිපින තීරුවේ පිහිටීම තෝරා ගන්න</translation>
-<translation id="7085332316435785646">Google සේවාවල වඩාත් පුද්ගලිකකරණය කළ අත්දැකීම් සඳහා Chrome ඉතිහාසය ඇතුළත් කළ යුතුද යන්න තෝරන්න</translation>
-<translation id="7088681679121566888">Chrome යාවත්කාලීනයි</translation>
+<translation id="7085332316435785646">Google සේවාවල වඩාත් පුද්ගලිකකරණය කළ අත්දැකීම් සඳහා Ultimatum ඉතිහාසය ඇතුළත් කළ යුතුද යන්න තෝරන්න</translation>
+<translation id="7088681679121566888">Ultimatum යාවත්කාලීනයි</translation>
 <translation id="7098100324909062850"><ph name="TAB_TITLE" />, බහු-තේරූ නිහඬ අප්‍රකට පටිත්ත</translation>
 <translation id="7106762743910369165">ඔබේ බ්‍රවුසරය ඔබේ සංවිධානය විසින් කළමනාකරණය කරයි</translation>
-<translation id="7111394291981742152">Chrome ඔබට ඔබ දකින දැන්වීම් කෙරෙහි වැඩි පාලනයක් ලබා දෙන අතර ඔවුන් ඔබට පෞද්ගලීකරණය කළ දැන්වීම් පෙන්වන විට අඩවිවලට ඔබ ගැන ඉගෙන ගත හැකි දේ සීමා කරයි.</translation>
+<translation id="7111394291981742152">Ultimatum ඔබට ඔබ දකින දැන්වීම් කෙරෙහි වැඩි පාලනයක් ලබා දෙන අතර ඔවුන් ඔබට පෞද්ගලීකරණය කළ දැන්වීම් පෙන්වන විට අඩවිවලට ඔබ ගැන ඉගෙන ගත හැකි දේ සීමා කරයි.</translation>
 <translation id="7111822978084196600">මෙම කවුළුව නම් කරන්න</translation>
 <translation id="7115358764509798967">පද්ධති පෙරනිමිය</translation>
 <translation id="7117485132243600300">ඔබ අනුගමනය කරන අන්තර්ගතය සහ යෝජිත මාතෘකා සහ සෙවීම් කළමනාකරණය කරන්න</translation>
 <translation id="7119984597597798764"><ph name="INSTANCE_TITLE" /> වසන්න</translation>
-<translation id="7121179479711575744">Chrome වෙත පුරනය වන්න</translation>
+<translation id="7121179479711575744">Ultimatum වෙත පුරනය වන්න</translation>
 <translation id="7136694880210472378">පෙරනිමි කරන්න</translation>
 <translation id="7136902389402789299">{NUM_SITES,plural, =1{1 අඩවියක් සඳහා අවසර සමාලෝචනය කරන ලදි}one{අඩවි #ක් සඳහා අවසර සමාලෝචනය කරන ලදි}other{අඩවි #ක් සඳහා අවසර සමාලෝචනය කරන ලදි}}</translation>
 <translation id="7138678301420049075">වෙනත්</translation>
@@ -1523,8 +1523,8 @@
 <translation id="7149893636342594995">පසුගිය පැය 24</translation>
 <translation id="71503698506017927">මුර වැකිකඩ සංකේතනයට Google Pay වෙතින් ලැබෙන ගෙවීම් ක්‍රම සහ ලිපින ඇතුළත් නොවේ.
 
-මෙම සැකසීම වෙනස් කිරීමට <ph name="BEGIN_LINK" />ඔබේ ගිණුමේ ඇති Chrome දත්ත මකන්න<ph name="END_LINK" />.</translation>
-<translation id="7165972437814027679">Chrome සමහර ගොනු අවහිර කරන්නේ මන්දැයි තව දැන ගන්න</translation>
+මෙම සැකසීම වෙනස් කිරීමට <ph name="BEGIN_LINK" />ඔබේ ගිණුමේ ඇති Ultimatum දත්ත මකන්න<ph name="END_LINK" />.</translation>
+<translation id="7165972437814027679">Ultimatum සමහර ගොනු අවහිර කරන්නේ මන්දැයි තව දැන ගන්න</translation>
 <translation id="7168323970702333693"><ph name="USER_NAME" /> ලෙස පුරනය වී ඇත. සැකසීම් විවෘත කරයි.</translation>
 <translation id="7170930892977483182">ඔබේ උපාංගයේ සහ Google Wallet හි සුරකින ලද සියලු ආරක්ෂක කේත මකනු ඇත</translation>
 <translation id="7173114856073700355">සැකසීම් විවෘත කරන්න</translation>
@@ -1544,7 +1544,7 @@
 <translation id="7197682514647286393">ඔබේ බ්‍රවුස් කිරීමේ දත්ත ඉක්මනින් මකන්න</translation>
 <translation id="719791532916917144">යතුරු පුවරු කෙටි මඟ</translation>
 <translation id="7207760545532569765">නව පසුබිම් ටැබ සමූහයක් ලෙස ටැබ <ph name="TAB_COUNT" />ක් ප්‍රතිසාධනය කරන්න.</translation>
-<translation id="7217781228893594884">ඔබ Chrome වෙතින් පිටවන විට අප්‍රකට පටිති අගුළු දමනු ඇත</translation>
+<translation id="7217781228893594884">ඔබ Ultimatum වෙතින් පිටවන විට අප්‍රකට පටිති අගුළු දමනු ඇත</translation>
 <translation id="7221869452894271364">මෙම පිටුව නැවත ලබාගන්න</translation>
 <translation id="722681077040152344">අඩවි <ph name="COUNT" />කින් ග්‍රාහක නොවුණි</translation>
 <translation id="7227218174981371415">{FILE_COUNT,plural, =1{බාගැනීම් 1ක් පොරොත්තුවෙන්}one{බාගැනීම් #ක් පොරොත්තුවෙන්}other{බාගැනීම් #ක් පොරොත්තුවෙන්}}</translation>
@@ -1554,12 +1554,12 @@
 <translation id="724510009481365878">මෙම පිටුව මුද්‍රණය කළ නොහැක</translation>
 <translation id="7248671827512403053">ඉල්ලුම් පත්‍රය</translation>
 <translation id="7253951228444156601">මුරපද පරීක්ෂා කරමින්…</translation>
-<translation id="7260367682327802201">ඔබේ Android උපාංගයට සමාන සැකසීමක් ඇතුළත් විය හැක. Chrome සහ ඔබේ Android උපාංගයේ දැන්වීම් මිනුම් ක්‍රියාත්මක කර ඇත්නම්, ඔබ පිවිසෙන වෙබ් අඩවි සහ ඔබ භාවිතා කරන යෙදුම් හරහා දැන්වීමක සඵලතාවය මැනීමට සමාගමකට හැකි විය හැක.</translation>
+<translation id="7260367682327802201">ඔබේ Android උපාංගයට සමාන සැකසීමක් ඇතුළත් විය හැක. Ultimatum සහ ඔබේ Android උපාංගයේ දැන්වීම් මිනුම් ක්‍රියාත්මක කර ඇත්නම්, ඔබ පිවිසෙන වෙබ් අඩවි සහ ඔබ භාවිතා කරන යෙදුම් හරහා දැන්වීමක සඵලතාවය මැනීමට සමාගමකට හැකි විය හැක.</translation>
 <translation id="727288900855680735"><ph name="ONE_TIME_CODE" /> <ph name="ORIGIN" /> වෙත ඉදිරිපත් කරන්නද?</translation>
 <translation id="7274013316676448362">අවහිර කළ අඩවිය</translation>
 <translation id="7276868533747677875">ඔබ පෙරදී මුරපද නිර්යාත කළේ නම්, ඔබේ උපාංගයේ CSV ගොනුවක් සොයා ඒවා ඔබ කැමති මුරපද කළමනාකරු වෙත ආයාත කරන්න.</translation>
 <translation id="728377807486816582">ලිපින තීරුව තට්ටු කරන්න</translation>
-<translation id="7289049772085228972">ඔබට Chrome හි ප්‍රබලම ආරක්ෂාව ඇත</translation>
+<translation id="7289049772085228972">ඔබට Ultimatum හි ප්‍රබලම ආරක්ෂාව ඇත</translation>
 <translation id="7289303553784750393">ඔබ සබැඳිව සිටින නමුත් මෙම ගැටලුව දිගටම පවතී නම්, <ph name="SITE_ETLD_PLUS_ONE" /> මත ඉදිරියට යාමට ඔබට වෙනත් ක්‍රම උත්සාහ කළ හැක.</translation>
 <translation id="7290209999329137901">යළි නම් කිරීම නොලැබේ</translation>
 <translation id="7291910923717764901">මෙම පිටුව සඳහා රූප විස්තර එක් කරන ලදි</translation>
@@ -1592,12 +1592,12 @@
 <translation id="7400003506822844357">{FILE_COUNT,plural, =1{ලැයිස්තුවේ ඇති අනෙකුත් ගොනු 1ක්}one{ලැයිස්තුවේ ඇති අනෙකුත් ගොනු #ක්}other{ලැයිස්තුවේ ඇති අනෙකුත් ගොනු #ක්}}</translation>
 <translation id="7400418766976504921">URL</translation>
 <translation id="7400424692675800399">නව කවුළුවක් විවෘත කිරීමට, සක්‍රිය සහ අක්‍රිය හරහා ඇති මුළු කවුළු ගණන <ph name="MAX_WINDOW_COUNT_MINUS_ONE" />ක් හෝ ඊට අඩු කරන්න.</translation>
-<translation id="7403691278183511381">Chrome පළමු ධාවන අත්දැකීම</translation>
+<translation id="7403691278183511381">Ultimatum පළමු ධාවන අත්දැකීම</translation>
 <translation id="7411224099004328643">Google ගිණුම් පරිශීලක</translation>
 <translation id="7419565702166471774">සෑම විටම ආරක්ෂිත සබැඳුම් භාවිත කරන්න.</translation>
 <translation id="7421293530411019405">පටිති සමූහය හැර යන්න ද?</translation>
 <translation id="7435356471928173109">ඔබේ පරිපාලක විසින් ක්‍රියාවිරහිත කරන ලදි</translation>
-<translation id="7437998757836447326">Chrome ගෙන් පිටවන්න</translation>
+<translation id="7437998757836447326">Ultimatum ගෙන් පිටවන්න</translation>
 <translation id="7439467816829380878">පටිත්ත සමූහයට ගෙන යන්න</translation>
 <translation id="7439749340204407129">පිටුසන් කළමනාකරු විවෘත කරන්න</translation>
 <translation id="7453810262525006706">පැති දසුනට හකුළන්න</translation>
@@ -1631,7 +1631,7 @@
 <translation id="7525248386620136756"><ph name="TAB_GROUPS_AND_TABS_PART" /> වසා සුරකින ලදි</translation>
 <translation id="7545347190366646170">ප්‍රවේශය ඇති පුද්ගලයින්</translation>
 <translation id="7553482318994371148">වැසූ පටිති නැවත විවෘත කරන්න</translation>
-<translation id="7554643625247105821">Chrome අනුවාදය පරීක්ෂා කළ නොහැක</translation>
+<translation id="7554643625247105821">Ultimatum අනුවාදය පරීක්ෂා කළ නොහැක</translation>
 <translation id="7557508262441527045">වරන ලදි</translation>
 <translation id="7573665567024262965">ඔබේ පෙරනිමි යෙදුම් තෝරන්න</translation>
 <translation id="757855969265046257">{FILES,plural, =1{<ph name="FILES_DOWNLOADED_ONE" /> ගොනුවක් බාගත්තා}one{ගොනු <ph name="FILES_DOWNLOADED_MANY" />ක් බාගත්තා}other{ගොනු <ph name="FILES_DOWNLOADED_MANY" />ක් බාගත්තා}}</translation>
@@ -1647,7 +1647,7 @@
 <translation id="7612619742409846846">Google වෙත පුරනය වූයේ</translation>
 <translation id="7612989789287281429">ඔබව පුරමින්…</translation>
 <translation id="7619072057915878432">ජාල දෝෂ නිසා <ph name="FILE_NAME" /> බාගැනීම අසාර්ථක විය.</translation>
-<translation id="7626032353295482388">Chrome වෙත පිළිගනිමු</translation>
+<translation id="7626032353295482388">Ultimatum වෙත පිළිගනිමු</translation>
 <translation id="7628417132421583481">මුරපද කළමනාකරු වෙත යන්න</translation>
 <translation id="7630202231528827509">සැපයුම්කරු URL</translation>
 <translation id="7638584964844754484">රහස්පදය වැරදියි</translation>
@@ -1662,7 +1662,7 @@
 <translation id="7666185984446444960"><ph name="TAB_GROUPS_AND_TABS_PART" /> වැසිණි</translation>
 <translation id="7682724950699840886">පහත ඉඟි උත්සාහ කරන්න: ඔබේ උපාංගයේ ප්‍රමාණවත් ඉඩක් ඇති බවට වග බලා ගෙන, නැවත නිර්යාත කිරීමට උත්සාහ කරන්න.</translation>
 <translation id="7686086654630106285">අඩවි-යෝජිත දැන්වීම් පිළිබඳ වැඩිදුර</translation>
-<translation id="7690596512217303514">ඔබේ උපාංගයට Chrome විවෘත කළ නොහැකි විය. ගැටලුව නිරාකරණය සඳහා, ඔබේ යෙදුම් වෙළඳ වෙතින් නවතම Chrome යාවත්කාලීනය බාගන්න.</translation>
+<translation id="7690596512217303514">ඔබේ උපාංගයට Ultimatum විවෘත කළ නොහැකි විය. ගැටලුව නිරාකරණය සඳහා, ඔබේ යෙදුම් වෙළඳ වෙතින් නවතම Ultimatum යාවත්කාලීනය බාගන්න.</translation>
 <translation id="7691043218961417207">අනුගමනය කිරීමට අන්තර්ගතය ගවේෂණය කරන්න</translation>
 <translation id="7692761875510935111">බ්‍රව්සරයේ ඉක්මනින් විවෘත කරන්න. මෙම කෙටිමඟ සංස්කරණ කිරීමට, ස්පර්ශ කර අල්ලා සිටින්න.</translation>
 <translation id="7697383401610880082">ඇදීම් හැඬලය</translation>
@@ -1670,7 +1670,7 @@
 <translation id="7702420606070050505">මෑත ක්‍රියාකාරකම් පහළ පත්‍රය සම්පූර්ණ උසින් විවෘත කරන ලදි</translation>
 <translation id="7707922173985738739">ජංගම දත්ත භාවිත කරන්න</translation>
 <translation id="7708994397325774423">ඔබේ සියලු මුරපද ලබා ගන්න</translation>
-<translation id="7714077993070342304">Chrome මෙනුව විවෘත කරන්න</translation>
+<translation id="7714077993070342304">Ultimatum මෙනුව විවෘත කරන්න</translation>
 <translation id="7733878270780732638">උපාංගය මත ප්‍රමාණවත් ඉඩක් නොමැත.</translation>
 <translation id="7740287852186792672">සෙවීම් ප්‍රතිඵල</translation>
 <translation id="774403695779169686"><ph name="TAB_TITLE" />, තෝරා ගත් බෙදා ගැනීමේ අප්‍රකට පටිත්ත</translation>
@@ -1697,9 +1697,9 @@
 <translation id="7821130663268546430">ඔබට පටිති මාරුව තුළ සියලු විවෘත පටිති සොයා ගත හැක</translation>
 <translation id="7822705602465980873">ඔබ පුරනය වී ඇති විට, මෙම දත්ත Google සේවා හරහා ඔබව ආරක්ෂා කිරීමට ඔබේ Google ගිණුම වෙත සම්බන්ධ කරනු ලැබේ, උදාහරණයක් ලෙස ආරක්ෂක සිදුවීමකින් පසුව Gmail තුළ ආරක්ෂාව වැඩි කිරීම.</translation>
 <translation id="7824665136384946951">ඔබේ සංවිධානය සුරක්ෂිත බ්‍රවුස් කිරීම ක්‍රියාවිරහිත කර ඇත</translation>
-<translation id="7826342993930002256">ඔබේ Chrome, සෑම තැනකම</translation>
+<translation id="7826342993930002256">ඔබේ Ultimatum, සෑම තැනකම</translation>
 <translation id="7844171778363018843">සමමුහුර්ත කිරීමට දත්ත තෝරා නැත</translation>
-<translation id="784453721355882533">පිළිතුරු, ප්‍රධාන කරුණු සහ තවත් දේ ලබා ගැනීමට Chrome හි Gemini උත්සාහ කරන්න.</translation>
+<translation id="784453721355882533">පිළිතුරු, ප්‍රධාන කරුණු සහ තවත් දේ ලබා ගැනීමට Ultimatum හි Gemini උත්සාහ කරන්න.</translation>
 <translation id="7846161022626028328">දෝෂයක් සිදු විය. නැවත උත්සාහ කරන්න.</translation>
 <translation id="7846296061357476882">Google සේවා</translation>
 <translation id="784652447248278262">වත්මන් කවුළුව</translation>
@@ -1709,10 +1709,10 @@
 <translation id="7853202427316060426">ක්‍රියාකාරකම</translation>
 <translation id="7859988229622350291">කිසි විටක පරිවර්තනය නොකරන්න</translation>
 <translation id="7866213166286285359">මෙහි පිටු පරිවර්තනය කරන්න</translation>
-<translation id="7873610418439765081">පිළිතුරු, ප්‍රධාන කරුණු සහ තවත් දේ තවත් විකල්ප බොත්තමෙන් ලබා ගැනීමට Chrome හි Gemini උත්සාහ කරන්න.</translation>
+<translation id="7873610418439765081">පිළිතුරු, ප්‍රධාන කරුණු සහ තවත් දේ තවත් විකල්ප බොත්තමෙන් ලබා ගැනීමට Ultimatum හි Gemini උත්සාහ කරන්න.</translation>
 <translation id="7875915731392087153">ඊ-තැපෑල සාදන්න</translation>
 <translation id="7876243839304621966">සියල්ල ඉවත් කරන්න</translation>
-<translation id="7886917304091689118">Chrome තුළ ධාවනය වේ</translation>
+<translation id="7886917304091689118">Ultimatum තුළ ධාවනය වේ</translation>
 <translation id="7887174313503389866">ප්‍රධාන පෞද්ගලිකත්ව සහ ආරක්ෂක පාලන පිළිබඳ මාර්ගෝපදේශය සහිත චාරිකාවක් සිදු කරන්න. තවත් විකල්ප සඳහා, තනි සැකසීම් වෙත යන්න.</translation>
 <translation id="7913993612870913335">{FILE_COUNT,plural, =1{ඔබේ සංවිධානය විසින් 1ක් අවහිර කර ඇත}one{ඔබේ සංවිධානය විසින් #ක් අවහිර කර ඇත}other{ඔබේ සංවිධානය විසින් #ක් අවහිර කර ඇත}}</translation>
 <translation id="7914399737746719723">යෙදුම ස්ථාපනය කරන ලදි</translation>
@@ -1721,7 +1721,7 @@
 <translation id="7921782882718083488">මෙම පිටුව සාරාංශ කරන්න</translation>
 <translation id="7926975587469166629">කාඩ්පතෙහි අපනාමය</translation>
 <translation id="7927073875790626822">XR</translation>
-<translation id="7929587383660661825">දැනුම්දීම් අනිසි ලෙස භාවිතා කරන හෝ ඔබ මෑතක දී නොපිවිසි අඩවි වලින් Chrome ස්වයංක්‍රීයව අවසර ඉවත් කරයි</translation>
+<translation id="7929587383660661825">දැනුම්දීම් අනිසි ලෙස භාවිතා කරන හෝ ඔබ මෑතක දී නොපිවිසි අඩවි වලින් Ultimatum ස්වයංක්‍රීයව අවසර ඉවත් කරයි</translation>
 <translation id="7934668619883965330">ගොනුව බාගැනීමට නොහැක. ගොනු ආකෘතිය සහාය නොදක්වයි.</translation>
 <translation id="7942131818088350342"><ph name="PRODUCT_NAME" /> යල් පැන ගොස් ඇත.</translation>
 <translation id="7944772052836377867">ඒ ඔබ බව සත්‍යාපනය කිරීමට සමමුහුර්තයට අවශ්‍යයි</translation>
@@ -1738,7 +1738,7 @@
 <translation id="7971136598759319605">1 දිනකට පෙර ක්‍රියාත්මකයි</translation>
 <translation id="7975379999046275268">පිටුව පෙරදකින්න <ph name="BEGIN_NEW" />නව<ph name="END_NEW" /></translation>
 <translation id="7977451675950311423">ඔබ දත්ත කඩකිරීමක අවදානමට ලක් වූ මුරපදයක් භාවිතා කරන්නේ නම් ඔබට අනතුරු අඟවයි.</translation>
-<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> ඔබ මෑතක දී නොපැමිණි නිසා Chrome මෙම අවසර ඉවත් කරන ලදි</translation>
+<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> ඔබ මෑතක දී නොපැමිණි නිසා Ultimatum මෙම අවසර ඉවත් කරන ලදි</translation>
 <translation id="7995059495660416932">එය ලබා ගත හැකි වූ විට ඔබට අන්තර්ගතය පෙනෙනු ඇත</translation>
 <translation id="799576009106109668">ඔබගේ වත්මන් වෙබ් පිටුවට පැමිණීම මත පදනම්ව අන්තර්ගතය ප්‍රගාමීව පූරණය කර ඇති නිසා ඔබ වේගයෙන් බ්‍රවුස් කරනු ඇත</translation>
 <translation id="7998918019931843664">වැසූ ටැබය යළි විවෘත කරන්න</translation>
@@ -1756,17 +1756,17 @@
 <translation id="804335162455518893">SD පත හමු නොවිණි</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{අප්‍රකට ටැබ <ph name="TAB_COUNT_ONE" />}one{අප්‍රකට ටැබ <ph name="TAB_COUNT_NORMAL" />}other{අප්‍රකට ටැබ <ph name="TAB_COUNT_NORMAL" />}}</translation>
 <translation id="8051695050440594747"><ph name="MEGABYTES" /> MB තිබේ</translation>
-<translation id="8058746566562539958">නව Chrome පටිත්තේ විවෘත කරන්න</translation>
+<translation id="8058746566562539958">නව Ultimatum පටිත්තේ විවෘත කරන්න</translation>
 <translation id="8062594758852531064">දීර්ඝ කළ පූර්ව පූරණය:</translation>
 <translation id="8063895661287329888">පිටුසන එක් කිරීම අසාර්ථක විය.</translation>
 <translation id="8066816452984416180">මෙම පිටුව ඉක්මනින් පිටුසන් කරන්න. මෙම කෙටිමඟ සංස්කරණ කිරීමට, ස්පර්ශ කර අල්ලා සිටින්න.</translation>
-<translation id="8072436850275034464">ඔබ Chrome භාවිත කරන ඕනෑම තැනක සිට ඔබ මෑතක දී වසා දැමූ පටිති නැවත විවෘත කළ හැක</translation>
+<translation id="8072436850275034464">ඔබ Ultimatum භාවිත කරන ඕනෑම තැනක සිට ඔබ මෑතක දී වසා දැමූ පටිති නැවත විවෘත කළ හැක</translation>
 <translation id="8073388330009372546">පින්තූරය නව ටැබයක විවෘත කරන්න</translation>
 <translation id="8076492880354921740">පටිති</translation>
 <translation id="8078096376109663956">පෙළ පමණක් බෙදා ගන්න</translation>
 <translation id="8078348702936632821">මෙම කෙටිමඟ අමුණන්න</translation>
 <translation id="8084285576995584326">ඔබගේ Google ගිණුම් දත්ත පාලනය කරන්න</translation>
-<translation id="8084864785646838999">ඔබේ සමහර වෙබ් ඉතිහාසය මෙහි දින් නොවීමට ඉඩ ඇත. ඔබේ සියලුම Chrome ඉතිහාසය බැලීමට, සම්පූර්ණ Chrome ඉතිහාසය විවෘත කරන්න. එසේම, ඔබේ Google ගිණුමට <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> තුළ බ්‍රවුස් කිරීමේ ඉතිහාසයේ වෙනත් ආකාර තිබේවි.</translation>
+<translation id="8084864785646838999">ඔබේ සමහර වෙබ් ඉතිහාසය මෙහි දින් නොවීමට ඉඩ ඇත. ඔබේ සියලුම Ultimatum ඉතිහාසය බැලීමට, සම්පූර්ණ Ultimatum ඉතිහාසය විවෘත කරන්න. එසේම, ඔබේ Google ගිණුමට <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> තුළ බ්‍රවුස් කිරීමේ ඉතිහාසයේ වෙනත් ආකාර තිබේවි.</translation>
 <translation id="8088176524274673045">අවට පුද්ගලයින් සමඟ බෙදා ගැනීමට, ඔවුන්ට මෙම QR කේතය ස්කෑන් කිරීමට ඉඩ දෙන්න</translation>
 <translation id="8090732854597034573">ඔබට උදවු අවශ්‍ය නම්, ඔබේ දෙමාපියන්ගෙන් විමසන්න</translation>
 <translation id="8101414242770404289"><ph name="TIME_PERIOD" /> වෙතින් පටිති නැත</translation>
@@ -1774,10 +1774,10 @@
 <translation id="810433609302852">ඉඟි දැනුම්දීම් විශේෂාංග ප්‍රවර්ධන සහ භාවිත පියවර පහළ පත්‍රිකාව</translation>
 <translation id="8105893657415066307"><ph name="DESCRIPTION" /> <ph name="SEPARATOR" /> <ph name="FILE_SIZE" /></translation>
 <translation id="8107530384992929318">අනුපිළිවෙළට සැකසීමේ විකල්ප වසන්න</translation>
-<translation id="8110024788458304985">Chrome හි විශේෂාංග සහ කාර්යසාධනය වැඩි දියුණු කිරීමට උදවු වන්න</translation>
-<translation id="8110087112193408731">ඩිජිටල් සුවතාව තුළ ඔබේ Chrome ක්‍රියාකාරකම් පෙන්වන්න ද?</translation>
+<translation id="8110024788458304985">Ultimatum හි විශේෂාංග සහ කාර්යසාධනය වැඩි දියුණු කිරීමට උදවු වන්න</translation>
+<translation id="8110087112193408731">ඩිජිටල් සුවතාව තුළ ඔබේ Ultimatum ක්‍රියාකාරකම් පෙන්වන්න ද?</translation>
 <translation id="8118117428362942925">ඔබට උදව් අවශ්‍ය නම්, ඔබේ දෙමාපියන්ගෙන් විමසන්න (<ph name="PARENT_NAME" />)</translation>
-<translation id="8118151008374483324">ඔබේ සියලු උපාංග මත ඔබේ පටිති සහ තවත් දේ ලබා ගැනීමට, Chrome වෙත පුරන්න</translation>
+<translation id="8118151008374483324">ඔබේ සියලු උපාංග මත ඔබේ පටිති සහ තවත් දේ ලබා ගැනීමට, Ultimatum වෙත පුරන්න</translation>
 <translation id="8120286190326371840">මෙම උපාංගයෙහි අවදානමට ලක් වූ මුරපද නොමැත</translation>
 <translation id="8122623268651408616">නවතම අනුව වර්ග කිරීම</translation>
 <translation id="8127542551745560481">මුල් පිටුව සංස්කරණ කරන්න</translation>
@@ -1818,7 +1818,7 @@
 <translation id="8260126382462817229">නැවත පිරීම උත්සාහ කරන්න</translation>
 <translation id="8261506727792406068">මකන්න</translation>
 <translation id="82619448491672958">අනෙකුත් ටැබ බලන්න</translation>
-<translation id="8265730590513812063">Chrome මෙනුව විවෘත කරන්න</translation>
+<translation id="8265730590513812063">Ultimatum මෙනුව විවෘත කරන්න</translation>
 <translation id="8266753737658117282"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> සමග ඉදිරියට යන්න</translation>
 <translation id="8266862848225348053">බාගැනීම් ස්ථානය</translation>
 <translation id="8271267069224406035">අයාචිත වාර්තා කරන්න</translation>
@@ -1832,7 +1832,7 @@
 <translation id="8317318757008452355">මුද්‍රණය කිරීමට විකල්ප විවෘත කරන්න</translation>
 <translation id="8320212361750431956">මෑත ක්‍රියාකාරකම</translation>
 <translation id="832514020744584629"><ph name="PREF_TITLE" />  <ph name="BEGIN_NEW" />අලුත්<ph name="END_NEW" /></translation>
-<translation id="8342727528718219152">බොහෝ දැනුම්දීම් යවන අඩවි ගැන Chrome ඔබට දන්වනු ඇත</translation>
+<translation id="8342727528718219152">බොහෝ දැනුම්දීම් යවන අඩවි ගැන Ultimatum ඔබට දන්වනු ඇත</translation>
 <translation id="834313815369870491">කිසි විටක අඩවි පරිවර්තනය නොකරන්න</translation>
 <translation id="8348215005712416247"><ph name="TAB_TITLE" />, බහු-තේරූ ඇමිණූ පටිගත කිරීමේ අප්‍රකට පටිත්ත</translation>
 <translation id="8348430946834215779">හැකි සෑම විට ම HTTPS භාවිතා කර එයට සහාය නොදක්වන අඩවි පූරණය කිරීමට පෙර අනතුරු අඟවන්න</translation>
@@ -1846,12 +1846,12 @@
 <translation id="8398389123831319859">අප්‍රකට වෙත මාරු වීමට දෙවරක් තට්ටු කර සිටින්න</translation>
 <translation id="8402673309244746971">පහත දේ වෙත යන්න</translation>
 <translation id="8413126021676339697">සම්පූර්ණ ඉතිහාසය පෙන්වන්න</translation>
-<translation id="8413795581997394485">අනතුරුදායක බව දන්නා වෙබ් අඩවි, බාගැනීම්, සහ දිගුවලින් ආරක්ෂා කරයි. ඔබ වෙබ් අඩවියකට පිවිසෙන විට, Chrome ඔබේ IP ලිපිනය සඟවන පෞද්ගලිකත්ව සේවාදායකයක් හරහා URL හි අපැහැදිලි කොටසක් Google වෙත යවයි. වෙබ් අඩවියක් සැක කටයුතු දෙයක් සිදු කරන්නේ නම්, සම්පූර්ණ URL සහ පිටු අන්තර්ගතයේ බිටු ද යවයි.</translation>
+<translation id="8413795581997394485">අනතුරුදායක බව දන්නා වෙබ් අඩවි, බාගැනීම්, සහ දිගුවලින් ආරක්ෂා කරයි. ඔබ වෙබ් අඩවියකට පිවිසෙන විට, Ultimatum ඔබේ IP ලිපිනය සඟවන පෞද්ගලිකත්ව සේවාදායකයක් හරහා URL හි අපැහැදිලි කොටසක් Google වෙත යවයි. වෙබ් අඩවියක් සැක කටයුතු දෙයක් සිදු කරන්නේ නම්, සම්පූර්ණ URL සහ පිටු අන්තර්ගතයේ බිටු ද යවයි.</translation>
 <translation id="8414396119627470038"><ph name="SITE_ETLD_PLUS_ONE" /> වෙත <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> සමග පුරන්න</translation>
 <translation id="8419144699778179708">සෙවුම් කොටුව තුළ ඇතුළුව ඉතිහාසය මකයි</translation>
 <translation id="8419244640277402268">ඇතුළත් කරන්න</translation>
 <translation id="8422250855136581222">මෙම උපාංගය මත පටිති නැත</translation>
-<translation id="842386925677997438">Chrome හි සුරක්ෂිතතා මෙවලම්</translation>
+<translation id="842386925677997438">Ultimatum හි සුරක්ෂිතතා මෙවලම්</translation>
 <translation id="8427875596167638501">පෙරදසුන් පටිත්ත අඩක් විවෘතයි</translation>
 <translation id="8428213095426709021">සැකසුම්</translation>
 <translation id="8430824733382774043">තිර රුව පමණක් බෙදා ගන්න</translation>
@@ -1859,7 +1859,7 @@
 <translation id="8438566539970814960">සෙවීම් සහ ගවේෂණය වඩා හොඳ කරන්න</translation>
 <translation id="8439974325294139057"><ph name="LANG" /> - භාෂාව සූදානම්ය, <ph name="APP_NAME" /> යළි අරඹන්න.</translation>
 <translation id="8442258441309440798">ලබා ගත හැකි කතාන්දර නැත</translation>
-<translation id="8443209985646068659">Chrome යාවත්කාලීන කළ නොහැක</translation>
+<translation id="8443209985646068659">Ultimatum යාවත්කාලීන කළ නොහැක</translation>
 <translation id="8443600937324357591">පටිත්ත වෙනත් කවුළුවකට ගෙන යන්න</translation>
 <translation id="8445448999790540984">මුරපද නිර්යාත කළ නොහැක</translation>
 <translation id="8446884382197647889">තවත් දැනගන්න</translation>
@@ -1868,7 +1868,7 @@
 <translation id="8455675988389029454">ඔබේ සියලු ම උපාංග මත ඔබේ පිටුසන්, මුරපද, සහ තවත් දේ ලබා ගන්න</translation>
 <translation id="8458341576712814616">කෙටි මඟ</translation>
 <translation id="8458413889418591446">ඔබ පිවිසි අඩවි වෙත ඉක්මනින් ආපසු යාමට, ඔබේ ඉතිහාසය සහ පටිති සමමුහුර්ත කරන්න</translation>
-<translation id="84594714173170813">ඔබේ Google ගිණුමේ Chrome දත්ත දිගටම භාවිතා කරන්න</translation>
+<translation id="84594714173170813">ඔබේ Google ගිණුමේ Ultimatum දත්ත දිගටම භාවිතා කරන්න</translation>
 <translation id="8460008946585880786">එක් පටිත්තක් තවත් පටිත්තක් මතට ඇද දමන්න</translation>
 <translation id="8460448946170646641">ප්‍රධාන පෞද්ගලිකත්ව සහ ආරක්ෂක පාලන සමාලෝචනය කරන්න</translation>
 <translation id="8460932807646981183">සෙවීම් යන්ත්‍ර සහ අඩවි සෙවීම කළමනාකරණය කරන්න</translation>
@@ -1890,8 +1890,8 @@
 <translation id="8540136935098276800">නිවැරදිව ආකෘති කළ URL එකක් ඇතුළත් කරන්න</translation>
 <translation id="854522910157234410">මෙම පිටුව විවෘත කරන්න</translation>
 <translation id="8547466829003330976">AI සමග PDF සමාලෝචනය කරන්න</translation>
-<translation id="8551513938758868521">ඔබ Chrome හැර යන විට අප්‍රකට ටැබ අගුලු දමන්න</translation>
-<translation id="8559961053328923750">දැන්වීම් කාර්ය සාධනය මැනීමට අඩවිවලට බ්‍රව්සරය හරහා බෙදා ගත හැකි මුළු දත්ත ප්‍රමාණය Chrome සීමා කරයි</translation>
+<translation id="8551513938758868521">ඔබ Ultimatum හැර යන විට අප්‍රකට ටැබ අගුලු දමන්න</translation>
+<translation id="8559961053328923750">දැන්වීම් කාර්ය සාධනය මැනීමට අඩවිවලට බ්‍රව්සරය හරහා බෙදා ගත හැකි මුළු දත්ත ප්‍රමාණය Ultimatum සීමා කරයි</translation>
 <translation id="8559990750235505898">වෙනත් භාෂාවල පිටු පරිවර්තනයට පිරිනමන්න</translation>
 <translation id="8560602726703398413">පිටුසන් තුළ ඔබගේ කියවීම් ලැයිස්තුව සොයා ගන්න</translation>
 <translation id="85618473456579127">ඉහළ දකුණේ පැතිකඩ තට්ටු කරන්න</translation>
@@ -1904,12 +1904,12 @@
 <translation id="859046281437143747">තවත් විකල්ප බොත්තමෙන් මිල ගණන් හඹා යන්න</translation>
 <translation id="859064343657890103"><ph name="TAB_GROUP_TITLE" /> පටිති සමූහය මකන ලදි</translation>
 <translation id="860043288473659153">කාඩ්පත් හිමිකරුගේ නම</translation>
-<translation id="8602358303461588329">Chrome වෙත පුරන්න, වසා ඇත.</translation>
+<translation id="8602358303461588329">Ultimatum වෙත පුරන්න, වසා ඇත.</translation>
 <translation id="860282621117673749">මිල පහත වැටීම් ඇඟවීම්</translation>
 <translation id="8611922158252451755">සබැඳිය සහිත ඕනෑම අයෙකුට සියලු පටිති සංස්කරණය කළ හැක, එබැවින් බුද්ධිමත්ව බෙදා ගන්න. සබැඳිය පැය 48කින් කල් ඉකුත් වේ.</translation>
 <translation id="8616006591992756292">ඔබේ Google ගිණුමට <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> හිදී බ්‍රවුස් කිරීමේ ඉතිහාසයේ වෙනත් ආකාරයන් තිබිය හැක.</translation>
 <translation id="8617240290563765734">බාගන්න ලද අන්තර්ගතයේ යෝජනාකර ඇති URL විවෘත කරන්න ද?</translation>
-<translation id="8629093325209491835">Chrome මෙනුව &gt; සැකසීම් විවෘත කරන්න</translation>
+<translation id="8629093325209491835">Ultimatum මෙනුව &gt; සැකසීම් විවෘත කරන්න</translation>
 <translation id="8634050254805484913">පටු තිර මත සැඟවී ඇත</translation>
 <translation id="8635399646025169806">පටිති සමූහය තබා ගන්න ද?</translation>
 <translation id="8636825310635137004">ඔබගේ වෙනත් උපාංග වෙතින් ඔබගේ ටැබ ලබා ගැනීමට, සමමුහුර්ත කිරීම ක්‍රියාත්මක කරන්න.</translation>
@@ -1928,15 +1928,15 @@
 <translation id="8715300232952757586"><ph name="TAB_TITLE" /> වසා දමනු ඇත</translation>
 <translation id="8723453889042591629">මෙම පිටුව ඉක්මනින් පරිවර්තන කරන්න. මෙම කෙටිමඟ සංස්කරණ කිරීමට, ස්පර්ශ කර අල්ලා සිටින්න.</translation>
 <translation id="8725066075913043281">නැවත උත්සහ කරන්න</translation>
-<translation id="8727043961453758442">Chrome වෙතින් උපරිම ප්‍රයෝජන ලබා ගන්න</translation>
+<translation id="8727043961453758442">Ultimatum වෙතින් උපරිම ප්‍රයෝජන ලබා ගන්න</translation>
 <translation id="8731268612289859741">ආරක්ෂක කේතය</translation>
 <translation id="8738163682604285902">කියවීමේ මාදිලිය බලන්න ද?</translation>
 <translation id="8746155870861185046">උද්දීපනය බෙදා ගන්න</translation>
 <translation id="8748850008226585750">අන්තර්ගත සැඟවිණි</translation>
 <translation id="8754448020583829686">සබැඳියකින් තොරව පිටපත් කරන්න</translation>
 <translation id="8756969031206844760">මුරපදය යාවත්කාලීන කරන්න ද?</translation>
-<translation id="8765470054473112089">ඔබ ලිපින තීරුවේ හෝ සෙවීම් පෙට්ටියේ ටයිප් කරන විට, වඩා හොඳ යෝජනා ලබා ගැනීමට Chrome ඔබ ටයිප් කරන දේ ඔබේ පෙරනිමි සෙවීම් යන්ත්‍රයට යවයි. මෙය අප්‍රසිද්ධ තුළ ක්‍රියා විරහිතයි.</translation>
-<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Chrome ඔබට වැඩි දියුණු කළ හැකි දුර්වල මුරපදයක් සොයා ගත්තේ ය}one{Chrome ඔබට වැඩි දියුණු කළ හැකි දුර්වල මුරපද #ක් සොයා ගත්තේ ය}other{Chrome ඔබට වැඩි දියුණු කළ හැකි දුර්වල මුරපද #ක් සොයා ගත්තේ ය}}</translation>
+<translation id="8765470054473112089">ඔබ ලිපින තීරුවේ හෝ සෙවීම් පෙට්ටියේ ටයිප් කරන විට, වඩා හොඳ යෝජනා ලබා ගැනීමට Ultimatum ඔබ ටයිප් කරන දේ ඔබේ පෙරනිමි සෙවීම් යන්ත්‍රයට යවයි. මෙය අප්‍රසිද්ධ තුළ ක්‍රියා විරහිතයි.</translation>
+<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Ultimatum ඔබට වැඩි දියුණු කළ හැකි දුර්වල මුරපදයක් සොයා ගත්තේ ය}one{Ultimatum ඔබට වැඩි දියුණු කළ හැකි දුර්වල මුරපද #ක් සොයා ගත්තේ ය}other{Ultimatum ඔබට වැඩි දියුණු කළ හැකි දුර්වල මුරපද #ක් සොයා ගත්තේ ය}}</translation>
 <translation id="8766529642647037772">මෙය වැනි උද්දීපනය කළ සබැඳියක් තනන්නද?</translation>
 <translation id="8788265440806329501">සංචලන ඉතිහාසය වසා ඇත</translation>
 <translation id="8790193082819560975">නව පටිත්තක් තුළ නිෂ්පාදනය සඳහා මිල දී ගැනීමේ විකල්ප සෙවීමට තට්ටු කරන්න.</translation>
@@ -1959,7 +1959,7 @@
 <translation id="885480114717186641">ඔබට <ph name="HOST_NAME" /> සඳහා ඩෙක්ස්ටොප් අඩවිය ඉල්ලා සිටිය හැක</translation>
 <translation id="8856607253650333758">විස්තර ලබා ගන්න</translation>
 <translation id="8863714995118816041"><ph name="SITE_NAME" /> සඳහා නැවත අවසරවලට ඉඩ දී ඇත</translation>
-<translation id="8865415417596392024">ඔබේ ගිණුමේ Chrome දත්ත</translation>
+<translation id="8865415417596392024">ඔබේ ගිණුමේ Ultimatum දත්ත</translation>
 <translation id="8872506776304248286">යෙදුමෙහි විවෘත කරන්න</translation>
 <translation id="8890668505403261809">ඔබේ අප්‍රකට පටිති සොයන්න</translation>
 <translation id="8892234476517513962">ඔබ දැනටමත් පුරනය වී ඇත</translation>
@@ -1971,7 +1971,7 @@
 <translation id="8922289737868596582">නොබැඳිව භාවිතා කිරීම සඳහා තවත් විකල්ප බොත්තමෙන් පිටු බාගන්න</translation>
 <translation id="8924575305646776101"><ph name="BEGIN_LINK" />තව දැන ගන්න<ph name="END_LINK" /></translation>
 <translation id="892496902842311796"><ph name="LANG" /> සූදානම්ය</translation>
-<translation id="8937772741022875483">ඩිජිටල් සුවතාව වෙතින් ඔබේ Chrome ක්‍රියාකාරකම් ඉවත් කරන්න ද?</translation>
+<translation id="8937772741022875483">ඩිජිටල් සුවතාව වෙතින් ඔබේ Ultimatum ක්‍රියාකාරකම් ඉවත් කරන්න ද?</translation>
 <translation id="8942627711005830162">වෙනත් කවුළුවක විවෘත කරන්න</translation>
 <translation id="8945143127965743188"><ph name="LANG" /> - මෙම භාෂාව බාගැනීමට නොහැකි විය. පසුව නැවත උත්සාහ කරන්න.</translation>
 <translation id="8946759102391960088">ඔබේ මුරපද වෙත ප්‍රවේශය තබා ගන්න</translation>
@@ -1983,12 +1983,12 @@
 <translation id="8970887620466824814">යම් දෙයක් වැරදිණි</translation>
 <translation id="8972098258593396643">පෙරනිමි ෆෝල්ඩරයට බාන්නද?</translation>
 <translation id="8987736167266086032">ඔබ නතර කළ තැනින් පටන් ගන්න</translation>
-<translation id="8992769679401294069">ඔබේ දත්ත ඔබේ මුර-වැකිකඩ සමග සංකේතනය කර ඇත. ඔබේ Google ගිණුම තුළ Chrome දත්ත භාවිත කිරීමට සහ සුරැකීමට එය ඇතුළත් කරන්න.</translation>
+<translation id="8992769679401294069">ඔබේ දත්ත ඔබේ මුර-වැකිකඩ සමග සංකේතනය කර ඇත. ඔබේ Google ගිණුම තුළ Ultimatum දත්ත භාවිත කිරීමට සහ සුරැකීමට එය ඇතුළත් කරන්න.</translation>
 <translation id="8993760627012879038">අප්‍රකට ප්‍රකාරය තුළ නව ටැබයක් විවෘත කරන්න</translation>
 <translation id="8995521496079646922">ඔබ තෝරා ගත් යෙදුම් පෙරනිමියෙන් භාවිත කරනු ඇත. යෙදුමක් දැනටමත් මෙම උපාංගයේ නොමැති නම්, එය ඉක්මනින් බාගනු ඇත.</translation>
 <translation id="8996847606757455498">වෙනත් සැපයුම්කරුවකු තෝරන්න</translation>
 <translation id="8998837250940831980">පටිත්ත අවම කිරීමට නොහැකි විය. පසුව නැවත උත්සාහ කරන්න.</translation>
-<translation id="9001604755921395912">අප්‍රසිද්ධ Chrome පටිත්ත තුළ විවෘත කරන්න</translation>
+<translation id="9001604755921395912">අප්‍රසිද්ධ Ultimatum පටිත්ත තුළ විවෘත කරන්න</translation>
 <translation id="9012585441087414258">අනතුරුදායක බව දන්නා අඩවි, බාගැනීම්, සහ දිගුවලින් ආරක්ෂා කරයි. පිටුවක් සැක කටයුතු දෙයක් කරන්නේ නම්, URL ලිපින සහ පිටු අන්තර්ගතයෙහි බිටු Google ආරක්ෂිත බ්‍රවුස් කිරීම වෙත යවනු ලැබේ.</translation>
 <translation id="9019199799064251516">මෝටර් රථ පැතිකඩ අගුලක් නොමැතිව ඉදිරියට යන්න ද?</translation>
 <translation id="9022774213089566801">නිතර පිවිසි</translation>
@@ -1996,7 +1996,7 @@
 <translation id="9027728231343310283"><ph name="SITE" /> පසුගමනය කරන්න</translation>
 <translation id="9035378196785279980">වෙත \u2026ගෙන යන්න</translation>
 <translation id="9042893549633094279">රහස්‍යතාව සහ ආරක්ෂාව</translation>
-<translation id="9047347135558855162">Chrome තුළ ඉක්මනින් සෙවීමක් ආරම්භ කරන්න</translation>
+<translation id="9047347135558855162">Ultimatum තුළ ඉක්මනින් සෙවීමක් ආරම්භ කරන්න</translation>
 <translation id="9050666287014529139">රහස්වැකිය</translation>
 <translation id="9055497320631373736">විභව අඩවි වෙත නැවත අඩවිය එක් කරන ලදි</translation>
 <translation id="9057030985451135243">බෙදා ගත් පටිති සමූහ ගැන ඉගෙන ගන්න</translation>
@@ -2004,7 +2004,7 @@
 <translation id="9063400323119781058">ග්‍රාහක නොවන ලදි</translation>
 <translation id="9063523880881406963">ඩෙස්ක්ටොප් අඩවිය ඉල්ලීම ක්‍රියා විරහිත කරන්න</translation>
 <translation id="9065203028668620118">සංස්කරණය කරන්න</translation>
-<translation id="9065383040763568503">Chrome වැදගත් යැයි නොසිතන ගබඩා කළ දත්ත (උදා: සුරැකූ සැකසීම් නැති හෝ ඔබ නිතර නොපිවිසෙන අඩවි)</translation>
+<translation id="9065383040763568503">Ultimatum වැදගත් යැයි නොසිතන ගබඩා කළ දත්ත (උදා: සුරැකූ සැකසීම් නැති හෝ ඔබ නිතර නොපිවිසෙන අඩවි)</translation>
 <translation id="9067341854474068781">පූර්ණ උසින් මුරයතුරු පත්‍රයක් විවෘත කර නැත</translation>
 <translation id="906781307897697745"><ph name="PRODUCT_NAME" /> තුළ</translation>
 <translation id="9068568736932147490"><ph name="TAB_TITLE" />, බහු-තේරූ ඇමිණූ ශ්‍රව්‍ය අප්‍රකට පටිත්ත</translation>
@@ -2014,8 +2014,8 @@
 <translation id="9074739597929991885">Bluetooth</translation>
 <translation id="9081543426177426948">ඔබ පිවිසෙන අඩවි අප්‍රසිද්ධ ප්‍රකාරයේදී සුරකිනු නොලැබේ.</translation>
 <translation id="9086455579313502267">ජාලය වෙත ප්‍රවේශ විය නොහැක</translation>
-<translation id="9093915805850895575">Chrome කවුළුව තුළ විවෘත කරන්න</translation>
-<translation id="909756639352028172">ඉතාම පුද්ගලායන කෙරෙන අත්දැකීම ලබා ගැනීමට, වෙබ් සහ යෙදුම් ක්‍රියාකාරකම් සහ සම්බන්ධිත Google සේවා තුළ Chrome ඇතුළු කරන්න</translation>
+<translation id="9093915805850895575">Ultimatum කවුළුව තුළ විවෘත කරන්න</translation>
+<translation id="909756639352028172">ඉතාම පුද්ගලායන කෙරෙන අත්දැකීම ලබා ගැනීමට, වෙබ් සහ යෙදුම් ක්‍රියාකාරකම් සහ සම්බන්ධිත Google සේවා තුළ Ultimatum ඇතුළු කරන්න</translation>
 <translation id="9099220545925418560">ඔබේ බ්‍රවුස් කිරීමේ ඉතිහාසය මත පදනම්ව. මෙම සැකසීම ක්‍රියාවිරහිතයි.</translation>
 <translation id="9100610230175265781">රහස් පදය අවශ්‍යයි</translation>
 <translation id="9101137867221042551">කළමනාකරණය</translation>
@@ -2051,9 +2051,9 @@
 <translation id="9218430445555521422">පෙරනිමි ලෙස සකසන්න</translation>
 <translation id="9219103736887031265">රූප</translation>
 <translation id="9222198206152536936">ඔබේ සියලු ම උපාංගවල පටිති සහ තවත් දේ ලබා ගැනීමට, <ph name="EMAIL" /> ලෙස පුරනය වන්න</translation>
-<translation id="924447568950697217">Chrome ඔබේ පෙරනිමි බ්‍රව්සරය කරන්න</translation>
-<translation id="926205370408745186">ඩිජිටල් සුවතාව වෙතින් ඔබේ Chrome ක්‍රියාකාරකම් ඉවත් කරන්න</translation>
-<translation id="927968626442779827">Google Chrome හි සැහැල්ලු ප්‍රකාරය භාවිත කරන්න</translation>
+<translation id="924447568950697217">Ultimatum ඔබේ පෙරනිමි බ්‍රව්සරය කරන්න</translation>
+<translation id="926205370408745186">ඩිජිටල් සුවතාව වෙතින් ඔබේ Ultimatum ක්‍රියාකාරකම් ඉවත් කරන්න</translation>
+<translation id="927968626442779827">Ultimatum හි සැහැල්ලු ප්‍රකාරය භාවිත කරන්න</translation>
 <translation id="928550791203542716"><ph name="SITE_NAME" /> අනුගමනය කරමින්</translation>
 <translation id="930124987204876019">ඉතිහාසය, කුකී, අඩවි දත්ත, හැඹිලිය මකන්න…</translation>
 <translation id="930834144334005936">වත්මන් ප්‍රකාරය <ph name="MODE_NAME" /> සෙවීමට යළි සකසන්න</translation>
@@ -2061,7 +2061,7 @@
 <translation id="939598580284253335">මුරවදන ඇතුළත් කරන්න</translation>
 <translation id="94161319503679839"><ph name="TAB_TITLE" />, අමුණන ලද පින්තූරය තුළ පින්තූරය අප්‍රකට පටිත්ත</translation>
 <translation id="945522503751344254">අදහස් හා යෝජනා යවන්න</translation>
-<translation id="95817756606698420">Chrome හට චීනයෙහි සෙවීම සඳහා <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> භාවිතා කළ හැකිය. ඔබට <ph name="BEGIN_LINK" />සැකසීම්<ph name="END_LINK" /> තුළ මෙය වෙනස් කළ හැකිය.</translation>
+<translation id="95817756606698420">Ultimatum හට චීනයෙහි සෙවීම සඳහා <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> භාවිතා කළ හැකිය. ඔබට <ph name="BEGIN_LINK" />සැකසීම්<ph name="END_LINK" /> තුළ මෙය වෙනස් කළ හැකිය.</translation>
 <translation id="961856697154696964">බ්‍රවුස් කිරීමේ දත්ත මකන්න</translation>
 <translation id="963246339335003378">කාර්ය කළමනාකරු විවෘත කරන්න</translation>
 <translation id="966131775676567255">ගිණුම් දත්ත මැකීම</translation>
