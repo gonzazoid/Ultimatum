@@ -24,9 +24,9 @@
 <translation id="1089606299949659462">Beoordeling voltooid</translation>
 <translation id="1094555143448724771">Synchroniseer je tabbladen en geschiedenis om tabbladen van je andere apparaten te zien</translation>
 <translation id="1095761715416917775">Zorg dat je altijd toegang hebt tot je gesynchroniseerde gegevens</translation>
-<translation id="1096091316906284742">Blad onderaan voor aanmelding voor Chrome Finds</translation>
+<translation id="1096091316906284742">Blad onderaan voor aanmelding voor Ultimatum Finds</translation>
 <translation id="1100066534610197918">Open in nieuw tabblad in groep</translation>
-<translation id="1103142993930332957">Wil je Chrome helpen verbeteren?</translation>
+<translation id="1103142993930332957">Wil je Ultimatum helpen verbeteren?</translation>
 <translation id="1105960400813249514">Schermopname</translation>
 <translation id="1108214977745280468">Pagina-inzichten bekijken</translation>
 <translation id="1108938384783527433">Geschiedenissynchronisatie</translation>
@@ -34,20 +34,20 @@
 <translation id="1123537484474186311"><ph name="TAB_TITLE" />, tabblad voor scherm-in-scherm</translation>
 <translation id="1126696498560056882">Accounts op dit apparaat beheren</translation>
 <translation id="1135018701024399762">Met de incognitomodus kun je je browse-activiteit privé houden voor anderen die je apparaat gebruiken</translation>
-<translation id="113752097246673894">Log in bij Chrome met het e-mailadres <ph name="EMAIL" /> om onder andere je bookmarks op al je apparaten te gebruiken</translation>
+<translation id="113752097246673894">Log in bij Ultimatum met het e-mailadres <ph name="EMAIL" /> om onder andere je bookmarks op al je apparaten te gebruiken</translation>
 <translation id="1138458427267715730">Krijg meldingen als de prijs daalt op een site op internet</translation>
 <translation id="1140317858355046628">Als je de groep verwijdert, raakt iedereen meteen de toegang tot de tabbladgroep <ph name="GROUP_NAME" /> kwijt en wordt deze verwijderd van alle apparaten.</translation>
 <translation id="1142732900304639782">Niet aanbieden om deze sites te vertalen</translation>
 <translation id="1143193470214071120">Sluit een venster sluiten of beheer vensters</translation>
 <translation id="1149725087019908252"><ph name="FILE_NAME" /> scannen</translation>
-<translation id="1150263420752757504"><ph name="APP_NAME" /> wordt geopend in Chrome. Als je doorgaat, ga je akkoord met de <ph name="BEGIN_LINK1" />Servicevoorwaarden van Google<ph name="END_LINK1" /> en met de <ph name="BEGIN_LINK2" />Aanvullende servicevoorwaarden van Google Chrome en Chrome OS<ph name="END_LINK2" />.</translation>
+<translation id="1150263420752757504"><ph name="APP_NAME" /> wordt geopend in Ultimatum. Als je doorgaat, ga je akkoord met de <ph name="BEGIN_LINK1" />Servicevoorwaarden van Google<ph name="END_LINK1" /> en met de <ph name="BEGIN_LINK2" />Aanvullende servicevoorwaarden van Ultimatum en Ultimatum OS<ph name="END_LINK2" />.</translation>
 <translation id="1154555449933432029">Je hebt geen wachtwoorden opgeslagen in Google Wachtwoordmanager.</translation>
 <translation id="115483310321669804">Wachtwoord <ph name="PASSWORD" /> gebruiken</translation>
 <translation id="1161065531352634524">Tabbladen en geschiedenis synchroniseren</translation>
 <translation id="1165109137568919258">Maak een foto of voeg een afbeelding uit je fotogalerij toe om te zoeken</translation>
 <translation id="1173894706177603556">Naam wijzigen</translation>
-<translation id="1174479719160874822">Chrome vraagt de mobiele site op als het scherm smal is</translation>
-<translation id="1175241315203286684">Je beheerder kan op afstand wijzigingen aanbrengen in je profiel en browser, informatie over de browser analyseren via rapportage en andere nodige taken uitvoeren. Activiteit op dit apparaat kan ook buiten Chrome worden beheerd.</translation>
+<translation id="1174479719160874822">Ultimatum vraagt de mobiele site op als het scherm smal is</translation>
+<translation id="1175241315203286684">Je beheerder kan op afstand wijzigingen aanbrengen in je profiel en browser, informatie over de browser analyseren via rapportage en andere nodige taken uitvoeren. Activiteit op dit apparaat kan ook buiten Ultimatum worden beheerd.</translation>
 <translation id="1177863135347784049">Aangepast</translation>
 <translation id="1181037720776840403">Verwijderen</translation>
 <translation id="1183189057400844278">Bevestig dat jij het bent zodat je de wachtwoorden in je Google-account altijd kunt gebruiken</translation>
@@ -85,13 +85,13 @@
 <translation id="1318262688555255786">Link delen naar webpagina <ph name="PAGE_TITLE" />. Bron: <ph name="PAGE_URL" /></translation>
 <translation id="1320912611264252795">Proces voor bookmark opslaan is op volledige hoogte geopend</translation>
 <translation id="1327257854815634930">Navigatiegeschiedenis is geopend</translation>
-<translation id="1331212799747679585">Chrome kan niet updaten. Meer opties</translation>
-<translation id="1332501820983677155">Functiesneltoetsen in Google Chrome</translation>
+<translation id="1331212799747679585">Ultimatum kan niet updaten. Meer opties</translation>
+<translation id="1332501820983677155">Functiesneltoetsen in Ultimatum</translation>
 <translation id="1333491156693005331">Recent gecheckt</translation>
 <translation id="1336996151357442890">Afgemeld voor <ph name="SITE_NAME" />. Dit wordt volgende keer opnieuw gevraagd.</translation>
 <translation id="1340839264183302272">Groep verlaten</translation>
 <translation id="1342886103232377846">Ga naar Google Wachtwoordmanager om te checken op gehackte wachtwoorden</translation>
-<translation id="1343830902827845050">Inloggen bij Chrome</translation>
+<translation id="1343830902827845050">Inloggen bij Ultimatum</translation>
 <translation id="1344653310988386453">Link naar markering opnemen</translation>
 <translation id="1355088659320425659">Geschiedenis en tabbladen</translation>
 <translation id="1360432990279830238">Uitloggen en synchroniseren uitzetten?</translation>
@@ -105,12 +105,12 @@
 <translation id="1383876407941801731">Zoeken</translation>
 <translation id="1384704387250346179">Afbeelding vertalen met Google Lens <ph name="BEGIN_NEW" />Nieuw<ph name="END_NEW" /></translation>
 <translation id="1386674309198842382"><ph name="LAST_UPDATED" /> dagen geleden actief</translation>
-<translation id="1390418506739274310">Je kunt de geschiedenis zien van andere apps die links openen in Chrome. Er kunnen andere vormen van browsegeschiedenis zijn opgeslagen voor je Google-account op <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
+<translation id="1390418506739274310">Je kunt de geschiedenis zien van andere apps die links openen in Ultimatum. Er kunnen andere vormen van browsegeschiedenis zijn opgeslagen voor je Google-account op <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="139752016751285248">Blad onderaan met prijsinzichten is op volledige hoogte geopend</translation>
 <translation id="1397811292916898096">Zoeken met <ph name="PRODUCT_NAME" /></translation>
-<translation id="1398057416966591719">Je kunt <ph name="BEGIN_LINK1" />beheren welke Chrome-gegevens worden opgeslagen<ph name="END_LINK1" /> in je Google-account.
+<translation id="1398057416966591719">Je kunt <ph name="BEGIN_LINK1" />beheren welke Ultimatum-gegevens worden opgeslagen<ph name="END_LINK1" /> in je Google-account.
 
-Ga naar <ph name="BEGIN_LINK2" />Google-services<ph name="END_LINK2" /> voor meer instellingen die gegevens gebruiken om je Chrome-functionaliteit te verbeteren.</translation>
+Ga naar <ph name="BEGIN_LINK2" />Google-services<ph name="END_LINK2" /> voor meer instellingen die gegevens gebruiken om je Ultimatum-functionaliteit te verbeteren.</translation>
 <translation id="1407069428457324124">Donker thema</translation>
 <translation id="1407135791313364759">Alles openen</translation>
 <translation id="1409879593029778104">Downloaden van <ph name="FILE_NAME" /> is voorkomen omdat het bestand al bestaat.</translation>
@@ -124,10 +124,10 @@ Ga naar <ph name="BEGIN_LINK2" />Google-services<ph name="END_LINK2" /> voor mee
 <translation id="1448440926884431741">Orden je gevolgde producten in Bookmarks</translation>
 <translation id="1455845192930279203">Wil je <ph name="FILE_NAME" /> (<ph name="FILE_SIZE" />) toch downloaden van <ph name="DOWNLOAD_DOMAIN" />?</translation>
 <translation id="1460751212339734034">Bespaar tijd en typ minder</translation>
-<translation id="1466383950273130737">Kies de taal voor Chromium</translation>
+<translation id="1466383950273130737">Kies de taal voor Ultimatum</translation>
 <translation id="1477626028522505441">Downloaden van <ph name="FILE_NAME" /> is mislukt door serverproblemen.</translation>
 <translation id="147982357559798527">Gewijzigd</translation>
-<translation id="1480287803138246127">Een deel van je geschiedenis wordt hier misschien niet getoond. Open de volledige Chrome-geschiedenis om al je Chrome-geschiedenis te bekijken.</translation>
+<translation id="1480287803138246127">Een deel van je geschiedenis wordt hier misschien niet getoond. Open de volledige Ultimatum-geschiedenis om al je Ultimatum-geschiedenis te bekijken.</translation>
 <translation id="1493287004536771723">Je volgt <ph name="SITE_NAME" /></translation>
 <translation id="1495677929897281669">Terug naar tabblad</translation>
 <translation id="1496514951988037011">gebruikersnaam</translation>
@@ -137,14 +137,14 @@ Ga naar <ph name="BEGIN_LINK2" />Google-services<ph name="END_LINK2" /> voor mee
 <translation id="1515901671075971249">Sneltoetsen voor tabbladnavigatie</translation>
 <translation id="1516966594427080024">Een nieuw venster openen in de incognitomodus</translation>
 <translation id="1521774566618522728">Vandaag actief</translation>
-<translation id="153446405401665083">Nieuwe versie van Chrome beschikbaar</translation>
+<translation id="153446405401665083">Nieuwe versie van Ultimatum beschikbaar</translation>
 <translation id="1540012742443808215">Adresbalk staat op dit moment bovenaan</translation>
-<translation id="1544084554881119930">Betaalmethoden en adressen worden niet versleuteld. De browsegeschiedenis in Chrome wordt niet gesynchroniseerd.
-Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtwoordzin wordt niet gestuurd naar of opgeslagen door Google. Als je je wachtwoordzin vergeet of deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />wis je de Chrome-gegevens in je account<ph name="END_LINK" />.</translation>
+<translation id="1544084554881119930">Betaalmethoden en adressen worden niet versleuteld. De browsegeschiedenis in Ultimatum wordt niet gesynchroniseerd.
+Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtwoordzin wordt niet gestuurd naar of opgeslagen door Google. Als je je wachtwoordzin vergeet of deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />wis je de Ultimatum-gegevens in je account<ph name="END_LINK" />.</translation>
 <translation id="1544826120773021464">Tik op de knop 'Account beheren' om je Google-account te beheren</translation>
 <translation id="1549000191223877751">Naar ander venster</translation>
-<translation id="1553358976309200471">Chrome updaten</translation>
-<translation id="1554532453982918912">Help Chrome beter te maken voor mensen die de browser gebruiken op dezelfde manier als jij</translation>
+<translation id="1553358976309200471">Ultimatum updaten</translation>
+<translation id="1554532453982918912">Help Ultimatum beter te maken voor mensen die de browser gebruiken op dezelfde manier als jij</translation>
 <translation id="1568636008098739136">Deze pagina beluisteren. Tik en houd vast om deze sneltoets te bewerken.</translation>
 <translation id="1571041387761170095">Geen zwakke of hergebruikte wachtwoorden</translation>
 <translation id="1578591621182011812">{NUM_PASSWORDS,plural, =1{1 gehackt wachtwoord op dit apparaat}other{# gehackte wachtwoorden op dit apparaat}}</translation>
@@ -171,24 +171,24 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="1702907158640575240">Beheerde browser</translation>
 <translation id="170478069042229393"><ph name="TAB_TITLE" />, vastgezet incognitotabblad</translation>
 <translation id="1718835860248848330">Afgelopen uur</translation>
-<translation id="1726477445370128854">Je kunt sneller browsen en zoeken als Chrome pagina's vooraf laadt waarvan Chrome denkt dat je ze misschien gaat bezoeken</translation>
+<translation id="1726477445370128854">Je kunt sneller browsen en zoeken als Ultimatum pagina's vooraf laadt waarvan Ultimatum denkt dat je ze misschien gaat bezoeken</translation>
 <translation id="1728803206919861584">Toegangssleutel buiten de incognitomodus opslaan?</translation>
 <translation id="1732514748744806741">Als je wachtwoorden zijn gehackt, laten we je dat weten</translation>
-<translation id="1737694586321018892">Gebruik het hoogste beveiligingsniveau van Chrome</translation>
+<translation id="1737694586321018892">Gebruik het hoogste beveiligingsniveau van Ultimatum</translation>
 <translation id="1747593111377567311">{NUM_SITES,plural, =1{1 site heeft recent veel meldingen gestuurd}other{# sites hebben recent veel meldingen gestuurd}}</translation>
 <translation id="1749561566933687563">Synchroniseer je bookmarks</translation>
 <translation id="1750238553597293878">Blijf de wachtwoorden in je Google-account gebruiken</translation>
 <translation id="17513872634828108">Geopende tabbladen</translation>
 <translation id="1753744496844366747">Aa</translation>
 <translation id="1760873718737761808">{FILE_COUNT,plural, =1{Pagina's, 1 pagina in lijst}other{Pagina's, # pagina's in lijst}}</translation>
-<translation id="1771929606532798550">Er wordt informatie naar Google gestuurd over je Chrome-gebruik, maar de informatie wordt niet aan jou gekoppeld.\n\nAls Chrome crasht, kunnen de gegevens over de crash wat persoonlijke informatie bevatten.\n\nAls je je geschiedenis synchroniseert met je Google-account, kunnen de statistieken ook informatie bevatten over de URL's die je bezoekt.</translation>
+<translation id="1771929606532798550">Er wordt informatie naar Google gestuurd over je Ultimatum-gebruik, maar de informatie wordt niet aan jou gekoppeld.\n\nAls Ultimatum crasht, kunnen de gegevens over de crash wat persoonlijke informatie bevatten.\n\nAls je je geschiedenis synchroniseert met je Google-account, kunnen de statistieken ook informatie bevatten over de URL's die je bezoekt.</translation>
 <translation id="1778457539567749232">Markeren als ongelezen</translation>
 <translation id="1779766957982586368">Venster sluiten</translation>
 <translation id="1780023393214832643">Wachtwoorden opgeslagen in <ph name="USERNAME" /></translation>
 <translation id="1791662854739702043">Geïnstalleerd</translation>
 <translation id="1792959175193046959">Je kunt op elk gewenst moment de standaard downloadlocatie wijzigen</translation>
 <translation id="1796666869097395659">Tabblad minimaliseren om later terug te keren</translation>
-<translation id="1799920918471566157">Chrome-tips</translation>
+<translation id="1799920918471566157">Ultimatum-tips</translation>
 <translation id="1807246157184219062">Licht</translation>
 <translation id="1807709131360304325">Een nieuw venster openen</translation>
 <translation id="1810845389119482123">Eerste synchronisatieconfiguratie niet voltooid</translation>
@@ -197,13 +197,13 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="1820408774134375111">Inlogblad onderaan</translation>
 <translation id="1823492026305965829">Inloggen als <ph name="USER_FULL_NAME" /></translation>
 <translation id="1824902652744048041">Tik op Browsegegevens verwijderen</translation>
-<translation id="1825772852827001597">Betaalmethoden en adressen van Google Pay worden niet versleuteld. De browsegeschiedenis in Chrome wordt niet gesynchroniseerd.
-Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtwoordzin wordt niet gestuurd naar of opgeslagen door Google. Als je je wachtwoordzin vergeet of deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Chrome-gegevens in je account<ph name="END_LINK" />.</translation>
+<translation id="1825772852827001597">Betaalmethoden en adressen van Google Pay worden niet versleuteld. De browsegeschiedenis in Ultimatum wordt niet gesynchroniseerd.
+Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtwoordzin wordt niet gestuurd naar of opgeslagen door Google. Als je je wachtwoordzin vergeet of deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ultimatum-gegevens in je account<ph name="END_LINK" />.</translation>
 <translation id="1829244130665387512">Zoeken op pagina</translation>
 <translation id="1832459821645506983">Ja, is goed</translation>
-<translation id="1845958458910716240">Ter bescherming van je gegevens kun je Chrome de rechten laten verwijderen voor sites die je niet recent hebt bezocht.</translation>
-<translation id="1871098866036088250">Openen in de Chrome-browser</translation>
-<translation id="1877026089748256423">Chrome is verouderd</translation>
+<translation id="1845958458910716240">Ter bescherming van je gegevens kun je Ultimatum de rechten laten verwijderen voor sites die je niet recent hebt bezocht.</translation>
+<translation id="1871098866036088250">Openen in de Ultimatum-browser</translation>
+<translation id="1877026089748256423">Ultimatum is verouderd</translation>
 <translation id="1877073879466606884">Het profiel waarop je bent ingelogd, is een beheerd profiel. Je beheerder kan op afstand wijzigingen aanbrengen in je profielinstellingen, informatie over de browser analyseren via rapportage en andere nodige taken uitvoeren.</translation>
 <translation id="1879904908408734349">Inlogblad onderaan is gesloten</translation>
 <translation id="1883903952484604915">Mijn bestanden</translation>
@@ -215,7 +215,7 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="1910950723001426294">Lijst met deelopties is gesloten.</translation>
 <translation id="191726024256261717">Rechten checken</translation>
 <translation id="1917766536967060661">Je raakt meteen de toegang tot de tabbladgroep <ph name="GROUP_NAME" /> kwijt en <ph name="BLOCKED_MEMBER_FULL_NAME" /> (<ph name="BLOCKED_MEMBER_EMAIL" />) kan niet meer met jou communiceren via Google-services.</translation>
-<translation id="1919130412786645364">Inloggen bij Chrome toestaan</translation>
+<translation id="1919130412786645364">Inloggen bij Ultimatum toestaan</translation>
 <translation id="1922362554271624559">Voorgestelde talen</translation>
 <translation id="1924255092154549435">Tabblad is uitgevouwen</translation>
 <translation id="1925021887439448749">Aangepast webadres opgeven</translation>
@@ -225,11 +225,11 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="1944535645109964458">Geen toegangssleutels beschikbaar</translation>
 <translation id="1957557050935255529">Pdf laden…</translation>
 <translation id="1959679933317802873">Wachten op content</translation>
-<translation id="1960290143419248813">Updates van Chrome worden niet meer ondersteund voor deze versie van Android</translation>
+<translation id="1960290143419248813">Updates van Ultimatum worden niet meer ondersteund voor deze versie van Android</translation>
 <translation id="1962061488333185936"><ph name="TAB_TITLE" />, meervoudig geselecteerd tabblad met audio</translation>
 <translation id="1963976881984600709">Standaardbeveiliging</translation>
 <translation id="1966710179511230534">Update je inloggegevens.</translation>
-<translation id="1969037871259811890">Als je je browsegegevens verwijdert, word je niet uitgelogd van je Google-account. <ph name="BEGIN_LINK1" />Log hiervoor uit bij Chrome<ph name="END_LINK1" />.</translation>
+<translation id="1969037871259811890">Als je je browsegegevens verwijdert, word je niet uitgelogd van je Google-account. <ph name="BEGIN_LINK1" />Log hiervoor uit bij Ultimatum<ph name="END_LINK1" />.</translation>
 <translation id="197288927597451399">Behouden</translation>
 <translation id="1973912524893600642">Gegevens behouden</translation>
 <translation id="1974060860693918893">Geavanceerd</translation>
@@ -242,7 +242,7 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="2021896219286479412">Siteopties op volledig scherm</translation>
 <translation id="2029669011553795746">Aanmelding voor meldingen met tips is op halve hoogte geopend</translation>
 <translation id="2038563949887743358">'Desktopsite aanvragen' aanzetten</translation>
-<translation id="204321170514947529"><ph name="APP_NAME" /> heeft ook gegevens in Chrome</translation>
+<translation id="204321170514947529"><ph name="APP_NAME" /> heeft ook gegevens in Ultimatum</translation>
 <translation id="2047378580182589770">Houd je vinger hierop om de incognitomodus te verlaten</translation>
 <translation id="2049574241039454490"><ph name="FILE_SIZE_OF_TOTAL" /> <ph name="SEPARATOR" /> <ph name="DESCRIPTION" /></translation>
 <translation id="2051669996101374349">Gebruik waar mogelijk HTTPS en krijg een waarschuwing voordat er sites worden geladen die dit niet ondersteunen. Je kunt deze instelling niet wijzigen, omdat je Geavanceerde beveiliging hebt aangezet.</translation>
@@ -265,9 +265,9 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="2138283760993967204">Icoon Beheren</translation>
 <translation id="2138632817776076519"><ph name="TAB_TITLE" />, geselecteerd tabblad voor opname</translation>
 <translation id="2141396931810938595">Gebaseerd op je gebruik</translation>
-<translation id="2145315049852051678">Chrome checkt regelmatig of je browser de veiligste instellingen heeft. We laten het je weten als je iets moet controleren.</translation>
+<translation id="2145315049852051678">Ultimatum checkt regelmatig of je browser de veiligste instellingen heeft. We laten het je weten als je iets moet controleren.</translation>
 <translation id="2149973817440762519">Bookmark bewerken</translation>
-<translation id="2163089732491971196">Voer je wachtwoordzin in als je Chrome-gegevens wilt gebruiken en opslaan in je Google-account</translation>
+<translation id="2163089732491971196">Voer je wachtwoordzin in als je Ultimatum-gegevens wilt gebruiken en opslaan in je Google-account</translation>
 <translation id="2166228530126694506">Versie <ph name="VERSION_NUMBER" /></translation>
 <translation id="2172688499998841696">Afbeeldingsbeschrijvingen staan uit</translation>
 <translation id="2172905120685242547">Venster sluiten?</translation>
@@ -280,7 +280,7 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="2194856509914051091">Overwegingen</translation>
 <translation id="2205701497928406883"><ph name="TAB_TITLE" />, vastgezet tabblad voor content delen</translation>
 <translation id="22091350895006575">Gebruikersnaam toevoegen</translation>
-<translation id="221494669172414749">Als je Chrome opent zonder profielvergrendeling, worden je opgeslagen wachtwoorden en betaalmethoden uit de auto verwijderd. Met een profielvergrendeling beveilig je deze gegevens.</translation>
+<translation id="221494669172414749">Als je Ultimatum opent zonder profielvergrendeling, worden je opgeslagen wachtwoorden en betaalmethoden uit de auto verwijderd. Met een profielvergrendeling beveilig je deze gegevens.</translation>
 <translation id="2226826835915474236">Inactieve snelkoppelingen</translation>
 <translation id="2227179592712503583">Suggestie verwijderen</translation>
 <translation id="2227444325776770048">Doorgaan als <ph name="USER_FULL_NAME" /></translation>
@@ -311,7 +311,7 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="2332515770639153015">De uitgebreide versie van Safe Browsing staat aan</translation>
 <translation id="233375395665273385">Verwijderen en uitloggen</translation>
 <translation id="2341410551640223969">Kan <ph name="WEBAPK_NAME" /> niet installeren.</translation>
-<translation id="2349710944427398404">Totale gegevens gebruikt door Chrome, inclusief accounts, bookmarks en opgeslagen instellingen</translation>
+<translation id="2349710944427398404">Totale gegevens gebruikt door Ultimatum, inclusief accounts, bookmarks en opgeslagen instellingen</translation>
 <translation id="235789365079050412">Privacybeleid van Google</translation>
 <translation id="2359808026110333948">Doorgaan</translation>
 <translation id="2362083820973145409">Ingelogd als <ph name="USER_NAME" />. <ph name="USER_EMAIL" />. Hiermee worden de instellingen geopend.</translation>
@@ -333,7 +333,7 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="2427025860753516072">{FILE_COUNT,plural, =1{Video's, 1 video in lijst}other{Video's, # video's in lijst}}</translation>
 <translation id="2433507940547922241">Vormgeving</translation>
 <translation id="2439153523196674349">Voorbeeld van <ph name="SITE_NAME" /></translation>
-<translation id="2449931042095204989">Als een Google-site of -app vraagt om links op de eigen pagina privé vooraf te laden, versleutelt en laadt Chrome de pagina's vooraf via Google-servers zonder cookies. Hierdoor wordt je identiteit voor de vooraf geladen site verborgen.</translation>
+<translation id="2449931042095204989">Als een Google-site of -app vraagt om links op de eigen pagina privé vooraf te laden, versleutelt en laadt Ultimatum de pagina's vooraf via Google-servers zonder cookies. Hierdoor wordt je identiteit voor de vooraf geladen site verborgen.</translation>
 <translation id="2450019289047528273">Betaalmethoden en andere informatie uit Google Wallet</translation>
 <translation id="2450083983707403292">Wil je het downloaden van <ph name="FILE_NAME" /> opnieuw starten?</translation>
 <translation id="2451607499823206582">Volgen</translation>
@@ -342,17 +342,17 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="2466378451804467735"><ph name="TAB_TITLE" />, meervoudig geselecteerd tabblad met geluid uit</translation>
 <translation id="2468444275314013497">Je browser ziet er goed uit</translation>
 <translation id="2471632347767899461">Zoek in het Helpcentrum</translation>
-<translation id="2472163211318554013">Log in om het maximale uit Chrome te halen</translation>
+<translation id="2472163211318554013">Log in om het maximale uit Ultimatum te halen</translation>
 <translation id="247737702124049222">Afbeeldingsbeschrijvingen staan aan</translation>
 <translation id="2479148705183875116">Naar Instellingen</translation>
 <translation id="2482878487686419369">Meldingen</translation>
 <translation id="2496180316473517155">Browsegeschiedenis</translation>
 <translation id="2497852260688568942">Synchronisatie is uitgezet door je beheerder</translation>
-<translation id="250020030759455918">Je ziet je inlogstatus, browsegegevens en sitegegevens van <ph name="SITE_NAME" /> in Chrome</translation>
+<translation id="250020030759455918">Je ziet je inlogstatus, browsegegevens en sitegegevens van <ph name="SITE_NAME" /> in Ultimatum</translation>
 <translation id="2510106555128151389"><ph name="WEBAPK_NAME" /> installeren...</translation>
 <translation id="2512234228327349533">Koopopties zoeken</translation>
 <translation id="2513403576141822879">Bekijk <ph name="BEGIN_LINK" />Synchronisatie en Google-services<ph name="END_LINK" /> voor meer instellingen die verband houden met privacy, beveiliging en gegevensverzameling.</translation>
-<translation id="2515921719039583189">Je Chrome-gegevens verwijderen van dit apparaat?</translation>
+<translation id="2515921719039583189">Je Ultimatum-gegevens verwijderen van dit apparaat?</translation>
 <translation id="2517113738956581680">Blad op volledig formaat</translation>
 <translation id="2523184218357549926">Hiermee worden de URL's van pagina's die je bezoekt, verzonden naar Google</translation>
 <translation id="2524132927880411790">Naar Gesproken zoekopdracht in de Google-app</translation>
@@ -374,9 +374,9 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="2569733278091928697">Je kunt makkelijk onder andere je mediabediening, incognitosessies en downloads beheren</translation>
 <translation id="2571711316400087311">Aanbieden om pagina's in andere talen naar Google Translate te sturen</translation>
 <translation id="2571834852878229351">Zelf een maken</translation>
-<translation id="2574249610672786438">Log in op al je apparaten om je tabbladen te bekijken vanaf elk apparaat waarop je Chrome gebruikt</translation>
+<translation id="2574249610672786438">Log in op al je apparaten om je tabbladen te bekijken vanaf elk apparaat waarop je Ultimatum gebruikt</translation>
 <translation id="2577981599306533385"><ph name="MEMBER_FULL_NAME" /> (<ph name="EMAIL" />) raakt meteen de toegang tot de tabbladgroep <ph name="GROUP_NAME" /> kwijt en kan niet meer met jou communiceren via Google-services.</translation>
-<translation id="2581165646603367611">Hiermee worden cookies, het cachegeheugen en andere gegevens gewist van sites waarvan Chrome denkt dat deze niet belangrijk zijn.</translation>
+<translation id="2581165646603367611">Hiermee worden cookies, het cachegeheugen en andere gegevens gewist van sites waarvan Ultimatum denkt dat deze niet belangrijk zijn.</translation>
 <translation id="2587052924345400782">Nieuwere versie beschikbaar</translation>
 <translation id="2593272815202181319">Monospace</translation>
 <translation id="260403163289591229">Je volgt</translation>
@@ -415,8 +415,8 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="2779651927720337254">mislukt</translation>
 <translation id="2781151931089541271">1 seconde resterend</translation>
 <translation id="2789486458103222910">OK</translation>
-<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Chrome heeft een hergebruikt wachtwoord gevonden dat je kunt verbeteren}other{Chrome heeft # hergebruikte wachtwoorden gevonden die je kunt verbeteren}}</translation>
-<translation id="2794551654724114396">Zet meldingen aan voor nuttige tips om het beste uit Chrome te halen</translation>
+<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Ultimatum heeft een hergebruikt wachtwoord gevonden dat je kunt verbeteren}other{Ultimatum heeft # hergebruikte wachtwoorden gevonden die je kunt verbeteren}}</translation>
+<translation id="2794551654724114396">Zet meldingen aan voor nuttige tips om het beste uit Ultimatum te halen</translation>
 <translation id="2805210243313393104">Je bookmarks en meer gebruiken op al je apparaten</translation>
 <translation id="2805756323405976993">Apps</translation>
 <translation id="2819849308549746319">Afmelden voor alles</translation>
@@ -433,7 +433,7 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="2842985007712546952">Bovenliggende map</translation>
 <translation id="2854916915045135148">Houd je vinger hierop om te wisselen naar de incognitomodus</translation>
 <translation id="2860954141821109167">Zorg ervoor dat een telefoon-app aanstaat op dit apparaat</translation>
-<translation id="2861923151411510142">Sommige Chrome-functies zijn niet meer beschikbaar</translation>
+<translation id="2861923151411510142">Sommige Ultimatum-functies zijn niet meer beschikbaar</translation>
 <translation id="286473047976978798">Je weergavevoorkeuren toepassen?</translation>
 <translation id="2869416538780777323">{OTHER_TAB_COUNT,plural, =1{<ph name="URL" /> en 1 ander tabblad}other{<ph name="URL" /> en <ph name="TAB_COUNT_MANY" /> andere tabbladen}}</translation>
 <translation id="2869430948265924908">Als je je gevoelige content in de auto wilt beschermen, stel je een profielvergrendeling voor je auto in.  Dit kun je doen met een pincode, code of wachtwoord.</translation>
@@ -441,10 +441,10 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="2871733351037274014">Pagina's vooraf laden</translation>
 <translation id="2876136027428473467"><ph name="CHILD_NAME" /> vraagt of je deze website wilt goedkeuren:</translation>
 <translation id="2876556152483133018">Site Search</translation>
-<translation id="2876628302275096482">Meer informatie over <ph name="BEGIN_LINK" />hoe Chrome je gegevens privé houdt<ph name="END_LINK" /></translation>
+<translation id="2876628302275096482">Meer informatie over <ph name="BEGIN_LINK" />hoe Ultimatum je gegevens privé houdt<ph name="END_LINK" /></translation>
 <translation id="2878607776582720720"><ph name="TAB_TITLE" />, meervoudig geselecteerd incognitotabblad voor content delen</translation>
 <translation id="2885355868600171871">Naar adresbalk gaan</translation>
-<translation id="2888126860611144412">Over Chrome</translation>
+<translation id="2888126860611144412">Over Ultimatum</translation>
 <translation id="2891154217021530873">Stoppen met het laden van de pagina</translation>
 <translation id="2893168226686371498">Standaardbrowser</translation>
 <translation id="2894821468041866720">Je browser of apparaat wordt hier niet merkbaar langzamer van.</translation>
@@ -463,14 +463,14 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="2923908459366352541">Naam is ongeldig</translation>
 <translation id="2932150158123903946">Opslag van Google <ph name="APP_NAME" /></translation>
 <translation id="2932222164150889403">Je toetsenbord verandert niet</translation>
-<translation id="2936980480904111527">Chrome-meldingen maken het je makkelijker</translation>
+<translation id="2936980480904111527">Ultimatum-meldingen maken het je makkelijker</translation>
 <translation id="2940075786175545812">Optie om een website wel of niet goed te keuren</translation>
 <translation id="2942036813789421260">Voorbeeldtabblad is gesloten</translation>
 <translation id="2951071800649516099">Voeg pagina's aan je leeslijst toe voor later</translation>
 <translation id="2954586176076923855">Adresbalk naar boven verplaatsen</translation>
 <translation id="2961208450284224863">{READING_LIST_UNREAD_PAGE_COUNT,plural, =1{<ph name="READING_LIST_UNREAD_PAGE_COUNT_ONE" /> ongelezen pagina}other{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> ongelezen pagina's}}</translation>
 <translation id="2972109037780336501">Rechten automatisch verwijderen</translation>
-<translation id="2976550651269220761">Sommige van je Chrome-gegevens zijn nog niet opgeslagen in je Google-account.\nWacht een paar minuten voordat je uitlogt. Als je nu uitlogt, worden deze gegevens verwijderd.</translation>
+<translation id="2976550651269220761">Sommige van je Ultimatum-gegevens zijn nog niet opgeslagen in je Google-account.\nWacht een paar minuten voordat je uitlogt. Als je nu uitlogt, worden deze gegevens verwijderd.</translation>
 <translation id="2977350910003566746">Sorteren op laatst geopend</translation>
 <translation id="297771753501244313">Sorteren op laatst geopend</translation>
 <translation id="2979639724566107830">Openen in nieuw venster</translation>
@@ -493,15 +493,15 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="3035527385626181784"><ph name="TAB_TITLE" />, geselecteerd tabblad voor content delen</translation>
 <translation id="3036750288708366620"><ph name="BEGIN_LINK" />Hulp krijgen<ph name="END_LINK" /></translation>
 <translation id="3037177537145227281">Prijs wordt gevolgd</translation>
-<translation id="3037517125981011456">Toont prompts om in te loggen bij Chrome</translation>
+<translation id="3037517125981011456">Toont prompts om in te loggen bij Ultimatum</translation>
 <translation id="3038272154009688107">Alle sites bekijken</translation>
 <translation id="3057938290530993634">Houd je vinger op je meest bezochte websites om ze vast te zetten voor snelle toegang de volgende keer</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> bookmark}other{<ph name="BOOKMARKS_COUNT_MANY" /> bookmarks}}</translation>
-<translation id="3062802207422175757">Artikelen over je interesses in Chrome</translation>
+<translation id="3062802207422175757">Artikelen over je interesses in Ultimatum</translation>
 <translation id="3066573403916685335">Naar beneden</translation>
 <translation id="3067505415088964188">Prijs is laag</translation>
 <translation id="3070005020161560471">Automatisch vertalen</translation>
-<translation id="3072980200212375806"><ph name="APP_NAME" /> wordt geopend in Chrome. Als je doorgaat, ga je akkoord met de <ph name="BEGIN_LINK1" />Servicevoorwaarden van Google<ph name="END_LINK1" /> en met de <ph name="BEGIN_LINK2" />Aanvullende servicevoorwaarden van Google Chrome en Chrome OS<ph name="END_LINK2" />. Het <ph name="BEGIN_LINK3" />Privacybeleid<ph name="END_LINK3" /> is ook van toepassing.</translation>
+<translation id="3072980200212375806"><ph name="APP_NAME" /> wordt geopend in Ultimatum. Als je doorgaat, ga je akkoord met de <ph name="BEGIN_LINK1" />Servicevoorwaarden van Google<ph name="END_LINK1" /> en met de <ph name="BEGIN_LINK2" />Aanvullende servicevoorwaarden van Ultimatum en Ultimatum OS<ph name="END_LINK2" />. Het <ph name="BEGIN_LINK3" />Privacybeleid<ph name="END_LINK3" /> is ook van toepassing.</translation>
 <translation id="3080525922482950719">Je kunt pagina's opslaan en later of offline lezen</translation>
 <translation id="3087734570205094154">Onderaan</translation>
 <translation id="3091010850649238832">Content op het klembord bekijken</translation>
@@ -511,7 +511,7 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="3123734510202723619">Aankondigingen</translation>
 <translation id="3134385238404760368">Geen recente tabbladen</translation>
 <translation id="3135655388926735587">Tik op Recente tabbladen</translation>
-<translation id="314939179385989105">Homepage van Chrome</translation>
+<translation id="314939179385989105">Homepage van Ultimatum</translation>
 <translation id="3158667104057012316">Sorteren op handmatige volgorde</translation>
 <translation id="3159335509547415276">Meer informatie over geblokkeerde accounts</translation>
 <translation id="3161699713309727585"><ph name="BUTTON_TEXT" />, wordt geopend in een nieuw tabblad</translation>
@@ -531,7 +531,7 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="3236059992281584593">1 minuut resterend</translation>
 <translation id="3237087289225714896">Standaard vooraf laden:</translation>
 <translation id="3244271242291266297">MM</translation>
-<translation id="3245429137663807393">Als je ook Chrome-gebruiksrapporten deelt, bevatten die rapporten de URL's die je bezoekt</translation>
+<translation id="3245429137663807393">Als je ook Ultimatum-gebruiksrapporten deelt, bevatten die rapporten de URL's die je bezoekt</translation>
 <translation id="3250563604907490871">Je ziet weer afbeeldingsbeschrijvingen als je verbinding maakt met wifi</translation>
 <translation id="3254409185687681395">Bookmark instellen voor deze pagina</translation>
 <translation id="3265093782546847662">Alle pagina's van <ph name="DOMAIN" /></translation>
@@ -568,22 +568,22 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="3435575784518354875">Als je toegang wilt houden tot je wachtwoorden, exporteer je ze nu, update je Google Play-services en importeer je ze terug naar Google Wachtwoordmanager. <ph name="BEGIN_LINK" />Bekijk de volledige instructies<ph name="END_LINK" />.</translation>
 <translation id="3435738964857648380">Beveiliging</translation>
 <translation id="3435914367318771664">Tabblad toevoegen aan nieuwe groep</translation>
-<translation id="3438681572027105609">Log in bij Chrome om onder andere je wachtwoorden te gebruiken op al je apparaten</translation>
+<translation id="3438681572027105609">Log in bij Ultimatum om onder andere je wachtwoorden te gebruiken op al je apparaten</translation>
 <translation id="3439276997620616816">Hier vind je je recente tabbladen</translation>
 <translation id="3443221991560634068">De huidige pagina opnieuw laden</translation>
 <translation id="3444179773590444986">Feedback delen over donker thema voor sites?</translation>
 <translation id="3448874648066942074">Pagina samenvatten met AI</translation>
-<translation id="3452832259067974318">Ter bescherming van je privacy vult Chrome je wachtwoord niet automatisch in dit veld in.</translation>
+<translation id="3452832259067974318">Ter bescherming van je privacy vult Ultimatum je wachtwoord niet automatisch in dit veld in.</translation>
 <translation id="3474624961160222204">Doorgaan als <ph name="NAME" /></translation>
 <translation id="3478363558367712427">Je kunt je zoekmachine kiezen</translation>
 <translation id="3482805106082349287">Zoek met je toetsenbord, stem, camera of incognito</translation>
-<translation id="3487903178221457900">Het geëxporteerde bestand is mogelijk toegankelijk voor anderen, waaronder apps. Na de export worden je wachtwoorden verwijderd uit Chrome.</translation>
+<translation id="3487903178221457900">Het geëxporteerde bestand is mogelijk toegankelijk voor anderen, waaronder apps. Na de export worden je wachtwoorden verwijderd uit Ultimatum.</translation>
 <translation id="3488199663160411179">naam</translation>
 <translation id="3493531032208478708"><ph name="BEGIN_LINK" />Meer informatie<ph name="END_LINK" /> over voorgestelde content</translation>
 <translation id="3499246418971111862">chrome_qrcode_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="350276055892098337">Sorteren op oudste</translation>
 <translation id="3507132249039706973">Standaardbeveiliging staat aan</translation>
-<translation id="3509330069915219067">Offline. Chrome kan niet checken op updates.</translation>
+<translation id="3509330069915219067">Offline. Ultimatum kan niet checken op updates.</translation>
 <translation id="3513019849832307207">Deelnemen en openen</translation>
 <translation id="3513704683820682405">Augmented reality</translation>
 <translation id="3516053221628030540">Naar Google Play</translation>
@@ -615,10 +615,10 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="3623240789707551553">{DOMAIN_COUNT,plural, =1{+ 1 site}other{+ # sites}}</translation>
 <translation id="3625870480639975468">Zoom opnieuw instellen</translation>
 <translation id="3631987586758005671">Delen met <ph name="DEVICE_NAME" /></translation>
-<translation id="3635073343384702370">Chrome kan je wachtwoorden controleren als je deze hebt opgeslagen</translation>
+<translation id="3635073343384702370">Ultimatum kan je wachtwoorden controleren als je deze hebt opgeslagen</translation>
 <translation id="3636940436873918441">Voorkeurstalen</translation>
-<translation id="3637744895182738742">Als je je wachtwoordzin bent vergeten of deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Chrome-gegevens in je account<ph name="END_LINK" />.</translation>
-<translation id="3641581193271938629">Aanmelding voor Chrome Finds gesloten</translation>
+<translation id="3637744895182738742">Als je je wachtwoordzin bent vergeten of deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ultimatum-gegevens in je account<ph name="END_LINK" />.</translation>
+<translation id="3641581193271938629">Aanmelding voor Ultimatum Finds gesloten</translation>
 <translation id="3647019414263135904">De contextpop-up openen of sluiten</translation>
 <translation id="3653111872753786013"><ph name="WEBSITE_TITLE" />: <ph name="WEBSITE_URL" /></translation>
 <translation id="3674208116086565128">Naar de homepage van de Google-app</translation>
@@ -636,7 +636,7 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="3710501561113687889"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> deelt je <ph name="FIELDS_STRING" /> met deze site om door te gaan.</translation>
 <translation id="3710560693796335511">Samenwerking</translation>
 <translation id="3714430408451673233">Tabblad onderaan op halve hoogte.</translation>
-<translation id="3718765429352682176">Je kunt de geschiedenis zien van andere apps die links openen in Chrome.</translation>
+<translation id="3718765429352682176">Je kunt de geschiedenis zien van andere apps die links openen in Ultimatum.</translation>
 <translation id="3721119614952978349">Jij en Google</translation>
 <translation id="3727000368239390918">Log in om onder andere je tabbladen op al je apparaten te gebruiken</translation>
 <translation id="3737319253362202215">Vertaalinstellingen</translation>
@@ -690,8 +690,8 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="3943322906274039960"><ph name="TAB_TITLE" />, vastgezet tabblad voor scherm-in-scherm</translation>
 <translation id="3950820424414687140">Inloggen</translation>
 <translation id="395377504920307820">Gebruiken zonder account</translation>
-<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Chrome laadt de pagina wanneer deze klaar is}other{Chrome laadt de pagina's wanneer deze klaar zijn}}</translation>
-<translation id="3969142555815019568">Chrome kan je wachtwoorden niet checken</translation>
+<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Ultimatum laadt de pagina wanneer deze klaar is}other{Ultimatum laadt de pagina's wanneer deze klaar zijn}}</translation>
+<translation id="3969142555815019568">Ultimatum kan je wachtwoorden niet checken</translation>
 <translation id="3969863827134279083">Naar boven</translation>
 <translation id="397105322502079400">Berekenen...</translation>
 <translation id="397583555483684758">Synchronisatie werkt niet meer</translation>
@@ -702,10 +702,10 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="3987993985790029246">Link kopiëren</translation>
 <translation id="3994236846568425219">Zet het donkere thema aan als het donkere thema van je apparaat aanstaat</translation>
 <translation id="4000212216660919741">Homepage voor offline</translation>
-<translation id="4000670338830950598">Google Chrome aanpassen en beheren met een gemarkeerd item</translation>
+<translation id="4000670338830950598">Ultimatum aanpassen en beheren met een gemarkeerd item</translation>
 <translation id="4015643064997321279">{NUM_PASSWORDS,plural, =1{1 gehackt wachtwoord in je Google-account}other{# gehackte wachtwoorden in je Google-account}}</translation>
 <translation id="4016425174436051808">Volgen is mislukt. Er is iets misgegaan.</translation>
-<translation id="4023638601467301498">Log in bij Chrome om onder andere je bookmarks op al je apparaten te gebruiken</translation>
+<translation id="4023638601467301498">Log in bij Ultimatum om onder andere je bookmarks op al je apparaten te gebruiken</translation>
 <translation id="4024768890073681126">Je browser wordt beheerd door je ouder</translation>
 <translation id="4027569221211770437">Map <ph name="FOLDER_TITLE" /></translation>
 <translation id="4034817413553209278">{HOURS,plural, =1{# uur}other{# uur}}</translation>
@@ -745,13 +745,13 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="4180726336228139707">Alleen op dit apparaat</translation>
 <translation id="4181841719683918333">Talen</translation>
 <translation id="4188221736490993796">Sorteren van Z tot A</translation>
-<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{Chrome heeft voorkomen dat deze site meldingen stuurt vanwege spam of misleidende content}other{Chrome heeft voorkomen dat deze sites meldingen sturen vanwege spam of misleidende content}}</translation>
+<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{Ultimatum heeft voorkomen dat deze site meldingen stuurt vanwege spam of misleidende content}other{Ultimatum heeft voorkomen dat deze sites meldingen sturen vanwege spam of misleidende content}}</translation>
 <translation id="4195643157523330669">Openen op nieuw tabblad</translation>
 <translation id="4197828496439691735">{NUM_TABS,plural, =1{1 tabblad op dit apparaat}other{# tabbladen op dit apparaat}}</translation>
 <translation id="4198268995694216131">Meer sites</translation>
 <translation id="4198423547019359126">Geen beschikbare downloadlocaties</translation>
 <translation id="4209029522667123437"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> • Door jou gebruikt op deze site</translation>
-<translation id="4214315110991671325">Als je cookies toestaat, kan Chrome deze voor vooraf laden gebruiken.</translation>
+<translation id="4214315110991671325">Als je cookies toestaat, kan Ultimatum deze voor vooraf laden gebruiken.</translation>
 <translation id="421517251707893998">Tik op Deze snelkoppeling vastzetten</translation>
 <translation id="4216511743389425832">Deze pagina beluisteren</translation>
 <translation id="4217657297368492684"><ph name="TAB_TITLE" />, geselecteerd vastgezet incognitotabblad voor scherm-in-scherm</translation>
@@ -759,7 +759,7 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="4225895483398857530">Snelkoppeling voor werkbalk</translation>
 <translation id="4232376164796433044">Wachtwoorden en automatisch invullen</translation>
 <translation id="4242533952199664413">Instellingen openen</translation>
-<translation id="424864128008805179">Uitloggen bij Chrome?</translation>
+<translation id="424864128008805179">Uitloggen bij Ultimatum?</translation>
 <translation id="4249955472157341256">Sorteren op nieuwste</translation>
 <translation id="4255841059940367080">Realtime, AI-gestuurde bescherming tegen gevaarlijke sites, downloads en extensies op basis van je browsegegevens die naar Google worden gestuurd.</translation>
 <translation id="4256782883801055595">Opensource-licenties</translation>
@@ -768,7 +768,7 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="4270730597186910506">Een product volgen of niet meer volgen.</translation>
 <translation id="4277529130885813215">Ander apparaat gebruiken</translation>
 <translation id="427987768447457592">Nieuwe tabbladgroep</translation>
-<translation id="4282440837784183472">Je organisatie, <ph name="MANAGED_DOMAIN" />, beheert het account waarop je inlogt en hoe Chrome kan worden gebruikt. Je beheerder kan bepaalde functies instellen of beperken.</translation>
+<translation id="4282440837784183472">Je organisatie, <ph name="MANAGED_DOMAIN" />, beheert het account waarop je inlogt en hoe Ultimatum kan worden gebruikt. Je beheerder kan bepaalde functies instellen of beperken.</translation>
 <translation id="4283234489712362947"><ph name="TAB_TITLE" />, incognitotabblad voor scherm-in-scherm</translation>
 <translation id="4285498937028063278">Losmaken</translation>
 <translation id="4285846616383034558">Cookies, cachegeheugen en andere sitegegevens</translation>
@@ -784,10 +784,10 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="4311652497846705514">Pdf openen?</translation>
 <translation id="4313895677475587452">{NUM_SUSPICIOUS_NOTIFICATIONS,plural, =1{Mogelijk spam}other{Mogelijk spam (#)}}</translation>
 <translation id="4320177379694898372">Geen internetverbinding</translation>
-<translation id="4326079409704643112">Bevestig dat jij het bent om Chrome-gegevens te gebruiken en op te slaan in je Google-account</translation>
+<translation id="4326079409704643112">Bevestig dat jij het bent om Ultimatum-gegevens te gebruiken en op te slaan in je Google-account</translation>
 <translation id="433213510553688132">Volgen…</translation>
 <translation id="4335835283689002019">Safe Browsing staat uit</translation>
-<translation id="4343250402091037179">Als je een specifieke site of een deel van Chrome wilt doorzoeken, typ je de bijbehorende snelkoppeling in de adresbalk gevolgd door de gewenste sneltoets.</translation>
+<translation id="4343250402091037179">Als je een specifieke site of een deel van Ultimatum wilt doorzoeken, typ je de bijbehorende snelkoppeling in de adresbalk gevolgd door de gewenste sneltoets.</translation>
 <translation id="4351244548802238354">Dialoogvenster sluiten</translation>
 <translation id="4352287748243729941">Je wachtwoord van <ph name="PROVIDER" /> gebruiken?</translation>
 <translation id="4355272626458588338">Je kunt teruggaan naar een pagina die belangrijk voor je is door een bookmark toe te voegen</translation>
@@ -800,7 +800,7 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="4384468725000734951">Sogou wordt gebruikt om te zoeken</translation>
 <translation id="4387647248986092471">Profielvergrendeling voor auto instellen</translation>
 <translation id="4387817230000841154">Downloads openen</translation>
-<translation id="4395046795145457714">Aanmelding voor Chrome Finds is op volledige hoogte geopend</translation>
+<translation id="4395046795145457714">Aanmelding voor Ultimatum Finds is op volledige hoogte geopend</translation>
 <translation id="4398561997852463382"><ph name="TAB_TITLE" />, geselecteerd vastgezet incognitotabblad voor opname</translation>
 <translation id="4402611456429872546"><ph name="LANG" /> - Downloaden…</translation>
 <translation id="4404568932422911380">Geen bookmarks</translation>
@@ -822,16 +822,16 @@ Alleen iemand met je wachtwoordzin kan je versleutelde gegevens lezen. De wachtw
 <translation id="4460822871039013969"><ph name="TAB_TITLE" />, geselecteerd vastgezet tabblad voor opname</translation>
 <translation id="4460861538906892109">{ITEMS_COUNT,plural, =1{1 bookmark}other{# bookmarks}}</translation>
 <translation id="4478161224666880173">Je kunt je <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />-account gebruiken op deze site. Als je wilt doorgaan, log je in op <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="4479972344484327217"><ph name="MODULE" /> installeren voor Chrome…</translation>
+<translation id="4479972344484327217"><ph name="MODULE" /> installeren voor Ultimatum…</translation>
 <translation id="4484496141267039529">Geen verbinding. Probeer het later opnieuw.</translation>
-<translation id="4487967297491345095">Alle app-gegevens voor Chrome worden definitief verwijderd. Dit omvat alle bestanden, instellingen, accounts, databases, enzovoort.</translation>
+<translation id="4487967297491345095">Alle app-gegevens voor Ultimatum worden definitief verwijderd. Dit omvat alle bestanden, instellingen, accounts, databases, enzovoort.</translation>
 <translation id="4494315997125191493">Selecteer Beheren om alle vensters te bekijken</translation>
 <translation id="4494806687727322324">Wachtwoord opslaan is aangezet door je beheerder</translation>
 <translation id="4508528996305412043">Feedkaartmenu is geopend</translation>
 <translation id="4509741852167209430">Beperkte typen gegevens worden gedeeld tussen sites om de prestaties van hun advertenties te meten. Denk bijvoorbeeld aan informatie over of je een aankoop hebt gedaan na bezoek aan een site.</translation>
 <translation id="4513387527876475750">{DAYS,plural, =1{# dag geleden}other{# dagen geleden}}</translation>
 <translation id="451872707440238414">Zoek in je bookmarks</translation>
-<translation id="4521489764227272523">De geselecteerde gegevens zijn verwijderd uit Chrome en van je gesynchroniseerde apparaten.
+<translation id="4521489764227272523">De geselecteerde gegevens zijn verwijderd uit Ultimatum en van je gesynchroniseerde apparaten.
 
 Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekopdrachten en activiteit uit andere Google-services) beschikbaar zijn via <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="4523326818319942067">afgelopen uur</translation>
@@ -853,10 +853,10 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="4595276580892809760">Afbeeldingen uit galerij bijvoegen</translation>
 <translation id="4595805675102978678">Fout met Google-account</translation>
 <translation id="4601095002996233687">Uitgebreide scans voor verdachte downloads.</translation>
-<translation id="4606559747793337066">Als een site of app vraagt om links op de sitepagina privé vooraf te laden, versleutelt en laadt Chrome de pagina's vooraf via Google-servers zonder cookies. Hierdoor wordt je identiteit voor de vooraf geladen site verborgen.</translation>
+<translation id="4606559747793337066">Als een site of app vraagt om links op de sitepagina privé vooraf te laden, versleutelt en laadt Ultimatum de pagina's vooraf via Google-servers zonder cookies. Hierdoor wordt je identiteit voor de vooraf geladen site verborgen.</translation>
 <translation id="4616150815774728855"><ph name="WEBAPK_NAME" /> openen</translation>
 <translation id="4619564267100705184">Bevestigen dat jij het bent</translation>
-<translation id="4624065194742029982">Chrome-incognitomodus</translation>
+<translation id="4624065194742029982">Ultimatum-incognitomodus</translation>
 <translation id="4634124774493850572">Wachtwoord gebruiken</translation>
 <translation id="463471994228293091">{PASSWORDS_COUNT,plural, =1{1 wachtwoord en andere items worden alleen op dit apparaat opgeslagen. Als je ze wilt gebruiken op je andere apparaten, sla je ze op in je Google-account.}other{# wachtwoorden en andere items worden alleen op dit apparaat opgeslagen. Als je ze wilt gebruiken op je andere apparaten, sla je ze op in je Google-account.}}</translation>
 <translation id="4640331037679501949">{NUM_PASSWORDS,plural, =1{1 gehackt wachtwoord}other{# gehackte wachtwoorden}}</translation>
@@ -871,7 +871,7 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="4668347365065281350">Alle gegevens die zijn opgeslagen door sites, waaronder cookies en andere lokaal opgeslagen gegevens</translation>
 <translation id="4673702426794876519">Incognitovenster</translation>
 <translation id="4675298276894277358">Deze site wordt niet meer getoond</translation>
-<translation id="4678082183394354975">Donker thema voor sites staat aan in Chrome</translation>
+<translation id="4678082183394354975">Donker thema voor sites staat aan in Ultimatum</translation>
 <translation id="4682306524980568490">Er kunnen maar <ph name="MAX_INSTANCE_COUNT" /> vensters worden getoond</translation>
 <translation id="4684427112815847243">Alles synchroniseren</translation>
 <translation id="4685741273709472646">Selecteren in het dropdownmenu</translation>
@@ -893,7 +893,7 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="4738836084190194332">Laatst gesynchroniseerd: <ph name="WHEN" /></translation>
 <translation id="474121291218385686">Filteren op app</translation>
 <translation id="4741753828624614066">Je krijgt verbeterde suggesties in de adresbalk</translation>
-<translation id="4742795653798179840">Verwijderde Chrome-gegevens</translation>
+<translation id="4742795653798179840">Verwijderde Ultimatum-gegevens</translation>
 <translation id="4742970037960872810">Markering verwijderen</translation>
 <translation id="4749960740855309258">Een nieuw tabblad openen</translation>
 <translation id="4753600213727157212">Ingelogd als <ph name="USER_NAME" />. <ph name="USER_EMAIL" />. Fout in Google-account. Hiermee worden de instellingen geopend.</translation>
@@ -911,21 +911,21 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="4782929588435725897"><ph name="SEARCH_ENGINE" /> is je standaard zoekmachine</translation>
 <translation id="4784349455504343791"><ph name="WEBSITE_ORIGIN" /> wil persoonlijke informatie uit je digitale portemonnee gebruiken.</translation>
 <translation id="4787736314074622408">Wil je <ph name="ITEM_TITLE" /> verwijderen?</translation>
-<translation id="4793679854893018356">Meer informatie over hoe Chrome je beschermt</translation>
+<translation id="4793679854893018356">Meer informatie over hoe Ultimatum je beschermt</translation>
 <translation id="4794291718671962615">(<ph name="MEGABYTES" />) <ph name="URL" /></translation>
 <translation id="4807098396393229769">Naam op kaart</translation>
 <translation id="480990236307250886">Open de homepage</translation>
 <translation id="4822710610088666676">Tabbladgroep <ph name="TAB_GROUP_TITLE" /> gesloten en opgeslagen</translation>
 <translation id="482405935591409882">Je tabbladen en groepen doorzoeken</translation>
 <translation id="4834250788637067901">Betaalmethoden, aanbiedingen en adressen via Google Pay</translation>
-<translation id="4835385943915508971">Chrome heeft geen toegang tot de gevraagde bron.</translation>
+<translation id="4835385943915508971">Ultimatum heeft geen toegang tot de gevraagde bron.</translation>
 <translation id="483742037940503070">{TAB_COUNT,plural, =1{Tabbladgroep van <ph name="TAB_COUNT_ONE" /> tabblad, kleur <ph name="COLOR_NAME" />, herstellen als een nieuwe tabbladgroep op de achtergrond.}other{Tabbladgroep van <ph name="TAB_COUNT_MANY" /> tabbladen, kleur <ph name="COLOR_NAME" />, herstellen als een nieuwe tabbladgroep op de achtergrond.}}</translation>
 <translation id="4849731766219625109">Je account voor <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> gebruiken</translation>
 <translation id="4850886885716139402">Weergave</translation>
 <translation id="4852014461738377247">Inloggen\u2026</translation>
 <translation id="4860895144060829044">Bellen</translation>
 <translation id="4864369630010738180">Inloggen...</translation>
-<translation id="4866368707455379617">Kan <ph name="MODULE" /> niet installeren voor Chrome</translation>
+<translation id="4866368707455379617">Kan <ph name="MODULE" /> niet installeren voor Ultimatum</translation>
 <translation id="4871568871368204250">Synchronisatie uitzetten</translation>
 <translation id="487567923005969537">AI-modus aanzetten</translation>
 <translation id="4875775213178255010">Contentsuggesties</translation>
@@ -934,27 +934,27 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="4880127995492972015">Vertalen…</translation>
 <translation id="4881695831933465202">Openen</translation>
 <translation id="488187801263602086">Naam van bestand wijzigen</translation>
-<translation id="4885273946141277891">Niet-ondersteund aantal Chrome-instanties.</translation>
+<translation id="4885273946141277891">Niet-ondersteund aantal Ultimatum-instanties.</translation>
 <translation id="4890973535105146893">Geen opgeslagen wachtwoorden in je Google-account</translation>
 <translation id="4905823827770127520">Link naar de pagina opnemen</translation>
 <translation id="4908869848243824489">Discover van Google</translation>
 <translation id="4910889077668685004">Betaal-apps</translation>
 <translation id="4911042367886397055">Welkom terug <ph name="USER_NAME" />.</translation>
 <translation id="4913169188695071480">Vernieuwen stopzetten</translation>
-<translation id="4921224083091001889">Log in bij Chrome als <ph name="EMAIL" /> om onder andere je wachtwoorden te gebruiken op al je apparaten</translation>
+<translation id="4921224083091001889">Log in bij Ultimatum als <ph name="EMAIL" /> om onder andere je wachtwoorden te gebruiken op al je apparaten</translation>
 <translation id="4923173329789776645">Downloaden niet aanbevolen door je organisatie</translation>
 <translation id="4925120120285606924">Screenshot <ph name="CURRENT_DATE_ISO" /></translation>
 <translation id="4926901776383726965">Je kunt afbeeldingen en bestanden opslaan om ze offline te bekijken of in andere apps te delen</translation>
 <translation id="492699891214363151">{BOOKMARKS_COUNT,plural, =1{1 bookmark en andere items worden alleen op dit apparaat opgeslagen. Als je ze wilt gebruiken op je andere apparaten, sla je ze op in je Google-account.}other{# bookmarks en andere items worden alleen op dit apparaat opgeslagen. Als je ze wilt gebruiken op je andere apparaten, sla je ze op in je Google-account.}}</translation>
-<translation id="4932247056774066048">Omdat je uitlogt van een account dat wordt beheerd door <ph name="DOMAIN_NAME" />, worden je Chrome-gegevens verwijderd. De gegevens blijven in je Google-account staan.</translation>
+<translation id="4932247056774066048">Omdat je uitlogt van een account dat wordt beheerd door <ph name="DOMAIN_NAME" />, worden je Ultimatum-gegevens verwijderd. De gegevens blijven in je Google-account staan.</translation>
 <translation id="4943703118917034429">Virtual reality</translation>
 <translation id="4943872375798546930">Geen resultaten</translation>
 <translation id="4957722034734105353">Meer informatie...</translation>
 <translation id="4959115606310463263">Inlogblad onderaan is op halve hoogte geopend</translation>
 <translation id="4961107849584082341">Vertaal deze pagina in een andere taal</translation>
-<translation id="4964614743143953889">Chrome waarschuwt je voor onveilige sites en downloads</translation>
+<translation id="4964614743143953889">Ultimatum waarschuwt je voor onveilige sites en downloads</translation>
 <translation id="496607651705915226">Update Google Play-services om nieuwe wachtwoorden op te slaan en te gebruiken in je Google-account</translation>
-<translation id="4971753085054504448">Zoek naar iets anders of open de hele Chrome-geschiedenis om meer resultaten te bekijken.</translation>
+<translation id="4971753085054504448">Zoek naar iets anders of open de hele Ultimatum-geschiedenis om meer resultaten te bekijken.</translation>
 <translation id="497421865427891073">Naar voren gaan</translation>
 <translation id="497983151715419057">Check hier je inactieve tabbladen en groepen</translation>
 <translation id="498624032394115435">Iedereen met de link kan alle tabbladen bewerken.</translation>
@@ -981,7 +981,7 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="506254248375231072">Geen tabbladen</translation>
 <translation id="5075939510584558547">Opslaan zonder versleuteling</translation>
 <translation id="5078638979202084724">Bookmark toevoegen aan alle tabbladen</translation>
-<translation id="5085038751173179818">Log in op deze site en bij Chrome om onder andere je bookmarks op al je apparaten te gebruiken</translation>
+<translation id="5085038751173179818">Log in op deze site en bij Ultimatum om onder andere je bookmarks op al je apparaten te gebruiken</translation>
 <translation id="5088347662971855383">Gemini vastzetten</translation>
 <translation id="5091199029769593641">Binnenkort zie je artikelen van <ph name="SITE_NAME" /> als je een nieuw tabblad opent. Sites die je volgt, worden opgeslagen in je Google-account. Je kunt ze beheren in de instellingen van Discover.</translation>
 <translation id="509429900233858213">Er is een fout opgetreden.</translation>
@@ -989,7 +989,7 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="510275257476243843">1 uur resterend</translation>
 <translation id="5114895953710637392">Blad voor app-filter is gesloten.</translation>
 <translation id="5115811374190515607">naar <ph name="PRODUCT_NAME" /></translation>
-<translation id="5116239826668864748">Je kunt Chrome gebruiken als je op links in berichten, documenten en andere apps tikt</translation>
+<translation id="5116239826668864748">Je kunt Ultimatum gebruiken als je op links in berichten, documenten en andere apps tikt</translation>
 <translation id="5118713593561876160">Interesses</translation>
 <translation id="5122378528687922675">Vraag zo nodig je ouder (<ph name="PARENT_NAME_1" /> of <ph name="PARENT_NAME_2" />) om hulp</translation>
 <translation id="5123685120097942451">Incognitotabblad</translation>
@@ -1012,11 +1012,11 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="5206168361184759344">{FILE_COUNT,plural, =1{Bestand downloaden…}other{# bestanden downloaden…}}</translation>
 <translation id="5210286577605176222">Naar het vorige tabblad gaan</translation>
 <translation id="5210365745912300556">Tabblad sluiten</translation>
-<translation id="5212800876504289412">Start Chrome opnieuw op om deze wijziging af te ronden. Tabbladen worden automatisch opnieuw geopend als je opnieuw opstart.</translation>
+<translation id="5212800876504289412">Start Ultimatum opnieuw op om deze wijziging af te ronden. Tabbladen worden automatisch opnieuw geopend als je opnieuw opstart.</translation>
 <translation id="5213114823401215820">Gesloten groep heropenen</translation>
 <translation id="5215957675041756913">Je gegevens en account beheren</translation>
 <translation id="5218324087477576825">Kaartnummer, vereist</translation>
-<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> en meer <ph name="SEPARATOR" /> Chrome heeft deze rechten verwijderd omdat je deze site niet recent hebt bezocht</translation>
+<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> en meer <ph name="SEPARATOR" /> Ultimatum heeft deze rechten verwijderd omdat je deze site niet recent hebt bezocht</translation>
 <translation id="5222676887888702881">Uitloggen</translation>
 <translation id="5226378907213531272">Je ontgrendelt je scherm elke keer dat je de auto gebruikt</translation>
 <translation id="5227554086496586518">Tik om zoekresultaten te bekijken</translation>
@@ -1036,7 +1036,7 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="5313967007315987356">Site toevoegen</translation>
 <translation id="5316947901395241499">Wachtwoord opslaan is uitgezet door je beheerder</translation>
 <translation id="5317780077021120954">Opslaan</translation>
-<translation id="5319359161174645648">Google beveelt Chrome aan</translation>
+<translation id="5319359161174645648">Google beveelt Ultimatum aan</translation>
 <translation id="5326246328175179736">Je kunt niet inloggen met dit account</translation>
 <translation id="5327248766486351172">Naam</translation>
 <translation id="5328542107300944283">Gebruiken met <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
@@ -1049,7 +1049,7 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="5375374982898812658">Je raakt meteen de toegang tot de tabbladgroep <ph name="GROUP_NAME" /> kwijt en de groep wordt verwijderd van al je apparaten</translation>
 <translation id="5375577065097716013">Afbeelding zoeken met Google Lens <ph name="BEGIN_NEW" />Nieuw<ph name="END_NEW" /></translation>
 <translation id="5390367025924544771"><ph name="WEBSITE_ORIGIN" /> wil persoonlijke informatie uit je digitale portemonnee gebruiken. Ga alleen door als je deze site vertrouwt. Op gevaarlijke sites kun je worden misleid om bijvoorbeeld je officiële naam of ID-nummer bekend te maken.</translation>
-<translation id="5395376160638294582">Zorg dat je de Chrome-gegevens in je Google-account altijd kunt gebruiken</translation>
+<translation id="5395376160638294582">Zorg dat je de Ultimatum-gegevens in je Google-account altijd kunt gebruiken</translation>
 <translation id="539881862970320163">Sterk wachtwoord voorgesteld. Toetsenbord verborgen.</translation>
 <translation id="5409881200985013443"><ph name="ONE_TIME_CODE" /> doorgeven op <ph name="CLIENT_NAME" />?</translation>
 <translation id="5410300144953132176"><ph name="OWNER_FULL_NAME" /> (<ph name="OWNER_EMAIL" />) vraagt je om lid te worden van een tabbladgroep. Iedereen met de link kan alle tabbladen bewerken. Denk dus goed na voordat je lid wordt. De link verloopt over 48 uur.</translation>
@@ -1061,7 +1061,7 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="543271133149552180"><ph name="TAB_TITLE" />, meervoudig geselecteerd incognitotabblad voor scherm-in-scherm</translation>
 <translation id="5436928407363358055">Synchroniseer je geschiedenis en tabbladen om makkelijk verder te gaan waar je gebleven was</translation>
 <translation id="5438292632479953702">Opnieuw downloaden</translation>
-<translation id="5439191312780166229">Geeft je waarschuwingen over gevaarlijke sites, zelfs sites die Google niet eerder kende, door meer gegevens van sites te analyseren dan de standaardbeveiliging. Je kunt ervoor kiezen Chrome-waarschuwingen over te slaan.</translation>
+<translation id="5439191312780166229">Geeft je waarschuwingen over gevaarlijke sites, zelfs sites die Google niet eerder kende, door meer gegevens van sites te analyseren dan de standaardbeveiliging. Je kunt ervoor kiezen Ultimatum-waarschuwingen over te slaan.</translation>
 <translation id="5441137934526263133">Werkt de site niet? Cookies van derden worden geblokkeerd.</translation>
 <translation id="5441466871879044658">Vertalen naar deze taal</translation>
 <translation id="5444999712122199445">Terug naar site</translation>
@@ -1072,7 +1072,7 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="5469852975082458401">Je kunt navigeren op pagina's met een tekstcursor. Druk op F7 om dit uit te zetten.</translation>
 <translation id="5471273988133666918">Tabblad <ph name="TAB_TITLE" /> kan niet worden verplaatst</translation>
 <translation id="548278423535722844">Openen in app voor passen</translation>
-<translation id="5489222148748465285">Chrome verder laten zoeken?</translation>
+<translation id="5489222148748465285">Ultimatum verder laten zoeken?</translation>
 <translation id="5490848366863949315"><ph name="TAB_TITLE" />, meervoudig geselecteerd tabblad voor scherm-in-scherm</translation>
 <translation id="5494920125229734069">Alles selecteren</translation>
 <translation id="549660026907543296">Deelnemen als <ph name="MEMBER_FULL_NAME" /></translation>
@@ -1080,7 +1080,7 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="5526281268548144413">Kunnen niet worden gesloten voor meerdere vensters</translation>
 <translation id="5532536403031755365">Een extra beveiligingslaag toevoegen tegen online dreigingen met Geoptimaliseerde beveiliging</translation>
 <translation id="5548606607480005320">Veiligheidscheck</translation>
-<translation id="5554520618550346933">Als je een wachtwoord gebruikt, waarschuwt Chrome je als het online is gepubliceerd. Als dit wordt gedaan, zijn je wachtwoorden en gebruikersnamen versleuteld, zodat ze door niemand (ook niet Google) kunnen worden gelezen.</translation>
+<translation id="5554520618550346933">Als je een wachtwoord gebruikt, waarschuwt Ultimatum je als het online is gepubliceerd. Als dit wordt gedaan, zijn je wachtwoorden en gebruikersnamen versleuteld, zodat ze door niemand (ook niet Google) kunnen worden gelezen.</translation>
 <translation id="5555525474779371165">Je Safe Browsing-bescherming kiezen</translation>
 <translation id="5556459405103347317">Opnieuw laden</translation>
 <translation id="555671485580955310">Geschiedenis en tabbladen synchroniseren</translation>
@@ -1093,10 +1093,10 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="5578795271662203820">Zoeken op <ph name="SEARCH_ENGINE" /> naar afbeelding</translation>
 <translation id="5596627076506792578">Meer opties</translation>
 <translation id="5599455543593328020">Incognitomodus</translation>
-<translation id="5601180634394228718">Ga naar <ph name="BEGIN_LINK" />Google-services<ph name="END_LINK" /> voor meer instellingen die gegevens gebruiken om je Chrome-functionaliteit te verbeteren.</translation>
+<translation id="5601180634394228718">Ga naar <ph name="BEGIN_LINK" />Google-services<ph name="END_LINK" /> voor meer instellingen die gegevens gebruiken om je Ultimatum-functionaliteit te verbeteren.</translation>
 <translation id="5601924940067278327">Gebruik onder andere je tabbladen op al je apparaten</translation>
 <translation id="5611398002774823980">Opslaan in account</translation>
-<translation id="5613381935190035031">Log in bij Chrome als <ph name="EMAIL" /> om onder andere je tabbladen op al je apparaten te gebruiken</translation>
+<translation id="5613381935190035031">Log in bij Ultimatum als <ph name="EMAIL" /> om onder andere je tabbladen op al je apparaten te gebruiken</translation>
 <translation id="5614625640221885312">Log in om onder andere je bookmarks en wachtwoorden op al je apparaten te gebruiken</translation>
 <translation id="5619633276517849615">Je organisatie heeft Safe Browsing aangezet</translation>
 <translation id="5620163320393916465">Geen opgeslagen wachtwoorden</translation>
@@ -1112,21 +1112,21 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="5657871969392618475">Je informatie wordt beveiligd met een profielvergrendeling</translation>
 <translation id="5659593005791499971">E-mail</translation>
 <translation id="5665379678064389456">Afspraak maken in <ph name="APP_NAME" /></translation>
-<translation id="5683547024293500885">Chrome kan niet checken op updates</translation>
+<translation id="5683547024293500885">Ultimatum kan niet checken op updates</translation>
 <translation id="5683916195767086779">Tabbladgroep</translation>
 <translation id="5686790454216892815">Bestandsnaam te lang</translation>
 <translation id="569536719314091526">Vertaal deze pagina in een andere taal via de knop 'Meer opties'</translation>
-<translation id="5696597120588531049">Chrome kan je beschermen tegen gegevenslekken, onveilige websites en meer.</translation>
+<translation id="5696597120588531049">Ultimatum kan je beschermen tegen gegevenslekken, onveilige websites en meer.</translation>
 <translation id="5698878456427040674">Check of het geselecteerde account wordt ondersteund.</translation>
 <translation id="5709213329446699338"><ph name="SITE" /> wil verbinding maken met een seriële poort</translation>
 <translation id="5715150588940290235">Opgeslagen beveiligingscodes verwijderen?</translation>
-<translation id="571930967925877633">Je bookmarks, geschiedenis en andere Chrome-gegevens worden niet meer gesynchroniseerd met je Google-account</translation>
+<translation id="571930967925877633">Je bookmarks, geschiedenis en andere Ultimatum-gegevens worden niet meer gesynchroniseerd met je Google-account</translation>
 <translation id="572328651809341494">Recente tabbladen</translation>
 <translation id="5728072125198221967">Gekoppelde Google-services</translation>
 <translation id="5734658507307260911"><ph name="TAB_TITLE" />, vastgezet incognitotabblad met audio</translation>
 <translation id="5744751019568455640">Dit zijn de stemmen die je kunt kiezen om webpagina's voor te lezen. Als je deze stem leuk vindt en wilt dat ik deze blijf gebruiken, tik je op de naam van de stem.</translation>
 <translation id="574845902699630049">Delen als <ph name="OWNER_FULL_NAME" /></translation>
-<translation id="5749068826913805084">Chrome heeft toegang tot de opslag nodig om deze bestanden te kunnen downloaden.</translation>
+<translation id="5749068826913805084">Ultimatum heeft toegang tot de opslag nodig om deze bestanden te kunnen downloaden.</translation>
 <translation id="5749237766298580851">Uit <ph name="SEPARATOR" /> Niet aanbevolen</translation>
 <translation id="5752232708629533680">Alleen gif delen</translation>
 <translation id="5753570386948603678">Verwijderen uit geschiedenis</translation>
@@ -1145,14 +1145,14 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="5811144606237321538"><ph name="TAB_TITLE" />, meervoudig geselecteerd vastgezet tabblad met geluid uit</translation>
 <translation id="5814749351757353073">Blijf op de hoogte van je favoriete sites</translation>
 <translation id="5823093032261493462">Wil je <ph name="FILE_NAME" /> toch downloaden van <ph name="DOWNLOAD_DOMAIN" />?</translation>
-<translation id="5825135637446025843">Nadat Chrome opnieuw is opgestart, worden je opgeslagen gegevens van je nieuwe provider gebruikt om wachtwoorden, toegangssleutels, adressen, betaalmethoden en andere informatie automatisch in te vullen.</translation>
-<translation id="5828921839638612740">Je kunt de gegevens verwijderen in de Chrome-instellingen</translation>
+<translation id="5825135637446025843">Nadat Ultimatum opnieuw is opgestart, worden je opgeslagen gegevens van je nieuwe provider gebruikt om wachtwoorden, toegangssleutels, adressen, betaalmethoden en andere informatie automatisch in te vullen.</translation>
+<translation id="5828921839638612740">Je kunt de gegevens verwijderen in de Ultimatum-instellingen</translation>
 <translation id="5829586821381540080">Opgeslagen in <ph name="FOLDER_NAME" /></translation>
 <translation id="583281660410589416">Onbekend</translation>
 <translation id="5833984609253377421">Link delen</translation>
-<translation id="5839058148541733625">Chrome Dino</translation>
+<translation id="5839058148541733625">Ultimatum Dino</translation>
 <translation id="5841444063256914865">Wil je <ph name="FILE_NAME" /> toch downloaden?</translation>
-<translation id="5847265694842662173">Chrome heeft voorkomen dat malafide en ongebruikte sites meldingen sturen</translation>
+<translation id="5847265694842662173">Ultimatum heeft voorkomen dat malafide en ongebruikte sites meldingen sturen</translation>
 <translation id="5848257610304005265">Pdf openen met <ph name="APP_NAME" />?</translation>
 <translation id="5849288995120328556">Delen stoppen?</translation>
 <translation id="5853623416121554550">onderbroken</translation>
@@ -1166,8 +1166,8 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="5865733239029070421">Hiermee worden automatisch gebruiksstatistieken en crashrapporten naar Google verzonden</translation>
 <translation id="5869522115854928033">Opgeslagen wachtwoorden</translation>
 <translation id="5870416898561279542">Dubbele tabbladen en groepen of tabbladen en groepen die <ph name="DAYS_INACTIVE" /> dagen niet zijn gebruikt, worden hierheen verplaatst<ph name="AUTODELETE_SECTION" />. Je kunt dit op elk moment wijzigen via <ph name="DECLUTTER_SETTINGS_TITLE" />.</translation>
-<translation id="587735546353481577">Als je een site wilt volgen, ga je naar de site, open je het Chrome-menu en tik je op Volgen.</translation>
-<translation id="5885378508678660271">Meldingen <ph name="SEPARATOR" /> Chrome heeft deze rechten verwijderd omdat deze site gevaarlijk is</translation>
+<translation id="587735546353481577">Als je een site wilt volgen, ga je naar de site, open je het Ultimatum-menu en tik je op Volgen.</translation>
+<translation id="5885378508678660271">Meldingen <ph name="SEPARATOR" /> Ultimatum heeft deze rechten verwijderd omdat deze site gevaarlijk is</translation>
 <translation id="5899667542927581604">Blad Geen toegangssleutels gesloten</translation>
 <translation id="5907542076239273525">Bookmark opgeslagen in <ph name="FOLDER_NAME" />.</translation>
 <translation id="5911301511366365629"><ph name="TAB_TITLE" />, geselecteerd incognitotabblad met audio</translation>
@@ -1178,23 +1178,23 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="5942872142862698679">Google wordt gebruikt om te zoeken</translation>
 <translation id="5945035219773565305">Huidige aanbeveling: <ph name="RECOMMENDATION" /></translation>
 <translation id="5951119116059277034">Live pagina bekijken</translation>
-<translation id="5956665950594638604">Helpcentrum van Chrome openen in een nieuw tabblad</translation>
+<translation id="5956665950594638604">Helpcentrum van Ultimatum openen in een nieuw tabblad</translation>
 <translation id="59577092665511740">Kies een account.</translation>
 <translation id="5958275228015807058">Vind je bestanden en pagina's in Downloads</translation>
-<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{Chrome heeft voorkomen dat een site die je niet recent hebt bezocht, je meldingen stuurt}other{Chrome heeft voorkomen dat sites die je niet recent hebt bezocht, je meldingen sturen}}</translation>
+<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{Ultimatum heeft voorkomen dat een site die je niet recent hebt bezocht, je meldingen stuurt}other{Ultimatum heeft voorkomen dat sites die je niet recent hebt bezocht, je meldingen sturen}}</translation>
 <translation id="5962718611393537961">Tik om samen te vouwen</translation>
 <translation id="5964869237734432770">Afbeeldingsbeschrijvingen stoppen</translation>
 <translation id="5972844218283131174">Alles deselecteren</translation>
 <translation id="5975083100439434680">Uitzoomen</translation>
 <translation id="5977976211062815271">Op dit apparaat</translation>
 <translation id="5978661847409534366">{ITEMS_COUNT,plural, =1{1 pagina op je leeslijst}other{# pagina's op je leeslijst}}</translation>
-<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Chrome heeft deze rechten verwijderd omdat je deze site niet recent hebt bezocht</translation>
+<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Ultimatum heeft deze rechten verwijderd omdat je deze site niet recent hebt bezocht</translation>
 <translation id="5995726099713306770">Pagina opnieuw downloaden?</translation>
 <translation id="6000066717592683814">Google blijven gebruiken</translation>
 <translation id="6000203700195075278">Opnieuw volgen</translation>
 <translation id="6011308810877101166">Zoeksuggesties verbeteren</translation>
 <translation id="6013305291643746595">Sorteren op oudste</translation>
-<translation id="6022659036123304283">Personaliseer Chrome voor jou</translation>
+<translation id="6022659036123304283">Personaliseer Ultimatum voor jou</translation>
 <translation id="6026538407078977628">Uitvouwen naar volledig scherm</translation>
 <translation id="6030719887161080597">Informatie beheren die sites gebruiken om advertentieprestaties te meten</translation>
 <translation id="6039379616847168523">Naar het volgende tabblad gaan</translation>
@@ -1223,7 +1223,7 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="6125864963080902918"><ph name="BEGIN_LINK" />Meer informatie<ph name="END_LINK" /></translation>
 <translation id="6127860394906721547">Tabbladgroep <ph name="TITLE_OF_GROUP" /> openen, kleur <ph name="COLOR_NAME" />, met sites <ph name="URL_LIST" />.</translation>
 <translation id="6130303040046284160">Tabblad minimaliseren</translation>
-<translation id="6132075343662013154">Chrome biedt aan om je wachtwoord op te slaan</translation>
+<translation id="6132075343662013154">Ultimatum biedt aan om je wachtwoord op te slaan</translation>
 <translation id="6134168885321518274">Zoekbalk openen</translation>
 <translation id="6135608400322377268">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> tabblad}other{<ph name="TAB_COUNT_MANY" /> tabbladen}}</translation>
 <translation id="6137022273846704445">Taal van <ph name="APP_NAME" /></translation>
@@ -1234,10 +1234,10 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="6146563240635539929">Video's</translation>
 <translation id="614890671148262506">Meldingen van deze site altijd toestaan</translation>
 <translation id="6150320133806434356">Bookmark opgeslagen</translation>
-<translation id="6150706324143004339">Update Chrome om Chrome-gegevens te gebruiken en op te slaan in je Google-account</translation>
+<translation id="6150706324143004339">Update Ultimatum om Ultimatum-gegevens te gebruiken en op te slaan in je Google-account</translation>
 <translation id="6154478581116148741">Zet de schermvergrendeling aan via Instellingen om je wachtwoorden te exporteren vanaf dit apparaat</translation>
 <translation id="6156323911414505561">Bookmarkbalk tonen</translation>
-<translation id="6162892189396105610">Pagina's waarvan Chrome denkt dat je ze waarschijnlijk gaat bezoeken, worden vooraf geladen.</translation>
+<translation id="6162892189396105610">Pagina's waarvan Ultimatum denkt dat je ze waarschijnlijk gaat bezoeken, worden vooraf geladen.</translation>
 <translation id="6165508094623778733">Meer informatie</translation>
 <translation id="6170675927290506430">Naar instellingen voor meldingen</translation>
 <translation id="6184972259157699660"><ph name="TAB_TITLE" />, incognitotabblad met geluid uit</translation>
@@ -1246,7 +1246,7 @@ Voor je Google-account kunnen andere vormen van browsegeschiedenis (zoals zoekop
 <translation id="6193448654517602979">Tabbladen selecteren</translation>
 <translation id="6196315980958524839">Wachtwoorden worden opgeslagen in Google Wachtwoordmanager op dit apparaat</translation>
 <translation id="6202812185118613467">Log weer in om de synchronisatie te starten</translation>
-<translation id="6204781143409202534">Chrome heeft mogelijk spam van <ph name="DOMAIN" /> gevonden.</translation>
+<translation id="6204781143409202534">Ultimatum heeft mogelijk spam van <ph name="DOMAIN" /> gevonden.</translation>
 <translation id="6205314730813004066">Advertentieprivacy</translation>
 <translation id="6210282067670792090">Je kunt in de adresbalk deze sneltoetsen met snelkoppelingen voor zoekmachines en het doorzoeken van sites gebruiken.</translation>
 <translation id="6210748933810148297">Niet <ph name="EMAIL" />?</translation>
@@ -1260,12 +1260,12 @@ Zo kunnen sommige websites op dit verzoek reageren door advertenties te bekijken
 <translation id="6247557882553405851">Google Wachtwoordmanager</translation>
 <translation id="6248988683584659830">Zoek in de instellingen</translation>
 <translation id="6250847299079540062"><ph name="TAB_TITLE" />, meerdere geselecteerde vastgezette incognitotabbladen</translation>
-<translation id="6251449557817521191">Bekijk hier je Chrome-geschiedenis</translation>
+<translation id="6251449557817521191">Bekijk hier je Ultimatum-geschiedenis</translation>
 <translation id="6254139308321626268">Je bekijkt een pdf-bestand</translation>
-<translation id="6255809143828972562">Met tools van Chrome kun je beveiligd browsen en de controle behouden</translation>
+<translation id="6255809143828972562">Met tools van Ultimatum kun je beveiligd browsen en de controle behouden</translation>
 <translation id="6264376385120300461">Toch downloaden</translation>
 <translation id="6264485186158353794">Terug naar beveiligde website</translation>
-<translation id="6267106249090587268">Meldingen <ph name="SEPARATOR" /> Chrome heeft deze rechten verwijderd vanwege spam of misleidende content</translation>
+<translation id="6267106249090587268">Meldingen <ph name="SEPARATOR" /> Ultimatum heeft deze rechten verwijderd vanwege spam of misleidende content</translation>
 <translation id="6276708887952587684">Paginabron bekijken</translation>
 <translation id="6277522088822131679">Er is een fout opgetreden bij het afdrukken van de pagina. Probeer het opnieuw.</translation>
 <translation id="6278428485366576908">Thema</translation>
@@ -1281,7 +1281,7 @@ Zo kunnen sommige websites op dit verzoek reageren door advertenties te bekijken
 <translation id="6312687380483398334">Web-apps (stil)</translation>
 <translation id="6315386555979018699">Verwijderen en doorgaan</translation>
 <translation id="6316139424528454185">Android-versie wordt niet ondersteund</translation>
-<translation id="631839948975905034">Incognitovensters vergrendelen als je Chrome sluit</translation>
+<translation id="631839948975905034">Incognitovensters vergrendelen als je Ultimatum sluit</translation>
 <translation id="6324916366299863871">Snelkoppeling bewerken</translation>
 <translation id="6324977638108296054">Kan geen link naar de markering maken</translation>
 <translation id="6333140779060797560">Delen via <ph name="APPLICATION" /></translation>
@@ -1297,13 +1297,13 @@ Zo kunnen sommige websites op dit verzoek reageren door advertenties te bekijken
 <translation id="6356893102071098867">Check of je het juiste account hebt gekozen</translation>
 <translation id="6363990818884053551">Bevestig dat jij het bent om de synchronisatie te starten</translation>
 <translation id="6364438453358674297">Suggestie verwijderen uit geschiedenis?</translation>
-<translation id="6380100320871303656">Pagina's waarvan Chrome denkt dat je ze waarschijnlijk gaat bezoeken, worden vaker vooraf geladen. Deze instelling kan leiden tot meer datagebruik.</translation>
+<translation id="6380100320871303656">Pagina's waarvan Ultimatum denkt dat je ze waarschijnlijk gaat bezoeken, worden vaker vooraf geladen. Deze instelling kan leiden tot meer datagebruik.</translation>
 <translation id="6382848304055775421">Exporteren</translation>
 <translation id="6388152137132427505">Deel de link altijd verstandig. Links verlopen na 48 uur.</translation>
 <translation id="6394791151443660613">Zoeken: <ph name="SEARCH_QUERY" /></translation>
 <translation id="6397616442223433927">Weer online</translation>
 <translation id="6399363707848566877">Je kunt hier nu makkelijk tabbladen aan groepen toevoegen</translation>
-<translation id="6401458660421980302">Als je dit tabblad naar een ander apparaat wilt sturen, log je hier in bij Chrome</translation>
+<translation id="6401458660421980302">Als je dit tabblad naar een ander apparaat wilt sturen, log je hier in bij Ultimatum</translation>
 <translation id="6404511346730675251">Bookmark bewerken</translation>
 <translation id="6406506848690869874">Synchronisatie</translation>
 <translation id="6408370409308816490"><ph name="TAB_TITLE" />, geselecteerd vastgezet incognitotabblad voor content delen</translation>
@@ -1323,24 +1323,24 @@ Zo kunnen sommige websites op dit verzoek reageren door advertenties te bekijken
 <translation id="6452534462676960500">Nieuwe activiteit</translation>
 <translation id="6459045781120991510">Enquêtes</translation>
 <translation id="6461962085415701688">Kan bestand niet openen</translation>
-<translation id="6464977750820128603">Je kunt sites bekijken die je in Chrome bezoekt en timers hiervoor instellen.\n\nGoogle ontvangt informatie over de sites waarvoor je timers instelt en hoelang je ze bezoekt. Deze informatie wordt gebruikt om Digitaal welzijn te verbeteren.</translation>
+<translation id="6464977750820128603">Je kunt sites bekijken die je in Ultimatum bezoekt en timers hiervoor instellen.\n\nGoogle ontvangt informatie over de sites waarvoor je timers instelt en hoelang je ze bezoekt. Deze informatie wordt gebruikt om Digitaal welzijn te verbeteren.</translation>
 <translation id="6468703991511753953">Adresbalk staat op dit moment onderaan</translation>
-<translation id="6470181189905173055">Hier komen de pagina's te staan die je in Chrome hebt geopend terwijl je <ph name="APP_LABEL" /> gebruikt.</translation>
+<translation id="6470181189905173055">Hier komen de pagina's te staan die je in Ultimatum hebt geopend terwijl je <ph name="APP_LABEL" /> gebruikt.</translation>
 <translation id="6473086018775716761">Lijst met deelopties is geopend op halve hoogte.</translation>
 <translation id="6475951671322991020">Video downloaden</translation>
 <translation id="6477928892249167417">Zo te zien zijn deze sites belangrijk voor jou:</translation>
-<translation id="6479881432656947268">Chrome Web Store bezoeken</translation>
-<translation id="6481963882741794338">Koppel Chrome en andere Google-services voor personalisatie en andere doeleinden</translation>
+<translation id="6479881432656947268">Ultimatum Web Store bezoeken</translation>
+<translation id="6481963882741794338">Koppel Ultimatum en andere Google-services voor personalisatie en andere doeleinden</translation>
 <translation id="6482749332252372425">Downloaden van <ph name="FILE_NAME" /> is mislukt door te weinig opslagruimte.</translation>
 <translation id="6486420406192123355">Dit pdf-bestand is afkomstig van een site die een niet-beveiligde verbinding gebruikt</translation>
 <translation id="650224091954855786">{FILE_COUNT,plural, =1{Bestand gedownload}other{# downloads voltooid}}</translation>
-<translation id="6508722015517270189">Chrome opnieuw starten</translation>
+<translation id="6508722015517270189">Ultimatum opnieuw starten</translation>
 <translation id="6513924416597632811">Link kopiëren naar pagina met zoekresultaten voor: <ph name="SEARCH_QUERY" />. Bron: <ph name="PAGE_URL" /></translation>
 <translation id="6518133107902771759">Controleren</translation>
 <translation id="6521218807522232085">Maak, bewaar en beheer je wachtwoorden zodat je makkelijk kunt inloggen</translation>
 <translation id="6527303717912515753">Delen</translation>
-<translation id="652948702951888897">Chrome-geschiedenis</translation>
-<translation id="6532866250404780454">Je ziet geen sites die je in Chrome bezoekt. Alle sitetimers worden verwijderd.</translation>
+<translation id="652948702951888897">Ultimatum-geschiedenis</translation>
+<translation id="6532866250404780454">Je ziet geen sites die je in Ultimatum bezoekt. Alle sitetimers worden verwijderd.</translation>
 <translation id="6539092367496845964">Er is iets misgegaan. Probeer het later opnieuw.</translation>
 <translation id="6541983376925655882">{NUM_HOURS,plural, =1{1 uur geleden gecheckt}other{# uur geleden gecheckt}}</translation>
 <translation id="6545017243486555795">Alle gegevens wissen</translation>
@@ -1355,7 +1355,7 @@ Zo kunnen sommige websites op dit verzoek reageren door advertenties te bekijken
 <translation id="6569373978618239158">Je ziet nu artikelen van <ph name="SITE_NAME" /> als je een nieuw tabblad opent. Sites die je volgt, worden opgeslagen in je Google-account. Je kunt ze beheren in de instellingen van Discover.</translation>
 <translation id="657177046675873214">Als je al je bookmarks op al je apparaten wilt gebruiken, zet je in de instellingen de optie Bookmarks aan</translation>
 <translation id="6573096386450695060">Altijd toestaan</translation>
-<translation id="6573431926118603307">Hier zie je tabbladen die je op andere apparaten in Chrome hebt geopend.</translation>
+<translation id="6573431926118603307">Hier zie je tabbladen die je op andere apparaten in Ultimatum hebt geopend.</translation>
 <translation id="6583199322650523874">Een bookmark toevoegen voor de huidige pagina</translation>
 <translation id="6588043302623806746">Beveiligde DNS gebruiken</translation>
 <translation id="6590471736817333463">Bespaar tot 60% data</translation>
@@ -1363,28 +1363,28 @@ Zo kunnen sommige websites op dit verzoek reageren door advertenties te bekijken
 <translation id="6594347733515723558">Sorteer- en weergaveopties</translation>
 <translation id="6595046016124923392">Afbeeldingen worden naar Google gestuurd om de beschrijvingen voor je te verbeteren.</translation>
 <translation id="661266467055912436">Verbetert de beveiliging voor jou en alle andere internetgebruikers.</translation>
-<translation id="6621391692573306628">Als je dit tabblad naar een ander apparaat wilt sturen, log je op beide apparaten in bij Chrome</translation>
+<translation id="6621391692573306628">Als je dit tabblad naar een ander apparaat wilt sturen, log je op beide apparaten in bij Ultimatum</translation>
 <translation id="6627583120233659107">Map bewerken</translation>
 <translation id="6633067410344541938">Incognitomodus ontgrendelen</translation>
 <translation id="6636623428211296678">Bekijk hieronder meer instellingen of rond nu af</translation>
-<translation id="6637100877383020115">Chrome stuurt gebruiks- en crashgegevens naar Google om de app te helpen verbeteren. <ph name="BEGIN_UMA_LINK" />Beheren<ph name="END_UMA_LINK" /></translation>
+<translation id="6637100877383020115">Ultimatum stuurt gebruiks- en crashgegevens naar Google om de app te helpen verbeteren. <ph name="BEGIN_UMA_LINK" />Beheren<ph name="END_UMA_LINK" /></translation>
 <translation id="6641780377503683465"><ph name="INTEREST" /> verwijderen</translation>
 <translation id="6642299196749785472">Tabbladen bijvoegen</translation>
 <translation id="6647441008198474441">URL's die je bezoekt, worden naar Google gestuurd om te voorspellen naar welke sites je misschien daarna gaat</translation>
 <translation id="6648977384226967773">{CONTACT,plural, =1{<ph name="CONTACT_PREVIEW" />\u2026 en nog <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" /> andere}other{<ph name="CONTACT_PREVIEW" />\u2026 en nog <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" /> andere}}</translation>
 <translation id="6649642165559792194">Afbeelding bekijken <ph name="BEGIN_NEW" />Nieuw<ph name="END_NEW" /></translation>
 <translation id="6659594942844771486">Tab</translation>
-<translation id="6661521899577697780">Aanmelding voor Chrome Finds is op halve hoogte geopend</translation>
+<translation id="6661521899577697780">Aanmelding voor Ultimatum Finds is op halve hoogte geopend</translation>
 <translation id="666731172850799929">Openen in <ph name="APP_NAME" /></translation>
 <translation id="6669390930482049506">Melding sturen</translation>
-<translation id="6670767097276846646">Met sommige extensies kun je zoekmachines aan Chrome toevoegen</translation>
+<translation id="6670767097276846646">Met sommige extensies kun je zoekmachines aan Ultimatum toevoegen</translation>
 <translation id="6671495933530132209">Afbeelding kopiëren</translation>
 <translation id="6672697278890207089">Je wachtwoordzin invoeren</translation>
 <translation id="6672917148207387131"><ph name="DOMAIN" /> toevoegen</translation>
 <translation id="6674571176963658787">Geef je wachtwoordzin op om de synchronisatie te starten</translation>
-<translation id="6676927815633975364">Log in bij deze site en Chrome</translation>
+<translation id="6676927815633975364">Log in bij deze site en Ultimatum</translation>
 <translation id="6684262542644248484">Log in bij een website</translation>
-<translation id="6684809838922667136">Chrome verbeteren</translation>
+<translation id="6684809838922667136">Ultimatum verbeteren</translation>
 <translation id="6689436252814043643">Leesmodus is niet beschikbaar</translation>
 <translation id="669971068476817798">Tik op Opslaan.</translation>
 <translation id="6700279777779583398">Keuzes opgeslagen</translation>
@@ -1408,18 +1408,18 @@ Zo kunnen sommige websites op dit verzoek reageren door advertenties te bekijken
 <translation id="6764137532716892442">Gedeelde tabbladgroep <ph name="GROUP_TITLE" /> met nieuwe activiteit</translation>
 <translation id="6767294960381293877">De lijst met apparaten om een tabblad mee te delen, is op halve hoogte geopend.</translation>
 <translation id="6783664456110886353">{TAB_COUNT,plural, =1{<ph name="INCOGNITO_TAB_COUNT" /> incognitotabbladen en <ph name="TAB_COUNT_ONE" /> ander tabblad worden gesloten}other{<ph name="INCOGNITO_TAB_COUNT" /> incognitotabbladen en <ph name="TAB_COUNT_MANY" /> andere tabbladen worden gesloten}}</translation>
-<translation id="6785476624617658922">Aanvullende servicevoorwaarden van Google Chrome en Chrome OS</translation>
+<translation id="6785476624617658922">Aanvullende servicevoorwaarden van Ultimatum en Ultimatum OS</translation>
 <translation id="6786747875388722282">Extensies</translation>
 <translation id="6787600234697426339">Limiet van <ph name="MAX_INSTANCE_COUNT" /> vensters bereikt</translation>
 <translation id="6795633245022906657">Open snel een nieuw tabblad. Je kunt deze snelkoppeling bewerken via Instellingen.</translation>
-<translation id="679588508577699489">Chrome instellen als je standaardbrowser</translation>
+<translation id="679588508577699489">Ultimatum instellen als je standaardbrowser</translation>
 <translation id="679956319013005046">Als je je voorkeursservice voor automatisch invullen wilt instellen, voeg je de service eerst toe in de <ph name="BEGIN_LINK" />Android-instellingen<ph name="END_LINK" />.</translation>
 <translation id="6802555630140434547">Het venster wordt gesloten</translation>
 <translation id="6803791793483522764">Meldingen checken</translation>
 <translation id="6809470175540814047">Openen in incognitovenster</translation>
 <translation id="6811034713472274749">Pagina kan nu worden bekeken</translation>
 <translation id="6813359536773993594">{FILE_COUNT,plural, =1{Afbeeldingen, 1 afbeelding in lijst}other{Afbeeldingen, # afbeeldingen in lijst}}</translation>
-<translation id="6813446258015311409">Inloggen bij Chrome, geopend.</translation>
+<translation id="6813446258015311409">Inloggen bij Ultimatum, geopend.</translation>
 <translation id="6815692190508268848">Je weergavevoorkeuren zijn toegepast</translation>
 <translation id="6817747507826986771">Deel deze pagina snel. Tik en houd vast om deze snelkoppeling te bewerken.</translation>
 <translation id="6820686453637990663">CVC</translation>
@@ -1428,7 +1428,7 @@ Zo kunnen sommige websites op dit verzoek reageren door advertenties te bekijken
 <translation id="6828070228333235514">Prijs volgen stoppen</translation>
 <translation id="6830728435402077660">Niet beveiligd</translation>
 <translation id="6831043979455480757">Vertalen</translation>
-<translation id="6835182496791325827">Krijg een melding als Chrome de beste resultaten voor je zoekopdrachten vindt terwijl je weg bent.</translation>
+<translation id="6835182496791325827">Krijg een melding als Ultimatum de beste resultaten voor je zoekopdrachten vindt terwijl je weg bent.</translation>
 <translation id="6846298663435243399">Laden…</translation>
 <translation id="6850409657436465440">Je download wordt nog uitgevoerd</translation>
 <translation id="6850830437481525139"><ph name="TAB_COUNT" /> tabbladen gesloten</translation>
@@ -1451,7 +1451,7 @@ Zo kunnen sommige websites op dit verzoek reageren door advertenties te bekijken
 <translation id="6886500155621657325">{ITEMS_COUNT,plural, =1{1 wachtwoord}other{# wachtwoorden}}</translation>
 <translation id="688730033107341407">Nadat je bent uitgelogd, worden onder andere je bookmarks en wachtwoorden in je Google-account van dit apparaat verwijderd.</translation>
 <translation id="6896758677409633944">Kopiëren</translation>
-<translation id="6898797562238201317">Je eigen wachtwoordzin gebruiken om alle Chrome-gegevens in je Google-account te versleutelen</translation>
+<translation id="6898797562238201317">Je eigen wachtwoordzin gebruiken om alle Ultimatum-gegevens in je Google-account te versleutelen</translation>
 <translation id="6900532703269623216">Geoptimaliseerde beveiliging</translation>
 <translation id="6903907808598579934">Synchronisatie aanzetten</translation>
 <translation id="6906448540340261898">Zorg dat je de wachtwoorden in je Google-account altijd kunt gebruiken</translation>
@@ -1461,7 +1461,7 @@ Zo kunnen sommige websites op dit verzoek reageren door advertenties te bekijken
 <translation id="6910211073230771657">Verwijderd</translation>
 <translation id="6916590542764765824">Extensies beheren</translation>
 <translation id="6918398787259831832">Als dit probleem zich blijft voordoen, kun je <ph name="BEGIN_LINK" />meer informatie krijgen<ph name="END_LINK" /> van <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Chrome heeft deze rechten verwijderd omdat je de site niet recent hebt bezocht</translation>
+<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Ultimatum heeft deze rechten verwijderd omdat je de site niet recent hebt bezocht</translation>
 <translation id="6927821422725196292">{TABS_COUNT,plural, =1{1 tabblad}other{<ph name="NUMBER_OF_TABS" /> tabbladen}}</translation>
 <translation id="6929224077895306814">Alle beveiligingscodes die zijn opgeslagen op je apparaat en in je Google-account, worden verwijderd</translation>
 <translation id="6933180670536678127"><ph name="TAB_TITLE" />, geselecteerd vastgezet tabblad met audio</translation>
@@ -1490,30 +1490,30 @@ Zo kunnen sommige websites op dit verzoek reageren door advertenties te bekijken
 <translation id="7020741890149022655">Toevoegen aan leeslijst <ph name="BEGIN_NEW" />Nieuw<ph name="END_NEW" /></translation>
 <translation id="7022756207310403729">Openen in browser</translation>
 <translation id="7029809446516969842">Wachtwoorden</translation>
-<translation id="7037994709569287156">Chrome instellen als standaard</translation>
+<translation id="7037994709569287156">Ultimatum instellen als standaard</translation>
 <translation id="7053256416619638731">Maak je wachtwoorden op dit apparaat sterker</translation>
 <translation id="7053983685419859001">Blokkeren</translation>
 <translation id="7054588988317389591">Afbeeldingsbeschrijvingen ophalen?</translation>
-<translation id="7057969023583258980">Hele Chrome-geschiedenis openen</translation>
+<translation id="7057969023583258980">Hele Ultimatum-geschiedenis openen</translation>
 <translation id="7063006564040364415">Kan geen verbinding maken met synchronisatieserver.</translation>
 <translation id="7063106218165698546">Pas de tabbladgroep aan en tik op Klaar</translation>
 <translation id="7071521146534760487">Account beheren</translation>
 <translation id="707155805709242880">Kies hieronder wat je wilt synchroniseren</translation>
 <translation id="7072949719501323344"><ph name="TAB_TITLE" />, meervoudig geselecteerd vastgezet incognitotabblad voor scherm-in-scherm</translation>
 <translation id="7077143737582773186">SD-kaart</translation>
-<translation id="7078916049958741685">Je Chrome-gegevens ook verwijderen van dit apparaat</translation>
+<translation id="7078916049958741685">Je Ultimatum-gegevens ook verwijderen van dit apparaat</translation>
 <translation id="7080145768121641840"><ph name="TAB_TITLE" />, geselecteerd vastgezet tabblad met geluid uit</translation>
 <translation id="7084115944294706056">Positie van adresbalk kiezen</translation>
-<translation id="7085332316435785646">Kies of je de Chrome-geschiedenis wilt opnemen voor meer gepersonaliseerde functies in Google-services</translation>
-<translation id="7088681679121566888">Chrome is up-to-date</translation>
+<translation id="7085332316435785646">Kies of je de Ultimatum-geschiedenis wilt opnemen voor meer gepersonaliseerde functies in Google-services</translation>
+<translation id="7088681679121566888">Ultimatum is up-to-date</translation>
 <translation id="7098100324909062850"><ph name="TAB_TITLE" />, meervoudig geselecteerd incognitotabblad met geluid uit</translation>
 <translation id="7106762743910369165">Je browser wordt beheerd door je organisatie</translation>
-<translation id="7111394291981742152">Chrome geeft je meer controle over de advertenties die je te zien krijgt en beperkt wat sites over jou te weten kunnen komen als ze je gepersonaliseerde advertenties tonen.</translation>
+<translation id="7111394291981742152">Ultimatum geeft je meer controle over de advertenties die je te zien krijgt en beperkt wat sites over jou te weten kunnen komen als ze je gepersonaliseerde advertenties tonen.</translation>
 <translation id="7111822978084196600">Dit venster een naam geven</translation>
 <translation id="7115358764509798967">Systeemstandaard</translation>
 <translation id="7117485132243600300">Beheer content die je volgt en voorgestelde onderwerpen en zoekopdrachten</translation>
 <translation id="7119984597597798764"><ph name="INSTANCE_TITLE" /> sluiten</translation>
-<translation id="7121179479711575744">Inloggen bij Chrome</translation>
+<translation id="7121179479711575744">Inloggen bij Ultimatum</translation>
 <translation id="7136694880210472378">Instellen als standaard</translation>
 <translation id="7136902389402789299">{NUM_SITES,plural, =1{Rechten beoordeeld voor 1 site}other{Rechten beoordeeld voor # sites}}</translation>
 <translation id="7138678301420049075">Overige</translation>
@@ -1523,8 +1523,8 @@ Zo kunnen sommige websites op dit verzoek reageren door advertenties te bekijken
 <translation id="7149893636342594995">Afgelopen 24 uur</translation>
 <translation id="71503698506017927">Betaalmethoden en adressen van Google Pay vallen niet onder versleuteling met een wachtwoordzin.
 
-Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Chrome-gegevens in je account<ph name="END_LINK" />.</translation>
-<translation id="7165972437814027679">Meer informatie over waarom Chrome bepaalde bestanden blokkeert</translation>
+Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ultimatum-gegevens in je account<ph name="END_LINK" />.</translation>
+<translation id="7165972437814027679">Meer informatie over waarom Ultimatum bepaalde bestanden blokkeert</translation>
 <translation id="7168323970702333693">Ingelogd als <ph name="USER_NAME" />. Hiermee worden de instellingen geopend.</translation>
 <translation id="7170930892977483182">Alle beveiligingscodes die zijn opgeslagen op je apparaat en in Google Wallet, worden verwijderd</translation>
 <translation id="7173114856073700355">Instellingen openen</translation>
@@ -1544,7 +1544,7 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="7197682514647286393">Snel je browsegegevens verwijderen</translation>
 <translation id="719791532916917144">Sneltoets</translation>
 <translation id="7207760545532569765"><ph name="TAB_COUNT" /> tabbladen herstellen als nieuwe tabbladen op de achtergrond.</translation>
-<translation id="7217781228893594884">Incognitotabbladen worden vergrendeld als je Chrome verlaat</translation>
+<translation id="7217781228893594884">Incognitotabbladen worden vergrendeld als je Ultimatum verlaat</translation>
 <translation id="7221869452894271364">Deze pagina opnieuw laden</translation>
 <translation id="722681077040152344">Afgemeld voor <ph name="COUNT" /> sites</translation>
 <translation id="7227218174981371415">{FILE_COUNT,plural, =1{1 download in behandeling}other{# downloads in behandeling}}</translation>
@@ -1554,12 +1554,12 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="724510009481365878">Deze pagina is niet worden afgedrukt</translation>
 <translation id="7248671827512403053">Applicatie</translation>
 <translation id="7253951228444156601">Wachtwoorden checken…</translation>
-<translation id="7260367682327802201">Je Android-apparaat kan een vergelijkbare instelling hebben. Als advertentiemeting aanstaat in Chrome en op je Android-apparaat, kan een bedrijf mogelijk de effectiviteit van een advertentie meten op websites die je bezoekt en in apps die je gebruikt.</translation>
+<translation id="7260367682327802201">Je Android-apparaat kan een vergelijkbare instelling hebben. Als advertentiemeting aanstaat in Ultimatum en op je Android-apparaat, kan een bedrijf mogelijk de effectiviteit van een advertentie meten op websites die je bezoekt en in apps die je gebruikt.</translation>
 <translation id="727288900855680735"><ph name="ONE_TIME_CODE" /> sturen naar <ph name="ORIGIN" />?</translation>
 <translation id="7274013316676448362">Geblokkeerde site</translation>
 <translation id="7276868533747677875">Als je eerder wachtwoorden hebt geëxporteerd, zoek je een csv-bestand op je apparaat en importeer je de wachtwoorden naar de wachtwoordmanager van je voorkeur.</translation>
 <translation id="728377807486816582">Tik op de adresbalk</translation>
-<translation id="7289049772085228972">Je hebt de krachtigste beveiliging van Chrome</translation>
+<translation id="7289049772085228972">Je hebt de krachtigste beveiliging van Ultimatum</translation>
 <translation id="7289303553784750393">Als je online bent, maar dit probleem zich blijft voordoen, kun je andere manieren proberen om door te gaan op <ph name="SITE_ETLD_PLUS_ONE" />.</translation>
 <translation id="7290209999329137901">Naam wijzigen niet beschikbaar</translation>
 <translation id="7291910923717764901">Afbeeldingsbeschrijvingen toegevoegd voor deze pagina</translation>
@@ -1592,12 +1592,12 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="7400003506822844357">{FILE_COUNT,plural, =1{Anders, 1 bestand in lijst}other{Anders, # bestanden in lijst}}</translation>
 <translation id="7400418766976504921">URL</translation>
 <translation id="7400424692675800399">Als je een nieuw venster wilt openen, verlaag je het totale aantal vensters (actief en inactief) tot <ph name="MAX_WINDOW_COUNT_MINUS_ONE" /> of minder.</translation>
-<translation id="7403691278183511381">Functionaliteit bij eerste uitvoering van Chrome</translation>
+<translation id="7403691278183511381">Functionaliteit bij eerste uitvoering van Ultimatum</translation>
 <translation id="7411224099004328643">Google-accountgebruiker</translation>
 <translation id="7419565702166471774">Altijd beveiligde verbindingen gebruiken</translation>
 <translation id="7421293530411019405">Tabbladgroep verlaten?</translation>
 <translation id="7435356471928173109">Uitgezet door je beheerder</translation>
-<translation id="7437998757836447326">Uitloggen bij Chrome</translation>
+<translation id="7437998757836447326">Uitloggen bij Ultimatum</translation>
 <translation id="7439467816829380878">Tabblad verplaatsen naar groep</translation>
 <translation id="7439749340204407129">Bookmarkmanager openen</translation>
 <translation id="7453810262525006706">Samenvouwen naar zijweergave</translation>
@@ -1631,7 +1631,7 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="7525248386620136756"><ph name="TAB_GROUPS_AND_TABS_PART" /> gesloten en opgeslagen</translation>
 <translation id="7545347190366646170">Personen met toegang</translation>
 <translation id="7553482318994371148">Gesloten tabbladen opnieuw openen</translation>
-<translation id="7554643625247105821">Kan Chrome-versie niet checken</translation>
+<translation id="7554643625247105821">Kan Ultimatum-versie niet checken</translation>
 <translation id="7557508262441527045">Uitgelogd</translation>
 <translation id="7573665567024262965">Je standaard-apps kiezen</translation>
 <translation id="757855969265046257">{FILES,plural, =1{<ph name="FILES_DOWNLOADED_ONE" /> bestand gedownload}other{<ph name="FILES_DOWNLOADED_MANY" /> bestanden gedownload}}</translation>
@@ -1647,7 +1647,7 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="7612619742409846846">Ingelogd bij Google als</translation>
 <translation id="7612989789287281429">Inloggen…</translation>
 <translation id="7619072057915878432">Downloaden van <ph name="FILE_NAME" /> is mislukt door netwerkfouten.</translation>
-<translation id="7626032353295482388">Welkom bij Chrome</translation>
+<translation id="7626032353295482388">Welkom bij Ultimatum</translation>
 <translation id="7628417132421583481">Naar Wachtwoordmanager</translation>
 <translation id="7630202231528827509">Provider-URL</translation>
 <translation id="7638584964844754484">Onjuiste wachtwoordzin</translation>
@@ -1662,7 +1662,7 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="7666185984446444960"><ph name="TAB_GROUPS_AND_TABS_PART" /> gesloten</translation>
 <translation id="7682724950699840886">Probeer de volgende tips: zorg dat er voldoende ruimte op je apparaat beschikbaar is, probeer opnieuw te exporteren.</translation>
 <translation id="7686086654630106285">Meer informatie over door de site voorgestelde advertenties</translation>
-<translation id="7690596512217303514">Chrome kan niet worden geopend op je apparaat. Download de nieuwste Chrome-update via de appstore om het probleem op te lossen.</translation>
+<translation id="7690596512217303514">Ultimatum kan niet worden geopend op je apparaat. Download de nieuwste Ultimatum-update via de appstore om het probleem op te lossen.</translation>
 <translation id="7691043218961417207">Ontdek content om te volgen</translation>
 <translation id="7692761875510935111">Snel openen in browser. Houd je vinger op het scherm om deze snelkoppeling te bewerken.</translation>
 <translation id="7697383401610880082">Handgreep voor slepen</translation>
@@ -1670,7 +1670,7 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="7702420606070050505">Blad onderaan met recente activiteit is op volledige hoogte geopend</translation>
 <translation id="7707922173985738739">Mobiele data gebruiken</translation>
 <translation id="7708994397325774423">Al je wachtwoorden ophalen</translation>
-<translation id="7714077993070342304">Chrome-menu openen</translation>
+<translation id="7714077993070342304">Ultimatum-menu openen</translation>
 <translation id="7733878270780732638">Onvoldoende ruimte op het apparaat.</translation>
 <translation id="7740287852186792672">Zoekresultaten</translation>
 <translation id="774403695779169686"><ph name="TAB_TITLE" />, geselecteerd incognitotabblad voor content delen</translation>
@@ -1697,9 +1697,9 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="7821130663268546430">Je vindt alle geopende tabbladen in de tabbladschakelaar</translation>
 <translation id="7822705602465980873">Als je bent ingelogd, worden deze gegevens gekoppeld aan je Google-account om je te beschermen in Google-services, bijvoorbeeld om de beveiliging in Gmail te verbeteren na een beveiligingsincident.</translation>
 <translation id="7824665136384946951">Je organisatie heeft Safe Browsing uitgezet</translation>
-<translation id="7826342993930002256">Jouw Chrome, waar je ook bent</translation>
+<translation id="7826342993930002256">Jouw Ultimatum, waar je ook bent</translation>
 <translation id="7844171778363018843">Geen gegevens geselecteerd om te synchroniseren</translation>
-<translation id="784453721355882533">Probeer Gemini in Chrome om onder meer antwoorden en belangrijke conclusies te krijgen.</translation>
+<translation id="784453721355882533">Probeer Gemini in Ultimatum om onder meer antwoorden en belangrijke conclusies te krijgen.</translation>
 <translation id="7846161022626028328">Er is iets fout gegaan. Probeer het opnieuw.</translation>
 <translation id="7846296061357476882">Google-services</translation>
 <translation id="784652447248278262">Huidig venster</translation>
@@ -1709,10 +1709,10 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="7853202427316060426">Activiteit</translation>
 <translation id="7859988229622350291">Nooit vertalen</translation>
 <translation id="7866213166286285359">Vertaal hier pagina's</translation>
-<translation id="7873610418439765081">Probeer Gemini in Chrome om onder meer antwoorden en belangrijke conclusies te krijgen via de knop Meer opties.</translation>
+<translation id="7873610418439765081">Probeer Gemini in Ultimatum om onder meer antwoorden en belangrijke conclusies te krijgen via de knop Meer opties.</translation>
 <translation id="7875915731392087153">E-mail maken</translation>
 <translation id="7876243839304621966">Alles verwijderen</translation>
-<translation id="7886917304091689118">Actief in Chrome</translation>
+<translation id="7886917304091689118">Actief in Ultimatum</translation>
 <translation id="7887174313503389866">Volg een rondleiding langs belangrijke privacy- en beveiligingsopties. Ga voor meer opties naar de afzonderlijke instellingen.</translation>
 <translation id="7913993612870913335">{FILE_COUNT,plural, =1{1 is geblokkeerd door je organisatie}other{# zijn geblokkeerd door je organisatie}}</translation>
 <translation id="7914399737746719723">App geïnstalleerd</translation>
@@ -1721,7 +1721,7 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="7921782882718083488">Deze pagina samenvatten</translation>
 <translation id="7926975587469166629">Bijnaam kaart</translation>
 <translation id="7927073875790626822">XR</translation>
-<translation id="7929587383660661825">Chrome verwijdert automatisch rechten voor sites die misbruik maken van meldingen of die je niet recent hebt bezocht</translation>
+<translation id="7929587383660661825">Ultimatum verwijdert automatisch rechten voor sites die misbruik maken van meldingen of die je niet recent hebt bezocht</translation>
 <translation id="7934668619883965330">Kan bestand niet downloaden. Bestandsindeling wordt niet ondersteund.</translation>
 <translation id="7942131818088350342"><ph name="PRODUCT_NAME" /> is verouderd.</translation>
 <translation id="7944772052836377867">Synchronisatie moet bevestigen dat jij het bent</translation>
@@ -1738,7 +1738,7 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="7971136598759319605">1 dag geleden actief</translation>
 <translation id="7975379999046275268">Pagina bekijken <ph name="BEGIN_NEW" />Nieuw<ph name="END_NEW" /></translation>
 <translation id="7977451675950311423">Waarschuwt je als je een wachtwoord gebruikt dat is gevonden bij een gegevenslek.</translation>
-<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Chrome heeft deze rechten verwijderd omdat je deze site niet recent hebt bezocht</translation>
+<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Ultimatum heeft deze rechten verwijderd omdat je deze site niet recent hebt bezocht</translation>
 <translation id="7995059495660416932">Je ziet content zodra deze beschikbaar komt</translation>
 <translation id="799576009106109668">Je browst sneller, omdat content proactief wordt geladen op basis van je huidige webpagina</translation>
 <translation id="7998918019931843664">Gesloten tabblad opnieuw openen</translation>
@@ -1756,17 +1756,17 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="804335162455518893">SD-kaart niet gevonden</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> incognitotabblad}other{<ph name="TAB_COUNT_NORMAL" /> incognitotabbladen}}</translation>
 <translation id="8051695050440594747"><ph name="MEGABYTES" /> MB beschikbaar</translation>
-<translation id="8058746566562539958">Openen op nieuw Chrome-tabblad</translation>
+<translation id="8058746566562539958">Openen op nieuw Ultimatum-tabblad</translation>
 <translation id="8062594758852531064">Uitgebreid vooraf laden:</translation>
 <translation id="8063895661287329888">Kan bookmark niet toevoegen.</translation>
 <translation id="8066816452984416180">Bookmark deze pagina snel. Houd je vinger op het scherm om deze snelkoppeling te bewerken.</translation>
-<translation id="8072436850275034464">Je kunt tabbladen die je onlangs hebt gesloten opnieuw openen vanaf elk apparaat waarop je Chrome gebruikt</translation>
+<translation id="8072436850275034464">Je kunt tabbladen die je onlangs hebt gesloten opnieuw openen vanaf elk apparaat waarop je Ultimatum gebruikt</translation>
 <translation id="8073388330009372546">Openen op nieuw tabblad</translation>
 <translation id="8076492880354921740">Tabbladen</translation>
 <translation id="8078096376109663956">Alleen tekst delen</translation>
 <translation id="8078348702936632821">Deze snelkoppeling vastzetten</translation>
 <translation id="8084285576995584326">De gegevens van je Google-account beheren</translation>
-<translation id="8084864785646838999">Een deel van je geschiedenis wordt hier misschien niet getoond. Open de hele Chrome-geschiedenis om alles te bekijken. Er kunnen ook andere vormen van browsegeschiedenis zijn opgeslagen voor je Google-account op <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
+<translation id="8084864785646838999">Een deel van je geschiedenis wordt hier misschien niet getoond. Open de hele Ultimatum-geschiedenis om alles te bekijken. Er kunnen ook andere vormen van browsegeschiedenis zijn opgeslagen voor je Google-account op <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="8088176524274673045">Als je wilt delen met mensen in de buurt, laat je ze deze QR-code scannen</translation>
 <translation id="8090732854597034573">Vraag zo nodig je ouder om hulp</translation>
 <translation id="8101414242770404289">Geen tabbladen in <ph name="TIME_PERIOD" /></translation>
@@ -1774,10 +1774,10 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="810433609302852">Promotie van de functie voor meldingen met tips en stappen voor gebruik in het onderste blad</translation>
 <translation id="8105893657415066307"><ph name="DESCRIPTION" /> <ph name="SEPARATOR" /> <ph name="FILE_SIZE" /></translation>
 <translation id="8107530384992929318">Sorteeropties sluiten</translation>
-<translation id="8110024788458304985">Help de functies en prestaties van Chrome te verbeteren</translation>
-<translation id="8110087112193408731">Chrome-activiteit in Digitaal welzijn bekijken?</translation>
+<translation id="8110024788458304985">Help de functies en prestaties van Ultimatum te verbeteren</translation>
+<translation id="8110087112193408731">Ultimatum-activiteit in Digitaal welzijn bekijken?</translation>
 <translation id="8118117428362942925">Vraag zo nodig je ouder (<ph name="PARENT_NAME" />) om hulp</translation>
-<translation id="8118151008374483324">Log in bij Chrome om onder andere je tabbladen op al je apparaten te gebruiken</translation>
+<translation id="8118151008374483324">Log in bij Ultimatum om onder andere je tabbladen op al je apparaten te gebruiken</translation>
 <translation id="8120286190326371840">Geen gehackte wachtwoorden op dit apparaat</translation>
 <translation id="8122623268651408616">Sorteren op nieuwste</translation>
 <translation id="8127542551745560481">Homepage bewerken</translation>
@@ -1818,7 +1818,7 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="8260126382462817229">Probeer opnieuw in te loggen</translation>
 <translation id="8261506727792406068">Verwijderen</translation>
 <translation id="82619448491672958">Andere tabbladen bekijken</translation>
-<translation id="8265730590513812063">Het Chrome-menu openen</translation>
+<translation id="8265730590513812063">Het Ultimatum-menu openen</translation>
 <translation id="8266753737658117282">Doorgaan met <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8266862848225348053">Downloadlocatie</translation>
 <translation id="8271267069224406035">Spam melden</translation>
@@ -1832,7 +1832,7 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="8317318757008452355">Opties openen om af te drukken</translation>
 <translation id="8320212361750431956">Recente activiteit</translation>
 <translation id="832514020744584629"><ph name="PREF_TITLE" />  <ph name="BEGIN_NEW" />Nieuw<ph name="END_NEW" /></translation>
-<translation id="8342727528718219152">Chrome laat je weten of sites misschien te veel meldingen sturen</translation>
+<translation id="8342727528718219152">Ultimatum laat je weten of sites misschien te veel meldingen sturen</translation>
 <translation id="834313815369870491">Sites nooit vertalen</translation>
 <translation id="8348215005712416247"><ph name="TAB_TITLE" />, meervoudig geselecteerd vastgezet incognitotabblad voor opname</translation>
 <translation id="8348430946834215779">Gebruik waar mogelijk HTTPS en krijg een waarschuwing voordat er sites worden geladen die dit niet ondersteunen</translation>
@@ -1846,12 +1846,12 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="8398389123831319859">Dubbeltik en houd je vinger hierop om te wisselen naar de incognitomodus</translation>
 <translation id="8402673309244746971">Naar Je volgt</translation>
 <translation id="8413126021676339697">Hele geschiedenis bekijken</translation>
-<translation id="8413795581997394485">Beschermt tegen sites, downloads en extensies die als gevaarlijk zijn bestempeld. Als je een site bezoekt, stuurt Chrome een geobfusceerd gedeelte van de URL naar Google via een privacyserver die je IP-adres verbergt. Doet een site iets verdachts, dan worden ook volledige URL's en delen van de paginacontent verstuurd.</translation>
+<translation id="8413795581997394485">Beschermt tegen sites, downloads en extensies die als gevaarlijk zijn bestempeld. Als je een site bezoekt, stuurt Ultimatum een geobfusceerd gedeelte van de URL naar Google via een privacyserver die je IP-adres verbergt. Doet een site iets verdachts, dan worden ook volledige URL's en delen van de paginacontent verstuurd.</translation>
 <translation id="8414396119627470038">Log in bij <ph name="SITE_ETLD_PLUS_ONE" /> met <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8419144699778179708">Hiermee verwijder je de geschiedenis, waaronder die in het zoekvak</translation>
 <translation id="8419244640277402268">Opnemen</translation>
 <translation id="8422250855136581222">Geen tabbladen op dit apparaat</translation>
-<translation id="842386925677997438">Veiligheidstools van Chrome</translation>
+<translation id="842386925677997438">Veiligheidstools van Ultimatum</translation>
 <translation id="8427875596167638501">Voorbeeldtabblad is half geopend</translation>
 <translation id="8428213095426709021">Instellingen</translation>
 <translation id="8430824733382774043">Alleen screenshot delen</translation>
@@ -1859,7 +1859,7 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="8438566539970814960">Zoekopdrachten en browsefunctionaliteit verbeteren</translation>
 <translation id="8439974325294139057"><ph name="LANG" /> - Taal klaar, start <ph name="APP_NAME" /> opnieuw op.</translation>
 <translation id="8442258441309440798">Geen artikelen beschikbaar</translation>
-<translation id="8443209985646068659">Chrome kan niet updaten</translation>
+<translation id="8443209985646068659">Ultimatum kan niet updaten</translation>
 <translation id="8443600937324357591">Tabblad verplaatsen naar ander venster</translation>
 <translation id="8445448999790540984">Wachtwoorden kunnen niet worden geëxporteerd</translation>
 <translation id="8446884382197647889">Meer informatie</translation>
@@ -1868,7 +1868,7 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="8455675988389029454">Je bookmarks, wachtwoorden en meer op al je apparaten gebruiken</translation>
 <translation id="8458341576712814616">Snelkoppeling</translation>
 <translation id="8458413889418591446">Synchroniseer je geschiedenis en tabbladen om snel terug te gaan naar sites die je hebt bezocht</translation>
-<translation id="84594714173170813">Blijf de Chrome-gegevens in je Google-account gebruiken</translation>
+<translation id="84594714173170813">Blijf de Ultimatum-gegevens in je Google-account gebruiken</translation>
 <translation id="8460008946585880786">Sleep een tabblad over een ander tabblad</translation>
 <translation id="8460448946170646641">Neem belangrijke privacy- en beveiligingsopties door</translation>
 <translation id="8460932807646981183">Zoekmachines en Site Search beheren</translation>
@@ -1890,8 +1890,8 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="8540136935098276800">Geef een correct opgemaakte URL op</translation>
 <translation id="854522910157234410">Deze pagina openen</translation>
 <translation id="8547466829003330976">Pdf beoordelen met AI</translation>
-<translation id="8551513938758868521">Incognitotabbladen vergrendelen als je Chrome sluit</translation>
-<translation id="8559961053328923750">Chrome beperkt de totale hoeveelheid gegevens die sites via de browser kunnen delen om de advertentieprestaties te meten</translation>
+<translation id="8551513938758868521">Incognitotabbladen vergrendelen als je Ultimatum sluit</translation>
+<translation id="8559961053328923750">Ultimatum beperkt de totale hoeveelheid gegevens die sites via de browser kunnen delen om de advertentieprestaties te meten</translation>
 <translation id="8559990750235505898">Aanbieden pagina's in andere talen te vertalen</translation>
 <translation id="8560602726703398413">Bekijk je leeslijst in Bookmarks</translation>
 <translation id="85618473456579127">Tik rechtsboven op Profiel</translation>
@@ -1904,12 +1904,12 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="859046281437143747">Volg de prijs via de knop Meer opties</translation>
 <translation id="859064343657890103">Tabbladgroep <ph name="TAB_GROUP_TITLE" /> verwijderd</translation>
 <translation id="860043288473659153">Naam kaarthouder</translation>
-<translation id="8602358303461588329">Inloggen bij Chrome, gesloten.</translation>
+<translation id="8602358303461588329">Inloggen bij Ultimatum, gesloten.</translation>
 <translation id="860282621117673749">Meldingen over prijsdalingen</translation>
 <translation id="8611922158252451755">Iedereen met de link kan alle tabbladen bewerken. Wees dus voorzichtig met delen. De link verloopt over 48 uur.</translation>
 <translation id="8616006591992756292">Er kunnen andere vormen van browsegeschiedenis zijn opgeslagen voor je Google-account op <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="8617240290563765734">De voorgestelde URL in de gedownloade content openen?</translation>
-<translation id="8629093325209491835">Open het Chrome-menu &gt; Instellingen</translation>
+<translation id="8629093325209491835">Open het Ultimatum-menu &gt; Instellingen</translation>
 <translation id="8634050254805484913">Verborgen op smalle schermen</translation>
 <translation id="8635399646025169806">Tabbladgroep behouden?</translation>
 <translation id="8636825310635137004">Zet synchronisatie aan om de tabbladen op je andere apparaten te bekijken</translation>
@@ -1928,15 +1928,15 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="8715300232952757586"><ph name="TAB_TITLE" /> wordt gesloten</translation>
 <translation id="8723453889042591629">Vertaal deze pagina snel. Houd je vinger op het scherm om deze snelkoppeling te bewerken.</translation>
 <translation id="8725066075913043281">Opnieuw proberen</translation>
-<translation id="8727043961453758442">Haal het maximale uit Chrome</translation>
+<translation id="8727043961453758442">Haal het maximale uit Ultimatum</translation>
 <translation id="8731268612289859741">Beveiligingscode</translation>
 <translation id="8738163682604285902">Leesmodus bekijken?</translation>
 <translation id="8746155870861185046">Gemarkeerde tekst delen</translation>
 <translation id="8748850008226585750">Content verborgen</translation>
 <translation id="8754448020583829686">Kopiëren zonder link</translation>
 <translation id="8756969031206844760">Wachtwoord updaten?</translation>
-<translation id="8765470054473112089">Als je in de adresbalk of het zoekvak typt, stuurt Chrome wat je typt naar je standaard zoekmachine om betere suggesties te krijgen. Dit staat uit in de incognitomodus.</translation>
-<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Chrome heeft een zwak wachtwoord gevonden dat je kunt verbeteren}other{Chrome heeft # zwakke wachtwoorden gevonden die je kunt verbeteren}}</translation>
+<translation id="8765470054473112089">Als je in de adresbalk of het zoekvak typt, stuurt Ultimatum wat je typt naar je standaard zoekmachine om betere suggesties te krijgen. Dit staat uit in de incognitomodus.</translation>
+<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Ultimatum heeft een zwak wachtwoord gevonden dat je kunt verbeteren}other{Ultimatum heeft # zwakke wachtwoorden gevonden die je kunt verbeteren}}</translation>
 <translation id="8766529642647037772">Wil je een gemarkeerde link zoals deze maken?</translation>
 <translation id="8788265440806329501">Navigatiegeschiedenis is gesloten</translation>
 <translation id="8790193082819560975">Tik om in een nieuw tabblad te zoeken naar koopopties voor het product.</translation>
@@ -1959,7 +1959,7 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="885480114717186641">Je kunt de desktopsite opvragen voor <ph name="HOST_NAME" /></translation>
 <translation id="8856607253650333758">Beschrijvingen ophalen</translation>
 <translation id="8863714995118816041">Rechten opnieuw toegestaan voor <ph name="SITE_NAME" /></translation>
-<translation id="8865415417596392024">Chrome-gegevens in je account</translation>
+<translation id="8865415417596392024">Ultimatum-gegevens in je account</translation>
 <translation id="8872506776304248286">Openen in app</translation>
 <translation id="8890668505403261809">Zoek op je incognitotabbladen</translation>
 <translation id="8892234476517513962">Je bent al ingelogd</translation>
@@ -1971,7 +1971,7 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="8922289737868596582">Download pagina's via de knop 'Meer opties' om ze offline te gebruiken</translation>
 <translation id="8924575305646776101"><ph name="BEGIN_LINK" />Meer informatie<ph name="END_LINK" /></translation>
 <translation id="892496902842311796"><ph name="LANG" /> is klaar</translation>
-<translation id="8937772741022875483">Je Chrome-activiteit verwijderen uit Digitaal welzijn?</translation>
+<translation id="8937772741022875483">Je Ultimatum-activiteit verwijderen uit Digitaal welzijn?</translation>
 <translation id="8942627711005830162">Openen in een ander venster</translation>
 <translation id="8945143127965743188"><ph name="LANG" /> - Deze taal kan niet worden gedownload. Probeer het later opnieuw.</translation>
 <translation id="8946759102391960088">Toegang houden tot je wachtwoorden</translation>
@@ -1983,12 +1983,12 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="8970887620466824814">Er is iets misgegaan.</translation>
 <translation id="8972098258593396643">Downloaden naar standaardmap?</translation>
 <translation id="8987736167266086032">Ga verder waar je gebleven was</translation>
-<translation id="8992769679401294069">Je gegevens zijn versleuteld met je wachtwoordzin. Voer deze in om Chrome-gegevens te gebruiken en op te slaan in je Google-account.</translation>
+<translation id="8992769679401294069">Je gegevens zijn versleuteld met je wachtwoordzin. Voer deze in om Ultimatum-gegevens te gebruiken en op te slaan in je Google-account.</translation>
 <translation id="8993760627012879038">Een nieuw venster openen in de incognitomodus</translation>
 <translation id="8995521496079646922">De door jou gekozen apps worden standaard gebruikt. Als een app nog niet op dit apparaat staat, wordt deze binnenkort gedownload.</translation>
 <translation id="8996847606757455498">Een andere provider kiezen</translation>
 <translation id="8998837250940831980">Kan tabblad niet minimaliseren. Probeer het later opnieuw.</translation>
-<translation id="9001604755921395912">Openen in Chrome-incognitotabblad</translation>
+<translation id="9001604755921395912">Openen in Ultimatum-incognitotabblad</translation>
 <translation id="9012585441087414258">Beschermt tegen sites, downloads en extensies die als gevaarlijk zijn bestempeld. Als een pagina iets verdachts doet, worden URL's en delen van de paginacontent naar Google Safe Browsing gestuurd.</translation>
 <translation id="9019199799064251516">Doorgaan zonder profielvergrendeling voor de auto?</translation>
 <translation id="9022774213089566801">Veelbezocht</translation>
@@ -1996,7 +1996,7 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="9027728231343310283">Actie voor <ph name="SITE" /> ongedaan maken</translation>
 <translation id="9035378196785279980">Verplaatsen naar\u2026</translation>
 <translation id="9042893549633094279">Privacy en beveiliging</translation>
-<translation id="9047347135558855162">Start snel een zoekopdracht in Chrome</translation>
+<translation id="9047347135558855162">Start snel een zoekopdracht in Ultimatum</translation>
 <translation id="9050666287014529139">Wachtwoordzin</translation>
 <translation id="9055497320631373736">Site is weer toegevoegd aan potentiële sites</translation>
 <translation id="9057030985451135243">Meer informatie over gedeelde tabbladgroepen</translation>
@@ -2004,7 +2004,7 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="9063400323119781058">Afgemeld</translation>
 <translation id="9063523880881406963">'Desktopsite opvragen' uitzetten</translation>
 <translation id="9065203028668620118">Bewerken</translation>
-<translation id="9065383040763568503">Opgeslagen gegevens waarvan Chrome denkt dat deze niet belangrijk zijn (bijvoorbeeld sites zonder opgeslagen instellingen of sites die je niet vaak bezoekt)</translation>
+<translation id="9065383040763568503">Opgeslagen gegevens waarvan Ultimatum denkt dat deze niet belangrijk zijn (bijvoorbeeld sites zonder opgeslagen instellingen of sites die je niet vaak bezoekt)</translation>
 <translation id="9067341854474068781">Blad Geen toegangssleutels geopend op volledige hoogte</translation>
 <translation id="906781307897697745">in <ph name="PRODUCT_NAME" /></translation>
 <translation id="9068568736932147490"><ph name="TAB_TITLE" />, meervoudig geselecteerd vastgezet incognitotabblad met audio</translation>
@@ -2014,8 +2014,8 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="9074739597929991885">Bluetooth</translation>
 <translation id="9081543426177426948">Sites die je bezoekt, worden niet opgeslagen in de incognitomodus</translation>
 <translation id="9086455579313502267">Geen toegang tot het netwerk</translation>
-<translation id="9093915805850895575">Openen in Chrome-venster</translation>
-<translation id="909756639352028172">Voor de meest gepersonaliseerde functionaliteit neem je Chrome op in Web- en app-activiteit en gekoppelde Google-services</translation>
+<translation id="9093915805850895575">Openen in Ultimatum-venster</translation>
+<translation id="909756639352028172">Voor de meest gepersonaliseerde functionaliteit neem je Ultimatum op in Web- en app-activiteit en gekoppelde Google-services</translation>
 <translation id="9099220545925418560">Gebaseerd op je browsegeschiedenis. Deze instelling staat uit.</translation>
 <translation id="9100610230175265781">Wachtwoordzin vereist</translation>
 <translation id="9101137867221042551">Beheer</translation>
@@ -2051,9 +2051,9 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="9218430445555521422">Instellen als standaard</translation>
 <translation id="9219103736887031265">Afbeeldingen</translation>
 <translation id="9222198206152536936">Log in als <ph name="EMAIL" /> om onder andere je tabbladen op al je apparaten te gebruiken</translation>
-<translation id="924447568950697217">Chrome instellen als je standaardbrowser</translation>
-<translation id="926205370408745186">Je Chrome-activiteit verwijderen uit Digitaal welzijn</translation>
-<translation id="927968626442779827">Lite-versie van Google Chrome gebruiken</translation>
+<translation id="924447568950697217">Ultimatum instellen als je standaardbrowser</translation>
+<translation id="926205370408745186">Je Ultimatum-activiteit verwijderen uit Digitaal welzijn</translation>
+<translation id="927968626442779827">Lite-versie van Ultimatum gebruiken</translation>
 <translation id="928550791203542716"><ph name="SITE_NAME" /> volgen</translation>
 <translation id="930124987204876019">Geschiedenis, cookies, sitegegevens, cachegeheugen verwijderen…</translation>
 <translation id="930834144334005936">Huidige modus <ph name="MODE_NAME" /> resetten naar Zoeken</translation>
@@ -2061,7 +2061,7 @@ Als je deze instelling wilt wijzigen, <ph name="BEGIN_LINK" />verwijder je de Ch
 <translation id="939598580284253335">Wachtwoordzin invoeren</translation>
 <translation id="94161319503679839"><ph name="TAB_TITLE" />, vastgezet incognitotabblad voor scherm-in-scherm</translation>
 <translation id="945522503751344254">Feedback sturen</translation>
-<translation id="95817756606698420">Chrome kan <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> gebruiken voor zoekopdrachten in China. Je kunt dit wijzigen in <ph name="BEGIN_LINK" />Instellingen<ph name="END_LINK" />.</translation>
+<translation id="95817756606698420">Ultimatum kan <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> gebruiken voor zoekopdrachten in China. Je kunt dit wijzigen in <ph name="BEGIN_LINK" />Instellingen<ph name="END_LINK" />.</translation>
 <translation id="961856697154696964">Browsegegevens verwijderen</translation>
 <translation id="963246339335003378">Taakbeheer openen</translation>
 <translation id="966131775676567255">Accountgegevens verwijderen</translation>

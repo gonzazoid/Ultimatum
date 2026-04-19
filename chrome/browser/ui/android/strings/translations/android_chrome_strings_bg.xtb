@@ -24,9 +24,9 @@
 <translation id="1089606299949659462">Прегледът завърши!</translation>
 <translation id="1094555143448724771">За да виждате разделите от другите си устройства, синхронизирайте разделите и историята си</translation>
 <translation id="1095761715416917775">Обезпечете си непрекъснат достъп до синхронизираните си данни</translation>
-<translation id="1096091316906284742">Долен лист за включване в Chrome Finds</translation>
+<translation id="1096091316906284742">Долен лист за включване в Ultimatum Finds</translation>
 <translation id="1100066534610197918">Отваряне в нов раздел в група</translation>
-<translation id="1103142993930332957">Искате ли да помогнете за подобряването на Chrome?</translation>
+<translation id="1103142993930332957">Искате ли да помогнете за подобряването на Ultimatum?</translation>
 <translation id="1105960400813249514">Заснемане на екрана</translation>
 <translation id="1108214977745280468">Статистика за страницата</translation>
 <translation id="1108938384783527433">Синхронизиране на историята</translation>
@@ -34,20 +34,20 @@
 <translation id="1123537484474186311"><ph name="TAB_TITLE" /> – раздел „картина в картината“</translation>
 <translation id="1126696498560056882">Управление на профилите на това устройство</translation>
 <translation id="1135018701024399762">Режим „инкогнито“ скрива сърфирането ви от другите хора, които използват устройството ви</translation>
-<translation id="113752097246673894">Влезте в Chrome с профила <ph name="EMAIL" />, за да получите отметките си и др. на всичките си устройства</translation>
+<translation id="113752097246673894">Влезте в Ultimatum с профила <ph name="EMAIL" />, за да получите отметките си и др. на всичките си устройства</translation>
 <translation id="1138458427267715730">Получавайте сигнали при понижение на цената в който и да е сайт в мрежата</translation>
 <translation id="1140317858355046628">Ако я изтриете, всички хора незабавно ще загубят достъп до групата раздели „<ph name="GROUP_NAME" />“ и тя ще бъде изтрита от всички устройства.</translation>
 <translation id="1142732900304639782">Да не се предлага превод на тези сайтове</translation>
 <translation id="1143193470214071120">Затворете прозорец или управлявайте прозорците</translation>
 <translation id="1149725087019908252">„<ph name="FILE_NAME" />“ се сканира</translation>
-<translation id="1150263420752757504"><ph name="APP_NAME" /> ще се отвори в Chrome. С продължаването си приемате <ph name="BEGIN_LINK1" />Общите условия на Google<ph name="END_LINK1" /> и <ph name="BEGIN_LINK2" />Допълнителните общи условия на Chrome и Chrome OS<ph name="END_LINK2" />.</translation>
+<translation id="1150263420752757504"><ph name="APP_NAME" /> ще се отвори в Ultimatum. С продължаването си приемате <ph name="BEGIN_LINK1" />Общите условия на Google<ph name="END_LINK1" /> и <ph name="BEGIN_LINK2" />Допълнителните общи условия на Ultimatum и Ultimatum OS<ph name="END_LINK2" />.</translation>
 <translation id="1154555449933432029">Нямате запазени пароли в Google Мениджър на пароли.</translation>
 <translation id="115483310321669804">Използване на паролата <ph name="PASSWORD" /></translation>
 <translation id="1161065531352634524">Синхронизиране на разделите и историята</translation>
 <translation id="1165109137568919258">Направете снимка или добавете изображение от фотогалерията си, за да извършите търсене.</translation>
 <translation id="1173894706177603556">Преименуване</translation>
-<translation id="1174479719160874822">Chrome ще заявява мобилната версия на сайта, когато екранът е тесен</translation>
-<translation id="1175241315203286684">Администраторът ви може да извършва промени в потребителския профил и браузъра ви отдалечено, да анализира информацията за браузъра чрез отчитане и да изпълнява други необходими задачи. Възможно е активността на това устройство да се управлява и извън Chrome.</translation>
+<translation id="1174479719160874822">Ultimatum ще заявява мобилната версия на сайта, когато екранът е тесен</translation>
+<translation id="1175241315203286684">Администраторът ви може да извършва промени в потребителския профил и браузъра ви отдалечено, да анализира информацията за браузъра чрез отчитане и да изпълнява други необходими задачи. Възможно е активността на това устройство да се управлява и извън Ultimatum.</translation>
 <translation id="1177863135347784049">По избор</translation>
 <translation id="1181037720776840403">Премахване</translation>
 <translation id="1183189057400844278">Потвърдете, че това сте вие, така че винаги да можете да използвате паролите в профила си в Google</translation>
@@ -85,13 +85,13 @@
 <translation id="1318262688555255786">Споделяне на връзка към уеб страницата <ph name="PAGE_TITLE" />. Източник: <ph name="PAGE_URL" /></translation>
 <translation id="1320912611264252795">Папките за потока за запазване на отметка са отворени на пълната височина</translation>
 <translation id="1327257854815634930">Историята на навигацията е отворена</translation>
-<translation id="1331212799747679585">Chrome не може да се актуализира. Още опции</translation>
-<translation id="1332501820983677155">Комбинации за функции на Google Chrome</translation>
+<translation id="1331212799747679585">Ultimatum не може да се актуализира. Още опции</translation>
+<translation id="1332501820983677155">Комбинации за функции на Ultimatum</translation>
 <translation id="1333491156693005331">Наскоро бе извършена проверка</translation>
 <translation id="1336996151357442890">Отписахте се от <ph name="SITE_NAME" />. Ще получите повторно запитване при следващото си посещение.</translation>
 <translation id="1340839264183302272">Напускане на групата</translation>
 <translation id="1342886103232377846">За да проверите за компрометирани пароли, отворете Google Мениджър на пароли</translation>
-<translation id="1343830902827845050">Вход в Chrome</translation>
+<translation id="1343830902827845050">Вход в Ultimatum</translation>
 <translation id="1344653310988386453">Включване на връзка към откроения текст</translation>
 <translation id="1355088659320425659">История и раздели</translation>
 <translation id="1360432990279830238">Изход и изключване на синхронизирането?</translation>
@@ -105,12 +105,12 @@
 <translation id="1383876407941801731">Търсене</translation>
 <translation id="1384704387250346179">Превод с Google Обектив <ph name="BEGIN_NEW" />Ново<ph name="END_NEW" /></translation>
 <translation id="1386674309198842382">Активно преди <ph name="LAST_UPDATED" /> дни</translation>
-<translation id="1390418506739274310">Възможно е да виждате историята от други приложения, които отварят връзки в Chrome. В профила ви в Google може да има други видове история на сърфиране, съхранявани на адрес <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
+<translation id="1390418506739274310">Възможно е да виждате историята от други приложения, които отварят връзки в Ultimatum. В профила ви в Google може да има други видове история на сърфиране, съхранявани на адрес <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="139752016751285248">Долният лист със статистика за цените е отворен на пълната височина</translation>
 <translation id="1397811292916898096">Търсене чрез <ph name="PRODUCT_NAME" /></translation>
-<translation id="1398057416966591719">Можете <ph name="BEGIN_LINK1" />да управлявате какви данни в Chrome да се запазват<ph name="END_LINK1" /> в профила ви в Google.
+<translation id="1398057416966591719">Можете <ph name="BEGIN_LINK1" />да управлявате какви данни в Ultimatum да се запазват<ph name="END_LINK1" /> в профила ви в Google.
 
-За още настройки, които използват данни с цел подобряване на практическата ви работа с Chrome, отворете <ph name="BEGIN_LINK2" />услугите на Google<ph name="END_LINK2" />.</translation>
+За още настройки, които използват данни с цел подобряване на практическата ви работа с Ultimatum, отворете <ph name="BEGIN_LINK2" />услугите на Google<ph name="END_LINK2" />.</translation>
 <translation id="1407069428457324124">Тъмна тема</translation>
 <translation id="1407135791313364759">Отваряне на всички</translation>
 <translation id="1409879593029778104">Изтеглянето на „<ph name="FILE_NAME" />“ е предотвратено, защото файлът вече съществува.</translation>
@@ -124,10 +124,10 @@
 <translation id="1448440926884431741">Организирайте проследяваните от вас продукти в „Отметки“</translation>
 <translation id="1455845192930279203">Искате ли да изтеглите „<ph name="FILE_NAME" />“ (<ph name="FILE_SIZE" />) от <ph name="DOWNLOAD_DOMAIN" /> въпреки това?</translation>
 <translation id="1460751212339734034">Пестете време, въвеждайте по-малко</translation>
-<translation id="1466383950273130737">Изберете език за Chrome</translation>
+<translation id="1466383950273130737">Изберете език за Ultimatum</translation>
 <translation id="1477626028522505441">Изтеглянето на „<ph name="FILE_NAME" />“ не бе успешно поради проблеми в сървъра.</translation>
 <translation id="147982357559798527">Променено</translation>
-<translation id="1480287803138246127">Част от историята ви може да не се показва тук. За да видите всички записи в нея, отворете пълната история в Chrome.</translation>
+<translation id="1480287803138246127">Част от историята ви може да не се показва тук. За да видите всички записи в нея, отворете пълната история в Ultimatum.</translation>
 <translation id="1493287004536771723">Следвате <ph name="SITE_NAME" /></translation>
 <translation id="1495677929897281669">Назад към раздела</translation>
 <translation id="1496514951988037011">потребителско име</translation>
@@ -137,14 +137,14 @@
 <translation id="1515901671075971249">Клавишни комбинации за навигиране между разделите</translation>
 <translation id="1516966594427080024">Отваряне на нов прозорец в режим „инкогнито“</translation>
 <translation id="1521774566618522728">Активно днес</translation>
-<translation id="153446405401665083">Налице е нова версия на Chrome</translation>
+<translation id="153446405401665083">Налице е нова версия на Ultimatum</translation>
 <translation id="1540012742443808215">Адресната лента понастоящем е в горната част</translation>
-<translation id="1544084554881119930">Начините на плащане и адресите няма да се шифроват. Историята на сърфиране от Chrome няма да се синхронизира.
-Само човек, който разполага с пропуска ви, може да чете шифрованите ви данни. Пропускът не се изпраща до Google, нито се съхранява от нас. Ако забравите пропуска си или искате да промените тази настройка, <ph name="BEGIN_LINK" />изчистете данните от Chrome в профила си<ph name="END_LINK" />.</translation>
+<translation id="1544084554881119930">Начините на плащане и адресите няма да се шифроват. Историята на сърфиране от Ultimatum няма да се синхронизира.
+Само човек, който разполага с пропуска ви, може да чете шифрованите ви данни. Пропускът не се изпраща до Google, нито се съхранява от нас. Ако забравите пропуска си или искате да промените тази настройка, <ph name="BEGIN_LINK" />изчистете данните от Ultimatum в профила си<ph name="END_LINK" />.</translation>
 <translation id="1544826120773021464">За да управлявате профила си в Google, докоснете бутона „Управление на профила“</translation>
 <translation id="1549000191223877751">Преместв. в другия прозорец</translation>
-<translation id="1553358976309200471">Актуализиране на Chrome</translation>
-<translation id="1554532453982918912">Помогнете за подобряването на Chrome за хората, които използват браузъра по същия начин като вас</translation>
+<translation id="1553358976309200471">Актуализиране на Ultimatum</translation>
+<translation id="1554532453982918912">Помогнете за подобряването на Ultimatum за хората, които използват браузъра по същия начин като вас</translation>
 <translation id="1568636008098739136">Слушане на тази страница. За да редактирате този пряк път, докоснете и задръжте.</translation>
 <translation id="1571041387761170095">Няма ненадеждни или повторно използвани пароли</translation>
 <translation id="1578591621182011812">{NUM_PASSWORDS,plural, =1{На това устройство има 1 компрометирана парола}other{На това устройство има # компрометирани пароли}}</translation>
@@ -171,24 +171,24 @@
 <translation id="1702907158640575240">Управляван браузър</translation>
 <translation id="170478069042229393"><ph name="TAB_TITLE" /> – фиксиран раздел в режим „инкогнито“</translation>
 <translation id="1718835860248848330">Последния час</translation>
-<translation id="1726477445370128854">Можете да сърфирате и търсите по-бързо, когато Chrome зарежда предварително страниците, които смята, че е възможно да посетите</translation>
+<translation id="1726477445370128854">Можете да сърфирате и търсите по-бързо, когато Ultimatum зарежда предварително страниците, които смята, че е възможно да посетите</translation>
 <translation id="1728803206919861584">Ключът за достъп да се запази ли извън режим „инкогнито“?</translation>
 <translation id="1732514748744806741">Ако паролите ви бъдат компрометирани, ще ви уведомим</translation>
-<translation id="1737694586321018892">Най-силната защита на Chrome</translation>
+<translation id="1737694586321018892">Най-силната защита на Ultimatum</translation>
 <translation id="1747593111377567311">{NUM_SITES,plural, =1{1 сайт наскоро изпрати много известия}other{# сайта наскоро изпратиха много известия}}</translation>
 <translation id="1749561566933687563">Синхронизирайте отметките си</translation>
 <translation id="1750238553597293878">Продължете да използвате паролите в профила си в Google</translation>
 <translation id="17513872634828108">Отворени раздели</translation>
 <translation id="1753744496844366747">Aa</translation>
 <translation id="1760873718737761808">{FILE_COUNT,plural, =1{Страници, 1 страница в списъка}other{Страници, # страници в списъка}}</translation>
-<translation id="1771929606532798550">До Google се изпраща информация за употребата на Chrome от ваша страна, но тя не е свързана с вас\n\nАко Chrome претърпи срив, подробностите за срива може да включват известна лична информация\n\nАко синхронизирате историята си с профила си в Google, показателите може да включват и информация за посещаваните от вас URL адреси</translation>
+<translation id="1771929606532798550">До Google се изпраща информация за употребата на Ultimatum от ваша страна, но тя не е свързана с вас\n\nАко Ultimatum претърпи срив, подробностите за срива може да включват известна лична информация\n\nАко синхронизирате историята си с профила си в Google, показателите може да включват и информация за посещаваните от вас URL адреси</translation>
 <translation id="1778457539567749232">Означаване като непрочетено</translation>
 <translation id="1779766957982586368">Затваряне на прозореца</translation>
 <translation id="1780023393214832643">Пароли, запазени в профила <ph name="USERNAME" /></translation>
 <translation id="1791662854739702043">Инсталиран</translation>
 <translation id="1792959175193046959">Променете стандартното местоположение за изтегляне по всяко време</translation>
 <translation id="1796666869097395659">Намалете раздела, за да се върнете към него по-късно</translation>
-<translation id="1799920918471566157">Съвети за Chrome</translation>
+<translation id="1799920918471566157">Съвети за Ultimatum</translation>
 <translation id="1807246157184219062">Светло</translation>
 <translation id="1807709131360304325">Отваряне на нов прозорец</translation>
 <translation id="1810845389119482123">Първоначалното настройване на синхронизирането не завърши</translation>
@@ -197,13 +197,13 @@
 <translation id="1820408774134375111">Долен лист за вход в профила</translation>
 <translation id="1823492026305965829">Вход като <ph name="USER_FULL_NAME" /></translation>
 <translation id="1824902652744048041">Докоснете „Данни за сърфир.: Изтриване“.</translation>
-<translation id="1825772852827001597">Начините на плащане и адресите от Google Pay няма да бъдат шифровани. Историята на сърфиране от Chrome няма да се синхронизира.
-Само човек, който разполага с пропуска ви, може да чете шифрованите ви данни. Пропускът не се изпраща до Google, нито се съхранява от нас. Ако забравите пропуска си или искате да промените тази настройка, <ph name="BEGIN_LINK" />изтрийте данните от Chrome в профила си<ph name="END_LINK" />.</translation>
+<translation id="1825772852827001597">Начините на плащане и адресите от Google Pay няма да бъдат шифровани. Историята на сърфиране от Ultimatum няма да се синхронизира.
+Само човек, който разполага с пропуска ви, може да чете шифрованите ви данни. Пропускът не се изпраща до Google, нито се съхранява от нас. Ако забравите пропуска си или искате да промените тази настройка, <ph name="BEGIN_LINK" />изтрийте данните от Ultimatum в профила си<ph name="END_LINK" />.</translation>
 <translation id="1829244130665387512">Търсене в страницата</translation>
 <translation id="1832459821645506983">Да, ще участвам</translation>
-<translation id="1845958458910716240">За да защитите данните си, разрешете на Chrome да премахва разрешенията от сайтовете, които не сте посещавали наскоро</translation>
-<translation id="1871098866036088250">Отваряне в браузъра Chrome</translation>
-<translation id="1877026089748256423">Chrome не е актуален</translation>
+<translation id="1845958458910716240">За да защитите данните си, разрешете на Ultimatum да премахва разрешенията от сайтовете, които не сте посещавали наскоро</translation>
+<translation id="1871098866036088250">Отваряне в браузъра Ultimatum</translation>
+<translation id="1877026089748256423">Ultimatum не е актуален</translation>
 <translation id="1877073879466606884">Потребителският профил, в който сте влезли, е управляван. Администраторът ви може да променя настройките на потребителския ви профил отдалечено, да анализира информацията за браузъра чрез отчитане и да изпълнява други необходими задачи.</translation>
 <translation id="1879904908408734349">Долният лист за вход в профила е затворен</translation>
 <translation id="1883903952484604915">Моите файлове</translation>
@@ -215,7 +215,7 @@
 <translation id="1910950723001426294">Списъкът с опции за споделяне е затворен.</translation>
 <translation id="191726024256261717">Преглед на разрешенията</translation>
 <translation id="1917766536967060661">Незабавно ще загубите достъп до групата раздели „<ph name="GROUP_NAME" />“, а <ph name="BLOCKED_MEMBER_FULL_NAME" /> (<ph name="BLOCKED_MEMBER_EMAIL" />) вече няма да може да взаимодейства с вас в услугите на Google.</translation>
-<translation id="1919130412786645364">Разрешаване на влизането в Chrome</translation>
+<translation id="1919130412786645364">Разрешаване на влизането в Ultimatum</translation>
 <translation id="1922362554271624559">Предложени езици</translation>
 <translation id="1924255092154549435">Разделът е разгънат</translation>
 <translation id="1925021887439448749">Въведете персонализиран уеб адрес</translation>
@@ -225,11 +225,11 @@
 <translation id="1944535645109964458">Няма налични кодове за достъп</translation>
 <translation id="1957557050935255529">PDF файлът се зарежда…</translation>
 <translation id="1959679933317802873">Изчаква се съдържание</translation>
-<translation id="1960290143419248813">Актуализациите на Chrome вече не се поддържат за тази версия на Android</translation>
+<translation id="1960290143419248813">Актуализациите на Ultimatum вече не се поддържат за тази версия на Android</translation>
 <translation id="1962061488333185936"><ph name="TAB_TITLE" /> – раздел, който възпроизвежда звук и е избран заедно с други</translation>
 <translation id="1963976881984600709">Стандартна защита</translation>
 <translation id="1966710179511230534">Моля, актуализирайте данните си за вход.</translation>
-<translation id="1969037871259811890">С изтриването на данните за сърфирането няма да излезете от профила си в Google. За да направите това, <ph name="BEGIN_LINK1" />излезте от профила си в Chrome<ph name="END_LINK1" />.</translation>
+<translation id="1969037871259811890">С изтриването на данните за сърфирането няма да излезете от профила си в Google. За да направите това, <ph name="BEGIN_LINK1" />излезте от профила си в Ultimatum<ph name="END_LINK1" />.</translation>
 <translation id="197288927597451399">Запазване</translation>
 <translation id="1973912524893600642">Запазване на данните</translation>
 <translation id="1974060860693918893">Разширени</translation>
@@ -242,7 +242,7 @@
 <translation id="2021896219286479412">Контроли за сайтове на цял екран</translation>
 <translation id="2029669011553795746">Долният лист за включване на известията със съвети е отворен на половината височина</translation>
 <translation id="2038563949887743358">Включване на функцията за заявяване на настолни сайтове</translation>
-<translation id="204321170514947529"><ph name="APP_NAME" /> също има данни в Chrome</translation>
+<translation id="204321170514947529"><ph name="APP_NAME" /> също има данни в Ultimatum</translation>
 <translation id="2047378580182589770">Докоснете и задръжте, за да излезете от режим „инкогнито“</translation>
 <translation id="2049574241039454490"><ph name="FILE_SIZE_OF_TOTAL" /><ph name="SEPARATOR" /><ph name="DESCRIPTION" /></translation>
 <translation id="2051669996101374349">Използвайте HTTPS при възможност и получавайте предупреждения, преди да бъдат заредени сайтове, които не поддържат този протокол. Не можете да промените настройката, защото сте активирали „Разширена защита“.</translation>
@@ -265,9 +265,9 @@
 <translation id="2138283760993967204">Икона за управление</translation>
 <translation id="2138632817776076519"><ph name="TAB_TITLE" /> – избран раздел, който записва</translation>
 <translation id="2141396931810938595">Въз основа на използването</translation>
-<translation id="2145315049852051678">Браузърът Chrome редовно проверява дали настройките му са най-безопасните. Ще ви уведомим, ако е необходим преглед.</translation>
+<translation id="2145315049852051678">Браузърът Ultimatum редовно проверява дали настройките му са най-безопасните. Ще ви уведомим, ако е необходим преглед.</translation>
 <translation id="2149973817440762519">Редактиране на отметката</translation>
-<translation id="2163089732491971196">Въведете пропуска си, за да използвате и запазвате данните от Chrome в профила си в Google</translation>
+<translation id="2163089732491971196">Въведете пропуска си, за да използвате и запазвате данните от Ultimatum в профила си в Google</translation>
 <translation id="2166228530126694506">Версия <ph name="VERSION_NUMBER" /></translation>
 <translation id="2172688499998841696">Функцията за описания на изображенията е изключена</translation>
 <translation id="2172905120685242547">Да се затвори ли прозорецът?</translation>
@@ -280,7 +280,7 @@
 <translation id="2194856509914051091">Обмислете следните неща</translation>
 <translation id="2205701497928406883"><ph name="TAB_TITLE" /> – фиксиран раздел, който споделя</translation>
 <translation id="22091350895006575">Добавяне на потребителското име</translation>
-<translation id="221494669172414749">Когато отворите Chrome без опция за заключване на потребителския профил, запазените ви пароли и начини на плащане ще бъдат премахнати от автомобила. Използването на опция за заключване на потребителския профил защитава тези данни.</translation>
+<translation id="221494669172414749">Когато отворите Ultimatum без опция за заключване на потребителския профил, запазените ви пароли и начини на плащане ще бъдат премахнати от автомобила. Използването на опция за заключване на потребителския профил защитава тези данни.</translation>
 <translation id="2226826835915474236">Неактивни преки пътища</translation>
 <translation id="2227179592712503583">Премахване на предложението</translation>
 <translation id="2227444325776770048">Продължаване като <ph name="USER_FULL_NAME" /></translation>
@@ -311,7 +311,7 @@
 <translation id="2332515770639153015">Функцията за подобрена защита от Безопасно сърфиране е включена</translation>
 <translation id="233375395665273385">Изтриване и излизане от профила</translation>
 <translation id="2341410551640223969">Инсталирането на <ph name="WEBAPK_NAME" /> не бе успешно.</translation>
-<translation id="2349710944427398404">Общо място в хранилището, което се използва от Chrome, включително за профили, отметки и запазени настройки</translation>
+<translation id="2349710944427398404">Общо място в хранилището, което се използва от Ultimatum, включително за профили, отметки и запазени настройки</translation>
 <translation id="235789365079050412">Декларация за поверителност на Google</translation>
 <translation id="2359808026110333948">Напред</translation>
 <translation id="2362083820973145409">Влезли сте като <ph name="USER_NAME" />. <ph name="USER_EMAIL" />. Отваря настройките.</translation>
@@ -333,7 +333,7 @@
 <translation id="2427025860753516072">{FILE_COUNT,plural, =1{Видеоклипове, 1 видеоклип в списъка}other{Видеоклипове, # видеоклипа в списъка}}</translation>
 <translation id="2433507940547922241">Облик</translation>
 <translation id="2439153523196674349">Предварителен преглед на <ph name="SITE_NAME" /></translation>
-<translation id="2449931042095204989">Когато сайт или приложение на Google поиска частно предварително зареждане на връзките в страницата си, Chrome шифрова и зарежда предварително съответните страници чрез сървърите на Google, без да използва „бисквитки“. По този начин самоличността ви се скрива от заредения предварително сайт.</translation>
+<translation id="2449931042095204989">Когато сайт или приложение на Google поиска частно предварително зареждане на връзките в страницата си, Ultimatum шифрова и зарежда предварително съответните страници чрез сървърите на Google, без да използва „бисквитки“. По този начин самоличността ви се скрива от заредения предварително сайт.</translation>
 <translation id="2450019289047528273">Начини на плащане и друга информация от Google Wallet</translation>
 <translation id="2450083983707403292">Искате ли да започнете да изтегляте „<ph name="FILE_NAME" />“ още веднъж?</translation>
 <translation id="2451607499823206582">Проследяване</translation>
@@ -342,17 +342,17 @@
 <translation id="2466378451804467735"><ph name="TAB_TITLE" /> – раздел, чийто звук е спрян и който е избран заедно с други</translation>
 <translation id="2468444275314013497">Всичко е наред с браузъра ви</translation>
 <translation id="2471632347767899461">Потърсете в Помощния център</translation>
-<translation id="2472163211318554013">Влезте в профила си, за да се възползвате максимално от Chrome</translation>
+<translation id="2472163211318554013">Влезте в профила си, за да се възползвате максимално от Ultimatum</translation>
 <translation id="247737702124049222">Функцията за описания на изображенията е включена</translation>
 <translation id="2479148705183875116">Към настройките</translation>
 <translation id="2482878487686419369">Известия</translation>
 <translation id="2496180316473517155">История на сърфирането</translation>
 <translation id="2497852260688568942">Синхронизирането е деактивирано от администратора ви</translation>
-<translation id="250020030759455918">В Chrome ще виждате дали сте влезли в профила си в <ph name="SITE_NAME" />, както и съответните данни за сърфирането и сайта</translation>
+<translation id="250020030759455918">В Ultimatum ще виждате дали сте влезли в профила си в <ph name="SITE_NAME" />, както и съответните данни за сърфирането и сайта</translation>
 <translation id="2510106555128151389"><ph name="WEBAPK_NAME" /> се инсталира...</translation>
 <translation id="2512234228327349533">Търсене на опции за купуване</translation>
 <translation id="2513403576141822879">За още настройки за поверителността, сигурността и събирането на данни вижте <ph name="BEGIN_LINK" />Синхронизиране и услуги на Google<ph name="END_LINK" /></translation>
-<translation id="2515921719039583189">Изтриване на данните в Chrome от у-вото?</translation>
+<translation id="2515921719039583189">Изтриване на данните в Ultimatum от у-вото?</translation>
 <translation id="2517113738956581680">Пълноразмерен лист</translation>
 <translation id="2523184218357549926">Изпраща до Google URL адресите на страниците, които посещавате</translation>
 <translation id="2524132927880411790">Извършване на гласово търсене с приложението Google</translation>
@@ -374,9 +374,9 @@
 <translation id="2569733278091928697">Ще можете лесно да управлявате контроли за мултимедия, сесии в режим „инкогнито“, изтегляния и др.</translation>
 <translation id="2571711316400087311">Извеждане на предложения за изпращане на страниците, написани на други езици, до Google Преводач</translation>
 <translation id="2571834852878229351">Създаване на собствена парола</translation>
-<translation id="2574249610672786438">Влезте в профила си на всичките си устройства, за да виждате разделите си навсякъде, където използвате Chrome</translation>
+<translation id="2574249610672786438">Влезте в профила си на всичките си устройства, за да виждате разделите си навсякъде, където използвате Ultimatum</translation>
 <translation id="2577981599306533385"><ph name="MEMBER_FULL_NAME" /> (<ph name="EMAIL" />) незабавно ще загуби достъп до групата раздели „<ph name="GROUP_NAME" />“ и вече няма да може да взаимодейства с вас в услугите на Google.</translation>
-<translation id="2581165646603367611">Така ще се изчистят „бисквитките“, кешът и другата информация от сайтове, която не е важна за Chrome.</translation>
+<translation id="2581165646603367611">Така ще се изчистят „бисквитките“, кешът и другата информация от сайтове, която не е важна за Ultimatum.</translation>
 <translation id="2587052924345400782">Налице е по-нова версия</translation>
 <translation id="2593272815202181319">Непропорционален</translation>
 <translation id="260403163289591229">Следено</translation>
@@ -415,8 +415,8 @@
 <translation id="2779651927720337254">неуспешно</translation>
 <translation id="2781151931089541271">Остава 1 сек</translation>
 <translation id="2789486458103222910">OK</translation>
-<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Chrome откри повторно използвана парола, която можете да подобрите}other{Chrome откри # повторно използвани пароли, които можете да подобрите}}</translation>
-<translation id="2794551654724114396">Включете известията за полезни съвети, с чиято помощ да се възползвате от най-добрите функции на Chrome</translation>
+<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Ultimatum откри повторно използвана парола, която можете да подобрите}other{Ultimatum откри # повторно използвани пароли, които можете да подобрите}}</translation>
+<translation id="2794551654724114396">Включете известията за полезни съвети, с чиято помощ да се възползвате от най-добрите функции на Ultimatum</translation>
 <translation id="2805210243313393104">Получете своите отметки и др. на всичките си устройства</translation>
 <translation id="2805756323405976993">Приложения</translation>
 <translation id="2819849308549746319">Отписване от всички</translation>
@@ -433,7 +433,7 @@
 <translation id="2842985007712546952">Основна папка</translation>
 <translation id="2854916915045135148">Докоснете и задръжте, за да превключите към режим „инкогнито“</translation>
 <translation id="2860954141821109167">Трябва да има активирано приложение за телефон на устройството</translation>
-<translation id="2861923151411510142">Някои функции на Chrome вече няма да са налице</translation>
+<translation id="2861923151411510142">Някои функции на Ultimatum вече няма да са налице</translation>
 <translation id="286473047976978798">Да се приложат ли предпочитанията ви за облика?</translation>
 <translation id="2869416538780777323">{OTHER_TAB_COUNT,plural, =1{<ph name="URL" /> и още 1 раздел}other{<ph name="URL" /> и още <ph name="TAB_COUNT_MANY" /> раздела}}</translation>
 <translation id="2869430948265924908">За да защитите деликатното си съдържание в автомобила, трябва да зададете опция за заключване на потребителския профил в него.  Можете да използвате ПИН, код или парола.</translation>
@@ -441,10 +441,10 @@
 <translation id="2871733351037274014">Предварително зареждане на страници</translation>
 <translation id="2876136027428473467"><ph name="CHILD_NAME" /> иска да одобрите този уебсайт:</translation>
 <translation id="2876556152483133018">Търсене в сайтове</translation>
-<translation id="2876628302275096482">Научете повече за това <ph name="BEGIN_LINK" />как Chrome се грижи за поверителността на данните ви<ph name="END_LINK" /></translation>
+<translation id="2876628302275096482">Научете повече за това <ph name="BEGIN_LINK" />как Ultimatum се грижи за поверителността на данните ви<ph name="END_LINK" /></translation>
 <translation id="2878607776582720720"><ph name="TAB_TITLE" /> – раздел в режим „инкогнито“, който споделя и е избран заедно с други</translation>
 <translation id="2885355868600171871">Преминаване към адресната лента</translation>
-<translation id="2888126860611144412">Всичко за Chrome</translation>
+<translation id="2888126860611144412">Всичко за Ultimatum</translation>
 <translation id="2891154217021530873">Спиране на зареждането на страницата</translation>
 <translation id="2893168226686371498">Браузър по подразбиране</translation>
 <translation id="2894821468041866720">Не забавя осезаемо браузъра или устройството ви.</translation>
@@ -463,14 +463,14 @@
 <translation id="2923908459366352541">Името е невалидно</translation>
 <translation id="2932150158123903946">Хранилище на Google <ph name="APP_NAME" /></translation>
 <translation id="2932222164150889403">Клавиатурата ви няма да се промени</translation>
-<translation id="2936980480904111527">Всичко е по-лесно с известията в Chrome</translation>
+<translation id="2936980480904111527">Всичко е по-лесно с известията в Ultimatum</translation>
 <translation id="2940075786175545812">Опция за одобряване или отхвърляне на уебсайт</translation>
 <translation id="2942036813789421260">Разделът за визуализация е затворен</translation>
 <translation id="2951071800649516099">Добавете страници към списъка за четене по-късно</translation>
 <translation id="2954586176076923855">Преместване на адресната лента в горната част</translation>
 <translation id="2961208450284224863">{READING_LIST_UNREAD_PAGE_COUNT,plural, =1{<ph name="READING_LIST_UNREAD_PAGE_COUNT_ONE" /> непрочетена страница}other{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> непрочетени страници}}</translation>
 <translation id="2972109037780336501">Автоматично премахване на разрешенията</translation>
-<translation id="2976550651269220761">Някои от данните ви в Chrome още не са запазени в профила ви в Google.\nИзчакайте няколко минути, преди да излезете от него. Ако излезете сега, тези данни ще бъдат изтрити.</translation>
+<translation id="2976550651269220761">Някои от данните ви в Ultimatum още не са запазени в профила ви в Google.\nИзчакайте няколко минути, преди да излезете от него. Ако излезете сега, тези данни ще бъдат изтрити.</translation>
 <translation id="2977350910003566746">Сортиране по последно отваряне</translation>
 <translation id="297771753501244313">Сорт. по посл. отваряне</translation>
 <translation id="2979639724566107830">Отваряне в нов прозорец</translation>
@@ -493,15 +493,15 @@
 <translation id="3035527385626181784"><ph name="TAB_TITLE" /> – избран раздел, който споделя</translation>
 <translation id="3036750288708366620"><ph name="BEGIN_LINK" />Получете помощ<ph name="END_LINK" /></translation>
 <translation id="3037177537145227281">Цената се проследява</translation>
-<translation id="3037517125981011456">Показва подкани за влизане в Chrome</translation>
+<translation id="3037517125981011456">Показва подкани за влизане в Ultimatum</translation>
 <translation id="3038272154009688107">Преглед на всички сайтове</translation>
 <translation id="3057938290530993634">Докоснете и задръжте, за да фиксирате най-посещаваните от вас уебсайтове за лесен достъп следващия път</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> отметка}other{<ph name="BOOKMARKS_COUNT_MANY" /> отметки}}</translation>
-<translation id="3062802207422175757">Статии, свързани с интересите ви, в Chrome</translation>
+<translation id="3062802207422175757">Статии, свързани с интересите ви, в Ultimatum</translation>
 <translation id="3066573403916685335">Преместване надолу</translation>
 <translation id="3067505415088964188">Цената е ниска</translation>
 <translation id="3070005020161560471">Да се превежда автоматично от</translation>
-<translation id="3072980200212375806"><ph name="APP_NAME" /> ще се отвори в Chrome. С продължаването си приемате <ph name="BEGIN_LINK1" />Общите условия на Google<ph name="END_LINK1" /> и <ph name="BEGIN_LINK2" />Допълнителните общи условия на Chrome и Chrome OS<ph name="END_LINK2" />. В сила е и <ph name="BEGIN_LINK3" />Декларацията за поверителност<ph name="END_LINK3" />.</translation>
+<translation id="3072980200212375806"><ph name="APP_NAME" /> ще се отвори в Ultimatum. С продължаването си приемате <ph name="BEGIN_LINK1" />Общите условия на Google<ph name="END_LINK1" /> и <ph name="BEGIN_LINK2" />Допълнителните общи условия на Ultimatum и Ultimatum OS<ph name="END_LINK2" />. В сила е и <ph name="BEGIN_LINK3" />Декларацията за поверителност<ph name="END_LINK3" />.</translation>
 <translation id="3080525922482950719">Можете да запазвате страници за четене по-късно или офлайн</translation>
 <translation id="3087734570205094154">Най-долу</translation>
 <translation id="3091010850649238832">Показване на съдържанието в буферната памет</translation>
@@ -511,7 +511,7 @@
 <translation id="3123734510202723619">Съобщения</translation>
 <translation id="3134385238404760368">Няма скорошни раздели</translation>
 <translation id="3135655388926735587">Докоснете „Скорошни раздели“</translation>
-<translation id="314939179385989105">Началната страница на Chrome</translation>
+<translation id="314939179385989105">Началната страница на Ultimatum</translation>
 <translation id="3158667104057012316">Сортиране по ръчен ред</translation>
 <translation id="3159335509547415276">Научете за блокираните профили</translation>
 <translation id="3161699713309727585"><ph name="BUTTON_TEXT" /> – отваря се в нов раздел</translation>
@@ -531,7 +531,7 @@
 <translation id="3236059992281584593">Остава 1 мин</translation>
 <translation id="3237087289225714896">Стандартно предварително зареждане:</translation>
 <translation id="3244271242291266297">ММ</translation>
-<translation id="3245429137663807393">Ако споделяте и отчети за употребата на Chrome, те ще включват посещаваните от вас URL адреси</translation>
+<translation id="3245429137663807393">Ако споделяте и отчети за употребата на Ultimatum, те ще включват посещаваните от вас URL адреси</translation>
 <translation id="3250563604907490871">Описанията на изображенията ще продължат да се изтеглят, когато се свържете с Wi-Fi</translation>
 <translation id="3254409185687681395">Запазване на отметка към тази страница</translation>
 <translation id="3265093782546847662">Всички страници на <ph name="DOMAIN" /></translation>
@@ -568,22 +568,22 @@
 <translation id="3435575784518354875">За да запазите достъпа до паролите си, експортирайте ги сега, актуализирайте услугите за Google Play и след това импортирайте паролите отново в Google Мениджър на пароли. <ph name="BEGIN_LINK" />Преглед на пълните инструкции<ph name="END_LINK" />.</translation>
 <translation id="3435738964857648380">Сигурност</translation>
 <translation id="3435914367318771664">Добавяне на раздела към нова група</translation>
-<translation id="3438681572027105609">Влезте в Chrome, за да получите паролите си и др. на всичките си устройства</translation>
+<translation id="3438681572027105609">Влезте в Ultimatum, за да получите паролите си и др. на всичките си устройства</translation>
 <translation id="3439276997620616816">Тук ще се показват скорошните ви раздели</translation>
 <translation id="3443221991560634068">Презареждане на текущата страница</translation>
 <translation id="3444179773590444986">Искате ли да споделите отзиви за тъмната тема за сайтовете?</translation>
 <translation id="3448874648066942074">Обобщаване на страницата с AI</translation>
-<translation id="3452832259067974318">За да защити поверителността ви, Chrome няма да попълни автоматично паролата ви в това поле.</translation>
+<translation id="3452832259067974318">За да защити поверителността ви, Ultimatum няма да попълни автоматично паролата ви в това поле.</translation>
 <translation id="3474624961160222204">Продължаване като <ph name="NAME" /></translation>
 <translation id="3478363558367712427">Можете да изберете търсещата си машина</translation>
 <translation id="3482805106082349287">Търсене чрез клавиатурата, с глас, чрез камерата или в режим „инкогнито“</translation>
-<translation id="3487903178221457900">Експортираният файл може да бъде достъпен за други лица, включително приложения. След експортиране паролите ви се изтриват от Chrome.</translation>
+<translation id="3487903178221457900">Експортираният файл може да бъде достъпен за други лица, включително приложения. След експортиране паролите ви се изтриват от Ultimatum.</translation>
 <translation id="3488199663160411179">име</translation>
 <translation id="3493531032208478708"><ph name="BEGIN_LINK" />Научете повече<ph name="END_LINK" /> за предложеното съдържание</translation>
 <translation id="3499246418971111862">chrome_qrcode_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="350276055892098337">Сортиране по най-стари</translation>
 <translation id="3507132249039706973">Режимът за стандартна защита е включен</translation>
-<translation id="3509330069915219067">Офлайн сте. Chrome не може да провери за актуализации.</translation>
+<translation id="3509330069915219067">Офлайн сте. Ultimatum не може да провери за актуализации.</translation>
 <translation id="3513019849832307207">Присъединяване и отваряне</translation>
 <translation id="3513704683820682405">Обогатена реалност</translation>
 <translation id="3516053221628030540">Към Google Play</translation>
@@ -615,10 +615,10 @@
 <translation id="3623240789707551553">{DOMAIN_COUNT,plural, =1{+ 1 сайт}other{+ # сайта}}</translation>
 <translation id="3625870480639975468">Повторно задаване на мащаба</translation>
 <translation id="3631987586758005671">Споделя се с(ъс) <ph name="DEVICE_NAME" /></translation>
-<translation id="3635073343384702370">Chrome може да проверява паролите ви, когато ги запазите</translation>
+<translation id="3635073343384702370">Ultimatum може да проверява паролите ви, когато ги запазите</translation>
 <translation id="3636940436873918441">Предпочитани езици</translation>
-<translation id="3637744895182738742">Ако сте забравили пропуска си или искате да промените тази настройка, <ph name="BEGIN_LINK" />изтрийте данните от Chrome в профила си<ph name="END_LINK" />.</translation>
-<translation id="3641581193271938629">Включването в Chrome Finds е затворено</translation>
+<translation id="3637744895182738742">Ако сте забравили пропуска си или искате да промените тази настройка, <ph name="BEGIN_LINK" />изтрийте данните от Ultimatum в профила си<ph name="END_LINK" />.</translation>
+<translation id="3641581193271938629">Включването в Ultimatum Finds е затворено</translation>
 <translation id="3647019414263135904">Отваряне или затваряне на контекстния изскачащ прозорец</translation>
 <translation id="3653111872753786013"><ph name="WEBSITE_TITLE" />: <ph name="WEBSITE_URL" /></translation>
 <translation id="3674208116086565128">Към началната страница на приложението Google</translation>
@@ -636,7 +636,7 @@
 <translation id="3710501561113687889">За да продължите, <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> ще сподели с този сайт вашите <ph name="FIELDS_STRING" />.</translation>
 <translation id="3710560693796335511">Съвместна работа</translation>
 <translation id="3714430408451673233">Долният лист за раздела е отворен на половината височина.</translation>
-<translation id="3718765429352682176">Възможно е да виждате историята от други приложения, които отварят връзки в Chrome.</translation>
+<translation id="3718765429352682176">Възможно е да виждате историята от други приложения, които отварят връзки в Ultimatum.</translation>
 <translation id="3721119614952978349">Вие и Google</translation>
 <translation id="3727000368239390918">Влезте в профила си, за да имате достъп до своите раздели и др. на всичките си устройства</translation>
 <translation id="3737319253362202215">Настройки за превод</translation>
@@ -690,8 +690,8 @@
 <translation id="3943322906274039960"><ph name="TAB_TITLE" /> – фиксиран раздел „картина в картината“</translation>
 <translation id="3950820424414687140">Вход</translation>
 <translation id="395377504920307820">Използване без профил</translation>
-<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Chrome ще зареди страницата при готовност}other{Chrome ще зареди страниците при готовност}}</translation>
-<translation id="3969142555815019568">Chrome не може да провери паролите ви</translation>
+<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Ultimatum ще зареди страницата при готовност}other{Ultimatum ще зареди страниците при готовност}}</translation>
+<translation id="3969142555815019568">Ultimatum не може да провери паролите ви</translation>
 <translation id="3969863827134279083">Преместване нагоре</translation>
 <translation id="397105322502079400">Изчислява се...</translation>
 <translation id="397583555483684758">Синхронизирането спря да работи</translation>
@@ -702,10 +702,10 @@
 <translation id="3987993985790029246">Връзка: Коп.</translation>
 <translation id="3994236846568425219">Включване на тъмната тема, когато тъмната тема на устройството ви е включена</translation>
 <translation id="4000212216660919741">Начална страница в офлайн режим</translation>
-<translation id="4000670338830950598">Персонализиране и контролиране на Google Chrome с откроен елемент</translation>
+<translation id="4000670338830950598">Персонализиране и контролиране на Ultimatum с откроен елемент</translation>
 <translation id="4015643064997321279">{NUM_PASSWORDS,plural, =1{1 компрометирана парола в профила ви в Google}other{# компрометирани пароли в профила ви в Google}}</translation>
 <translation id="4016425174436051808">Следенето не е възможно. Нещо се обърка.</translation>
-<translation id="4023638601467301498">Влезте в Chrome, за да получите отметките си и др. на всичките си устройства</translation>
+<translation id="4023638601467301498">Влезте в Ultimatum, за да получите отметките си и др. на всичките си устройства</translation>
 <translation id="4024768890073681126">Браузърът се управлява от родител</translation>
 <translation id="4027569221211770437">Папка <ph name="FOLDER_TITLE" /></translation>
 <translation id="4034817413553209278">{HOURS,plural, =1{# ч}other{# ч}}</translation>
@@ -745,13 +745,13 @@
 <translation id="4180726336228139707">Само на това устройство</translation>
 <translation id="4181841719683918333">Езици</translation>
 <translation id="4188221736490993796">Сортиране от Я до А</translation>
-<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{Chrome спря изпращането на известия от този сайт поради спам или подвеждащо съдържание}other{Chrome спря изпращането на известия от тези сайтове поради спам или подвеждащо съдържание}}</translation>
+<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{Ultimatum спря изпращането на известия от този сайт поради спам или подвеждащо съдържание}other{Ultimatum спря изпращането на известия от тези сайтове поради спам или подвеждащо съдържание}}</translation>
 <translation id="4195643157523330669">Отваряне в нов раздел</translation>
 <translation id="4197828496439691735">{NUM_TABS,plural, =1{1 раздел на това устройство}other{# раздела на това устройство}}</translation>
 <translation id="4198268995694216131">Допълнителни сайтове</translation>
 <translation id="4198423547019359126">Няма местоположения за изтегляне</translation>
 <translation id="4209029522667123437"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> • Използвано от вас на този сайт</translation>
-<translation id="4214315110991671325">Ако разрешите „бисквитките“, Chrome може да ги използва за предварителното зареждане.</translation>
+<translation id="4214315110991671325">Ако разрешите „бисквитките“, Ultimatum може да ги използва за предварителното зареждане.</translation>
 <translation id="421517251707893998">Докоснете „Фиксиране на този пряк път“</translation>
 <translation id="4216511743389425832">Слушане на тази страница</translation>
 <translation id="4217657297368492684"><ph name="TAB_TITLE" /> – избран фиксиран раздел „картина в картината“ в режим „инкогнито“</translation>
@@ -759,7 +759,7 @@
 <translation id="4225895483398857530">Пряк път в лентата с инструменти</translation>
 <translation id="4232376164796433044">Пароли и автоматично попълване</translation>
 <translation id="4242533952199664413">Отваряне на настройките</translation>
-<translation id="424864128008805179">Искате ли да излезете от Chrome?</translation>
+<translation id="424864128008805179">Искате ли да излезете от Ultimatum?</translation>
 <translation id="4249955472157341256">Сортиране по актуалност</translation>
 <translation id="4255841059940367080">Базирана на AI защита в реално време срещу опасни сайтове, изтегляния и разширения, която работи чрез изпращане на данни за сърфирането ви до Google</translation>
 <translation id="4256782883801055595">Лицензи за отворен код</translation>
@@ -768,7 +768,7 @@
 <translation id="4270730597186910506">Проследяване или прекратяване на проследяването на продукт.</translation>
 <translation id="4277529130885813215">Използване на друго устройство</translation>
 <translation id="427987768447457592">Нова група раздели</translation>
-<translation id="4282440837784183472">Организацията ви <ph name="MANAGED_DOMAIN" /> управлява профила, в който влизате, и начина на използване на Chrome. Администраторът ви може да настройва или ограничава определени функции.</translation>
+<translation id="4282440837784183472">Организацията ви <ph name="MANAGED_DOMAIN" /> управлява профила, в който влизате, и начина на използване на Ultimatum. Администраторът ви може да настройва или ограничава определени функции.</translation>
 <translation id="4283234489712362947"><ph name="TAB_TITLE" /> – раздел „картина в картината“ в режим „инкогнито“</translation>
 <translation id="4285498937028063278">Освобождаване</translation>
 <translation id="4285846616383034558">„Бисквитки“, кеш и други данни за сайтовете</translation>
@@ -784,10 +784,10 @@
 <translation id="4311652497846705514">Да се отвори ли PDF файлът?</translation>
 <translation id="4313895677475587452">{NUM_SUSPICIOUS_NOTIFICATIONS,plural, =1{Възможен спам}other{Възможен спам (#)}}</translation>
 <translation id="4320177379694898372">Няма връзка с интернет</translation>
-<translation id="4326079409704643112">Потвърдете, че сте вие, за да използвате и запазвате данните от Chrome в профила си в Google</translation>
+<translation id="4326079409704643112">Потвърдете, че сте вие, за да използвате и запазвате данните от Ultimatum в профила си в Google</translation>
 <translation id="433213510553688132">Започвате да следите...</translation>
 <translation id="4335835283689002019">„Безопасно сърфиране“ е изключено</translation>
-<translation id="4343250402091037179">За да търсите в конкретен сайт или в част от Chrome, въведете съответния пряк път в адресната лента и натиснете предпочитаната от вас клавишна комбинация.</translation>
+<translation id="4343250402091037179">За да търсите в конкретен сайт или в част от Ultimatum, въведете съответния пряк път в адресната лента и натиснете предпочитаната от вас клавишна комбинация.</translation>
 <translation id="4351244548802238354">Затваряне на диалоговия прозорец</translation>
 <translation id="4352287748243729941">Да се използва ли паролата ви за <ph name="PROVIDER" />?</translation>
 <translation id="4355272626458588338">Можете да се върнете на важна за вас страница, като добавите отметка</translation>
@@ -800,7 +800,7 @@
 <translation id="4384468725000734951">За търсене ще се използва Sogou</translation>
 <translation id="4387647248986092471">Задаване на опция за заключване на потребителския профил в автомобила</translation>
 <translation id="4387817230000841154">Отваряне на страницата „Изтегляния“</translation>
-<translation id="4395046795145457714">Включването в Chrome Finds е отворено на пълната височина</translation>
+<translation id="4395046795145457714">Включването в Ultimatum Finds е отворено на пълната височина</translation>
 <translation id="4398561997852463382"><ph name="TAB_TITLE" /> – избран фиксиран раздел в режим „инкогнито“, който записва</translation>
 <translation id="4402611456429872546"><ph name="LANG" /> – изтегля се…</translation>
 <translation id="4404568932422911380">Няма отметки</translation>
@@ -822,16 +822,16 @@
 <translation id="4460822871039013969"><ph name="TAB_TITLE" /> – избран фиксиран раздел, който записва</translation>
 <translation id="4460861538906892109">{ITEMS_COUNT,plural, =1{1 отметка}other{# отметки}}</translation>
 <translation id="4478161224666880173">Можете да използвате профила си в(ъв) <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> на този сайт. За да продължите, влезте в(ъв) <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="4479972344484327217">Модулът „<ph name="MODULE" />“ за Chrome се инсталира…</translation>
+<translation id="4479972344484327217">Модулът „<ph name="MODULE" />“ за Ultimatum се инсталира…</translation>
 <translation id="4484496141267039529">Няма връзка. Опитайте отново по-късно.</translation>
-<translation id="4487967297491345095">Всички данни на приложението Chrome ще се изтрият за постоянно. Това включва всички файлове, настройки, профили, бази от данни и др.</translation>
+<translation id="4487967297491345095">Всички данни на приложението Ultimatum ще се изтрият за постоянно. Това включва всички файлове, настройки, профили, бази от данни и др.</translation>
 <translation id="4494315997125191493">Изберете „Управление“, за да видите всички прозорци</translation>
 <translation id="4494806687727322324">Запазването на паролите е включено от администратора ви</translation>
 <translation id="4508528996305412043">Менюто на картата за емисията е отворено</translation>
 <translation id="4509741852167209430">С цел измерване на ефективността на показваните от тях реклами между сайтовете се споделят ограничени типове данни – например дали сте направили покупка, след като сте посетили даден сайт.</translation>
 <translation id="4513387527876475750">{DAYS,plural, =1{преди # ден}other{преди # дни}}</translation>
 <translation id="451872707440238414">Търсене в отметките ви</translation>
-<translation id="4521489764227272523">Избраните данни са премахнати от Chrome и синхронизираните ви устройства.
+<translation id="4521489764227272523">Избраните данни са премахнати от Ultimatum и синхронизираните ви устройства.
 
 Възможно е в профила ви в Google да има други видове история на сърфиране, съхранявани на адрес <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> – например търсения и активност от други наши услуги.</translation>
 <translation id="4523326818319942067">последния час</translation>
@@ -853,10 +853,10 @@
 <translation id="4595276580892809760">Прикачване на изображения от галерията</translation>
 <translation id="4595805675102978678">Грешка в профила в Google</translation>
 <translation id="4601095002996233687">Задълбочено сканиране за подозрителни изтегляния.</translation>
-<translation id="4606559747793337066">Когато даден сайт или приложение поиска частно предварително зареждане на връзките в страницата си, Chrome шифрова и зарежда предварително съответните страници чрез сървърите на Google, без да използва „бисквитки“. По този начин самоличността ви се скрива от заредения предварително сайт.</translation>
+<translation id="4606559747793337066">Когато даден сайт или приложение поиска частно предварително зареждане на връзките в страницата си, Ultimatum шифрова и зарежда предварително съответните страници чрез сървърите на Google, без да използва „бисквитки“. По този начин самоличността ви се скрива от заредения предварително сайт.</translation>
 <translation id="4616150815774728855">Отваряне на <ph name="WEBAPK_NAME" /></translation>
 <translation id="4619564267100705184">Потвърдете, че сте вие</translation>
-<translation id="4624065194742029982">Режим „инкогнито“ на Chrome</translation>
+<translation id="4624065194742029982">Режим „инкогнито“ на Ultimatum</translation>
 <translation id="4634124774493850572">Използване на паролата</translation>
 <translation id="463471994228293091">{PASSWORDS_COUNT,plural, =1{1 парола и други елементи са запазени само на това устройство. За да ги използвате на другите си устройства, запазете ги в профила си в Google.}other{# пароли и други елементи са запазени само на това устройство. За да ги използвате на другите си устройства, запазете ги в профила си в Google.}}</translation>
 <translation id="4640331037679501949">{NUM_PASSWORDS,plural, =1{1 компрометирана парола}other{# компрометирани пароли}}</translation>
@@ -871,7 +871,7 @@
 <translation id="4668347365065281350">Всички данни, съхранявани от сайтове, включително „бисквитки“ и друга локално съхранявана информация</translation>
 <translation id="4673702426794876519">Прозорец в режим „инкогнито“</translation>
 <translation id="4675298276894277358">Този сайт няма да бъде показан отново</translation>
-<translation id="4678082183394354975">Тъмната тема за сайтовете е включена в Chrome</translation>
+<translation id="4678082183394354975">Тъмната тема за сайтовете е включена в Ultimatum</translation>
 <translation id="4682306524980568490">Може да се покажат най-много <ph name="MAX_INSTANCE_COUNT" /> прозореца</translation>
 <translation id="4684427112815847243">Синхронизиране на всичко</translation>
 <translation id="4685741273709472646">Избиране от падащия списък</translation>
@@ -893,7 +893,7 @@
 <translation id="4738836084190194332">Последно синхронизиране: <ph name="WHEN" /></translation>
 <translation id="474121291218385686">Филтриране по приложение</translation>
 <translation id="4741753828624614066">Ще получавате подобрени предложения в адресната лента</translation>
-<translation id="4742795653798179840">Данните в Chrome бяха изтрити</translation>
+<translation id="4742795653798179840">Данните в Ultimatum бяха изтрити</translation>
 <translation id="4742970037960872810">Премахване на открояването</translation>
 <translation id="4749960740855309258">Отваряне на нов раздел</translation>
 <translation id="4753600213727157212">Влезли сте като <ph name="USER_NAME" />. <ph name="USER_EMAIL" />. Грешка в профила в Google. Отваря настройките.</translation>
@@ -911,21 +911,21 @@
 <translation id="4782929588435725897">Основната ви търсеща машина е <ph name="SEARCH_ENGINE" /></translation>
 <translation id="4784349455504343791"><ph name="WEBSITE_ORIGIN" /> иска да използва лична информация от дигиталния ви портфейл.</translation>
 <translation id="4787736314074622408">Искате ли да изтриете <ph name="ITEM_TITLE" />?</translation>
-<translation id="4793679854893018356">Научете как Chrome се грижи за безопасността ви</translation>
+<translation id="4793679854893018356">Научете как Ultimatum се грижи за безопасността ви</translation>
 <translation id="4794291718671962615">(<ph name="MEGABYTES" />) <ph name="URL" /></translation>
 <translation id="4807098396393229769">Име върху картата</translation>
 <translation id="480990236307250886">Отваряне на началната страница</translation>
 <translation id="4822710610088666676">Затворихте и запазихте групата раздели „<ph name="TAB_GROUP_TITLE" />“</translation>
 <translation id="482405935591409882">Търсете в разделите и групите си</translation>
 <translation id="4834250788637067901">Начини на плащане, оферти и адреси посредством Google Pay</translation>
-<translation id="4835385943915508971">Chrome няма достъп до заявения ресурс.</translation>
+<translation id="4835385943915508971">Ultimatum няма достъп до заявения ресурс.</translation>
 <translation id="483742037940503070">{TAB_COUNT,plural, =1{Възстановяване на група раздели с(ъс) <ph name="COLOR_NAME" /> цвят, в която има <ph name="TAB_COUNT_ONE" /> раздел, като нова група на заден план.}other{Възстановяване на група раздели с(ъс) <ph name="COLOR_NAME" /> цвят, в която има <ph name="TAB_COUNT_MANY" /> раздела, като нова група на заден план.}}</translation>
 <translation id="4849731766219625109">Използване на профила ви в(ъв) <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="4850886885716139402">Изглед</translation>
 <translation id="4852014461738377247">Влизате в профила си…</translation>
 <translation id="4860895144060829044">Обаждане</translation>
 <translation id="4864369630010738180">Извършва се влизане...</translation>
-<translation id="4866368707455379617">Модулът „<ph name="MODULE" />“ за Chrome не може да се инсталира</translation>
+<translation id="4866368707455379617">Модулът „<ph name="MODULE" />“ за Ultimatum не може да се инсталира</translation>
 <translation id="4871568871368204250">Изключване на синхронизирането</translation>
 <translation id="487567923005969537">Активиране на режима с AI</translation>
 <translation id="4875775213178255010">Предложения за съдържание</translation>
@@ -934,27 +934,27 @@
 <translation id="4880127995492972015">Превод…</translation>
 <translation id="4881695831933465202">Отваряне</translation>
 <translation id="488187801263602086">Преименуване на файла</translation>
-<translation id="4885273946141277891">Неподдържан брой екземпляри на Chrome.</translation>
+<translation id="4885273946141277891">Неподдържан брой екземпляри на Ultimatum.</translation>
 <translation id="4890973535105146893">В профила ви в Google няма запазени пароли</translation>
 <translation id="4905823827770127520">Включване на връзка към страницата</translation>
 <translation id="4908869848243824489">Discover от Google</translation>
 <translation id="4910889077668685004">Приложения за плащане</translation>
 <translation id="4911042367886397055">Добре дошли отново, <ph name="USER_NAME" />!</translation>
 <translation id="4913169188695071480">Спиране на опресняването</translation>
-<translation id="4921224083091001889">Влезте в Chrome с профила <ph name="EMAIL" />, за да получите паролите си и др. на всичките си устройства</translation>
+<translation id="4921224083091001889">Влезте в Ultimatum с профила <ph name="EMAIL" />, за да получите паролите си и др. на всичките си устройства</translation>
 <translation id="4923173329789776645">Изтеглянето не се препоръчва от организацията ви</translation>
 <translation id="4925120120285606924">Екранна снимка от <ph name="CURRENT_DATE_ISO" /></translation>
 <translation id="4926901776383726965">Можете да запазвате изображения и файлове, за да ги преглеждате офлайн или да ги споделяте в други приложения</translation>
 <translation id="492699891214363151">{BOOKMARKS_COUNT,plural, =1{1 отметка и други елементи са запазени само на това устройство. За да ги използвате на другите си устройства, запазете ги в профила си в Google.}other{# отметки и други елементи са запазени само на това устройство. За да ги използвате на другите си устройства, запазете ги в профила си в Google.}}</translation>
-<translation id="4932247056774066048">Тъй като излизате от профил, управляван от <ph name="DOMAIN_NAME" />, данните ви в Chrome ще бъдат изтрити от това устройство. Те ще останат в профила ви в Google.</translation>
+<translation id="4932247056774066048">Тъй като излизате от профил, управляван от <ph name="DOMAIN_NAME" />, данните ви в Ultimatum ще бъдат изтрити от това устройство. Те ще останат в профила ви в Google.</translation>
 <translation id="4943703118917034429">Виртуална реалност</translation>
 <translation id="4943872375798546930">Няма резултати</translation>
 <translation id="4957722034734105353">Научете повече...</translation>
 <translation id="4959115606310463263">Долният лист за вход в профила е отворен на половината височина</translation>
 <translation id="4961107849584082341">Превод на тази страница на който и да е език</translation>
-<translation id="4964614743143953889">Chrome ви предупреждава за опасни сайтове и изтегляния</translation>
+<translation id="4964614743143953889">Ultimatum ви предупреждава за опасни сайтове и изтегляния</translation>
 <translation id="496607651705915226">За да запазвате нови пароли в профила си в Google и да ги използвате, актуализирайте услугите за Google Play</translation>
-<translation id="4971753085054504448">Потърсете нещо друго или отворете пълната история на Chrome, за да видите още резултати.</translation>
+<translation id="4971753085054504448">Потърсете нещо друго или отворете пълната история на Ultimatum, за да видите още резултати.</translation>
 <translation id="497421865427891073">Преминаване напред</translation>
 <translation id="497983151715419057">Преглеждайте неактивните си раздели и групи оттук</translation>
 <translation id="498624032394115435">Всеки, който разполага с връзката, може да редактира всички раздели.</translation>
@@ -981,7 +981,7 @@
 <translation id="506254248375231072">Няма раздели</translation>
 <translation id="5075939510584558547">Запазване без шифроване</translation>
 <translation id="5078638979202084724">Запазване на отметки към всички раздели</translation>
-<translation id="5085038751173179818">Влезте в профила си в този сайт и в Chrome, за да получите отметките си и още много други неща на всичките си устройства</translation>
+<translation id="5085038751173179818">Влезте в профила си в този сайт и в Ultimatum, за да получите отметките си и още много други неща на всичките си устройства</translation>
 <translation id="5088347662971855383">Фиксиране на Gemini</translation>
 <translation id="5091199029769593641">Скоро ще виждате материали от <ph name="SITE_NAME" />, когато отворите нов раздел. Сайтовете, които следвате, се запазват в профила ви в Google. Можете да ги управлявате от настройките за Discover.</translation>
 <translation id="509429900233858213">Възникна грешка.</translation>
@@ -989,7 +989,7 @@
 <translation id="510275257476243843">Остава 1 час</translation>
 <translation id="5114895953710637392">Листът за филтриране по приложение е затворен.</translation>
 <translation id="5115811374190515607">до <ph name="PRODUCT_NAME" /></translation>
-<translation id="5116239826668864748">Можете да използвате Chrome всеки път, когато докоснете връзки в съобщения, документи и други приложения.</translation>
+<translation id="5116239826668864748">Можете да използвате Ultimatum всеки път, когато докоснете връзки в съобщения, документи и други приложения.</translation>
 <translation id="5118713593561876160">Интереси</translation>
 <translation id="5122378528687922675">Ако се нуждаете от помощ, попитайте родителя си (<ph name="PARENT_NAME_1" /> или <ph name="PARENT_NAME_2" />)</translation>
 <translation id="5123685120097942451">Раздел в режим „инкогнито“</translation>
@@ -1012,11 +1012,11 @@
 <translation id="5206168361184759344">{FILE_COUNT,plural, =1{Изтегля се файл…}other{Изтеглят се # файла…}}</translation>
 <translation id="5210286577605176222">Преминаване към предишния раздел</translation>
 <translation id="5210365745912300556">Затваряне на раздела</translation>
-<translation id="5212800876504289412">Рестартирайте Chrome, за да завършите тази промяна. Разделите се отварят автоматично след рестартиране.</translation>
+<translation id="5212800876504289412">Рестартирайте Ultimatum, за да завършите тази промяна. Разделите се отварят автоматично след рестартиране.</translation>
 <translation id="5213114823401215820">Повторно отваряне на затворената група</translation>
 <translation id="5215957675041756913">Управление на данните и профила ви</translation>
 <translation id="5218324087477576825">Номер на картата, задължителен</translation>
-<translation id="5221437554987713282">„<ph name="PERMISSION_1" />“, „<ph name="PERMISSION_2" />“ и др. <ph name="SEPARATOR" /> Chrome премахна тези разрешения, защото не сте посещавали този сайт наскоро</translation>
+<translation id="5221437554987713282">„<ph name="PERMISSION_1" />“, „<ph name="PERMISSION_2" />“ и др. <ph name="SEPARATOR" /> Ultimatum премахна тези разрешения, защото не сте посещавали този сайт наскоро</translation>
 <translation id="5222676887888702881">Изход</translation>
 <translation id="5226378907213531272">Ще отключвате екрана си при всяко използване на автомобила</translation>
 <translation id="5227554086496586518">Докоснете, за да видите резултатите от търсенето</translation>
@@ -1036,7 +1036,7 @@
 <translation id="5313967007315987356">Добавяне на сайт</translation>
 <translation id="5316947901395241499">Запазването на паролите е изключено от администратора ви</translation>
 <translation id="5317780077021120954">Запазване</translation>
-<translation id="5319359161174645648">Google препоръчва Chrome</translation>
+<translation id="5319359161174645648">Google препоръчва Ultimatum</translation>
 <translation id="5326246328175179736">Не можете да влезете с този профил</translation>
 <translation id="5327248766486351172">Име</translation>
 <translation id="5328542107300944283">Използване чрез <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
@@ -1049,7 +1049,7 @@
 <translation id="5375374982898812658">Незабавно ще загубите достъп до групата раздели „<ph name="GROUP_NAME" />“ и тя ще бъде изтрита от всичките ви устройства</translation>
 <translation id="5375577065097716013">Търсене на изобр. с Обектив <ph name="BEGIN_NEW" />Ново<ph name="END_NEW" /></translation>
 <translation id="5390367025924544771"><ph name="WEBSITE_ORIGIN" /> иска да използва лична информация от дигиталния ви портфейл. Продължете само ако имате доверие на този сайт. Опасните сайтове може да ви подведат да разкриете информация, като например името ви или номер на ваш документ за самоличност.</translation>
-<translation id="5395376160638294582">Уверете се, че винаги можете да използвате данните в Chrome в профила си в Google</translation>
+<translation id="5395376160638294582">Уверете се, че винаги можете да използвате данните в Ultimatum в профила си в Google</translation>
 <translation id="539881862970320163">Предложена бе надеждна парола. Клавиатурата е скрита.</translation>
 <translation id="5409881200985013443">Да се изпрати ли еднократният код <ph name="ONE_TIME_CODE" /> до <ph name="CLIENT_NAME" />?</translation>
 <translation id="5410300144953132176"><ph name="OWNER_FULL_NAME" /> (<ph name="OWNER_EMAIL" />) иска да се присъедините към група раздели. Всеки, който разполага с връзката, може да редактира всички раздели, затова се присъединявайте внимателно. Връзката изтича след 48 ч.</translation>
@@ -1061,7 +1061,7 @@
 <translation id="543271133149552180"><ph name="TAB_TITLE" /> – раздел „картина в картината“ в режим „инкогнито“, който е избран заедно с други</translation>
 <translation id="5436928407363358055">За да продължите лесно оттам, откъдето сте прекъснали, синхронизирайте историята и разделите си</translation>
 <translation id="5438292632479953702">Повторно изтегляне</translation>
-<translation id="5439191312780166229">Предупреждава ви за опасни сайтове, включително такива, които не са били известни на Google, като анализира повече данни от сайтовете в сравнение със стандартната защита. Можете да пропуснете предупрежденията от Chrome.</translation>
+<translation id="5439191312780166229">Предупреждава ви за опасни сайтове, включително такива, които не са били известни на Google, като анализира повече данни от сайтовете в сравнение със стандартната защита. Можете да пропуснете предупрежденията от Ultimatum.</translation>
 <translation id="5441137934526263133">Сайтът не работи? „Бисквитките“ на трети страни са блокирани</translation>
 <translation id="5441466871879044658">Превеждане на този език</translation>
 <translation id="5444999712122199445">Назад към сайта</translation>
@@ -1072,7 +1072,7 @@
 <translation id="5469852975082458401">Можете да навигирате в страниците с помощта на текстов курсор. Натиснете F7 за изключване на функцията.</translation>
 <translation id="5471273988133666918">Разделът „<ph name="TAB_TITLE" />“ не може да бъде преместен</translation>
 <translation id="548278423535722844">Отваряне в приложение за карти</translation>
-<translation id="5489222148748465285">Да продължи ли Chrome да търси?</translation>
+<translation id="5489222148748465285">Да продължи ли Ultimatum да търси?</translation>
 <translation id="5490848366863949315"><ph name="TAB_TITLE" /> – раздел „картина в картината“, който е избран заедно с други</translation>
 <translation id="5494920125229734069">Избиране на всички</translation>
 <translation id="549660026907543296">Присъединяване като <ph name="MEMBER_FULL_NAME" /></translation>
@@ -1080,7 +1080,7 @@
 <translation id="5526281268548144413">Затварянето в няколко прозореца не е възможно</translation>
 <translation id="5532536403031755365">Добавете допълнителен защитен слой срещу онлайн заплахи чрез подобрената защита</translation>
 <translation id="5548606607480005320">Проверка на безопасността</translation>
-<translation id="5554520618550346933">Когато използвате парола, Chrome ще ви предупреди, ако тя е публикувана онлайн. Когато го прави, паролите и потребителските ви имена са шифровани, така че да не могат да бъдат прочетени от никого, включително от Google.</translation>
+<translation id="5554520618550346933">Когато използвате парола, Ultimatum ще ви предупреди, ако тя е публикувана онлайн. Когато го прави, паролите и потребителските ви имена са шифровани, така че да не могат да бъдат прочетени от никого, включително от Google.</translation>
 <translation id="5555525474779371165">Изберете нивото на защита от Безопасно сърфиране</translation>
 <translation id="5556459405103347317">Повторно зареждане</translation>
 <translation id="555671485580955310">Синхронизиране на историята и разделите</translation>
@@ -1093,10 +1093,10 @@
 <translation id="5578795271662203820">Търсене на изображението със: <ph name="SEARCH_ENGINE" /></translation>
 <translation id="5596627076506792578">Още опции</translation>
 <translation id="5599455543593328020">Режим „инкогнито“</translation>
-<translation id="5601180634394228718">За още настройки, които използват данни с цел подобряване на практическата ви работа с Chrome, отворете <ph name="BEGIN_LINK" />услугите на Google<ph name="END_LINK" />.</translation>
+<translation id="5601180634394228718">За още настройки, които използват данни с цел подобряване на практическата ви работа с Ultimatum, отворете <ph name="BEGIN_LINK" />услугите на Google<ph name="END_LINK" />.</translation>
 <translation id="5601924940067278327">Получете разделите си и др. на всичките си устройства</translation>
 <translation id="5611398002774823980">Запазване в профила</translation>
-<translation id="5613381935190035031">Влезте в Chrome с профила <ph name="EMAIL" />, за да получите разделите си и др. на всичките си устройства</translation>
+<translation id="5613381935190035031">Влезте в Ultimatum с профила <ph name="EMAIL" />, за да получите разделите си и др. на всичките си устройства</translation>
 <translation id="5614625640221885312">Влезте в профила си, за да имате достъп до своите отметки, пароли и др. на всичките си устройства</translation>
 <translation id="5619633276517849615">Организацията ви включи Безопасно сърфиране</translation>
 <translation id="5620163320393916465">Няма запазени пароли</translation>
@@ -1112,21 +1112,21 @@
 <translation id="5657871969392618475">Информацията ви е защитена с опция за заключване на потребителския профил</translation>
 <translation id="5659593005791499971">Имейл</translation>
 <translation id="5665379678064389456">Създайте събитие в <ph name="APP_NAME" /></translation>
-<translation id="5683547024293500885">Chrome не може да провери за актуализации</translation>
+<translation id="5683547024293500885">Ultimatum не може да провери за актуализации</translation>
 <translation id="5683916195767086779">Група раздели</translation>
 <translation id="5686790454216892815">Името на файла е твърде дълго</translation>
 <translation id="569536719314091526">Страницата може да бъде преведена на който и да е език чрез бутона за още опции</translation>
-<translation id="5696597120588531049">Chrome може да ви защити от нарушения на сигурността на данните, опасни уебсайтове и др.</translation>
+<translation id="5696597120588531049">Ultimatum може да ви защити от нарушения на сигурността на данните, опасни уебсайтове и др.</translation>
 <translation id="5698878456427040674">Проверете дали избраният профил се поддържа.</translation>
 <translation id="5709213329446699338"><ph name="SITE" /> иска да се свърже със сериен порт</translation>
 <translation id="5715150588940290235">Да се изтрият ли запазените кодове за сигурност?</translation>
-<translation id="571930967925877633">Вашите отметки, история и други данни в Chrome повече няма да се синхронизират с профила ви в Google</translation>
+<translation id="571930967925877633">Вашите отметки, история и други данни в Ultimatum повече няма да се синхронизират с профила ви в Google</translation>
 <translation id="572328651809341494">Скорошни раздели</translation>
 <translation id="5728072125198221967">Свързани услуги на Google</translation>
 <translation id="5734658507307260911"><ph name="TAB_TITLE" /> – фиксиран раздел в режим „инкогнито“, който възпроизвежда звук</translation>
 <translation id="5744751019568455640">Ето гласовете, които можете да изберете за четене на уеб страниците ви. Ако този глас ви харесва и искате да продължа да го използвам, трябва само да докоснете името му.</translation>
 <translation id="574845902699630049">Споделяне като <ph name="OWNER_FULL_NAME" /></translation>
-<translation id="5749068826913805084">Chrome се нуждае от достъп до хранилището, за да изтегля файлове.</translation>
+<translation id="5749068826913805084">Ultimatum се нуждае от достъп до хранилището, за да изтегля файлове.</translation>
 <translation id="5749237766298580851">Изключено <ph name="SEPARATOR" /> Не се препоръчва</translation>
 <translation id="5752232708629533680">Споделяне само на GIF файла</translation>
 <translation id="5753570386948603678">Изтриване от историята</translation>
@@ -1145,14 +1145,14 @@
 <translation id="5811144606237321538"><ph name="TAB_TITLE" /> – фиксиран раздел, чийто звук е спрян и който е избран заедно с други</translation>
 <translation id="5814749351757353073">Получавайте актуална информация от любимите си сайтове</translation>
 <translation id="5823093032261493462">Искате ли да изтеглите „<ph name="FILE_NAME" />“ от <ph name="DOWNLOAD_DOMAIN" /> въпреки това?</translation>
-<translation id="5825135637446025843">След рестартирането на Chrome информацията, запазена от новия ви доставчик, ще се използва за автоматично попълване на пароли, ключове за достъп, адреси, начини на плащане и други данни.</translation>
-<translation id="5828921839638612740">Можете да изтриете данните в настройките на Chrome</translation>
+<translation id="5825135637446025843">След рестартирането на Ultimatum информацията, запазена от новия ви доставчик, ще се използва за автоматично попълване на пароли, ключове за достъп, адреси, начини на плащане и други данни.</translation>
+<translation id="5828921839638612740">Можете да изтриете данните в настройките на Ultimatum</translation>
 <translation id="5829586821381540080">Запазено в(ъв) „<ph name="FOLDER_NAME" />“</translation>
 <translation id="583281660410589416">Неизвестно</translation>
 <translation id="5833984609253377421">Споделяне на връзката</translation>
-<translation id="5839058148541733625">Динозавърът в Chrome</translation>
+<translation id="5839058148541733625">Динозавърът в Ultimatum</translation>
 <translation id="5841444063256914865">Искате ли да изтеглите „<ph name="FILE_NAME" />“ въпреки това?</translation>
-<translation id="5847265694842662173">Chrome спря изпращането на известия от злоупотребяващите и неизползваните сайтове</translation>
+<translation id="5847265694842662173">Ultimatum спря изпращането на известия от злоупотребяващите и неизползваните сайтове</translation>
 <translation id="5848257610304005265">Да се отвори ли PDF файлът чрез <ph name="APP_NAME" />?</translation>
 <translation id="5849288995120328556">Да се спре ли споделянето?</translation>
 <translation id="5853623416121554550">на пауза</translation>
@@ -1163,11 +1163,11 @@
 <translation id="5860033963881614850">Изключено</translation>
 <translation id="5860491529813859533">Включване</translation>
 <translation id="5864419784173784555">Изчаква се друго изтегляне…</translation>
-<translation id="5865733239029070421">Автоматично изпраща до Google статистически данни за използването на Chrome и сигнали за сривове</translation>
+<translation id="5865733239029070421">Автоматично изпраща до Google статистически данни за използването на Ultimatum и сигнали за сривове</translation>
 <translation id="5869522115854928033">Запазени пароли</translation>
 <translation id="5870416898561279542">Дублираните раздели и групи или тези, които не са използвани от <ph name="DAYS_INACTIVE" /> дни, се преместват тук<ph name="AUTODELETE_SECTION" />. Можете да промените това по всяко време от „<ph name="DECLUTTER_SETTINGS_TITLE" />“.</translation>
-<translation id="587735546353481577">За да последвате даден сайт, посетете го, отворете менюто на Chrome и докоснете съответната опция.</translation>
-<translation id="5885378508678660271">Известия <ph name="SEPARATOR" /> Chrome премахна тези разрешения, защото сайтът е опасен</translation>
+<translation id="587735546353481577">За да последвате даден сайт, посетете го, отворете менюто на Ultimatum и докоснете съответната опция.</translation>
+<translation id="5885378508678660271">Известия <ph name="SEPARATOR" /> Ultimatum премахна тези разрешения, защото сайтът е опасен</translation>
 <translation id="5899667542927581604">Долният лист без налични ключове за достъп бе затворен</translation>
 <translation id="5907542076239273525">Отметката е запазена в папката „<ph name="FOLDER_NAME" />“</translation>
 <translation id="5911301511366365629"><ph name="TAB_TITLE" /> – избран раздел в режим „инкогнито“, който възпроизвежда звук</translation>
@@ -1178,23 +1178,23 @@
 <translation id="5942872142862698679">За търсене ще се използва Google</translation>
 <translation id="5945035219773565305">Текуща препоръка: <ph name="RECOMMENDATION" /></translation>
 <translation id="5951119116059277034">Показва се активната страница</translation>
-<translation id="5956665950594638604">Отваряне на Помощния център на Chrome в нов раздел</translation>
+<translation id="5956665950594638604">Отваряне на Помощния център на Ultimatum в нов раздел</translation>
 <translation id="59577092665511740">Изберете профил.</translation>
 <translation id="5958275228015807058">Намерете файловете и страниците си в „Изтегляния“</translation>
-<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{Chrome спря изпращането на известия от сайт, който не сте посещавали наскоро}other{Chrome спря изпращането на известия от сайтовете, които не сте посещавали наскоро}}</translation>
+<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{Ultimatum спря изпращането на известия от сайт, който не сте посещавали наскоро}other{Ultimatum спря изпращането на известия от сайтовете, които не сте посещавали наскоро}}</translation>
 <translation id="5962718611393537961">Докоснете за свиване</translation>
 <translation id="5964869237734432770">Спиране на описанията</translation>
 <translation id="5972844218283131174">Премахване на избора от всички</translation>
 <translation id="5975083100439434680">Намаляване на мащаба</translation>
 <translation id="5977976211062815271">На това устройство</translation>
 <translation id="5978661847409534366">{ITEMS_COUNT,plural, =1{В списъка ви за четене има 1 страница}other{В списъка ви за четене има # страници}}</translation>
-<translation id="5992182727984874868">„<ph name="PERMISSION_1" />“ и „<ph name="PERMISSION_2" />“ <ph name="SEPARATOR" /> Chrome премахна тези разрешения, защото не сте посещавали този сайт наскоро</translation>
+<translation id="5992182727984874868">„<ph name="PERMISSION_1" />“ и „<ph name="PERMISSION_2" />“ <ph name="SEPARATOR" /> Ultimatum премахна тези разрешения, защото не сте посещавали този сайт наскоро</translation>
 <translation id="5995726099713306770">Искате ли отново да изтеглите страницата?</translation>
 <translation id="6000066717592683814">Запазване на Google</translation>
 <translation id="6000203700195075278">Повторно следене</translation>
 <translation id="6011308810877101166">Подобряване на предложенията за търсене</translation>
 <translation id="6013305291643746595">Сортиране по най-стари</translation>
-<translation id="6022659036123304283">Персонализирайте Chrome според вкуса си</translation>
+<translation id="6022659036123304283">Персонализирайте Ultimatum според вкуса си</translation>
 <translation id="6026538407078977628">Разгъване на цял екран</translation>
 <translation id="6030719887161080597">Управление на информацията, използвана от сайтовете с цел измерване на ефективността на рекламите</translation>
 <translation id="6039379616847168523">Преминаване към следващия раздел</translation>
@@ -1223,7 +1223,7 @@
 <translation id="6125864963080902918"><ph name="BEGIN_LINK" />Още подробности<ph name="END_LINK" /></translation>
 <translation id="6127860394906721547">Отваряне на групата раздели „<ph name="TITLE_OF_GROUP" />“ с(ъс) <ph name="COLOR_NAME" /> цвят, която съдържа следните сайтове: <ph name="URL_LIST" />.</translation>
 <translation id="6130303040046284160">Намаляване на раздела</translation>
-<translation id="6132075343662013154">Chrome ще предложи да запази паролата ви.</translation>
+<translation id="6132075343662013154">Ultimatum ще предложи да запази паролата ви.</translation>
 <translation id="6134168885321518274">Отваряне на лентата за търсене</translation>
 <translation id="6135608400322377268">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> раздел}other{<ph name="TAB_COUNT_MANY" /> раздела}}</translation>
 <translation id="6137022273846704445">Езикът на <ph name="APP_NAME" /></translation>
@@ -1234,10 +1234,10 @@
 <translation id="6146563240635539929">Видеоклипове</translation>
 <translation id="614890671148262506">Известията от този сайт да са разрешени винаги</translation>
 <translation id="6150320133806434356">Отметката е запазена</translation>
-<translation id="6150706324143004339">Актуализирайте браузъра Chrome, за да използвате и запазвате данните от него в профила си в Google</translation>
+<translation id="6150706324143004339">Актуализирайте браузъра Ultimatum, за да използвате и запазвате данните от него в профила си в Google</translation>
 <translation id="6154478581116148741">Включете функцията за заключване на екрана от настройките, за да експортирате паролите си от това устройство</translation>
 <translation id="6156323911414505561">Показване на лентата на отметките</translation>
-<translation id="6162892189396105610">Предварително зареждане на страниците, които Chrome смята, че е вероятно да посетите.</translation>
+<translation id="6162892189396105610">Предварително зареждане на страниците, които Ultimatum смята, че е вероятно да посетите.</translation>
 <translation id="6165508094623778733">Научете повече</translation>
 <translation id="6170675927290506430">Към настройките за известия</translation>
 <translation id="6184972259157699660"><ph name="TAB_TITLE" /> – раздел в режим „инкогнито“, чийто звук е спрян</translation>
@@ -1246,7 +1246,7 @@
 <translation id="6193448654517602979">Избиране на раздели</translation>
 <translation id="6196315980958524839">Паролите се запазват в Google Мениджър на пароли на това устройство</translation>
 <translation id="6202812185118613467">Влезте отново в профила си, за да стартирате синхронизирането</translation>
-<translation id="6204781143409202534">Chrome откри възможен спам от <ph name="DOMAIN" />.</translation>
+<translation id="6204781143409202534">Ultimatum откри възможен спам от <ph name="DOMAIN" />.</translation>
 <translation id="6205314730813004066">Поверителност при рекламите</translation>
 <translation id="6210282067670792090">В адресната лента използвайте тази клавишна комбинация заедно с преки пътища за търсещи машини и търсене в сайтове</translation>
 <translation id="6210748933810148297">Не сте <ph name="EMAIL" />?</translation>
@@ -1260,12 +1260,12 @@
 <translation id="6247557882553405851">Google Мениджър на паролите</translation>
 <translation id="6248988683584659830">Търсене в „Настройки“</translation>
 <translation id="6250847299079540062"><ph name="TAB_TITLE" /> – фиксиран раздел в режим „инкогнито“, избран заедно с други</translation>
-<translation id="6251449557817521191">Вижте историята си в Chrome тук</translation>
+<translation id="6251449557817521191">Вижте историята си в Ultimatum тук</translation>
 <translation id="6254139308321626268">Преглеждате PDF файл</translation>
-<translation id="6255809143828972562">С помощта на инструментите от Chrome можете да сърфирате безопасно и да запазите контрол</translation>
+<translation id="6255809143828972562">С помощта на инструментите от Ultimatum можете да сърфирате безопасно и да запазите контрол</translation>
 <translation id="6264376385120300461">Изтегляне въпреки това</translation>
 <translation id="6264485186158353794">Назад към безопасната страница</translation>
-<translation id="6267106249090587268">Известия <ph name="SEPARATOR" /> Chrome премахна тези разрешения поради спам или подвеждащо съдържание</translation>
+<translation id="6267106249090587268">Известия <ph name="SEPARATOR" /> Ultimatum премахна тези разрешения поради спам или подвеждащо съдържание</translation>
 <translation id="6276708887952587684">Преглед на изходния код на страницата</translation>
 <translation id="6277522088822131679">При отпечатването на страницата възникна проблем. Моля, опитайте отново.</translation>
 <translation id="6278428485366576908">Тема</translation>
@@ -1281,7 +1281,7 @@
 <translation id="6312687380483398334">Уеб приложения (без прекъсвания)</translation>
 <translation id="6315386555979018699">Изтриване и продължаване</translation>
 <translation id="6316139424528454185">Неподдържана версия на Android</translation>
-<translation id="631839948975905034">Заключване на прозорците в режим „инкогнито“ при излизане от Chrome</translation>
+<translation id="631839948975905034">Заключване на прозорците в режим „инкогнито“ при излизане от Ultimatum</translation>
 <translation id="6324916366299863871">Редактиране на прекия път</translation>
 <translation id="6324977638108296054">Не може да се създаде връзка към откроения текст</translation>
 <translation id="6333140779060797560">Споделяне чрез <ph name="APPLICATION" /></translation>
@@ -1297,13 +1297,13 @@
 <translation id="6356893102071098867">Проверете дали сте избрали правилния профил</translation>
 <translation id="6363990818884053551">За да стартирате синхронизирането, потвърдете, че сте вие</translation>
 <translation id="6364438453358674297">Предложението да се премахне ли от историята?</translation>
-<translation id="6380100320871303656">По-често предварително зареждане на страниците, които Chrome смята, че е вероятно да посетите. Тази настройка може да повиши количеството използвани данни.</translation>
+<translation id="6380100320871303656">По-често предварително зареждане на страниците, които Ultimatum смята, че е вероятно да посетите. Тази настройка може да повиши количеството използвани данни.</translation>
 <translation id="6382848304055775421">Експортира се</translation>
 <translation id="6388152137132427505">Винаги споделяйте разумно. Връзките изтичат след 48 часа.</translation>
 <translation id="6394791151443660613">Търсене: „<ph name="SEARCH_QUERY" />“</translation>
 <translation id="6397616442223433927">Отново онлайн</translation>
 <translation id="6399363707848566877">Вече можете лесно да добавяте раздели към групи оттук</translation>
-<translation id="6401458660421980302">За да изпратите този раздел до друго устройство, влезте в профила си в Chrome там</translation>
+<translation id="6401458660421980302">За да изпратите този раздел до друго устройство, влезте в профила си в Ultimatum там</translation>
 <translation id="6404511346730675251">Редактиране на отметката</translation>
 <translation id="6406506848690869874">Синхронизиранe</translation>
 <translation id="6408370409308816490"><ph name="TAB_TITLE" /> – избран фиксиран раздел в режим „инкогнито“, който споделя</translation>
@@ -1323,24 +1323,24 @@
 <translation id="6452534462676960500">Нова активност</translation>
 <translation id="6459045781120991510">Анкети</translation>
 <translation id="6461962085415701688">Файлът не може да бъде отворен</translation>
-<translation id="6464977750820128603">Можете да преглеждате сайтовете, които посещавате в Chrome, и да задавате таймери за тях.\n\nGoogle получава информация относно сайтовете, за които задавате таймери, и продължителността на посещенията ви. Тези данни се използват за подобряването на „Дигитално благополучие“.</translation>
+<translation id="6464977750820128603">Можете да преглеждате сайтовете, които посещавате в Ultimatum, и да задавате таймери за тях.\n\nGoogle получава информация относно сайтовете, за които задавате таймери, и продължителността на посещенията ви. Тези данни се използват за подобряването на „Дигитално благополучие“.</translation>
 <translation id="6468703991511753953">Адресната лента понастоящем е в долната част</translation>
-<translation id="6470181189905173055">Тук ще се показват страниците, които сте отворили в Chrome с помощта на <ph name="APP_LABEL" />.</translation>
+<translation id="6470181189905173055">Тук ще се показват страниците, които сте отворили в Ultimatum с помощта на <ph name="APP_LABEL" />.</translation>
 <translation id="6473086018775716761">Списъкът с опции за споделяне е отворен върху половината екран.</translation>
 <translation id="6475951671322991020">Изтегляне на видеоклипа</translation>
 <translation id="6477928892249167417">Тези сайтове изглеждат важни за вас:</translation>
-<translation id="6479881432656947268">Посетете уеб магазина на Chrome</translation>
-<translation id="6481963882741794338">Свързване на Chrome и други услуги на Google с цел персонализиране и др.</translation>
+<translation id="6479881432656947268">Посетете уеб магазина на Ultimatum</translation>
+<translation id="6481963882741794338">Свързване на Ultimatum и други услуги на Google с цел персонализиране и др.</translation>
 <translation id="6482749332252372425">Изтеглянето на „<ph name="FILE_NAME" />“ не бе успешно поради липса на място в хранилището.</translation>
 <translation id="6486420406192123355">Този PDF файл е от сайт, който използва незащитена връзка</translation>
 <translation id="650224091954855786">{FILE_COUNT,plural, =1{Файлът бе изтеглен}other{# изтегляния завършиха}}</translation>
-<translation id="6508722015517270189">Рестартирайте Chrome.</translation>
+<translation id="6508722015517270189">Рестартирайте Ultimatum.</translation>
 <translation id="6513924416597632811">Копиране на връзката към страницата с резултати от търсенето за следната заявка: „<ph name="SEARCH_QUERY" />“. Източник: <ph name="PAGE_URL" /></translation>
 <translation id="6518133107902771759">Потвърждаване</translation>
 <translation id="6521218807522232085">Създавайте, запазвайте и управлявайте паролите си, за да можете лесно да влизате в профила си</translation>
 <translation id="6527303717912515753">Споделяне</translation>
-<translation id="652948702951888897">История в Chrome</translation>
-<translation id="6532866250404780454">Посетените от вас сайтове в Chrome няма да се показват. Всички таймери за сайтове ще бъдат изтрити.</translation>
+<translation id="652948702951888897">История в Ultimatum</translation>
+<translation id="6532866250404780454">Посетените от вас сайтове в Ultimatum няма да се показват. Всички таймери за сайтове ще бъдат изтрити.</translation>
 <translation id="6539092367496845964">Нещо се обърка. Опитайте пак по-късно.</translation>
 <translation id="6541983376925655882">{NUM_HOURS,plural, =1{Проверено преди 1 час}other{Проверено преди # часа}}</translation>
 <translation id="6545017243486555795">Изчистване на всички данни</translation>
@@ -1355,7 +1355,7 @@
 <translation id="6569373978618239158">Когато отворите нов раздел, вече ще виждате материали от <ph name="SITE_NAME" />. Сайтовете, които следвате, се запазват в профила ви в Google. Можете да ги управлявате от настройките за Discover.</translation>
 <translation id="657177046675873214">За да имате достъп до отметките си на всичките си устройства, включете „Отметки“ в настройките</translation>
 <translation id="6573096386450695060">Разрешаване винаги</translation>
-<translation id="6573431926118603307">Тук ще се показват разделите, които сте отворили в Chrome на другите си устройства.</translation>
+<translation id="6573431926118603307">Тук ще се показват разделите, които сте отворили в Ultimatum на другите си устройства.</translation>
 <translation id="6583199322650523874">Запазване на отметка към текущата страница</translation>
 <translation id="6588043302623806746">Използване на сигурен DNS</translation>
 <translation id="6590471736817333463">Спестете до 60% данни</translation>
@@ -1363,28 +1363,28 @@
 <translation id="6594347733515723558">Сорт./преглед на опциите</translation>
 <translation id="6595046016124923392">Изображенията се изпращат до Google с цел подобряване на описанията за вас.</translation>
 <translation id="661266467055912436">Подобрява сигурността за вас и всички потребители в мрежата.</translation>
-<translation id="6621391692573306628">За да изпратите този раздел до друго устройство, влезте в профила си в Chrome и на двете устройства</translation>
+<translation id="6621391692573306628">За да изпратите този раздел до друго устройство, влезте в профила си в Ultimatum и на двете устройства</translation>
 <translation id="6627583120233659107">Редактиране на папката</translation>
 <translation id="6633067410344541938">Отключване на разделите в режим „инкогнито“</translation>
 <translation id="6636623428211296678">Разгледайте още настройки по-долу или завършете сега</translation>
-<translation id="6637100877383020115">С цел подобряване на приложението Chrome изпраща до Google данни за употребата и сривовете. <ph name="BEGIN_UMA_LINK" />Управление<ph name="END_UMA_LINK" /></translation>
+<translation id="6637100877383020115">С цел подобряване на приложението Ultimatum изпраща до Google данни за употребата и сривовете. <ph name="BEGIN_UMA_LINK" />Управление<ph name="END_UMA_LINK" /></translation>
 <translation id="6641780377503683465">Премахване на <ph name="INTEREST" /></translation>
 <translation id="6642299196749785472">Прикачване на разделите</translation>
 <translation id="6647441008198474441">Посещаваните от вас URL адреси се изпращат до Google с цел предвиждане на следващите страници, които е възможно да посетите</translation>
 <translation id="6648977384226967773">{CONTACT,plural, =1{<ph name="CONTACT_PREVIEW" />\u2026 и още <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" />}other{<ph name="CONTACT_PREVIEW" />\u2026 и още <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" />}}</translation>
 <translation id="6649642165559792194">Визуализация <ph name="BEGIN_NEW" />Ново<ph name="END_NEW" /></translation>
 <translation id="6659594942844771486">Tab</translation>
-<translation id="6661521899577697780">Включването в Chrome Finds е отворено на половината височина</translation>
+<translation id="6661521899577697780">Включването в Ultimatum Finds е отворено на половината височина</translation>
 <translation id="666731172850799929">Отваряне в <ph name="APP_NAME" /></translation>
 <translation id="6669390930482049506">Искам да получавам известия</translation>
-<translation id="6670767097276846646">Някои разширения могат да добавят търсещи машини към Chrome</translation>
+<translation id="6670767097276846646">Някои разширения могат да добавят търсещи машини към Ultimatum</translation>
 <translation id="6671495933530132209">Копиране на изображението</translation>
 <translation id="6672697278890207089">Въведете паролата си</translation>
 <translation id="6672917148207387131">Добавяне на <ph name="DOMAIN" /></translation>
 <translation id="6674571176963658787">За да стартирате синхронизирането, въведете пропуска си</translation>
-<translation id="6676927815633975364">Влезте в профила си в този сайт и в Chrome</translation>
+<translation id="6676927815633975364">Влезте в профила си в този сайт и в Ultimatum</translation>
 <translation id="6684262542644248484">Влезте в уебсайт</translation>
-<translation id="6684809838922667136">Подобряване на Chrome</translation>
+<translation id="6684809838922667136">Подобряване на Ultimatum</translation>
 <translation id="6689436252814043643">Няма достъп до режима на четене</translation>
 <translation id="669971068476817798">Докоснете „Запазване“</translation>
 <translation id="6700279777779583398">Предпочитанията са запазени</translation>
@@ -1408,18 +1408,18 @@
 <translation id="6764137532716892442"><ph name="GROUP_TITLE" /> – споделена група раздели с нова активност</translation>
 <translation id="6767294960381293877">Списъкът с устройства, с които да се сподели даден раздел, е отворен на половин височина.</translation>
 <translation id="6783664456110886353">{TAB_COUNT,plural, =1{Следните раздели ще бъдат затворени: <ph name="INCOGNITO_TAB_COUNT" /> в режим „инкогнито“ и още <ph name="TAB_COUNT_ONE" />}other{Следните раздели ще бъдат затворени: <ph name="INCOGNITO_TAB_COUNT" /> в режим „инкогнито“ и още <ph name="TAB_COUNT_MANY" />}}</translation>
-<translation id="6785476624617658922">Допълнителни общи условия на Chrome и Chrome OS</translation>
+<translation id="6785476624617658922">Допълнителни общи условия на Ultimatum и Ultimatum OS</translation>
 <translation id="6786747875388722282">Разширения</translation>
 <translation id="6787600234697426339">Достигнато е ограничението от <ph name="MAX_INSTANCE_COUNT" /> прозореца</translation>
 <translation id="6795633245022906657">Бързо отваряне на нов раздел. За да редактирате този пряк път, отворете настройките.</translation>
-<translation id="679588508577699489">Задайте Chrome като браузър по подразбиране</translation>
+<translation id="679588508577699489">Задайте Ultimatum като браузър по подразбиране</translation>
 <translation id="679956319013005046">За да зададете предпочитаната от вас услуга за автоматично попълване, първо я добавете от <ph name="BEGIN_LINK" />настройките на Android<ph name="END_LINK" />.</translation>
 <translation id="6802555630140434547">Прозорецът ще бъде затворен</translation>
 <translation id="6803791793483522764">Преглед на известията</translation>
 <translation id="6809470175540814047">Отваряне на прозорец в режим „инкогнито“</translation>
 <translation id="6811034713472274749">Страницата е готова за преглед</translation>
 <translation id="6813359536773993594">{FILE_COUNT,plural, =1{Изображения, 1 изображение в списъка}other{Изображения, # изображения в списъка}}</translation>
-<translation id="6813446258015311409">Вход в Chrome – отворено.</translation>
+<translation id="6813446258015311409">Вход в Ultimatum – отворено.</translation>
 <translation id="6815692190508268848">Предпочитанията ви за облика са приложени</translation>
 <translation id="6817747507826986771">Бързо споделяне на страницата. За да редактирате този пряк път, докоснете и задръжте.</translation>
 <translation id="6820686453637990663">Код за сигурност</translation>
@@ -1428,7 +1428,7 @@
 <translation id="6828070228333235514">Проследяване на цената: Спиране</translation>
 <translation id="6830728435402077660">Няма защита</translation>
 <translation id="6831043979455480757">Превод</translation>
-<translation id="6835182496791325827">Получавайте известия, когато Chrome намери най-добрите резултати за търсенията ви, докато не сте на екрана.</translation>
+<translation id="6835182496791325827">Получавайте известия, когато Ultimatum намери най-добрите резултати за търсенията ви, докато не сте на екрана.</translation>
 <translation id="6846298663435243399">Зарежда се…</translation>
 <translation id="6850409657436465440">Изтеглянето продължава</translation>
 <translation id="6850830437481525139">Затворихте <ph name="TAB_COUNT" /> раздела</translation>
@@ -1451,7 +1451,7 @@
 <translation id="6886500155621657325">{ITEMS_COUNT,plural, =1{1 парола}other{# пароли}}</translation>
 <translation id="688730033107341407">След като излезете от профила си в Google, отметките, паролите и др. в него ще бъдат премахнати от това устройство.</translation>
 <translation id="6896758677409633944">Копиране</translation>
-<translation id="6898797562238201317">Използване на ваш собствен пропуск за шифроване на всички данни от Chrome в профила ви в Google</translation>
+<translation id="6898797562238201317">Използване на ваш собствен пропуск за шифроване на всички данни от Ultimatum в профила ви в Google</translation>
 <translation id="6900532703269623216">Подобрена защита</translation>
 <translation id="6903907808598579934">Включване на синхронизирането</translation>
 <translation id="6906448540340261898">Уверете се, че винаги можете да използвате паролите в профила си в Google</translation>
@@ -1461,7 +1461,7 @@
 <translation id="6910211073230771657">Изтрито</translation>
 <translation id="6916590542764765824">Управление на разширенията</translation>
 <translation id="6918398787259831832">Ако този проблем не се отстрани, <ph name="BEGIN_LINK" />получете повече информация<ph name="END_LINK" /> от <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Chrome премахна това разрешение, защото не сте посещавали този сайт наскоро</translation>
+<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Ultimatum премахна това разрешение, защото не сте посещавали този сайт наскоро</translation>
 <translation id="6927821422725196292">{TABS_COUNT,plural, =1{1 раздел}other{<ph name="NUMBER_OF_TABS" /> раздела}}</translation>
 <translation id="6929224077895306814">Всички кодове за сигурност, запазени на устройството ви и в профила ви в Google, ще бъдат изтрити</translation>
 <translation id="6933180670536678127"><ph name="TAB_TITLE" /> – избран фиксиран раздел, който възпроизвежда звук</translation>
@@ -1490,30 +1490,30 @@
 <translation id="7020741890149022655">Списък за четене: Добав. <ph name="BEGIN_NEW" />Ново<ph name="END_NEW" /></translation>
 <translation id="7022756207310403729">Отваряне в браузъра</translation>
 <translation id="7029809446516969842">Пароли</translation>
-<translation id="7037994709569287156">Задаване на Chrome като браузър по подразбиране</translation>
+<translation id="7037994709569287156">Задаване на Ultimatum като браузър по подразбиране</translation>
 <translation id="7053256416619638731">Подобрете паролите си на това устройство</translation>
 <translation id="7053983685419859001">Блокиране</translation>
 <translation id="7054588988317389591">Искате ли да получавате описания на изображенията?</translation>
-<translation id="7057969023583258980">Отваряне на цялата история в Chrome</translation>
+<translation id="7057969023583258980">Отваряне на цялата история в Ultimatum</translation>
 <translation id="7063006564040364415">Не можа да се установи връзка със синхронизиращия сървър.</translation>
 <translation id="7063106218165698546">Персонализирайте групата раздели и изберете „Готово“</translation>
 <translation id="7071521146534760487">Управление на профила</translation>
 <translation id="707155805709242880">Изберете какво да синхронизирате по-долу</translation>
 <translation id="7072949719501323344"><ph name="TAB_TITLE" /> – фиксиран раздел „картина в картината“ в режим „инкогнито“, който е избран заедно с други</translation>
 <translation id="7077143737582773186">SD карта</translation>
-<translation id="7078916049958741685">Изтриване на данните ви в Chrome и от това устройство</translation>
+<translation id="7078916049958741685">Изтриване на данните ви в Ultimatum и от това устройство</translation>
 <translation id="7080145768121641840"><ph name="TAB_TITLE" /> – избран фиксиран раздел, чийто звук е спрян</translation>
 <translation id="7084115944294706056">Избиране на позиция на адресната лента</translation>
-<translation id="7085332316435785646">Изберете дали да включите историята в Chrome за по-персонализирана практическа работа с услугите на Google</translation>
-<translation id="7088681679121566888">Chrome е актуален</translation>
+<translation id="7085332316435785646">Изберете дали да включите историята в Ultimatum за по-персонализирана практическа работа с услугите на Google</translation>
+<translation id="7088681679121566888">Ultimatum е актуален</translation>
 <translation id="7098100324909062850"><ph name="TAB_TITLE" /> – раздел в режим „инкогнито“, чийто звук е спрян и който е избран заедно с други</translation>
 <translation id="7106762743910369165">Браузърът се управлява от организацията ви</translation>
-<translation id="7111394291981742152">Chrome ви дава повече контрол над рекламите, които виждате, и ограничава това, което сайтовете могат да научат за вас, когато ви показват персонализирани реклами.</translation>
+<translation id="7111394291981742152">Ultimatum ви дава повече контрол над рекламите, които виждате, и ограничава това, което сайтовете могат да научат за вас, когато ви показват персонализирани реклами.</translation>
 <translation id="7111822978084196600">Наименувайте този прозорец</translation>
 <translation id="7115358764509798967">Стандартно за системата</translation>
 <translation id="7117485132243600300">Управление на съдържанието, което следвате, и на предложените теми и търсения</translation>
 <translation id="7119984597597798764">Затваряне на <ph name="INSTANCE_TITLE" /></translation>
-<translation id="7121179479711575744">Вход в Chrome</translation>
+<translation id="7121179479711575744">Вход в Ultimatum</translation>
 <translation id="7136694880210472378">Задаване като основна</translation>
 <translation id="7136902389402789299">{NUM_SITES,plural, =1{Прегледани са разрешенията за 1 сайт}other{Прегледани са разрешенията за # сайта}}</translation>
 <translation id="7138678301420049075">Друго</translation>
@@ -1523,8 +1523,8 @@
 <translation id="7149893636342594995">Последните 24 часа</translation>
 <translation id="71503698506017927">Шифроването с пропуск не включва начините на плащане и адресите от Google Pay.
 
-За да промените тази настройка, <ph name="BEGIN_LINK" />изтрийте данните от Chrome в профила си<ph name="END_LINK" />.</translation>
-<translation id="7165972437814027679">Научете повече за това защо Chrome блокира някои файлове</translation>
+За да промените тази настройка, <ph name="BEGIN_LINK" />изтрийте данните от Ultimatum в профила си<ph name="END_LINK" />.</translation>
+<translation id="7165972437814027679">Научете повече за това защо Ultimatum блокира някои файлове</translation>
 <translation id="7168323970702333693">Влезли сте като <ph name="USER_NAME" />. Отваря настройките.</translation>
 <translation id="7170930892977483182">Всички кодове за сигурност, запазени на устройството ви и в Google Wallet, ще бъдат изтрити</translation>
 <translation id="7173114856073700355">Към настройките</translation>
@@ -1544,7 +1544,7 @@
 <translation id="7197682514647286393">Бързо изтрив. на данните за сърф.</translation>
 <translation id="719791532916917144">Клавишна комбинация</translation>
 <translation id="7207760545532569765">Възстановяване на <ph name="TAB_COUNT" /> раздела като нови на заден план.</translation>
-<translation id="7217781228893594884">Разделите в режим „инкогнито“ ще бъдат заключени, когато излезете от Chrome</translation>
+<translation id="7217781228893594884">Разделите в режим „инкогнито“ ще бъдат заключени, когато излезете от Ultimatum</translation>
 <translation id="7221869452894271364">Зарежда повторно тази страница</translation>
 <translation id="722681077040152344">Отписахте се от <ph name="COUNT" /> сайта</translation>
 <translation id="7227218174981371415">{FILE_COUNT,plural, =1{Предстои 1 изтегляне}other{Предстоят # изтегляния}}</translation>
@@ -1554,12 +1554,12 @@
 <translation id="724510009481365878">Тази страница не може да се отпечата</translation>
 <translation id="7248671827512403053">Приложение</translation>
 <translation id="7253951228444156601">Паролите се проверяват…</translation>
-<translation id="7260367682327802201">Възможно е устройството ви с Android да има подобна настройка. Ако функцията за измерване на рекламите е включена в Chrome и на устройството ви с Android, дадена компания може да измерва ефективността на рекламите в посещаваните от вас уебсайтове и използваните от вас приложения.</translation>
+<translation id="7260367682327802201">Възможно е устройството ви с Android да има подобна настройка. Ако функцията за измерване на рекламите е включена в Ultimatum и на устройството ви с Android, дадена компания може да измерва ефективността на рекламите в посещаваните от вас уебсайтове и използваните от вас приложения.</translation>
 <translation id="727288900855680735">Да се изпрати ли <ph name="ONE_TIME_CODE" /> до <ph name="ORIGIN" />?</translation>
 <translation id="7274013316676448362">Блокиран сайт</translation>
 <translation id="7276868533747677875">Ако по-рано сте експортирали пароли, потърсете CSV файл на устройството си и го импортирайте в предпочитания от вас мениджър на пароли.</translation>
 <translation id="728377807486816582">Докоснете адресната лента.</translation>
-<translation id="7289049772085228972">Разполагате с най-високото ниво на сигурност на Chrome</translation>
+<translation id="7289049772085228972">Разполагате с най-високото ниво на сигурност на Ultimatum</translation>
 <translation id="7289303553784750393">Ако сте онлайн, но проблемът не се отстрани, можете да изпробвате други начини за продължаване към <ph name="SITE_ETLD_PLUS_ONE" />.</translation>
 <translation id="7290209999329137901">Преименуването не е възможно</translation>
 <translation id="7291910923717764901">Бяха добавени описания за изображенията на тази страница</translation>
@@ -1592,12 +1592,12 @@
 <translation id="7400003506822844357">{FILE_COUNT,plural, =1{Други, 1 файл в списъка}other{Други, # файла в списъка}}</translation>
 <translation id="7400418766976504921">URL адрес</translation>
 <translation id="7400424692675800399">За да отворите нов прозорец, намалете общия брой на активните и неактивните прозорци до не повече от <ph name="MAX_WINDOW_COUNT_MINUS_ONE" />.</translation>
-<translation id="7403691278183511381">Представяне при първо стартиране на Chrome</translation>
+<translation id="7403691278183511381">Представяне при първо стартиране на Ultimatum</translation>
 <translation id="7411224099004328643">Потребител на профила в Google</translation>
 <translation id="7419565702166471774">Винаги да се използват сигурни връзки</translation>
 <translation id="7421293530411019405">Искате ли да напуснете групата раздели?</translation>
 <translation id="7435356471928173109">Изключено от администратора ви</translation>
-<translation id="7437998757836447326">Изход от Chrome</translation>
+<translation id="7437998757836447326">Изход от Ultimatum</translation>
 <translation id="7439467816829380878">Преместване на раздела в група</translation>
 <translation id="7439749340204407129">Отваряне на диспечера на отметките</translation>
 <translation id="7453810262525006706">Свиване до страничен изглед</translation>
@@ -1631,7 +1631,7 @@
 <translation id="7525248386620136756">Затворихте и запазихте <ph name="TAB_GROUPS_AND_TABS_PART" /></translation>
 <translation id="7545347190366646170">Хора с достъп</translation>
 <translation id="7553482318994371148">Повторно отваряне на затворените раздели</translation>
-<translation id="7554643625247105821">Версията на Chrome не бе проверена</translation>
+<translation id="7554643625247105821">Версията на Ultimatum не бе проверена</translation>
 <translation id="7557508262441527045">Излязохте от профила си</translation>
 <translation id="7573665567024262965">Избиране на приложенията по подразбиране</translation>
 <translation id="757855969265046257">{FILES,plural, =1{<ph name="FILES_DOWNLOADED_ONE" /> файл бе изтеглен}other{<ph name="FILES_DOWNLOADED_MANY" /> файла бяха изтеглени}}</translation>
@@ -1647,7 +1647,7 @@
 <translation id="7612619742409846846">Влезли сте в Google като</translation>
 <translation id="7612989789287281429">Влизате в профила си…</translation>
 <translation id="7619072057915878432">Изтеглянето на „<ph name="FILE_NAME" />“ не бе успешно поради грешки в мрежата.</translation>
-<translation id="7626032353295482388">Добре дошли в Chrome</translation>
+<translation id="7626032353295482388">Добре дошли в Ultimatum</translation>
 <translation id="7628417132421583481">Към Мениджър на пароли</translation>
 <translation id="7630202231528827509">URL адрес на доставчика</translation>
 <translation id="7638584964844754484">Неправилен пропуск</translation>
@@ -1662,7 +1662,7 @@
 <translation id="7666185984446444960">Затворихте <ph name="TAB_GROUPS_AND_TABS_PART" /></translation>
 <translation id="7682724950699840886">Изпробвайте следните съвети: Уверете се, че има достатъчно място на устройството ви. Опитайте отново да експортирате.</translation>
 <translation id="7686086654630106285">Повече за предлаганите от сайтовете реклами</translation>
-<translation id="7690596512217303514">Устройството ви не успя да отвори Chrome. За да отстраните проблема, изтеглете най-новата актуализация на Chrome от магазина за приложения.</translation>
+<translation id="7690596512217303514">Устройството ви не успя да отвори Ultimatum. За да отстраните проблема, изтеглете най-новата актуализация на Ultimatum от магазина за приложения.</translation>
 <translation id="7691043218961417207">Разгледайте съдържание, което да следите</translation>
 <translation id="7692761875510935111">Бързо отваряне в браузър. За да редактирате този пряк път, докоснете и задръжте.</translation>
 <translation id="7697383401610880082">Манипулатор за преместване с плъзгане</translation>
@@ -1670,7 +1670,7 @@
 <translation id="7702420606070050505">Долният лист със скорошна активност е отворен на пълната височина</translation>
 <translation id="7707922173985738739">Използване на мобилни данни</translation>
 <translation id="7708994397325774423">Получете всичките си пароли</translation>
-<translation id="7714077993070342304">Отваряне на менюто на Chrome</translation>
+<translation id="7714077993070342304">Отваряне на менюто на Ultimatum</translation>
 <translation id="7733878270780732638">Няма достатъчно място на устройството.</translation>
 <translation id="7740287852186792672">Резултати от търсенето</translation>
 <translation id="774403695779169686"><ph name="TAB_TITLE" /> – избран раздел в режим „инкогнито“, който споделя</translation>
@@ -1697,9 +1697,9 @@
 <translation id="7821130663268546430">Можете да видите всички отворени раздели чрез функцията „Превключвател на раздели“</translation>
 <translation id="7822705602465980873">Тези данни се свързват с профила ви в Google, когато сте влезли в него, с цел защита в услугите ни (например повишаване на нивото на защита в Gmail след инцидент, свързан със сигурността).</translation>
 <translation id="7824665136384946951">Организацията ви е изключила Безопасно сърфиране</translation>
-<translation id="7826342993930002256">Вашият Chrome навсякъде</translation>
+<translation id="7826342993930002256">Вашият Ultimatum навсякъде</translation>
 <translation id="7844171778363018843">Няма избрани данни за синхронизиране</translation>
-<translation id="784453721355882533">Изпробвайте Gemini в Chrome, за да получавате отговори, ключова информация и др.</translation>
+<translation id="784453721355882533">Изпробвайте Gemini в Ultimatum, за да получавате отговори, ключова информация и др.</translation>
 <translation id="7846161022626028328">Възникна грешка. Опитайте отново.</translation>
 <translation id="7846296061357476882">Услуги на Google</translation>
 <translation id="784652447248278262">Текущият прозорец</translation>
@@ -1709,10 +1709,10 @@
 <translation id="7853202427316060426">Активност</translation>
 <translation id="7859988229622350291">Никога да не се превежда от</translation>
 <translation id="7866213166286285359">Превеждайте страници тук</translation>
-<translation id="7873610418439765081">Изпробвайте Gemini в Chrome, за да получавате отговори, ключова информация и др. от бутона „Още опции“.</translation>
+<translation id="7873610418439765081">Изпробвайте Gemini в Ultimatum, за да получавате отговори, ключова информация и др. от бутона „Още опции“.</translation>
 <translation id="7875915731392087153">Създайте имейл</translation>
 <translation id="7876243839304621966">Премахване на всички</translation>
-<translation id="7886917304091689118">Изпълнява се в Chrome</translation>
+<translation id="7886917304091689118">Изпълнява се в Ultimatum</translation>
 <translation id="7887174313503389866">Направете обиколка с упътване на ключовите контроли за поверителност и сигурност. За още опции отворете отделните настройки.</translation>
 <translation id="7913993612870913335">{FILE_COUNT,plural, =1{1 бе блокирано от организацията ви}other{# бяха блокирани от организацията ви}}</translation>
 <translation id="7914399737746719723">Приложението бе инсталирано</translation>
@@ -1721,7 +1721,7 @@
 <translation id="7921782882718083488">Обобщаване на тази страница</translation>
 <translation id="7926975587469166629">Псевдоним на картата</translation>
 <translation id="7927073875790626822">XR</translation>
-<translation id="7929587383660661825">Chrome автоматично премахва разрешенията от сайтовете, които използват подвеждащи известия или които не сте посещавали наскоро</translation>
+<translation id="7929587383660661825">Ultimatum автоматично премахва разрешенията от сайтовете, които използват подвеждащи известия или които не сте посещавали наскоро</translation>
 <translation id="7934668619883965330">Файлът не може да се изтегли. Файловият формат не се поддържа.</translation>
 <translation id="7942131818088350342"><ph name="PRODUCT_NAME" /> не е актуален.</translation>
 <translation id="7944772052836377867">Синхронизирането трябва да потвърди, че това сте вие</translation>
@@ -1738,7 +1738,7 @@
 <translation id="7971136598759319605">Активно преди 1 ден</translation>
 <translation id="7975379999046275268">Визуализация <ph name="BEGIN_NEW" />Ново<ph name="END_NEW" /></translation>
 <translation id="7977451675950311423">Предупреждава ви, ако използвате парола, която е компрометирана при нарушение на сигурността на данните.</translation>
-<translation id="7987499071758862048">„<ph name="PERMISSION_1" />“, „<ph name="PERMISSION_2" />“ и „<ph name="PERMISSION_3" />“ <ph name="SEPARATOR" /> Chrome премахна тези разрешения, защото не сте посещавали този сайт наскоро</translation>
+<translation id="7987499071758862048">„<ph name="PERMISSION_1" />“, „<ph name="PERMISSION_2" />“ и „<ph name="PERMISSION_3" />“ <ph name="SEPARATOR" /> Ultimatum премахна тези разрешения, защото не сте посещавали този сайт наскоро</translation>
 <translation id="7995059495660416932">Ще видите съдържание, когато има такова</translation>
 <translation id="799576009106109668">Ще сърфирате по-бързо, тъй като съдържанието се зарежда предварително въз основа на уеб страницата, която сте посетили в момента</translation>
 <translation id="7998918019931843664">Повторно отваряне на затворения раздел</translation>
@@ -1756,17 +1756,17 @@
 <translation id="804335162455518893">SD картата не е намерена</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> раздел в режим „инкогнито“}other{<ph name="TAB_COUNT_NORMAL" /> раздела в режим „инкогнито“}}</translation>
 <translation id="8051695050440594747">Налице: <ph name="MEGABYTES" /> МБ</translation>
-<translation id="8058746566562539958">Отваряне в нов раздел в Chrome</translation>
+<translation id="8058746566562539958">Отваряне в нов раздел в Ultimatum</translation>
 <translation id="8062594758852531064">Разширено предварително зареждане:</translation>
 <translation id="8063895661287329888">Добавянето на отметката не бе успешно.</translation>
 <translation id="8066816452984416180">Бързо запазване на отметка към тази страница. За да редактирате този пряк път, докоснете и задръжте.</translation>
-<translation id="8072436850275034464">Можете да отваряте отново разделите, които сте затворили наскоро, откъдето и да използвате Chrome</translation>
+<translation id="8072436850275034464">Можете да отваряте отново разделите, които сте затворили наскоро, откъдето и да използвате Ultimatum</translation>
 <translation id="8073388330009372546">Отваряне в нов раздел</translation>
 <translation id="8076492880354921740">Раздели</translation>
 <translation id="8078096376109663956">Споделяне само на текста</translation>
 <translation id="8078348702936632821">Фиксиране на този пряк път</translation>
 <translation id="8084285576995584326">Управление на данните в профила ви в Google</translation>
-<translation id="8084864785646838999">Част от историята ви може да не се показва тук. За да видите всички записи в нея, отворете пълната история в Chrome. В профила ви в Google може да има и други видове история на сърфиране, съхранявани на адрес <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
+<translation id="8084864785646838999">Част от историята ви може да не се показва тук. За да видите всички записи в нея, отворете пълната история в Ultimatum. В профила ви в Google може да има и други видове история на сърфиране, съхранявани на адрес <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="8088176524274673045">За да споделите с хората в близост, те трябва да сканират този QR код</translation>
 <translation id="8090732854597034573">Ако се нуждаете от помощ, попитайте родителя си</translation>
 <translation id="8101414242770404289">Няма раздели от <ph name="TIME_PERIOD" /></translation>
@@ -1774,10 +1774,10 @@
 <translation id="810433609302852">Долен лист за функцията за известия със съвети и съответните стъпки за използване</translation>
 <translation id="8105893657415066307"><ph name="DESCRIPTION" /><ph name="SEPARATOR" /><ph name="FILE_SIZE" /></translation>
 <translation id="8107530384992929318">Затваряне на опциите за сортиране</translation>
-<translation id="8110024788458304985">Помощ за подобряването на функциите и ефективността на Chrome</translation>
-<translation id="8110087112193408731">Искате ли активността ви в Chrome да се показва в „Дигитално благополучие“?</translation>
+<translation id="8110024788458304985">Помощ за подобряването на функциите и ефективността на Ultimatum</translation>
+<translation id="8110087112193408731">Искате ли активността ви в Ultimatum да се показва в „Дигитално благополучие“?</translation>
 <translation id="8118117428362942925">Ако се нуждаете от помощ, попитайте родителя си (<ph name="PARENT_NAME" />)</translation>
-<translation id="8118151008374483324">Влезте в Chrome, за да получите разделите си и др. на всичките си устройства</translation>
+<translation id="8118151008374483324">Влезте в Ultimatum, за да получите разделите си и др. на всичките си устройства</translation>
 <translation id="8120286190326371840">На това устройство няма компрометирани пароли</translation>
 <translation id="8122623268651408616">Сортиране по най-нови</translation>
 <translation id="8127542551745560481">Редактиране на началната страница</translation>
@@ -1818,7 +1818,7 @@
 <translation id="8260126382462817229">Опитайте да влезете отново</translation>
 <translation id="8261506727792406068">Изтриване</translation>
 <translation id="82619448491672958">Преглед на другите раздели</translation>
-<translation id="8265730590513812063">Отваряне на менюто на Chrome</translation>
+<translation id="8265730590513812063">Отваряне на менюто на Ultimatum</translation>
 <translation id="8266753737658117282">Продължаване чрез <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8266862848225348053">Местоположение за изтеглянията</translation>
 <translation id="8271267069224406035">Подаване на сигнал за спам</translation>
@@ -1832,7 +1832,7 @@
 <translation id="8317318757008452355">Отваряне на опциите за печат</translation>
 <translation id="8320212361750431956">Скорошна активност</translation>
 <translation id="832514020744584629"><ph name="PREF_TITLE" />  <ph name="BEGIN_NEW" />Ново<ph name="END_NEW" /></translation>
-<translation id="8342727528718219152">Chrome ще ви уведомява за сайтовете, които може да изпращат твърде много известия</translation>
+<translation id="8342727528718219152">Ultimatum ще ви уведомява за сайтовете, които може да изпращат твърде много известия</translation>
 <translation id="834313815369870491">Сайтове, които никога да не се превеждат</translation>
 <translation id="8348215005712416247"><ph name="TAB_TITLE" /> – фиксиран раздел в режим „инкогнито“, който записва и е избран заедно с други</translation>
 <translation id="8348430946834215779">Използвайте HTTPS, когато е възможно, и получавайте предупреждения, преди да бъдат заредени сайтове, които не поддържат този протокол</translation>
@@ -1846,12 +1846,12 @@
 <translation id="8398389123831319859">Докоснете два пъти и задръжте, за да превключите към режим „инкогнито“</translation>
 <translation id="8402673309244746971">Към „Следено“</translation>
 <translation id="8413126021676339697">Цялата история</translation>
-<translation id="8413795581997394485">Защитава срещу сайтове, изтегляния и разширения, за които е известно, че са опасни. Когато посещавате сайт, Chrome изпраща до Google усложнена част от URL адреса чрез поверителен сървър, който скрива IP адреса ви. Ако даден сайт направи нещо подозрително, се изпращат и пълните URL адреси, както и част от съдържанието на страницата.</translation>
+<translation id="8413795581997394485">Защитава срещу сайтове, изтегляния и разширения, за които е известно, че са опасни. Когато посещавате сайт, Ultimatum изпраща до Google усложнена част от URL адреса чрез поверителен сървър, който скрива IP адреса ви. Ако даден сайт направи нещо подозрително, се изпращат и пълните URL адреси, както и част от съдържанието на страницата.</translation>
 <translation id="8414396119627470038">Вход в(ъв) <ph name="SITE_ETLD_PLUS_ONE" /> с(ъс) <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8419144699778179708">Изтриване на историята, включително в полето за търсене</translation>
 <translation id="8419244640277402268">Включване</translation>
 <translation id="8422250855136581222">На това устройство няма раздели</translation>
-<translation id="842386925677997438">Инструменти за безопасност на Chrome</translation>
+<translation id="842386925677997438">Инструменти за безопасност на Ultimatum</translation>
 <translation id="8427875596167638501">Разделът за визуализация е наполовина отворен</translation>
 <translation id="8428213095426709021">Настройки</translation>
 <translation id="8430824733382774043">Споделяне само на екранната снимка</translation>
@@ -1868,7 +1868,7 @@
 <translation id="8455675988389029454">Получаване на отметките, паролите ви и др. на всичките ви устройства</translation>
 <translation id="8458341576712814616">Пряк път</translation>
 <translation id="8458413889418591446">За да се връщате бързо към посетените от вас сайтове, синхронизирайте историята и разделите си</translation>
-<translation id="84594714173170813">Продължете да използвате данните в Chrome в профила си в Google</translation>
+<translation id="84594714173170813">Продължете да използвате данните в Ultimatum в профила си в Google</translation>
 <translation id="8460008946585880786">Преместете даден раздел върху друг.</translation>
 <translation id="8460448946170646641">Прегледайте ключовите контроли за поверителност и сигурност</translation>
 <translation id="8460932807646981183">Управление на търсещите машини и търсенето в сайтовете</translation>
@@ -1890,8 +1890,8 @@
 <translation id="8540136935098276800">Въведете правилно форматиран URL адрес</translation>
 <translation id="854522910157234410">Отваряне на тази страница</translation>
 <translation id="8547466829003330976">Преглед на PDF файла с AI</translation>
-<translation id="8551513938758868521">Заключване на разделите в режим „инкогнито“ при излизане от Chrome</translation>
-<translation id="8559961053328923750">Chrome ограничава общото количество данни, които сайтовете могат да споделят чрез браузъра с цел измерване на ефективността на рекламите.</translation>
+<translation id="8551513938758868521">Заключване на разделите в режим „инкогнито“ при излизане от Ultimatum</translation>
+<translation id="8559961053328923750">Ultimatum ограничава общото количество данни, които сайтовете могат да споделят чрез браузъра с цел измерване на ефективността на рекламите.</translation>
 <translation id="8559990750235505898">Извеждане на предложения за превод на страниците, написани на други езици</translation>
 <translation id="8560602726703398413">Списъкът ви за четене се намира в „Отметки“</translation>
 <translation id="85618473456579127">Докоснете „Потребителски профил“ горе вдясно</translation>
@@ -1904,12 +1904,12 @@
 <translation id="859046281437143747">Проследявайте цени от бутона „Още опции“</translation>
 <translation id="859064343657890103">Групата раздели „<ph name="TAB_GROUP_TITLE" />“ бе изтрита</translation>
 <translation id="860043288473659153">Име на титуляря на картата</translation>
-<translation id="8602358303461588329">Вход в Chrome – затворено.</translation>
+<translation id="8602358303461588329">Вход в Ultimatum – затворено.</translation>
 <translation id="860282621117673749">Сигнали за понижение на цените</translation>
 <translation id="8611922158252451755">Всеки, който разполага с връзката, може да редактира всички раздели, затова споделяйте разумно. Връзката изтича след 48 часа.</translation>
 <translation id="8616006591992756292">В профила ви в Google може да има други видове история на сърфиране, съхранявани на адрес <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="8617240290563765734">Да се отвори ли предложеният URL адрес, посочен в изтегленото съдържание?</translation>
-<translation id="8629093325209491835">Отворете менюто на Chrome &gt; „Настройки“.</translation>
+<translation id="8629093325209491835">Отворете менюто на Ultimatum &gt; „Настройки“.</translation>
 <translation id="8634050254805484913">Скриване на тесни екрани</translation>
 <translation id="8635399646025169806">Искате ли да запазите групата раздели?</translation>
 <translation id="8636825310635137004">Включете синхронизирането, за да получите разделите си от другите си устройства.</translation>
@@ -1928,15 +1928,15 @@
 <translation id="8715300232952757586">Разделът „<ph name="TAB_TITLE" />“ ще бъде затворен</translation>
 <translation id="8723453889042591629">Бърз превод на страницата. За да редактирате този пряк път, докоснете и задръжте.</translation>
 <translation id="8725066075913043281">Опитайте отново</translation>
-<translation id="8727043961453758442">Възползвайте се максимално от Chrome</translation>
+<translation id="8727043961453758442">Възползвайте се максимално от Ultimatum</translation>
 <translation id="8731268612289859741">Код за сигурност</translation>
 <translation id="8738163682604285902">Искате ли да включите режима на четене?</translation>
 <translation id="8746155870861185046">Споделяне на открояването</translation>
 <translation id="8748850008226585750">Съдържанието е скрито</translation>
 <translation id="8754448020583829686">Копиране без връзката</translation>
 <translation id="8756969031206844760">Да се актуализира ли паролата?</translation>
-<translation id="8765470054473112089">Когато пишете в адресната лента или полето за търсене, Chrome изпраща въведеното от вас до основната ви търсеща машина с цел получаване на по-добри предложения. Тази функция е изключена в режим „инкогнито“.</translation>
-<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Chrome откри ненадеждна парола, която можете да подобрите}other{Chrome откри # ненадеждни пароли, които можете да подобрите}}</translation>
+<translation id="8765470054473112089">Когато пишете в адресната лента или полето за търсене, Ultimatum изпраща въведеното от вас до основната ви търсеща машина с цел получаване на по-добри предложения. Тази функция е изключена в режим „инкогнито“.</translation>
+<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Ultimatum откри ненадеждна парола, която можете да подобрите}other{Ultimatum откри # ненадеждни пароли, които можете да подобрите}}</translation>
 <translation id="8766529642647037772">Да се създаде ли откроена връзка като тази?</translation>
 <translation id="8788265440806329501">Историята на навигацията е затворена</translation>
 <translation id="8790193082819560975">Докоснете, за да търсите опции за купуване на продукта в нов раздел.</translation>
@@ -1959,7 +1959,7 @@
 <translation id="885480114717186641">Можете да заявите настолната версия на сайта <ph name="HOST_NAME" /></translation>
 <translation id="8856607253650333758">Получаване на описания</translation>
 <translation id="8863714995118816041">Разрешенията за <ph name="SITE_NAME" /> са предоставени отново</translation>
-<translation id="8865415417596392024">Данни в Chrome в профила ви</translation>
+<translation id="8865415417596392024">Данни в Ultimatum в профила ви</translation>
 <translation id="8872506776304248286">Отваряне в прилож.</translation>
 <translation id="8890668505403261809">Търсете в разделите си в режим „инкогнито“</translation>
 <translation id="8892234476517513962">Вече сте влезли в профила си</translation>
@@ -1971,7 +1971,7 @@
 <translation id="8922289737868596582">Изтеглете страниците чрез бутона „Още опции“, за да ги използвате офлайн</translation>
 <translation id="8924575305646776101"><ph name="BEGIN_LINK" />Научете повече<ph name="END_LINK" /></translation>
 <translation id="892496902842311796">Пакетът за <ph name="LANG" /> е готов</translation>
-<translation id="8937772741022875483">Искате ли активността ви в Chrome да се премахне от „Дигитално благополучие“?</translation>
+<translation id="8937772741022875483">Искате ли активността ви в Ultimatum да се премахне от „Дигитално благополучие“?</translation>
 <translation id="8942627711005830162">Отваряне в другия прозорец</translation>
 <translation id="8945143127965743188"><ph name="LANG" /> – този език не бе изтеглен. Опитайте отново по-късно.</translation>
 <translation id="8946759102391960088">Запазете достъп до паролите си</translation>
@@ -1983,7 +1983,7 @@
 <translation id="8970887620466824814">Нещо се обърка.</translation>
 <translation id="8972098258593396643">Да се изтегли ли файлът в стандартната папка?</translation>
 <translation id="8987736167266086032">Продължавайте оттам, откъдето сте прекъснали</translation>
-<translation id="8992769679401294069">Данните ви са шифровани с пропуска ви. Въведете го, за да използвате и запазвате данните от Chrome в профила си в Google.</translation>
+<translation id="8992769679401294069">Данните ви са шифровани с пропуска ви. Въведете го, за да използвате и запазвате данните от Ultimatum в профила си в Google.</translation>
 <translation id="8993760627012879038">Отваряне на нов раздел в режим „инкогнито“</translation>
 <translation id="8995521496079646922">Избраните от вас приложения ще се използват по подразбиране. Ако дадено приложение още не е инсталирано на това устройство, то скоро ще бъде изтеглено.</translation>
 <translation id="8996847606757455498">Избиране на друг доставчик</translation>
@@ -1996,7 +1996,7 @@
 <translation id="9027728231343310283">Отмяна на <ph name="SITE" /></translation>
 <translation id="9035378196785279980">Преместване във\u2026</translation>
 <translation id="9042893549633094279">Поверителност и сигурност</translation>
-<translation id="9047347135558855162">Бързо стартиране на търсене в Chrome</translation>
+<translation id="9047347135558855162">Бързо стартиране на търсене в Ultimatum</translation>
 <translation id="9050666287014529139">Парола</translation>
 <translation id="9055497320631373736">Сайтът отново бе добавен към потенциалните сайтове</translation>
 <translation id="9057030985451135243">Научете за споделените групи раздели</translation>
@@ -2004,7 +2004,7 @@
 <translation id="9063400323119781058">Отписахте се</translation>
 <translation id="9063523880881406963">Изключване на функцията за заявяване на настолни сайтове</translation>
 <translation id="9065203028668620118">Редактиране</translation>
-<translation id="9065383040763568503">Съхранявани данни, които Chrome не счита за важни (напр. рядко посещавани сайтове или такива без запазени настройки)</translation>
+<translation id="9065383040763568503">Съхранявани данни, които Ultimatum не счита за важни (напр. рядко посещавани сайтове или такива без запазени настройки)</translation>
 <translation id="9067341854474068781">Долният лист без налични ключове за достъп е отворен на пълната височина</translation>
 <translation id="906781307897697745">в(ъв) <ph name="PRODUCT_NAME" /></translation>
 <translation id="9068568736932147490"><ph name="TAB_TITLE" /> – фиксиран раздел в режим „инкогнито“, който възпроизвежда звук и е избран заедно с други</translation>
@@ -2014,8 +2014,8 @@
 <translation id="9074739597929991885">Bluetooth</translation>
 <translation id="9081543426177426948">Сайтовете, които посещавате в режим „инкогнито“, не се запазват</translation>
 <translation id="9086455579313502267">Няма достъп до мрежата</translation>
-<translation id="9093915805850895575">Отваряне в прозорец на Chrome</translation>
-<translation id="909756639352028172">За възможно най-персонализирана практическа работа включете Chrome в „Активност в мрежата и приложенията“ и свързаните услуги на Google</translation>
+<translation id="9093915805850895575">Отваряне в прозорец на Ultimatum</translation>
+<translation id="909756639352028172">За възможно най-персонализирана практическа работа включете Ultimatum в „Активност в мрежата и приложенията“ и свързаните услуги на Google</translation>
 <translation id="9099220545925418560">Въз основа на историята ви на сърфиране. Тази настройка е изключена.</translation>
 <translation id="9100610230175265781">Изисква се пропуск</translation>
 <translation id="9101137867221042551">Управление</translation>
@@ -2051,9 +2051,9 @@
 <translation id="9218430445555521422">Задаване като основен избор</translation>
 <translation id="9219103736887031265">Изображения</translation>
 <translation id="9222198206152536936">Влезте с профила <ph name="EMAIL" />, за да получите разделите си и др. на всичките си устройства</translation>
-<translation id="924447568950697217">Задаване на Chrome като браузър по подразбиране</translation>
-<translation id="926205370408745186">Премахване на активността ви в Chrome от „Дигитално благополучие“</translation>
-<translation id="927968626442779827">Използване на олекотения режим в Google Chrome</translation>
+<translation id="924447568950697217">Задаване на Ultimatum като браузър по подразбиране</translation>
+<translation id="926205370408745186">Премахване на активността ви в Ultimatum от „Дигитално благополучие“</translation>
+<translation id="927968626442779827">Използване на олекотения режим в Ultimatum</translation>
 <translation id="928550791203542716">Следвате <ph name="SITE_NAME" /></translation>
 <translation id="930124987204876019">Изтриване на историята, „бисквитките“, данните за сайтове и кеша…</translation>
 <translation id="930834144334005936">Повторно задаване на текущия режим <ph name="MODE_NAME" /> на „Търсене“</translation>
@@ -2061,7 +2061,7 @@
 <translation id="939598580284253335">Въведете пропуск</translation>
 <translation id="94161319503679839"><ph name="TAB_TITLE" /> – фиксиран раздел „картина в картината“ в режим „инкогнито“</translation>
 <translation id="945522503751344254">Изпращане на отзиви</translation>
-<translation id="95817756606698420">Chrome може да използва <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> за търсене в Китай. Можете да промените това от <ph name="BEGIN_LINK" />Настройки<ph name="END_LINK" />.</translation>
+<translation id="95817756606698420">Ultimatum може да използва <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> за търсене в Китай. Можете да промените това от <ph name="BEGIN_LINK" />Настройки<ph name="END_LINK" />.</translation>
 <translation id="961856697154696964">Данни за сърфир.: Изтриване</translation>
 <translation id="963246339335003378">Отваряне на „Диспечер на задачите“</translation>
 <translation id="966131775676567255">Данните в профила се изтриват</translation>

@@ -5,20 +5,20 @@
 <translation id="1036348656032585052">Deaktivieren</translation>
 <translation id="1046742265332833834">Blaues Design</translation>
 <translation id="1070329623210597193">Dateien, die von dieser Website aufgerufen oder bearbeitet werden können</translation>
-<translation id="1073417869336441572">Sag uns, warum du Drittanbieter-Cookies zugelassen hast, und hilf uns so, Chrome zu verbessern. <ph name="BEGIN_LINK" />Feedback geben<ph name="END_LINK" /></translation>
+<translation id="1073417869336441572">Sag uns, warum du Drittanbieter-Cookies zugelassen hast, und hilf uns so, Ultimatum zu verbessern. <ph name="BEGIN_LINK" />Feedback geben<ph name="END_LINK" /></translation>
 <translation id="1074758928858737435">Du kannst die Desktopversion von Websites anfordern</translation>
 <translation id="1109482864356262001">Funktionen, die Bewegungs- oder Lichtsensoren benötigen, funktionieren dann nicht</translation>
-<translation id="1126523729897810826">Mit den unten vorgeschlagenen Aktionen lässt sich das Beste aus Chrome herausholen</translation>
+<translation id="1126523729897810826">Mit den unten vorgeschlagenen Aktionen lässt sich das Beste aus Ultimatum herausholen</translation>
 <translation id="113098737392899175">Auf den Seiten mithilfe eines Textcursors bewegen, wenn eine Tastatur angeschlossen ist</translation>
 <translation id="1148624853678088576">Fertig!</translation>
-<translation id="1149644372535087155">Passwörter in Chrome speichern</translation>
+<translation id="1149644372535087155">Passwörter in Ultimatum speichern</translation>
 <translation id="1178015372320901893">Ansicht „Meine Verknüpfungen“ am unteren Rand</translation>
 <translation id="1178581264944972037">Pause</translation>
 <translation id="1181037720776840403">Entfernen</translation>
 <translation id="1192844206376121885">Dadurch werden alle von <ph name="ORIGIN" /> gespeicherten Daten und Cookies gelöscht.</translation>
 <translation id="1199963004393929848">Grünes Design</translation>
 <translation id="1201402288615127009">Weiter</translation>
-<translation id="1240190568154816272">Chrome-Tipps</translation>
+<translation id="1240190568154816272">Ultimatum-Tipps</translation>
 <translation id="1242008676835033345">Auf <ph name="WEBSITE_URL" /> eingebettet</translation>
 <translation id="1263609676484797429">Tippe auf „Apps“ &gt; „Standard-Apps“</translation>
 <translation id="1272079795634619415">Stoppen</translation>
@@ -38,7 +38,7 @@
 <translation id="1396327438254055134">Du kannst einer Website erlauben, dass V8‑Optimierungstool zu verwenden.</translation>
 <translation id="1409338233051621926">Tippe auf „Apps“ und dann auf „Standard-Apps“</translation>
 <translation id="1415402041810619267">URL abgeschnitten</translation>
-<translation id="1415855080660575082">Erlaube Chrome, deine zuletzt geöffneten Tabs mit deinem Gerät zu teilen, damit sie dort in der App-Liste und in den Suchergebnissen angezeigt werden können. Diese Funktion lässt sich in den Chrome-Einstellungen aktivieren oder deaktivieren.</translation>
+<translation id="1415855080660575082">Erlaube Ultimatum, deine zuletzt geöffneten Tabs mit deinem Gerät zu teilen, damit sie dort in der App-Liste und in den Suchergebnissen angezeigt werden können. Diese Funktion lässt sich in den Ultimatum-Einstellungen aktivieren oder deaktivieren.</translation>
 <translation id="1420688843103859429">Du kannst vorwärts- und zurückgehen, indem du mit zwei Fingern auf dem Touchpad wischst</translation>
 <translation id="1432650420699700107">Websites können nachfragen, ob eine Verbindung mit einem beliebigen Gerät in deinem lokalen Netzwerk hergestellt werden darf</translation>
 <translation id="1442081309487427303">Links im Lesemodus aktivieren</translation>
@@ -52,7 +52,7 @@
 <translation id="1532175480576580256">Die Ansicht „Meine Verknüpfungen“ am unteren Rand ist vollständig geöffnet</translation>
 <translation id="1538031354170655462">Websites verwenden Nahfeldkommunikation für gewöhnlich dazu, mit Tags oder Geräten in der Nähe zu interagieren, z. B. beim Scannen von Preisetiketten oder kontaktlosen Bezahlen</translation>
 <translation id="1547123415014299762">Drittanbieter-Cookies werden zugelassen</translation>
-<translation id="1569054338208717605">Websites mit der V8-Engine von Chrome beschleunigen (dadurch wird Chrome etwas anfälliger für Angriffe)</translation>
+<translation id="1569054338208717605">Websites mit der V8-Engine von Ultimatum beschleunigen (dadurch wird Ultimatum etwas anfälliger für Angriffe)</translation>
 <translation id="1593426485665524382">Neue Aktionen auf dem oberen Teil des Bildschirms verfügbar</translation>
 <translation id="1594521731409209842">Bildschirm zusammen- und auseinanderziehen, um die Größe des Fotos zu ändern</translation>
 <translation id="1599268789440304082">Einrichtungsansicht geöffnet</translation>
@@ -73,14 +73,14 @@
 <translation id="1717996979683942279">Wenn diese Option aktiviert ist, können Websites anfragen, ob sie Fenster auf allen deinen Bildschirmen verwalten dürfen. Falls die Option deaktiviert ist, können Websites keine Fenster auf deinen Bildschirmen verwalten.</translation>
 <translation id="1738912554587725807">Ansicht am unteren Rand mit Designsammlungen für die Seite „Neuer Tab“</translation>
 <translation id="1743802530341753419">Nachfragen, bevor Websites eine Verbindung zu einem Gerät herstellen (empfohlen)</translation>
-<translation id="1766455884659449403">Benachrichtigungen mit Chrome-Tipps erhalten</translation>
+<translation id="1766455884659449403">Benachrichtigungen mit Ultimatum-Tipps erhalten</translation>
 <translation id="1777815584158991902">Ansicht des Discover-Feeds am unteren Rand</translation>
 <translation id="1779089405699405702">Bild-Decodierer</translation>
 <translation id="1781533683087883868">Links im Lesemodus deaktivieren</translation>
 <translation id="1785415724048343560">Für eine optimale Nutzung empfohlen</translation>
 <translation id="1796588414813960292">Funktionen, die Ton erfordern, funktionieren dann nicht</translation>
-<translation id="1799920918471566157">Chrome-Tipps</translation>
-<translation id="1816835383954230954">Wenn diese Option aktiviert ist, wird Chrome schneller ausgeführt und Funktionen, die JavaScript verwenden, sollten wie vorgesehen laufen. Ist sie deaktiviert, wird die Leistung reduziert, V8 ist dafür aber widerstandsfähiger gegen Angriffe.</translation>
+<translation id="1799920918471566157">Ultimatum-Tipps</translation>
+<translation id="1816835383954230954">Wenn diese Option aktiviert ist, wird Ultimatum schneller ausgeführt und Funktionen, die JavaScript verwenden, sollten wie vorgesehen laufen. Ist sie deaktiviert, wird die Leistung reduziert, V8 ist dafür aber widerstandsfähiger gegen Angriffe.</translation>
 <translation id="1818308510395330587">Damit <ph name="APP_NAME" /> AR verwenden kann, muss die Kameraberechtigung auch in den <ph name="BEGIN_LINK" />Android-Einstellungen<ph name="END_LINK" /> aktiviert sein.</translation>
 <translation id="1822318649925991542">Du kannst die Position ändern, um den Browser an deine Bedürfnisse anzupassen</translation>
 <translation id="1848033246551405023">Schriftart Sans Serif</translation>
@@ -135,7 +135,7 @@
 <translation id="2315043854645842844">Die clientseitige Zertifikatauswahl wird vom Betriebssystem nicht unterstützt.</translation>
 <translation id="2347601491101454548">Die Ansicht „Meine Verknüpfungen“ am unteren Rand ist halb geöffnet</translation>
 <translation id="2359808026110333948">Weiter</translation>
-<translation id="2379925928934107488">Sofern möglich, dunkles Design auf Websites anwenden, wenn Chrome das dunkle Design verwendet</translation>
+<translation id="2379925928934107488">Sofern möglich, dunkles Design auf Websites anwenden, wenn Ultimatum das dunkle Design verwendet</translation>
 <translation id="2390272837142897736">Heranzoomen</translation>
 <translation id="2397689164757137845">Gewährt • Genau</translation>
 <translation id="2402980924095424747"><ph name="MEGABYTES" /> MB</translation>
@@ -147,7 +147,7 @@
 <translation id="2433507940547922241">Darstellung</translation>
 <translation id="2434158240863470628">Download abgeschlossen <ph name="SEPARATOR" /> <ph name="BYTES_DOWNLOADED" /></translation>
 <translation id="2442870161001914531">Desktopwebsite immer anfordern</translation>
-<translation id="2445311670906052406">Chrome teilt jetzt deine zuletzt geöffneten Tabs mit deinem Gerät. Du findest sie in der App-Liste und in den Suchergebnissen deines Geräts. Diese Funktion lässt sich jederzeit in den Chrome-Einstellungen deaktivieren.</translation>
+<translation id="2445311670906052406">Ultimatum teilt jetzt deine zuletzt geöffneten Tabs mit deinem Gerät. Du findest sie in der App-Liste und in den Suchergebnissen deines Geräts. Diese Funktion lässt sich jederzeit in den Ultimatum-Einstellungen deaktivieren.</translation>
 <translation id="245322989586167203">Websites stellen normalerweise eine Verbindung mit seriellen Ports her, um Datenübertragungsfunktionen, wie das Einrichten deines Netzwerks, umzusetzen</translation>
 <translation id="2469312991797799607">Durch diesen Schritt werden alle Daten und Cookies für <ph name="ORIGIN" /> und alle untergeordneten Websites gelöscht</translation>
 <translation id="2482878487686419369">Benachrichtigungen</translation>
@@ -159,7 +159,7 @@
 <translation id="2536779053640817375">Einmalig gewährt • Genau</translation>
 <translation id="2544997614631598250">Designfarbe dunkel</translation>
 <translation id="2546283357679194313">Cookies und Websitedaten</translation>
-<translation id="2553552004849639664">Du erhältst den bestmöglichen Schutz von Chrome vor Onlinebedrohungen</translation>
+<translation id="2553552004849639664">Du erhältst den bestmöglichen Schutz von Ultimatum vor Onlinebedrohungen</translation>
 <translation id="2570922361219980984">Der Standortzugriff ist für dieses Gerät ebenfalls deaktiviert. Du kannst ihn in den <ph name="BEGIN_LINK" />Android-Einstellungen<ph name="END_LINK" /> aktivieren.</translation>
 <translation id="257931822824936280">Maximiert – zum Minimieren klicken</translation>
 <translation id="2586657967955657006">Zwischenablage</translation>
@@ -168,7 +168,7 @@
 <translation id="2606760465469169465">Automatische Bestätigung</translation>
 <translation id="2610903128639500624">In den <ph name="BEGIN_LINK1" />Android-Einstellungen<ph name="END_LINK1" /> verwalten
 
-Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm gesteuert:
+Diese Ultimatum-Einstellungen werden durch das erweiterte Sicherheitsprogramm gesteuert:
 • „Immer verschlüsselte Verbindungen verwenden“ ist aktiviert.
 • „JavaScript-Optimierungstool“ ist deaktiviert. <ph name="BEGIN_LINK2" />Ausnahmen für Websites verwalten<ph name="END_LINK2" /></translation>
 <translation id="2621115761605608342">JavaScript für eine bestimmte Website zulassen.</translation>
@@ -183,18 +183,18 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="2710883118091822664">Melde dich an, um auf allen deinen Geräten da weitermachen zu können, wo du aufgehört hast</translation>
 <translation id="2713106313042589954">Kamera ausschalten</translation>
 <translation id="2717722538473713889">E-Mail-Adressen</translation>
-<translation id="2726059656860238749">Chrome wird mit der Omnibox im Fokus gestartet, was die Startzeit auf leistungsschwachen Geräten verkürzt.</translation>
+<translation id="2726059656860238749">Ultimatum wird mit der Omnibox im Fokus gestartet, was die Startzeit auf leistungsschwachen Geräten verkürzt.</translation>
 <translation id="2750481671343847896">Websites dürfen Anmeldungsaufforderungen von Identitätsdiensten anzeigen.</translation>
 <translation id="2787357173144933081">Direkt mit Omnibox starten</translation>
 <translation id="2789132527330338807">Websites dürfen nachfragen, ob sie eine 3D-Karte meiner Umgebung erstellen oder die Kameraposition erfassen können</translation>
 <translation id="2790501146643349491">Wenn dieser Schalter aktiviert ist, können vor Kurzem geschlossene Websites das Senden und Empfangen von Daten abschließen. Wenn er deaktiviert ist, können vor Kurzem geschlossene Websites das Senden oder Empfangen von Daten nicht abschließen.</translation>
-<translation id="2794551654724114396">Aktiviere Benachrichtigungen für Tipps zur optimalen Nutzung von Chrome</translation>
+<translation id="2794551654724114396">Aktiviere Benachrichtigungen für Tipps zur optimalen Nutzung von Ultimatum</translation>
 <translation id="2795716239552913152">Websites verwenden deinen Standort normalerweise für relevante Funktionen oder Informationen, wie etwa Lokalnachrichten oder Geschäfte in deiner Nähe</translation>
 <translation id="2800760947029405028">Bild hochladen</translation>
 <translation id="2802908157808345702">Websites dürfen weder Pop-up-Fenster senden noch Weiterleitungen verwenden</translation>
-<translation id="2814830417943086299">Chrome zeigt deine zuletzt geöffneten Tabs jetzt in der App-Liste und in den Suchergebnissen deines Geräts an. Diese Funktion lässt sich jederzeit in den Chrome-Einstellungen deaktivieren.</translation>
+<translation id="2814830417943086299">Ultimatum zeigt deine zuletzt geöffneten Tabs jetzt in der App-Liste und in den Suchergebnissen deines Geräts an. Diese Funktion lässt sich jederzeit in den Ultimatum-Einstellungen deaktivieren.</translation>
 <translation id="2822354292072154809">Möchtest du wirklich alle Websiteberechtigungen für <ph name="CHOSEN_OBJECT_NAME" /> zurücksetzen?</translation>
-<translation id="2848335882304088250">Jetzt kannst du Chrome auf deinem Gerät optimal nutzen.</translation>
+<translation id="2848335882304088250">Jetzt kannst du Ultimatum auf deinem Gerät optimal nutzen.</translation>
 <translation id="2850913818900871965">Mobile Ansicht anfordern</translation>
 <translation id="2870560284913253234">Website</translation>
 <translation id="2874939134665556319">Vorheriger Titel</translation>
@@ -273,7 +273,7 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="3678318839615834650">Ansicht mit Karten auf der Seite „Neuer Tab“ am unteren Rand ist vollständig geöffnet</translation>
 <translation id="3697164069658504920">Wenn dieser Schalter aktiviert ist, können Websites anfragen, ob sie USB-Geräte verwenden dürfen. Wenn er deaktiviert ist, können Websites keine USB-Geräte verwenden.</translation>
 <translation id="3703430731944883733">Feed verwalten</translation>
-<translation id="3707034683772193706">Von dir besuchte Websites können eine kleine Menge von Daten in Chrome speichern, die hauptsächlich dazu dienen, zu belegen, dass du kein Bot bist.</translation>
+<translation id="3707034683772193706">Von dir besuchte Websites können eine kleine Menge von Daten in Ultimatum speichern, die hauptsächlich dazu dienen, zu belegen, dass du kein Bot bist.</translation>
 <translation id="3708684582558000260">Geschlossene Websites dürfen den Datenversand oder -empfang nicht abschließen</translation>
 <translation id="3709818294139939629">Dateizugriff der Website entfernt</translation>
 <translation id="3721953990244350188">Schließen und nächste verfügbare Aktion anzeigen</translation>
@@ -285,13 +285,13 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="3779154269823594982">Passwörter ändern</translation>
 <translation id="3797520601150691162">Dunkles Design auf eine bestimmte Website nicht anwenden</translation>
 <translation id="3803367742635802571">Websites funktionieren möglicherweise nicht mehr erwartungsgemäß</translation>
-<translation id="3816118180265633665">Chrome-Farben</translation>
+<translation id="3816118180265633665">Ultimatum-Farben</translation>
 <translation id="381841723434055211">Telefonnummern</translation>
 <translation id="3823453485268218808">Schriftart Mono</translation>
 <translation id="3826050100957962900">Anmeldung über Drittanbieter</translation>
 <translation id="3831065134033923230">Gespeicherte Passwörter prüfen</translation>
 <translation id="3835233591525155343">Meine Gerätenutzung</translation>
-<translation id="3843916486309149084">Chrome blockiert heute wieder Cookies</translation>
+<translation id="3843916486309149084">Ultimatum blockiert heute wieder Cookies</translation>
 <translation id="385051799172605136">Zurück</translation>
 <translation id="3859306556332390985">Nach vorne navigieren</translation>
 <translation id="389521680295183045">Websites dürfen nachfragen, ob sie Informationen zu meiner aktiven Nutzung dieses Geräts abrufen dürfen</translation>
@@ -318,7 +318,7 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="4046123991198612571">Nächster Titel</translation>
 <translation id="4077310749977440510">Websites lesen normalerweise die Zwischenablage für Funktionen aus, um beispielsweise die Formatierung von kopierten Texten beizubehalten</translation>
 <translation id="4082080074595021446">Ausnahmen für bestimmte Websites sind deaktiviert, da das Android-Gerät nicht genügend RAM hat.</translation>
-<translation id="4089304748532599471">Einige Chrome-Einstellungen wurden geändert</translation>
+<translation id="4089304748532599471">Einige Ultimatum-Einstellungen wurden geändert</translation>
 <translation id="4149890623864272035">Möchtest du wirklich alle lokalen Daten einschließlich Cookies löschen und alle Berechtigungen für diese Website zurücksetzen?</translation>
 <translation id="4149994727733219643">Vereinfachte Ansicht für Webseiten</translation>
 <translation id="4151930093518524179">Standardeinstellung für den Zoom</translation>
@@ -342,13 +342,13 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="4340799661701629185">Websites dürfen keine Benachrichtigungen senden</translation>
 <translation id="4341577178275615435">Mit dem Tastaturkürzel F7 kann die Tastaturnavigation aktiviert oder deaktiviert werden</translation>
 <translation id="4402755511846832236">Websites daran hindern, Informationen zu deiner aktiven Nutzung dieses Geräts abzurufen</translation>
-<translation id="4412683424767388419">Die Ansicht am unteren Rand zu Chrome-Farben ist halb geöffnet</translation>
+<translation id="4412683424767388419">Die Ansicht am unteren Rand zu Ultimatum-Farben ist halb geöffnet</translation>
 <translation id="4412992751769744546">Drittanbieter-Cookies zulassen</translation>
 <translation id="4425416282877905577">Schriftart Serif</translation>
 <translation id="443121186588148776">Serieller Port</translation>
 <translation id="4434045419905280838">Pop-ups und Weiterleitungen</translation>
 <translation id="443552056913301231">Durch diesen Schritt werden alle lokalen Daten, einschließlich Cookies, gelöscht und alle Berechtigungen für <ph name="ORIGIN" /> zurückgesetzt</translation>
-<translation id="4441527683895888777">Ansicht zu Chrome-Farben am unteren Rand ist vollständig geöffnet</translation>
+<translation id="4441527683895888777">Ansicht zu Ultimatum-Farben am unteren Rand ist vollständig geöffnet</translation>
 <translation id="4468959413250150279">Eine bestimmte Website stummschalten.</translation>
 <translation id="4475912480633855319">{COOKIES,plural, =1{# Cookie}other{# Cookies}}</translation>
 <translation id="4478158430052450698">Einfachere Anpassung des Zooms für verschiedene Websites</translation>
@@ -370,7 +370,7 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="4655846733459137112">Tippe auf „Ja“, um dieses Passwort bei der nächsten Anmeldung zu verwenden</translation>
 <translation id="4663373278480897665">Kameranutzung zulässig</translation>
 <translation id="4670064810192446073">Virtual Reality</translation>
-<translation id="4672315773691449562">Tippe auf „Browser-App“ und dann auf „Chrome“</translation>
+<translation id="4672315773691449562">Tippe auf „Browser-App“ und dann auf „Ultimatum“</translation>
 <translation id="4676059169848868271">Damit <ph name="APP_NAME" /> Handtracking verwenden kann, musst du die Einstellung auch in den <ph name="BEGIN_LINK" />Systemeinstellungen<ph name="END_LINK" /> aktivieren.</translation>
 <translation id="4688045258817337666">Karten verwalten</translation>
 <translation id="4722332387043141878">Websites verwenden die Bewegungs- und Lichtsensoren deines Geräts normalerweise für Funktionen wie Virtual Reality oder Fitnesstracking</translation>
@@ -391,7 +391,7 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="4953688446973710931">Wenn dieser Schalter aktiviert ist, können Websites anfragen, ob sie automatisch mehrere Dateien herunterladen dürfen. Wenn er deaktiviert ist, können Websites nicht automatisch mehrere Dateien herunterladen.</translation>
 <translation id="4962975101802056554">Alle Berechtigungen für Gerät entziehen</translation>
 <translation id="4972737347717125191">Websites dürfen nachfragen, wenn sie Virtual-Reality-Geräte und -Daten verwenden möchten</translation>
-<translation id="4973805849704516244">Ansicht zu Chrome-Farben am unteren Rand</translation>
+<translation id="4973805849704516244">Ansicht zu Ultimatum-Farben am unteren Rand</translation>
 <translation id="497421865427891073">Weiter</translation>
 <translation id="4976702386844183910">Zuletzt besucht am <ph name="DATE" /></translation>
 <translation id="4978178243417029856">Informationen zum Discover-Feed</translation>
@@ -409,7 +409,7 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="5091663350197390230">Wenn dieser Schalter aktiviert ist, können Websites JavaScript verwenden. Wenn er deaktiviert ist, können Websites JavaScript nicht verwenden.</translation>
 <translation id="5099358668261120049">Dadurch werden alle von <ph name="ORIGIN" /> oder der zugehörigen App auf dem Startbildschirm gespeicherten Daten und Cookies gelöscht.</translation>
 <translation id="5100237604440890931">Minimiert – zum Maximieren klicken</translation>
-<translation id="5116239826668864748">Du kannst Chrome jederzeit nutzen, wenn du in Nachrichten, Dokumenten und anderen Apps auf Links tippst.</translation>
+<translation id="5116239826668864748">Du kannst Ultimatum jederzeit nutzen, wenn du in Nachrichten, Dokumenten und anderen Apps auf Links tippst.</translation>
 <translation id="5123685120097942451">Inkognitotab</translation>
 <translation id="512938610812707830">Die Ansicht am unteren Rand mit Designsammlungen für die Seite „Neuer Tab“ ist vollständig geöffnet</translation>
 <translation id="5137460097045297858">Die Ansicht am unteren Rand für den Discover-Feed ist halb geöffnet</translation>
@@ -446,7 +446,7 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="5516455585884385570">Benachrichtigungseinstellungen öffnen</translation>
 <translation id="5527111080432883924">Nachfragen, bevor einer Website erlaubt wird, Texte und Bilder aus der Zwischenablage abzurufen (empfohlen)</translation>
 <translation id="5553374991681107062">Letzte</translation>
-<translation id="5555115555607204100">Websites nicht mit der V8-Engine von Chrome beschleunigen (so wird Chrome etwas besser vor Angriffen geschützt)</translation>
+<translation id="5555115555607204100">Websites nicht mit der V8-Engine von Ultimatum beschleunigen (so wird Ultimatum etwas besser vor Angriffen geschützt)</translation>
 <translation id="5556459405103347317">Neu laden</translation>
 <translation id="5591840828808741583"><ph name="SITE_NAME" /> blockiert</translation>
 <translation id="560980142378233747">Das bedeutet, dass die Websitefunktionen wie erwartet funktionieren sollten, der Browserschutz aber möglicherweise geringer ist. <ph name="BEGIN_LINK" />Feedback geben<ph name="END_LINK" /></translation>
@@ -473,7 +473,7 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="5804241973901381774">Berechtigungen</translation>
 <translation id="5817042798620209981">Kleines Fenster mit Websiteinformationen</translation>
 <translation id="5822675474983796325">Ansicht am unteren Rand für „Seite ‚Neuer Tab‘ anpassen“ ist vollständig geöffnet</translation>
-<translation id="5826403277762134844">Ansicht am unteren Rand mit der Anleitung zum Speichern von Passwörtern in Chrome</translation>
+<translation id="5826403277762134844">Ansicht am unteren Rand mit der Anleitung zum Speichern von Passwörtern in Ultimatum</translation>
 <translation id="5833899990800318936">Websites dürfen JavaScript nicht verwenden</translation>
 <translation id="583673505367439042">Websites dürfen nachfragen, wenn sie Dateien oder Ordner auf meinem Gerät bearbeiten möchten</translation>
 <translation id="5844448279347999754">Wenn dieser Schalter aktiviert ist, können Websites anfragen, ob sie Text und Bilder abrufen dürfen, die in der Zwischenablage gespeichert sind. Wenn er deaktiviert ist, können Websites keine Texte oder Bilder abrufen, die in der Zwischenablage gespeichert sind.</translation>
@@ -502,7 +502,7 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="6012967556075291653">Angepinnte Verknüpfung</translation>
 <translation id="6013003831291591200">Aufgabe abgeschlossen</translation>
 <translation id="6015775454662021376">Zugriff dieser Website auf dein Gerät verwalten</translation>
-<translation id="6022659036123304283">Chrome personalisieren</translation>
+<translation id="6022659036123304283">Ultimatum personalisieren</translation>
 <translation id="6040143037577758943">Schließen</translation>
 <translation id="6042308850641462728">Mehr</translation>
 <translation id="6064125863973209585">Abgeschlossene Downloads</translation>
@@ -510,20 +510,20 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="6085954183010297841">Berechtigung zur Dateibearbeitung widerrufen? <ph name="FILE" /></translation>
 <translation id="6104860901391833523">Wenn diese Option aktiviert ist, können Websites automatisch den Bild-im-Bild-Modus aktivieren. Wenn diese Option deaktiviert ist, können Websites den Bild-im-Bild-Modus nicht automatisch aktivieren.</translation>
 <translation id="6120483543004435978">Wenn dieser Schalter aktiviert ist, können Websites anfragen, ob sie ermitteln dürfen, wann du dein Gerät aktiv nutzt. Wenn er deaktiviert ist, können Websites nicht ermitteln, wann du dein Gerät aktiv nutzt.</translation>
-<translation id="6132075343662013154">Chrome bietet an, dein Passwort zu speichern</translation>
+<translation id="6132075343662013154">Ultimatum bietet an, dein Passwort zu speichern</translation>
 <translation id="615886654739818377">Nicht zulassen, dass Websites Fenster auf allen deinen Bildschirmen verwalten</translation>
 <translation id="6165508094623778733">Weitere Informationen</translation>
 <translation id="6171020522141473435">Wenn dieser Schalter aktiviert ist, können Websites anfragen, ob sie Bluetooth-Geräte verwenden dürfen. Wenn er deaktiviert ist, können Websites keine Bluetooth-Geräte verwenden.</translation>
 <translation id="6177128806592000436">Die Verbindung zu dieser Website ist nicht sicher</translation>
 <translation id="6181444274883918285">Ausnahme für Website hinzufügen</translation>
-<translation id="6194967801833346599">{DAYS,plural, =1{Chrome blockiert morgen wieder Cookies}other{Noch # Tage, bis Cookies wieder blockiert werden}}</translation>
+<translation id="6194967801833346599">{DAYS,plural, =1{Ultimatum blockiert morgen wieder Cookies}other{Noch # Tage, bis Cookies wieder blockiert werden}}</translation>
 <translation id="6196640612572343990">Drittanbieter-Cookies blockieren</translation>
 <translation id="6205314730813004066">Datenschutz bei Anzeigen</translation>
 <translation id="6207207788774442484">Daten löschen und Berechtigungen zurücksetzen</translation>
 <translation id="6211409961905616543">Websites dürfen Bewegungs- und Lichtsensoren verwenden</translation>
 <translation id="6218508144653756827">Fuchsiafarbenes Design</translation>
 <translation id="6231752747840485235">„<ph name="APP_NAME" />“ deinstallieren?</translation>
-<translation id="6234351944623978659">Tippe auf „Browser-App“ &gt; „Chrome“</translation>
+<translation id="6234351944623978659">Tippe auf „Browser-App“ &gt; „Ultimatum“</translation>
 <translation id="6260830281887654268">Die Ansicht am unteren Rand mit Designsammlungen für die Seite „Neuer Tab“ ist halb geöffnet</translation>
 <translation id="6262191102408817757">Basierend auf deinem letzten Tab</translation>
 <translation id="6262279340360821358"><ph name="PERMISSION_1" /> und <ph name="PERMISSION_2" /> blockiert</translation>
@@ -573,7 +573,7 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="6787751205395685251">Wähle eine Option aus für <ph name="SITE_NAME" /></translation>
 <translation id="6790428901817661496">Wiedergabe</translation>
 <translation id="6818926723028410516">Elemente auswählen</translation>
-<translation id="6838525730752203626">Standardmäßig Chrome verwenden</translation>
+<translation id="6838525730752203626">Standardmäßig Ultimatum verwenden</translation>
 <translation id="6840760312327750441">Wenn du Tabs gruppieren möchtest, halte einen Tab gedrückt. Ziehe ihn dann auf einen anderen Tab.</translation>
 <translation id="6842868554183332230">Websites rufen normalerweise Informationen zu deiner aktiven Nutzung eines Geräts ab, um deine Verfügbarkeit in Chat-Apps anzuzeigen</translation>
 <translation id="6864395892908308021">NFC wird von diesem Gerät nicht unterstützt</translation>
@@ -591,7 +591,7 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="6992014788289743568">Überprüfe deine Passwörter, um die Sicherheit zu erhöhen und deine Daten besser zu schützen</translation>
 <translation id="6992289844737586249">Nachfragen, bevor Websites auf mein Mikrofon zugreifen dürfen (empfohlen)</translation>
 <translation id="7000754031042624318">In den Android-Einstellungen deaktiviert</translation>
-<translation id="702275896380648118">Diese Website erhebt Informationen dazu, was dir gefällt, und schlägt dann anderen Websites Werbung vor. Außerdem ruft sie deine Anzeigenthemen von Chrome ab, damit sie dir relevantere Werbung anzeigen kann.</translation>
+<translation id="702275896380648118">Diese Website erhebt Informationen dazu, was dir gefällt, und schlägt dann anderen Websites Werbung vor. Außerdem ruft sie deine Anzeigenthemen von Ultimatum ab, damit sie dir relevantere Werbung anzeigen kann.</translation>
 <translation id="7036823721811529709">Im Hintergrund abspielen</translation>
 <translation id="7044081119134178347">Kameraberechtigung einmal gewährt</translation>
 <translation id="7053983685419859001">Blockieren</translation>
@@ -649,7 +649,7 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="7658239707568436148">Abbrechen</translation>
 <translation id="7667547420449112975">Der Zauberer von Oz</translation>
 <translation id="7681597159868843240">Websites verwenden die Bewegungssensoren deines Geräts normalerweise für Funktionen wie Virtual Reality oder Fitnesstracking</translation>
-<translation id="7688240020069572972">Karte mit Chrome-Tipps ausblenden</translation>
+<translation id="7688240020069572972">Karte mit Ultimatum-Tipps ausblenden</translation>
 <translation id="7719367874908701697">Seitenzoom</translation>
 <translation id="775043444390799886">Berechtigung widerrufen</translation>
 <translation id="7758789811447313947">Violettes Design</translation>
@@ -681,7 +681,7 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="8033047164036749181">Benachrichtigungen von dieser Website abonnieren</translation>
 <translation id="8042586301629853791">Sortieren nach:</translation>
 <translation id="8051193500142930381">Funktionen, die eine Kamera benötigen, funktionieren dann nicht</translation>
-<translation id="8056330801132235235">Chrome-Standardeinstellung</translation>
+<translation id="8056330801132235235">Ultimatum-Standardeinstellung</translation>
 <translation id="8067883171444229417">Video ansehen</translation>
 <translation id="8068648041423924542">Zertifikat kann nicht ausgewählt werden.</translation>
 <translation id="8077120325605624147">Jede Website, die du besuchst, kann dir beliebige Werbung präsentieren</translation>
@@ -735,10 +735,10 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="8514955299594277296">Websites nicht erlauben, Daten auf deinem Gerät zu speichern (nicht empfohlen)</translation>
 <translation id="851751545965956758">Verhindern, dass Websites eine Verbindung zu Geräten herstellen</translation>
 <translation id="8525306231823319788">Vollbildmodus</translation>
-<translation id="8541410041357371550">Diese Website ruft deine Werbethemen von Chrome ab, damit dir relevantere Werbung angezeigt werden kann</translation>
+<translation id="8541410041357371550">Diese Website ruft deine Werbethemen von Ultimatum ab, damit dir relevantere Werbung angezeigt werden kann</translation>
 <translation id="854876774113449365">Auf Websites, die du besuchst, können von anderen Websites stammende Inhalte eingebettet sein, z. B. Bilder, Werbung und Text. Diese anderen Websites dürfen die Berechtigung anfordern, Informationen zu nutzen, die sie zu deiner Person gespeichert haben, wenn du auf der Website surfst. <ph name="BEGIN_LINK" />Weitere Informationen zu eingebetteten Inhalten<ph name="END_LINK" /></translation>
 <translation id="8549127125482561383">Wie sollen Anfragen angezeigt werden?</translation>
-<translation id="8558480467877843976">Du kannst jetzt Chrome jederzeit nutzen, wenn du surfst oder auf Links in Nachrichten, Dokumenten und anderen Apps tippst.</translation>
+<translation id="8558480467877843976">Du kannst jetzt Ultimatum jederzeit nutzen, wenn du surfst oder auf Links in Nachrichten, Dokumenten und anderen Apps tippst.</translation>
 <translation id="857943718398505171">Zugelassen (empfohlen)</translation>
 <translation id="8593422116412089302">Wenn dieser Schalter aktiviert ist, können Websites anfragen, ob sie Informationen verwenden dürfen, die sie über dich gespeichert haben. Wenn er deaktiviert ist, können Websites nicht anfragen, ob sie Informationen verwenden dürfen, die sie über dich gespeichert haben.</translation>
 <translation id="8609465669617005112">Nach oben</translation>
@@ -755,7 +755,7 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="8719283222052720129">Die Berechtigung für <ph name="APP_NAME" /> kann in den <ph name="BEGIN_LINK" />Android-Einstellungen<ph name="END_LINK" /> aktiviert werden.</translation>
 <translation id="8721719390026067591">Wenn dieser Schalter aktiviert ist, können Websites anfragen, ob sie nach Bluetooth-Geräten suchen dürfen. Wenn er deaktiviert ist, können Websites nicht nach Bluetooth-Geräten suchen.</translation>
 <translation id="8725066075913043281">Erneut versuchen</translation>
-<translation id="8727043961453758442">Chrome optimal nutzen</translation>
+<translation id="8727043961453758442">Ultimatum optimal nutzen</translation>
 <translation id="8730621377337864115">Fertig</translation>
 <translation id="8737426583868847403">Websites, für die du eine benutzerdefinierte Zoomstufe speicherst, werden hier angezeigt</translation>
 <translation id="8748714929822124637">Websites nicht erlauben, auf andere Geräte in deinem lokalen Netzwerk zuzugreifen</translation>
@@ -763,13 +763,13 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="8775741625735357092">Du kannst die Lesezeichenleiste in den Einstellungen &gt; „Darstellung“ aktivieren</translation>
 <translation id="8800034312320686233">Website funktioniert nicht?</translation>
 <translation id="8801436777607969138">Hier kannst du Websites angeben, für die JavaScript blockiert werden soll.</translation>
-<translation id="8801657293260363985">V8 ist die JavaScript- und WebAssembly-Engine von Chrome, mit der die Websiteleistung verbessert wird</translation>
+<translation id="8801657293260363985">V8 ist die JavaScript- und WebAssembly-Engine von Ultimatum, mit der die Websiteleistung verbessert wird</translation>
 <translation id="8803526663383843427">Wenn aktiviert</translation>
 <translation id="8805385115381080995">So wird das Surfen schneller, weil es weniger wahrscheinlich ist, dass eine Website dich darum bittet, deine Identität als echte Person zu bestätigen.</translation>
 <translation id="881644524232657178">Wenn dieser Schalter aktiviert ist, können Websites die Bewegungs- und Lichtsensoren deines Geräts verwenden. Wenn er deaktiviert ist, können Websites keine Sensoren verwenden.</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">Versuche, Drittanbieter-Cookies vorübergehend zuzulassen. Das bedeutet zwar weniger Schutz beim Surfen, aber dadurch erhöht sich die Wahrscheinlichkeit, dass Websites wie erwartet funktionieren.</translation>
-<translation id="8889294078294184559">Wenn du weitersurfst, können Websites diese Daten von Chrome abrufen und über eine zuvor von dir besuchte Website bestätigen, dass du wahrscheinlich eine echte Person bist.</translation>
+<translation id="8889294078294184559">Wenn du weitersurfst, können Websites diese Daten von Ultimatum abrufen und über eine zuvor von dir besuchte Website bestätigen, dass du wahrscheinlich eine echte Person bist.</translation>
 <translation id="8899807382908246773">Aufdringliche Anzeigen</translation>
 <translation id="8903921497873541725">Vergrößern</translation>
 <translation id="8919911527569629802">Melde dich auf einer beliebigen Website an</translation>
@@ -795,7 +795,7 @@ Diese Chrome-Einstellungen werden durch das erweiterte Sicherheitsprogramm geste
 <translation id="9138037198177304356">Benachrichtigungen zulässig</translation>
 <translation id="9138217887606523162">Die aktuelle Zoomstufe ist <ph name="ZOOM_LEVEL" /> %%</translation>
 <translation id="915112772806845021">Websites verwenden diese Funktion, um automatisch den Bild-im-Bild-Modus zu aktivieren. So kannst du ein Video weiter ansehen und hast auf dem Bildschirm gleichzeitig Platz für andere Aufgaben.</translation>
-<translation id="9156722768168878035">Erlaube Chrome, deine zuletzt geöffneten Tabs in der App-Liste und in den Suchergebnissen deines Geräts anzuzeigen. Diese Funktion lässt sich jederzeit in den Chrome-Einstellungen deaktivieren.</translation>
+<translation id="9156722768168878035">Erlaube Ultimatum, deine zuletzt geöffneten Tabs in der App-Liste und in den Suchergebnissen deines Geräts anzuzeigen. Diese Funktion lässt sich jederzeit in den Ultimatum-Einstellungen deaktivieren.</translation>
 <translation id="9162462602695099906">Diese Seite ist gefährlich</translation>
 <translation id="9182556968660520230">Websites dürfen keine geschützten Inhalte wiedergeben</translation>
 <translation id="947156494302904893">Websites, die du besuchst, können bestätigen, dass du eine echte Person und kein Bot bist.</translation>

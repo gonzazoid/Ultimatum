@@ -24,9 +24,9 @@
 <translation id="1089606299949659462">Az áttekintés befejeződött!</translation>
 <translation id="1094555143448724771">Ha látni szeretné a többi eszközén felkeresett lapokat, szinkronizálja lapjait és előzményeit</translation>
 <translation id="1095761715416917775">Gondoskodjon arról, hogy mindig hozzá tudjon férni a szinkronizált adataihoz</translation>
-<translation id="1096091316906284742">A Chrome Keresés funkciójára való feliratkozás alsó lapja</translation>
+<translation id="1096091316906284742">A Ultimatum Keresés funkciójára való feliratkozás alsó lapja</translation>
 <translation id="1100066534610197918">Megnyitás új lapon, csoportban</translation>
-<translation id="1103142993930332957">Segíteni szeretne a Chrome fejlesztésében?</translation>
+<translation id="1103142993930332957">Segíteni szeretne a Ultimatum fejlesztésében?</translation>
 <translation id="1105960400813249514">Képernyőrögzítés</translation>
 <translation id="1108214977745280468">Oldalstatisztikák mutatása</translation>
 <translation id="1108938384783527433">Előzmények szinkronizálása</translation>
@@ -34,20 +34,20 @@
 <translation id="1123537484474186311"><ph name="TAB_TITLE" />, lap kép a képben módban</translation>
 <translation id="1126696498560056882">Fiókok kezelése ezen az eszközön</translation>
 <translation id="1135018701024399762">Az inkognitó mód használatával az Ön böngészési tevékenységei privát jellegűek maradnak az eszközt használó többi személy előtt</translation>
-<translation id="113752097246673894">Ha az összes eszközén szeretne hozzáférni könyvjelzőihez és egyebekhez, jelentkezzen be a Chrome-ba a következő fiókkal: <ph name="EMAIL" /></translation>
+<translation id="113752097246673894">Ha az összes eszközén szeretne hozzáférni könyvjelzőihez és egyebekhez, jelentkezzen be a Ultimatum-ba a következő fiókkal: <ph name="EMAIL" /></translation>
 <translation id="1138458427267715730">Értesítéseket kaphat, ha valamelyik webhelyen csökken az ár</translation>
 <translation id="1140317858355046628">Törlés esetén mindenki azonnal elveszíti a hozzáférését a(z) „<ph name="GROUP_NAME" />” lapcsoporthoz, és a lapcsoport az összes eszközről törlődik.</translation>
 <translation id="1142732900304639782">Ne ajánlja fel ezeknek a webhelyeknek a fordítását</translation>
 <translation id="1143193470214071120">Zárjon be egy ablakot, vagy kezelje az ablakokat.</translation>
 <translation id="1149725087019908252"><ph name="FILE_NAME" /> ellenőrzése…</translation>
-<translation id="1150263420752757504">A(z) <ph name="APP_NAME" /> a Chrome-ban fog megnyílni. A továbblépéssel Ön elfogadja a <ph name="BEGIN_LINK1" />Google Általános Szerződési Feltételeket<ph name="END_LINK1" />, valamint <ph name="BEGIN_LINK2" />A Google Chrome és a ChromeOS Kiegészítő Általános Szerződési Feltételeit<ph name="END_LINK2" />.</translation>
+<translation id="1150263420752757504">A(z) <ph name="APP_NAME" /> a Ultimatum-ban fog megnyílni. A továbblépéssel Ön elfogadja a <ph name="BEGIN_LINK1" />Google Általános Szerződési Feltételeket<ph name="END_LINK1" />, valamint <ph name="BEGIN_LINK2" />A Ultimatum és a UltimatumOS Kiegészítő Általános Szerződési Feltételeit<ph name="END_LINK2" />.</translation>
 <translation id="1154555449933432029">Nincsenek mentett jelszavai a Google Jelszókezelőben.</translation>
 <translation id="115483310321669804">A következő jelszó használata: <ph name="PASSWORD" /></translation>
 <translation id="1161065531352634524">Lapok és előzmények szinkronizálása</translation>
 <translation id="1165109137568919258">Készítsen fotót, vagy adjon hozzá képet a fotógalériából a kereséshez.</translation>
 <translation id="1173894706177603556">Átnevezés</translation>
-<translation id="1174479719160874822">A Chrome a mobilwebhelyet kéri le, ha keskeny a képernyő</translation>
-<translation id="1175241315203286684">A rendszergazda távolról módosításokat végezhet az Ön profiljában és böngészőjében, jelentésekkel elemezheti a böngészőadatait, és egyéb szükséges feladatokat is elvégezhet. Az is lehetséges, hogy az eszközön végzett tevékenységeket a Chrome-on kívülről felügyelik.</translation>
+<translation id="1174479719160874822">A Ultimatum a mobilwebhelyet kéri le, ha keskeny a képernyő</translation>
+<translation id="1175241315203286684">A rendszergazda távolról módosításokat végezhet az Ön profiljában és böngészőjében, jelentésekkel elemezheti a böngészőadatait, és egyéb szükséges feladatokat is elvégezhet. Az is lehetséges, hogy az eszközön végzett tevékenységeket a Ultimatum-on kívülről felügyelik.</translation>
 <translation id="1177863135347784049">Egyéni</translation>
 <translation id="1181037720776840403">Eltávolítás</translation>
 <translation id="1183189057400844278">Annak érdekében, hogy mindig használhassa a Google-fiókjában lévő jelszavakat, igazolja személyazonosságát</translation>
@@ -85,13 +85,13 @@
 <translation id="1318262688555255786">A következő weboldalra mutató link megosztása: <ph name="PAGE_TITLE" />. Forrás: <ph name="PAGE_URL" /></translation>
 <translation id="1320912611264252795">A könyvjelzőmentési folyamat teljes magasságban van megnyitva</translation>
 <translation id="1327257854815634930">Megnyitotta a navigációs előzményeket</translation>
-<translation id="1331212799747679585">A Chrome frissítése nem lehetséges. További lehetőségek</translation>
-<translation id="1332501820983677155">A Google Chrome-funkciók billentyűparancsai</translation>
+<translation id="1331212799747679585">A Ultimatum frissítése nem lehetséges. További lehetőségek</translation>
+<translation id="1332501820983677155">A Ultimatum-funkciók billentyűparancsai</translation>
 <translation id="1333491156693005331">Nemrég ellenőrizve</translation>
 <translation id="1336996151357442890">Leiratkozott innen: <ph name="SITE_NAME" /> A rendszer következő látogatásakor ismét rákérdez.</translation>
 <translation id="1340839264183302272">Kilépés a csoportból</translation>
 <translation id="1342886103232377846">Az illetéktelen kézbe került jelszavak előfordulásának ellenőrzéséhez nyissa meg a Google Jelszókezelőt</translation>
-<translation id="1343830902827845050">Bejelentkezés a Chrome-ba</translation>
+<translation id="1343830902827845050">Bejelentkezés a Ultimatum-ba</translation>
 <translation id="1344653310988386453">A kiemelt szöveghez vezető linkkel együtt</translation>
 <translation id="1355088659320425659">Előzmények és lapok</translation>
 <translation id="1360432990279830238">Kijelentkezik, és kikapcsolja a szinkronizálást?</translation>
@@ -105,12 +105,12 @@
 <translation id="1383876407941801731">Keresés</translation>
 <translation id="1384704387250346179">Google Lens-képfordítás <ph name="BEGIN_NEW" />Új<ph name="END_NEW" /></translation>
 <translation id="1386674309198842382"><ph name="LAST_UPDATED" /> napja volt aktív</translation>
-<translation id="1390418506739274310">Előfordulhat, hogy más olyan alkalmazásokból származó előzményeket is lát, amelyek a Chrome-ban nyitják meg a linkeket. Előfordulhat, hogy a böngészési előzmények más formái még megtalálhatók Google-fiókjában a <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> webhelyen.</translation>
+<translation id="1390418506739274310">Előfordulhat, hogy más olyan alkalmazásokból származó előzményeket is lát, amelyek a Ultimatum-ban nyitják meg a linkeket. Előfordulhat, hogy a böngészési előzmények más formái még megtalálhatók Google-fiókjában a <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> webhelyen.</translation>
 <translation id="139752016751285248">Az „Árváltozások és -összehasonlítások” alsó lap teljes magasságban van megnyitva</translation>
 <translation id="1397811292916898096">Keresőmotor: <ph name="PRODUCT_NAME" /></translation>
-<translation id="1398057416966591719"><ph name="BEGIN_LINK1" />Kezelheti, hogy milyen Chrome-adatokat mentsen<ph name="END_LINK1" /> a rendszer az Ön Google-fiókjába.
+<translation id="1398057416966591719"><ph name="BEGIN_LINK1" />Kezelheti, hogy milyen Ultimatum-adatokat mentsen<ph name="END_LINK1" /> a rendszer az Ön Google-fiókjába.
 
-Az adatokat a Chrome-élmény javítására használó további beállításokért keresse fel a <ph name="BEGIN_LINK2" />Google-szolgáltatások<ph name="END_LINK2" /> oldalát.</translation>
+Az adatokat a Ultimatum-élmény javítására használó további beállításokért keresse fel a <ph name="BEGIN_LINK2" />Google-szolgáltatások<ph name="END_LINK2" /> oldalát.</translation>
 <translation id="1407069428457324124">Sötét téma</translation>
 <translation id="1407135791313364759">Összes megnyitása</translation>
 <translation id="1409879593029778104">A következő fájl letöltését a böngésző megakadályozta, mert a fájl már létezik: <ph name="FILE_NAME" />.</translation>
@@ -124,10 +124,10 @@ Az adatokat a Chrome-élmény javítására használó további beállításoké
 <translation id="1448440926884431741">A nyomon követett termékeket a Könyvjelzők között rendszerezheti</translation>
 <translation id="1455845192930279203">Mindenképpen le szeretné tölteni a(z) <ph name="FILE_NAME" /> (<ph name="FILE_SIZE" />) fájlt innen: <ph name="DOWNLOAD_DOMAIN" />?</translation>
 <translation id="1460751212339734034">Takarítson meg időt, gépeljen kevesebbet</translation>
-<translation id="1466383950273130737">Chrome nyelvének kiválasztása</translation>
+<translation id="1466383950273130737">Ultimatum nyelvének kiválasztása</translation>
 <translation id="1477626028522505441">A következő fájl letöltése szerverproblémák miatt nem sikerült: <ph name="FILE_NAME" />.</translation>
 <translation id="147982357559798527">Módosítva</translation>
-<translation id="1480287803138246127">Előfordulhat, hogy az előzményeinek egy része nem jelenik meg itt. Az összes Chrome-előzmény megtekintéséhez nyissa meg a teljes Chrome-előzményeket.</translation>
+<translation id="1480287803138246127">Előfordulhat, hogy az előzményeinek egy része nem jelenik meg itt. Az összes Ultimatum-előzmény megtekintéséhez nyissa meg a teljes Ultimatum-előzményeket.</translation>
 <translation id="1493287004536771723">Követi a következő webhelyet: <ph name="SITE_NAME" /></translation>
 <translation id="1495677929897281669">Vissza a lapra</translation>
 <translation id="1496514951988037011">felhasználónév</translation>
@@ -137,14 +137,14 @@ Az adatokat a Chrome-élmény javítására használó további beállításoké
 <translation id="1515901671075971249">Lap navigációs billentyűparancsai</translation>
 <translation id="1516966594427080024">Új ablak megnyitása inkognitó módban</translation>
 <translation id="1521774566618522728">Ma volt aktív</translation>
-<translation id="153446405401665083">Rendelkezésre áll a Chrome új verziója</translation>
+<translation id="153446405401665083">Rendelkezésre áll a Ultimatum új verziója</translation>
 <translation id="1540012742443808215">A címsáv jelenleg felül van</translation>
-<translation id="1544084554881119930">A fizetési módok és a címek nem lesznek titkosítva. A Chrome böngészési előzményei nem lesznek szinkronizálva.
-Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titkosított adatait. Az összetett jelszót nem kapja meg, és nem is tárolja a Google. Ha elfelejti az összetett jelszavát, vagy módosítani szeretné ezt a beállítást, <ph name="BEGIN_LINK" />törölje a fiókjában lévő Chrome-adatokat<ph name="END_LINK" />.</translation>
+<translation id="1544084554881119930">A fizetési módok és a címek nem lesznek titkosítva. A Ultimatum böngészési előzményei nem lesznek szinkronizálva.
+Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titkosított adatait. Az összetett jelszót nem kapja meg, és nem is tárolja a Google. Ha elfelejti az összetett jelszavát, vagy módosítani szeretné ezt a beállítást, <ph name="BEGIN_LINK" />törölje a fiókjában lévő Ultimatum-adatokat<ph name="END_LINK" />.</translation>
 <translation id="1544826120773021464">Google-fiókjának kezeléséhez koppintson a „Fiók kezelése” gombra</translation>
 <translation id="1549000191223877751">Áthelyezés másik ablakba</translation>
-<translation id="1553358976309200471">A Chrome böngésző frissítése</translation>
-<translation id="1554532453982918912">Segítsen, hogy továbbfejleszthessük a Chrome-ot azok számára, akik Önhöz hasonló módon használják</translation>
+<translation id="1553358976309200471">A Ultimatum böngésző frissítése</translation>
+<translation id="1554532453982918912">Segítsen, hogy továbbfejleszthessük a Ultimatum-ot azok számára, akik Önhöz hasonló módon használják</translation>
 <translation id="1568636008098739136">Oldal meghallgatása. A gyorsparancs szerkesztéséhez tartsa lenyomva.</translation>
 <translation id="1571041387761170095">Nincsenek gyenge vagy újrafelhasznált jelszavak</translation>
 <translation id="1578591621182011812">{NUM_PASSWORDS,plural, =1{1 olyan jelszó található ezen az eszközön, amelyhez illetéktelenül fértek hozzá}other{# olyan jelszó található ezen az eszközön, amelyhez illetéktelenül fértek hozzá}}</translation>
@@ -171,24 +171,24 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="1702907158640575240">Felügyelt böngésző</translation>
 <translation id="170478069042229393"><ph name="TAB_TITLE" />, rögzített inkognitó lap</translation>
 <translation id="1718835860248848330">Az elmúlt órából</translation>
-<translation id="1726477445370128854">Gyorsabban böngészhet és kereshet, ha a Chrome betölti előre azokat az oldalakat, amelyeket a böngésző szerint Ön már felkeresett.</translation>
+<translation id="1726477445370128854">Gyorsabban böngészhet és kereshet, ha a Ultimatum betölti előre azokat az oldalakat, amelyeket a böngésző szerint Ön már felkeresett.</translation>
 <translation id="1728803206919861584">Menti az azonosítókulcsot az inkognitó módon kívül?</translation>
 <translation id="1732514748744806741">Ha jelszavaihoz illetéktelenül fértek hozzá, értesítjük Önt</translation>
-<translation id="1737694586321018892">A Chrome legerősebb védelme</translation>
+<translation id="1737694586321018892">A Ultimatum legerősebb védelme</translation>
 <translation id="1747593111377567311">{NUM_SITES,plural, =1{Az utóbbi időben 1 webhely sok értesítést küldött}other{Az utóbbi időben # webhely sok értesítést küldött}}</translation>
 <translation id="1749561566933687563">Könyvjelzők szinkronizálása</translation>
 <translation id="1750238553597293878">Továbbra is használhatja a Google-fiókjában lévő jelszavakat</translation>
 <translation id="17513872634828108">Megnyitott lapok</translation>
 <translation id="1753744496844366747">Aa</translation>
 <translation id="1760873718737761808">{FILE_COUNT,plural, =1{Oldalak, 1 oldal a listában}other{Oldalak, # oldal a listában}}</translation>
-<translation id="1771929606532798550">A rendszer információt küld a Google-nak az Ön Chrome-használatáról, de ez az információ nem köthető Önhöz\n\nHa a Chrome összeomlik, az összeomlással kapcsolatos adatok között szerepelhetnek bizonyos személyes adatok\n\nHa szinkronizálja előzményeit Google-fiókjával, a mutatók tartalmazhatnak információkat az Ön által felkeresett URL-ekre vonatkozóan</translation>
+<translation id="1771929606532798550">A rendszer információt küld a Google-nak az Ön Ultimatum-használatáról, de ez az információ nem köthető Önhöz\n\nHa a Ultimatum összeomlik, az összeomlással kapcsolatos adatok között szerepelhetnek bizonyos személyes adatok\n\nHa szinkronizálja előzményeit Google-fiókjával, a mutatók tartalmazhatnak információkat az Ön által felkeresett URL-ekre vonatkozóan</translation>
 <translation id="1778457539567749232">Megjelölés olvasatlanként</translation>
 <translation id="1779766957982586368">Ablak bezárása</translation>
 <translation id="1780023393214832643">A(z) <ph name="USERNAME" /> fiókba mentett jelszavak</translation>
 <translation id="1791662854739702043">Telepítve</translation>
 <translation id="1792959175193046959">Az alapértelmezett letöltési helyet bármikor módosíthatja</translation>
 <translation id="1796666869097395659">Lap kis méretűre állítása a későbbi visszatéréshez</translation>
-<translation id="1799920918471566157">Chrome-tippek</translation>
+<translation id="1799920918471566157">Ultimatum-tippek</translation>
 <translation id="1807246157184219062">Világos</translation>
 <translation id="1807709131360304325">Új ablak nyitása</translation>
 <translation id="1810845389119482123">A szinkronizálás kezdeti beállítása nem fejeződött be</translation>
@@ -197,13 +197,13 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="1820408774134375111">Alsó bejelentkezési lap</translation>
 <translation id="1823492026305965829">Bejelentkezés mint <ph name="USER_FULL_NAME" /></translation>
 <translation id="1824902652744048041">Koppintson a Böngészési adatok törlése lehetőségre.</translation>
-<translation id="1825772852827001597">A Google Payből származó fizetési módok és címek nem lesznek titkosítva. A Chrome böngészési előzményei nem lesznek szinkronizálva.
-Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titkosított adatait. Az összetett jelszót nem kapja meg, és nem is tárolja a Google. Ha elfelejti az összetett jelszavát, vagy módosítani szeretné ezt a beállítást, <ph name="BEGIN_LINK" />törölje a fiókjában lévő Chrome-adatokat<ph name="END_LINK" />.</translation>
+<translation id="1825772852827001597">A Google Payből származó fizetési módok és címek nem lesznek titkosítva. A Ultimatum böngészési előzményei nem lesznek szinkronizálva.
+Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titkosított adatait. Az összetett jelszót nem kapja meg, és nem is tárolja a Google. Ha elfelejti az összetett jelszavát, vagy módosítani szeretné ezt a beállítást, <ph name="BEGIN_LINK" />törölje a fiókjában lévő Ultimatum-adatokat<ph name="END_LINK" />.</translation>
 <translation id="1829244130665387512">Keresés ezen az oldalon</translation>
 <translation id="1832459821645506983">Benne vagyok!</translation>
-<translation id="1845958458910716240">Adatainak védelme érdekében engedélyezheti, hogy a Chrome eltávolítsa azoknak a webhelyeknek az engedélyeit, amelyeket Ön nem keresett fel mostanában</translation>
-<translation id="1871098866036088250">Megnyitás a Chrome böngészőben</translation>
-<translation id="1877026089748256423">A Chrome elavult</translation>
+<translation id="1845958458910716240">Adatainak védelme érdekében engedélyezheti, hogy a Ultimatum eltávolítsa azoknak a webhelyeknek az engedélyeit, amelyeket Ön nem keresett fel mostanában</translation>
+<translation id="1871098866036088250">Megnyitás a Ultimatum böngészőben</translation>
+<translation id="1877026089748256423">A Ultimatum elavult</translation>
 <translation id="1877073879466606884">A bejelentkezéshez használt profil felügyelt profil. A rendszergazda távolról módosíthatja az Ön profilbeállításait, jelentésekkel elemezheti a böngészőadatait, és egyéb szükséges feladatokat is elvégezhet.</translation>
 <translation id="1879904908408734349">Az alsó bejelentkezési lap bezárva</translation>
 <translation id="1883903952484604915">Saját fájlok</translation>
@@ -215,7 +215,7 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="1910950723001426294">A megosztási lehetőségek listája össze van csukva.</translation>
 <translation id="191726024256261717">Engedélyek áttekintése</translation>
 <translation id="1917766536967060661">Azonnal elveszíti a(z) „<ph name="GROUP_NAME" />” lapcsoporthoz való hozzáférését, és <ph name="BLOCKED_MEMBER_FULL_NAME" /> (<ph name="BLOCKED_MEMBER_EMAIL" />) a továbbiakban nem fog tudni kapcsolatba lépni Önnel a Google-szolgáltatásokban.</translation>
-<translation id="1919130412786645364">Chrome-bejelentkezés engedélyezése</translation>
+<translation id="1919130412786645364">Ultimatum-bejelentkezés engedélyezése</translation>
 <translation id="1922362554271624559">Javasolt nyelvek</translation>
 <translation id="1924255092154549435">Lap kibontva</translation>
 <translation id="1925021887439448749">Írja be az egyéni internetcímet</translation>
@@ -225,11 +225,11 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="1944535645109964458">Nincsenek rendelkezésre álló azonosítókulcsok</translation>
 <translation id="1957557050935255529">PDF betöltése…</translation>
 <translation id="1959679933317802873">Várakozás tartalomra…</translation>
-<translation id="1960290143419248813">Az Android jelen verziója a továbbiakban már nem támogatja a Chrome-frissítéseket</translation>
+<translation id="1960290143419248813">Az Android jelen verziója a továbbiakban már nem támogatja a Ultimatum-frissítéseket</translation>
 <translation id="1962061488333185936"><ph name="TAB_TITLE" />, több kiválasztott, hangot lejátszó lap</translation>
 <translation id="1963976881984600709">Normál védelem</translation>
 <translation id="1966710179511230534">Kérjük, frissítse bejelentkezési adatait.</translation>
-<translation id="1969037871259811890">Böngészési adatainak törlésével nem jelentkezik ki Google-fiókjából. Ehhez <ph name="BEGIN_LINK1" />jelentkezzen ki a Chrome-ból<ph name="END_LINK1" />.</translation>
+<translation id="1969037871259811890">Böngészési adatainak törlésével nem jelentkezik ki Google-fiókjából. Ehhez <ph name="BEGIN_LINK1" />jelentkezzen ki a Ultimatum-ból<ph name="END_LINK1" />.</translation>
 <translation id="197288927597451399">Megőrzés</translation>
 <translation id="1973912524893600642">Adatok megőrzése</translation>
 <translation id="1974060860693918893">Speciális</translation>
@@ -242,7 +242,7 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="2021896219286479412">Teljes képernyős oldal vezérlői</translation>
 <translation id="2029669011553795746">A tippekre vonatkozó értesítésekre való feliratkozás félmagasságban van megnyitva</translation>
 <translation id="2038563949887743358">Kapcsolja be az Asztali webhely kérése funkciót</translation>
-<translation id="204321170514947529">A(z) <ph name="APP_NAME" /> a Chrome-ban is rendelkezik adatokkal</translation>
+<translation id="204321170514947529">A(z) <ph name="APP_NAME" /> a Ultimatum-ban is rendelkezik adatokkal</translation>
 <translation id="2047378580182589770">Tartsa lenyomva az ujját az inkognitó módból való kilépéshez</translation>
 <translation id="2049574241039454490"><ph name="FILE_SIZE_OF_TOTAL" /> <ph name="SEPARATOR" /> <ph name="DESCRIPTION" /></translation>
 <translation id="2051669996101374349">HTTPS használata, amikor csak lehetséges, és figyelmeztetés megjelenítése a protokollt nem támogató webhelyek betöltése előtt. Ezt a beállítást nem módosíthatja, mert be van kapcsolva a Speciális védelem.</translation>
@@ -265,9 +265,9 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="2138283760993967204">Kezelés ikon</translation>
 <translation id="2138632817776076519"><ph name="TAB_TITLE" />, kiválasztott, felvételt készítő lap</translation>
 <translation id="2141396931810938595">A használata alapján</translation>
-<translation id="2145315049852051678">A Chrome rendszeresen ellenőrzi, hogy a böngészője a legbiztonságosabb beállításokkal rendelkezik-e. Tudatni fogjuk, ha bármit felül kell vizsgálnia.</translation>
+<translation id="2145315049852051678">A Ultimatum rendszeresen ellenőrzi, hogy a böngészője a legbiztonságosabb beállításokkal rendelkezik-e. Tudatni fogjuk, ha bármit felül kell vizsgálnia.</translation>
 <translation id="2149973817440762519">Könyvjelző szerkesztése</translation>
-<translation id="2163089732491971196">Ha Chrome-adatokat szeretne használni és tárolni Google-fiókjában, adja meg az összetett jelszavát</translation>
+<translation id="2163089732491971196">Ha Ultimatum-adatokat szeretne használni és tárolni Google-fiókjában, adja meg az összetett jelszavát</translation>
 <translation id="2166228530126694506">Verzió: <ph name="VERSION_NUMBER" /></translation>
 <translation id="2172688499998841696">A képleírások ki vannak kapcsolva</translation>
 <translation id="2172905120685242547">Bezárja az ablakot?</translation>
@@ -280,7 +280,7 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="2194856509914051091">Megfontolandó szempontok</translation>
 <translation id="2205701497928406883"><ph name="TAB_TITLE" />, rögzített, tartalmat megosztó lap</translation>
 <translation id="22091350895006575">Felhasználónév megadása</translation>
-<translation id="221494669172414749">Ha profilzárolás nélkül nyitja meg a Chrome-ot, azzal eltávolítja a mentett jelszavakat és fizetési módokat az autóból. A profilzárolással biztonságban tudhatja adatait.</translation>
+<translation id="221494669172414749">Ha profilzárolás nélkül nyitja meg a Ultimatum-ot, azzal eltávolítja a mentett jelszavakat és fizetési módokat az autóból. A profilzárolással biztonságban tudhatja adatait.</translation>
 <translation id="2226826835915474236">Inaktív gyorsparancsok</translation>
 <translation id="2227179592712503583">Javaslat eltávolítása</translation>
 <translation id="2227444325776770048">Folytatás mint <ph name="USER_FULL_NAME" /></translation>
@@ -311,7 +311,7 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="2332515770639153015">A Biztonságos Böngészés fokozott védelemmel funkció be van kapcsolva</translation>
 <translation id="233375395665273385">Törlés és kijelentkezés</translation>
 <translation id="2341410551640223969">A(z) <ph name="WEBAPK_NAME" /> telepítése nem sikerült.</translation>
-<translation id="2349710944427398404">A Chrome által használt teljes adatmennyiség, beleértve a fiókokat, könyvjelzőket és mentett beállításokat is</translation>
+<translation id="2349710944427398404">A Ultimatum által használt teljes adatmennyiség, beleértve a fiókokat, könyvjelzőket és mentett beállításokat is</translation>
 <translation id="235789365079050412">Google Adatvédelmi irányelvek</translation>
 <translation id="2359808026110333948">Tovább</translation>
 <translation id="2362083820973145409">Bejelentkezve a következőként: <ph name="USER_NAME" />. <ph name="USER_EMAIL" />. Megnyitja a beállításokat.</translation>
@@ -333,7 +333,7 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="2427025860753516072">{FILE_COUNT,plural, =1{Videók, 1 videó a listában}other{Videók, # videó a listában}}</translation>
 <translation id="2433507940547922241">Megjelenés</translation>
 <translation id="2439153523196674349"><ph name="SITE_NAME" />-előnézet</translation>
-<translation id="2449931042095204989">Ha valamely Google-webhely vagy -alkalmazás a linkek privát módon való előtöltését kéri az oldalán, a Chrome cookie-k nélkül titkosítja és tölti be előre az oldalakat a Google szerverein keresztül. Ez a művelet elrejti az Ön személyazonosságát az előre betöltött webhely előtt.</translation>
+<translation id="2449931042095204989">Ha valamely Google-webhely vagy -alkalmazás a linkek privát módon való előtöltését kéri az oldalán, a Ultimatum cookie-k nélkül titkosítja és tölti be előre az oldalakat a Google szerverein keresztül. Ez a művelet elrejti az Ön személyazonosságát az előre betöltött webhely előtt.</translation>
 <translation id="2450019289047528273">Fizetési módok és egyéb információk a Google Walletből</translation>
 <translation id="2450083983707403292">Szeretné újra elkezdeni a(z) <ph name="FILE_NAME" /> letöltését?</translation>
 <translation id="2451607499823206582">Nyomon követés</translation>
@@ -342,17 +342,17 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="2466378451804467735"><ph name="TAB_TITLE" />, több kiválasztott némított lap</translation>
 <translation id="2468444275314013497">Böngészője jól néz ki</translation>
 <translation id="2471632347767899461">Próbáljon keresni a Súgóban</translation>
-<translation id="2472163211318554013">Jelentkezzen be, hogy a legtöbbet hozhassa ki a Chrome-ból</translation>
+<translation id="2472163211318554013">Jelentkezzen be, hogy a legtöbbet hozhassa ki a Ultimatum-ból</translation>
 <translation id="247737702124049222">A képleírások be vannak kapcsolva</translation>
 <translation id="2479148705183875116">Beállítások</translation>
 <translation id="2482878487686419369">Értesítések</translation>
 <translation id="2496180316473517155">Böngészés előzményei</translation>
 <translation id="2497852260688568942">A szinkronizálást letiltotta a rendszergazda</translation>
-<translation id="250020030759455918">Láthatja a(z) <ph name="SITE_NAME" /> bejelentkezési állapotát, a böngészőadatokat és a webhelyadatokat a Chrome-ban</translation>
+<translation id="250020030759455918">Láthatja a(z) <ph name="SITE_NAME" /> bejelentkezési állapotát, a böngészőadatokat és a webhelyadatokat a Ultimatum-ban</translation>
 <translation id="2510106555128151389">A(z) <ph name="WEBAPK_NAME" /> telepítése…</translation>
 <translation id="2512234228327349533">Vásárlási lehetőségek keresése</translation>
 <translation id="2513403576141822879">A <ph name="BEGIN_LINK" />Szinkronizálás és Google<ph name="END_LINK" /> részben további beállításokat talál az adatvédelemre, biztonságra és adatgyűjtésre vonatkozóan</translation>
-<translation id="2515921719039583189">Törli Chrome-adatait erről az eszközről?</translation>
+<translation id="2515921719039583189">Törli Ultimatum-adatait erről az eszközről?</translation>
 <translation id="2517113738956581680">Teljes méretű munkalap</translation>
 <translation id="2523184218357549926">A felkeresett oldalak URL-címének elküldése a Google-nak</translation>
 <translation id="2524132927880411790">Ugrás a Google alkalmazás Hangalapú keresés oldalára</translation>
@@ -374,9 +374,9 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="2569733278091928697">Könnyedén tudja majd kezelni a médiavezérlőket, az inkognitó munkameneteket, a letöltéseket és egyebeket</translation>
 <translation id="2571711316400087311">Más nyelvű oldalak Google Fordítónak való küldésének felajánlása</translation>
 <translation id="2571834852878229351">Saját létrehozása</translation>
-<translation id="2574249610672786438">Jelentkezzen be minden eszközén, hogy bárhol hozzáférhessen a lapjaihoz, ahol a Chrome-ot használja.</translation>
+<translation id="2574249610672786438">Jelentkezzen be minden eszközén, hogy bárhol hozzáférhessen a lapjaihoz, ahol a Ultimatum-ot használja.</translation>
 <translation id="2577981599306533385"><ph name="MEMBER_FULL_NAME" /> (<ph name="EMAIL" />) azonnal elveszíti a hozzáférését a(z) „<ph name="GROUP_NAME" />” lapcsoporthoz, és nem fog tudni Önnel kapcsolatba lépni a Google-szolgáltatásokban.</translation>
-<translation id="2581165646603367611">Ezzel törli a cookie-kat, a gyorsítótárat, valamint a webhelyek összes olyan adatát, amelyről a Chrome úgy véli, hogy nem fontos.</translation>
+<translation id="2581165646603367611">Ezzel törli a cookie-kat, a gyorsítótárat, valamint a webhelyek összes olyan adatát, amelyről a Ultimatum úgy véli, hogy nem fontos.</translation>
 <translation id="2587052924345400782">Rendelkezésre áll új verzió</translation>
 <translation id="2593272815202181319">Monospace</translation>
 <translation id="260403163289591229">Követve</translation>
@@ -415,8 +415,8 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="2779651927720337254">sikertelen</translation>
 <translation id="2781151931089541271">1 másodperc van hátra</translation>
 <translation id="2789486458103222910">OK</translation>
-<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{A Chrome talált egy újrafelhasznált jelszót, amelyen lehetne javítani}other{A Chrome talált # újrafelhasznált jelszót, amelyen lehetne javítani}}</translation>
-<translation id="2794551654724114396">Kapcsolja be az értesítéseket, hogy hasznos tippeket kapjon, amelyek segítségével a legtöbbet hozhatja ki a Chrome-ból</translation>
+<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{A Ultimatum talált egy újrafelhasznált jelszót, amelyen lehetne javítani}other{A Ultimatum talált # újrafelhasznált jelszót, amelyen lehetne javítani}}</translation>
+<translation id="2794551654724114396">Kapcsolja be az értesítéseket, hogy hasznos tippeket kapjon, amelyek segítségével a legtöbbet hozhatja ki a Ultimatum-ból</translation>
 <translation id="2805210243313393104">A könyvjelzők és egyebek elérése bármely eszközéről</translation>
 <translation id="2805756323405976993">Alkalmazások</translation>
 <translation id="2819849308549746319">Leiratkozás az összesről</translation>
@@ -433,7 +433,7 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="2842985007712546952">Szülőmappa</translation>
 <translation id="2854916915045135148">Tartsa lenyomva az ujját az inkognitó módba való váltáshoz</translation>
 <translation id="2860954141821109167">Győződjön meg arról, hogy van engedélyezett telefonalkalmazás ezen az eszközön</translation>
-<translation id="2861923151411510142">A Chrome egyes funkcióihoz nem tud majd hozzáférni</translation>
+<translation id="2861923151411510142">A Ultimatum egyes funkcióihoz nem tud majd hozzáférni</translation>
 <translation id="286473047976978798">Alkalmazza a megjelenési beállításokat?</translation>
 <translation id="2869416538780777323">{OTHER_TAB_COUNT,plural, =1{<ph name="URL" /> és további 1 lap}other{<ph name="URL" /> és további <ph name="TAB_COUNT_MANY" /> lap}}</translation>
 <translation id="2869430948265924908">Profilzárolást kell létrehoznia, hogy meg tudja védeni az autóban a bizalmas tartalmait.  Ezt PIN-kód, kód vagy jelszó segítségével teheti meg.</translation>
@@ -441,10 +441,10 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="2871733351037274014">Oldalak előtöltése</translation>
 <translation id="2876136027428473467"><ph name="CHILD_NAME" /> arra kéri, hogy hagyja jóvá a következő webhelyet:</translation>
 <translation id="2876556152483133018">Webhelyen történő keresés</translation>
-<translation id="2876628302275096482">További információ arról, <ph name="BEGIN_LINK" />hogyan gondoskodik az Ön adatainak védelméről a Chrome<ph name="END_LINK" />.</translation>
+<translation id="2876628302275096482">További információ arról, <ph name="BEGIN_LINK" />hogyan gondoskodik az Ön adatainak védelméről a Ultimatum<ph name="END_LINK" />.</translation>
 <translation id="2878607776582720720"><ph name="TAB_TITLE" />, több kiválasztott, tartalmat megosztó inkognitó lap</translation>
 <translation id="2885355868600171871">Ugrás a címsávra</translation>
-<translation id="2888126860611144412">A Chrome névjegye</translation>
+<translation id="2888126860611144412">A Ultimatum névjegye</translation>
 <translation id="2891154217021530873">Oldal betöltésének leállítása</translation>
 <translation id="2893168226686371498">Alapértelmezett böngésző</translation>
 <translation id="2894821468041866720">Nem lassítja jelentősen a böngészőt vagy az eszközt.</translation>
@@ -463,14 +463,14 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="2923908459366352541">A név érvénytelen</translation>
 <translation id="2932150158123903946">Google <ph name="APP_NAME" />-tárhely</translation>
 <translation id="2932222164150889403">A billentyűzet ugyanaz marad</translation>
-<translation id="2936980480904111527">A Chrome-értesítések megkönnyítik a felhasználók dolgát</translation>
+<translation id="2936980480904111527">A Ultimatum-értesítések megkönnyítik a felhasználók dolgát</translation>
 <translation id="2940075786175545812">Lehetőség a webhely jóváhagyására vagy elutasítására</translation>
 <translation id="2942036813789421260">Az előnézeti lap zárva van</translation>
 <translation id="2951071800649516099">Oldalak felvétele az olvasólistára, hogy később elolvashassa őket</translation>
 <translation id="2954586176076923855">Címsáv áthelyezése felülre</translation>
 <translation id="2961208450284224863">{READING_LIST_UNREAD_PAGE_COUNT,plural, =1{<ph name="READING_LIST_UNREAD_PAGE_COUNT_ONE" /> olvasatlan oldal}other{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> olvasatlan oldal}}</translation>
 <translation id="2972109037780336501">Engedélyek automatikus eltávolítása</translation>
-<translation id="2976550651269220761">A Chrome egyes adatait még nem mentette a rendszer a Google-fiókjába.\nA kijelentkezés előtt várjon néhány percet. Ha most jelentkezik ki, akkor ezek az adatok törlődnek.</translation>
+<translation id="2976550651269220761">A Ultimatum egyes adatait még nem mentette a rendszer a Google-fiókjába.\nA kijelentkezés előtt várjon néhány percet. Ha most jelentkezik ki, akkor ezek az adatok törlődnek.</translation>
 <translation id="2977350910003566746">Rendezés folyamatban: legutóbb megnyitottak szerint</translation>
 <translation id="297771753501244313">Legutóbbiak szerint</translation>
 <translation id="2979639724566107830">Megnyitás új ablakban</translation>
@@ -493,15 +493,15 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="3035527385626181784"><ph name="TAB_TITLE" />, kiválasztott, tartalmaz megosztó lap</translation>
 <translation id="3036750288708366620"><ph name="BEGIN_LINK" />Kérjen segítséget<ph name="END_LINK" /></translation>
 <translation id="3037177537145227281">Ár nyomon követése…</translation>
-<translation id="3037517125981011456">Értesítéseket jelenít meg a Chrome-ba való bejelentkezéshez</translation>
+<translation id="3037517125981011456">Értesítéseket jelenít meg a Ultimatum-ba való bejelentkezéshez</translation>
 <translation id="3038272154009688107">Összes webhely megjelenítése</translation>
 <translation id="3057938290530993634">Tartsa lenyomva a leggyakrabban felkeresett webhelyek kitűzéséhez, hogy legközelebb könnyen hozzájuk férhessen</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> könyvjelző}other{<ph name="BOOKMARKS_COUNT_MANY" /> könyvjelző}}</translation>
-<translation id="3062802207422175757">Az érdeklődési köreihez kapcsolódó cikkek a Chrome-ban</translation>
+<translation id="3062802207422175757">Az érdeklődési köreihez kapcsolódó cikkek a Ultimatum-ban</translation>
 <translation id="3066573403916685335">Le</translation>
 <translation id="3067505415088964188">Alacsony ár</translation>
 <translation id="3070005020161560471">Automatikusan fordított nyelvek</translation>
-<translation id="3072980200212375806">A(z) <ph name="APP_NAME" /> a Chrome-ban fog megnyílni. A továbblépéssel Ön elfogadja a <ph name="BEGIN_LINK1" />Google Általános Szerződési Feltételeket<ph name="END_LINK1" />, valamint <ph name="BEGIN_LINK2" />A Google Chrome és a ChromeOS Kiegészítő Általános Szerződési Feltételeit<ph name="END_LINK2" />. Az <ph name="BEGIN_LINK3" />adatvédelmi irányelvek<ph name="END_LINK3" /> is érvényben vannak.</translation>
+<translation id="3072980200212375806">A(z) <ph name="APP_NAME" /> a Ultimatum-ban fog megnyílni. A továbblépéssel Ön elfogadja a <ph name="BEGIN_LINK1" />Google Általános Szerződési Feltételeket<ph name="END_LINK1" />, valamint <ph name="BEGIN_LINK2" />A Ultimatum és a UltimatumOS Kiegészítő Általános Szerződési Feltételeit<ph name="END_LINK2" />. Az <ph name="BEGIN_LINK3" />adatvédelmi irányelvek<ph name="END_LINK3" /> is érvényben vannak.</translation>
 <translation id="3080525922482950719">Mentheti az oldalakat későbbi olvasásra, vagy ha offline állapotban van</translation>
 <translation id="3087734570205094154">Alja</translation>
 <translation id="3091010850649238832">Vágólap tartalmának mutatása</translation>
@@ -511,7 +511,7 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="3123734510202723619">Hirdetmények</translation>
 <translation id="3134385238404760368">Nincsenek nemrég megnyitott lapok</translation>
 <translation id="3135655388926735587">Koppintson a Nemrég megnyitott lapok elemre.</translation>
-<translation id="314939179385989105">A Chrome kezdőlapja</translation>
+<translation id="314939179385989105">A Ultimatum kezdőlapja</translation>
 <translation id="3158667104057012316">Manuális rendezés folyamatban</translation>
 <translation id="3159335509547415276">További információ a letiltott fiókokról</translation>
 <translation id="3161699713309727585"><ph name="BUTTON_TEXT" />, új lapon nyílik meg</translation>
@@ -531,7 +531,7 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="3236059992281584593">1 perc van hátra</translation>
 <translation id="3237087289225714896">Normál előtöltés:</translation>
 <translation id="3244271242291266297">HH</translation>
-<translation id="3245429137663807393">Ha a Chrome használati jelentéseit is megosztja, ezek a jelentések tartalmazzák az Ön által felkeresett URL-eket.</translation>
+<translation id="3245429137663807393">Ha a Ultimatum használati jelentéseit is megosztja, ezek a jelentések tartalmazzák az Ön által felkeresett URL-eket.</translation>
 <translation id="3250563604907490871">A képleírások megjelenítése akkor folytatódik, ha csatlakozik Wi-Fi-hálózathoz</translation>
 <translation id="3254409185687681395">Könyvjelző hozzáadása ehhez az oldalhoz</translation>
 <translation id="3265093782546847662">A(z) <ph name="DOMAIN" /> összes oldala</translation>
@@ -568,22 +568,22 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="3435575784518354875">Ha továbbra is hozzá szeretne férni jelszavaihoz, exportálja őket haladéktalanul, majd frissítse a Google Play-szolgáltatásokat, és importálja őket vissza a Google Jelszókezelőbe. <ph name="BEGIN_LINK" />Részletes utasítások<ph name="END_LINK" />.</translation>
 <translation id="3435738964857648380">Biztonság</translation>
 <translation id="3435914367318771664">Lap hozzáadása új csoporthoz</translation>
-<translation id="3438681572027105609">Ha az összes eszközén szeretne hozzáférni jelszavaihoz és egyebekhez, jelentkezzen be a Chrome-ba</translation>
+<translation id="3438681572027105609">Ha az összes eszközén szeretne hozzáférni jelszavaihoz és egyebekhez, jelentkezzen be a Ultimatum-ba</translation>
 <translation id="3439276997620616816">Itt láthatja majd a legutóbb megnyitott lapjait</translation>
 <translation id="3443221991560634068">Az aktuális oldal újratöltése</translation>
 <translation id="3444179773590444986">Megosztja velünk véleményét a webhelyeknél használt sötét témával kapcsolatban?</translation>
 <translation id="3448874648066942074">Oldal összegzése AI segítségével</translation>
-<translation id="3452832259067974318">Adatai védelme érdekében a Chrome nem tölti ki automatikusan a jelszót ebben a mezőben.</translation>
+<translation id="3452832259067974318">Adatai védelme érdekében a Ultimatum nem tölti ki automatikusan a jelszót ebben a mezőben.</translation>
 <translation id="3474624961160222204">Folytatás mint <ph name="NAME" /></translation>
 <translation id="3478363558367712427">Kiválaszthatja keresőmotorját</translation>
 <translation id="3482805106082349287">Keresés billentyűzet, hang, Inkognitó mód vagy kamera használatával</translation>
-<translation id="3487903178221457900">Az exportált fájl mások számára is hozzáférhető lehet, beleértve az alkalmazásokat is. Az exportálás után a jelszavak törlődnek a Chrome-ból.</translation>
+<translation id="3487903178221457900">Az exportált fájl mások számára is hozzáférhető lehet, beleértve az alkalmazásokat is. Az exportálás után a jelszavak törlődnek a Ultimatum-ból.</translation>
 <translation id="3488199663160411179">név</translation>
 <translation id="3493531032208478708"><ph name="BEGIN_LINK" />További információ<ph name="END_LINK" /> a javasolt tartalomról</translation>
 <translation id="3499246418971111862">chrome_qrcode_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="350276055892098337">Rendezés: legrégibb elől</translation>
 <translation id="3507132249039706973">A Normál védelem be van kapcsolva</translation>
-<translation id="3509330069915219067">Offline. A Chrome nem tud frissítéseket keresni.</translation>
+<translation id="3509330069915219067">Offline. A Ultimatum nem tud frissítéseket keresni.</translation>
 <translation id="3513019849832307207">Csatlakozás és megnyitás</translation>
 <translation id="3513704683820682405">Kiterjesztett valóság</translation>
 <translation id="3516053221628030540">A Google Play megnyitása</translation>
@@ -615,10 +615,10 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="3623240789707551553">{DOMAIN_COUNT,plural, =1{+1 webhely}other{+# webhely}}</translation>
 <translation id="3625870480639975468">Nagyítás alaphelyzetbe állítása</translation>
 <translation id="3631987586758005671">Megosztás a következővel: <ph name="DEVICE_NAME" /></translation>
-<translation id="3635073343384702370">A Chrome képes a jelszavak ellenőrzésére, amikor Ön menti őket</translation>
+<translation id="3635073343384702370">A Ultimatum képes a jelszavak ellenőrzésére, amikor Ön menti őket</translation>
 <translation id="3636940436873918441">Előnyben részesített nyelvek</translation>
-<translation id="3637744895182738742">Ha elfelejtette az összetett jelszavát, vagy módosítani szeretné ezt a beállítást, <ph name="BEGIN_LINK" />törölje a fiókjában lévő Chrome-adatokat<ph name="END_LINK" />.</translation>
-<translation id="3641581193271938629">A Chrome Keresés funkciójára való feliratkozás bezárva</translation>
+<translation id="3637744895182738742">Ha elfelejtette az összetett jelszavát, vagy módosítani szeretné ezt a beállítást, <ph name="BEGIN_LINK" />törölje a fiókjában lévő Ultimatum-adatokat<ph name="END_LINK" />.</translation>
+<translation id="3641581193271938629">A Ultimatum Keresés funkciójára való feliratkozás bezárva</translation>
 <translation id="3647019414263135904">A Kontextus előugró ablak megnyitása vagy bezárása</translation>
 <translation id="3653111872753786013"><ph name="WEBSITE_TITLE" />: <ph name="WEBSITE_URL" /></translation>
 <translation id="3674208116086565128">Ugrás a Google alkalmazás főoldalára</translation>
@@ -636,7 +636,7 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="3710501561113687889">A folytatáshoz a(z) <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> megosztja a következőket ezzel a webhellyel: <ph name="FIELDS_STRING" />.</translation>
 <translation id="3710560693796335511">Együttműködés</translation>
 <translation id="3714430408451673233">A lap alsó lapja félmagasságban megnyitva.</translation>
-<translation id="3718765429352682176">Előfordulhat, hogy más olyan alkalmazásokból származó előzményeket is lát, amelyek a Chrome-ban nyitják meg a linkeket.</translation>
+<translation id="3718765429352682176">Előfordulhat, hogy más olyan alkalmazásokból származó előzményeket is lát, amelyek a Ultimatum-ban nyitják meg a linkeket.</translation>
 <translation id="3721119614952978349">Ön és a Google</translation>
 <translation id="3727000368239390918">Bejelentkezve valamennyi eszközén hozzáférhet lapjaihoz és egyebekhez.</translation>
 <translation id="3737319253362202215">Fordítási beállítások</translation>
@@ -690,8 +690,8 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="3943322906274039960"><ph name="TAB_TITLE" />, kitűzött lap kép a képben módban</translation>
 <translation id="3950820424414687140">Bejelentkezés</translation>
 <translation id="395377504920307820">Fiók nélküli használat</translation>
-<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{A Chrome betölti az oldalt, amint lehetséges}other{A Chrome betölti az oldalakat, amint lehetséges}}</translation>
-<translation id="3969142555815019568">A Chrome nem tudja ellenőrizni a jelszavakat</translation>
+<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{A Ultimatum betölti az oldalt, amint lehetséges}other{A Ultimatum betölti az oldalakat, amint lehetséges}}</translation>
+<translation id="3969142555815019568">A Ultimatum nem tudja ellenőrizni a jelszavakat</translation>
 <translation id="3969863827134279083">Fel</translation>
 <translation id="397105322502079400">Számítás…</translation>
 <translation id="397583555483684758">A szinkronizálás leállt</translation>
@@ -702,10 +702,10 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="3987993985790029246">Link másolása</translation>
 <translation id="3994236846568425219">A sötét téma bekapcsolása, amikor az eszköz sötét témája be van kapcsolva</translation>
 <translation id="4000212216660919741">Offline kezdőlap</translation>
-<translation id="4000670338830950598">A Google Chrome személyre szabása és vezérlése kiemelt elemmel</translation>
+<translation id="4000670338830950598">A Ultimatum személyre szabása és vezérlése kiemelt elemmel</translation>
 <translation id="4015643064997321279">{NUM_PASSWORDS,plural, =1{1 olyan jelszó található az Ön Google-fiókjában, amelyhez illetéktelenül hozzáfértek}other{# olyan jelszó található az Ön Google-fiókjában, amelyhez illetéktelenül hozzáfértek}}</translation>
 <translation id="4016425174436051808">Nem lehet követni. Hiba történt.</translation>
-<translation id="4023638601467301498">Ha az összes eszközén szeretne hozzáférni könyvjelzőihez, könyvjelzőihez és egyebekhez, jelentkezzen be a Chrome-ba</translation>
+<translation id="4023638601467301498">Ha az összes eszközén szeretne hozzáférni könyvjelzőihez, könyvjelzőihez és egyebekhez, jelentkezzen be a Ultimatum-ba</translation>
 <translation id="4024768890073681126">Böngésződet a szülőd kezeli</translation>
 <translation id="4027569221211770437"><ph name="FOLDER_TITLE" /> mappa</translation>
 <translation id="4034817413553209278">{HOURS,plural, =1{# órája}other{# órája}}</translation>
@@ -745,13 +745,13 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="4180726336228139707">Csak ezen az eszközön</translation>
 <translation id="4181841719683918333">Nyelvek</translation>
 <translation id="4188221736490993796">Rendezés Z-től A-ig</translation>
-<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{A Chrome spam vagy megtévesztő tartalom miatt megakadályozta, hogy ez a webhely értesítéseket küldjön}other{A Chrome spam vagy megtévesztő tartalom miatt megakadályozta, hogy ezek a webhelyek értesítéseket küldjenek}}</translation>
+<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{A Ultimatum spam vagy megtévesztő tartalom miatt megakadályozta, hogy ez a webhely értesítéseket küldjön}other{A Ultimatum spam vagy megtévesztő tartalom miatt megakadályozta, hogy ezek a webhelyek értesítéseket küldjenek}}</translation>
 <translation id="4195643157523330669">Megnyitás új lapon</translation>
 <translation id="4197828496439691735">{NUM_TABS,plural, =1{1 lap ezen az eszközön}other{# lap ezen az eszközön}}</translation>
 <translation id="4198268995694216131">További webhelyek</translation>
 <translation id="4198423547019359126">Nem áll rendelkezésre letöltési hely</translation>
 <translation id="4209029522667123437"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> • Ön használta ezen a webhelyen</translation>
-<translation id="4214315110991671325">Ha engedélyezi a cookie-kat, előfordulhat, hogy a Chrome előtöltéshez használja fel őket.</translation>
+<translation id="4214315110991671325">Ha engedélyezi a cookie-kat, előfordulhat, hogy a Ultimatum előtöltéshez használja fel őket.</translation>
 <translation id="421517251707893998">Koppintson a Parancsikon kitűzése lehetőségre</translation>
 <translation id="4216511743389425832">Oldal meghallgatása</translation>
 <translation id="4217657297368492684"><ph name="TAB_TITLE" />, kiválasztott, kitűzött inkognitó lap kép a képben módban</translation>
@@ -759,7 +759,7 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="4225895483398857530">Eszköztár gyorsparancs</translation>
 <translation id="4232376164796433044">Jelszavak és automatikus kitöltés</translation>
 <translation id="4242533952199664413">Beállítások megnyitása</translation>
-<translation id="424864128008805179">Kijelentkezés a Chrome-ból</translation>
+<translation id="424864128008805179">Kijelentkezés a Ultimatum-ból</translation>
 <translation id="4249955472157341256">Rendezés a legutóbbiak szerint</translation>
 <translation id="4255841059940367080">Valós idejű, AI-alapú védelem a veszélyes webhelyek, letöltések és bővítmények ellen, amely az Ön Google-nak küldött böngészési adatain alapul.</translation>
 <translation id="4256782883801055595">Nyílt forráskódú licencek</translation>
@@ -768,7 +768,7 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="4270730597186910506">Termék nyomon követése vagy nyomon követés leállítása.</translation>
 <translation id="4277529130885813215">Másik eszköz használata</translation>
 <translation id="427987768447457592">Új lapcsoport</translation>
-<translation id="4282440837784183472">Szervezete (<ph name="MANAGED_DOMAIN" />) kezeli azt a fiókot, amelybe bejelentkezik, valamint azt is, hogy miként használhatja a Chrome-ot. A rendszergazda beállíthat, illetve korlátozhat bizonyos funkciókat.</translation>
+<translation id="4282440837784183472">Szervezete (<ph name="MANAGED_DOMAIN" />) kezeli azt a fiókot, amelybe bejelentkezik, valamint azt is, hogy miként használhatja a Ultimatum-ot. A rendszergazda beállíthat, illetve korlátozhat bizonyos funkciókat.</translation>
 <translation id="4283234489712362947"><ph name="TAB_TITLE" />, inkognitó lap kép a képben módban</translation>
 <translation id="4285498937028063278">Rögzítés megszüntetése</translation>
 <translation id="4285846616383034558">Cookie-k, gyorsítótár és egyéb webhelyadatok</translation>
@@ -784,10 +784,10 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="4311652497846705514">Megnyitja a PDF-et?</translation>
 <translation id="4313895677475587452">{NUM_SUSPICIOUS_NOTIFICATIONS,plural, =1{Lehetséges spam}other{Lehetséges spam (#)}}</translation>
 <translation id="4320177379694898372">Nincs internetkapcsolat</translation>
-<translation id="4326079409704643112">Ha Chrome-adatokat szeretne használni és tárolni Google-fiókjában, igazolja személyazonosságát</translation>
+<translation id="4326079409704643112">Ha Ultimatum-adatokat szeretne használni és tárolni Google-fiókjában, igazolja személyazonosságát</translation>
 <translation id="433213510553688132">Követés…</translation>
 <translation id="4335835283689002019">A Biztonságos Böngészés ki van kapcsolva</translation>
-<translation id="4343250402091037179">Ha egy adott webhelyen vagy a Chrome egy részében szeretne keresni, gépelje be a kapcsolódó gyorsparancsot a címsávba, majd nyomja le az Ön által preferált billentyűparancsot.</translation>
+<translation id="4343250402091037179">Ha egy adott webhelyen vagy a Ultimatum egy részében szeretne keresni, gépelje be a kapcsolódó gyorsparancsot a címsávba, majd nyomja le az Ön által preferált billentyűparancsot.</translation>
 <translation id="4351244548802238354">Párbeszédablak bezárása</translation>
 <translation id="4352287748243729941">Szeretné <ph name="PROVIDER" />-jelszavát használni?</translation>
 <translation id="4355272626458588338">A fontos oldalakra könyvjelző felvételével térhet vissza a későbbiekben</translation>
@@ -800,7 +800,7 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="4384468725000734951">A Sogou használata a kereséshez</translation>
 <translation id="4387647248986092471">Autóprofil-zárolás létrehozása</translation>
 <translation id="4387817230000841154">Letöltések megnyitása</translation>
-<translation id="4395046795145457714">A Chrome Keresés funkciójára való feliratkozás teljes magasságban megnyitva</translation>
+<translation id="4395046795145457714">A Ultimatum Keresés funkciójára való feliratkozás teljes magasságban megnyitva</translation>
 <translation id="4398561997852463382"><ph name="TAB_TITLE" />, kiválasztott rögzített, felvételt készítő inkognitó lap</translation>
 <translation id="4402611456429872546"><ph name="LANG" /> – Letöltés…</translation>
 <translation id="4404568932422911380">Nincsenek könyvjelzők</translation>
@@ -822,16 +822,16 @@ Csak az Ön összetett jelszava ismeretében tudja bárki is megtekinteni a titk
 <translation id="4460822871039013969"><ph name="TAB_TITLE" />, kiválasztott rögzített, felvételt készítő lap</translation>
 <translation id="4460861538906892109">{ITEMS_COUNT,plural, =1{1 könyvjelző}other{# könyvjelző}}</translation>
 <translation id="4478161224666880173">Ezen a webhelyen használhatja <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />-fiókját. A folytatáshoz jelentkezzen be a(z) <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> e-mail-címhez tartozó fiókba.</translation>
-<translation id="4479972344484327217">A(z) <ph name="MODULE" /> telepítése a Chrome-hoz…</translation>
+<translation id="4479972344484327217">A(z) <ph name="MODULE" /> telepítése a Ultimatum-hoz…</translation>
 <translation id="4484496141267039529">Nincs kapcsolat. Próbálja újra később.</translation>
-<translation id="4487967297491345095">A Chrome összes alkalmazásadata véglegesen törlődik, beleértve a fájlokat, beállításokat, fiókokat, adatbázisokat stb.</translation>
+<translation id="4487967297491345095">A Ultimatum összes alkalmazásadata véglegesen törlődik, beleértve a fájlokat, beállításokat, fiókokat, adatbázisokat stb.</translation>
 <translation id="4494315997125191493">Az összes ablak megtekintéséhez válassza a Kezelés lehetőséget</translation>
 <translation id="4494806687727322324">A rendszergazda bekapcsolta a jelszavak mentését</translation>
 <translation id="4508528996305412043">A hírcsatornakártya menüje meg van nyitva</translation>
 <translation id="4509741852167209430">Korlátozott adattípusokat osztanak meg egymással a webhelyek a hirdetéseik teljesítményének mérése érdekében (például hogy Ön vásárolt-e egy adott webhely felkeresése után).</translation>
 <translation id="4513387527876475750">{DAYS,plural, =1{# napja}other{# napja}}</translation>
 <translation id="451872707440238414">Keresés a saját könyvjelzők közt</translation>
-<translation id="4521489764227272523">A kiválasztott adatok el lettek távolítva a Chrome-ból és a szinkronizált eszközökről.
+<translation id="4521489764227272523">A kiválasztott adatok el lettek távolítva a Ultimatum-ból és a szinkronizált eszközökről.
 
 Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> címen) még szerepelnek a böngészési előzmények egyéb formái, így például a keresések és egyéb tevékenységek más Google-szolgáltatásokból.</translation>
 <translation id="4523326818319942067">az elmúlt óra</translation>
@@ -853,10 +853,10 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="4595276580892809760">Képek csatolása a galériából</translation>
 <translation id="4595805675102978678">Hiba a Google-fiókkal</translation>
 <translation id="4601095002996233687">Mélyreható vizsgálatok a gyanús letöltött tartalmak ellenőrzéséhez.</translation>
-<translation id="4606559747793337066">Ha valamely webhely vagy alkalmazás a linkek privát módon való előtöltését kéri az oldalán, a Chrome cookie-k nélkül titkosítja és tölti be előre az oldalakat a Google szerverein keresztül. Ez a művelet elrejti az Ön személyazonosságát az előre betöltött webhely előtt.</translation>
+<translation id="4606559747793337066">Ha valamely webhely vagy alkalmazás a linkek privát módon való előtöltését kéri az oldalán, a Ultimatum cookie-k nélkül titkosítja és tölti be előre az oldalakat a Google szerverein keresztül. Ez a művelet elrejti az Ön személyazonosságát az előre betöltött webhely előtt.</translation>
 <translation id="4616150815774728855"><ph name="WEBAPK_NAME" /> megnyitása</translation>
 <translation id="4619564267100705184">Igazolja személyazonosságát</translation>
-<translation id="4624065194742029982">Chrome inkognitó mód</translation>
+<translation id="4624065194742029982">Ultimatum inkognitó mód</translation>
 <translation id="4634124774493850572">Jelszó használata</translation>
 <translation id="463471994228293091">{PASSWORDS_COUNT,plural, =1{1 jelszót és egyéb elemeket csak erre az eszközre ment a rendszer. Ha a többi eszközén is használni szeretné őket, mentse őket Google-fiókjába.}other{# jelszót és egyéb elemeket csak erre az eszközre ment a rendszer. Ha a többi eszközén is használni szeretné őket, mentse őket Google-fiókjába.}}</translation>
 <translation id="4640331037679501949">{NUM_PASSWORDS,plural, =1{1 jelszó, amelyhez illetéktelenül hozzáfértek}other{# jelszó, amelyhez illetéktelenül hozzáfértek}}</translation>
@@ -871,7 +871,7 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="4668347365065281350">A webhelyek által tárolt összes adat, beleértve a cookie-kat és más, helyben tárolt adatokat</translation>
 <translation id="4673702426794876519">Inkognitó ablak</translation>
 <translation id="4675298276894277358">Ez a webhely nem fog újra megjelenni</translation>
-<translation id="4678082183394354975">A sötét téma engedélyezve van a webhelyeknél a Chrome-ban</translation>
+<translation id="4678082183394354975">A sötét téma engedélyezve van a webhelyeknél a Ultimatum-ban</translation>
 <translation id="4682306524980568490">Csak <ph name="MAX_INSTANCE_COUNT" /> ablak jeleníthető meg</translation>
 <translation id="4684427112815847243">Az összes szinkronizálása</translation>
 <translation id="4685741273709472646">Választás a legördülő listából</translation>
@@ -893,7 +893,7 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="4738836084190194332">Utolsó szinkronizálás: <ph name="WHEN" /></translation>
 <translation id="474121291218385686">Szűrés alkalmazás szerint</translation>
 <translation id="4741753828624614066">Jobb javaslatokat kaphat a címsávban.</translation>
-<translation id="4742795653798179840">Törölt Chrome-adatok</translation>
+<translation id="4742795653798179840">Törölt Ultimatum-adatok</translation>
 <translation id="4742970037960872810">Kiemelés eltávolítása</translation>
 <translation id="4749960740855309258">Új lap megnyitása</translation>
 <translation id="4753600213727157212">A következőként van bejelentkezve: <ph name="USER_NAME" />. <ph name="USER_EMAIL" />. Hiba történt a Google-fiókkal. Ez a gomb megnyitja a beállításokat.</translation>
@@ -911,21 +911,21 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="4782929588435725897">Az alapértelmezett keresőmotor a(z) <ph name="SEARCH_ENGINE" /></translation>
 <translation id="4784349455504343791">A(z) <ph name="WEBSITE_ORIGIN" /> használni szeretné az Ön digitális pénztárcájából származó személyes adatokat.</translation>
 <translation id="4787736314074622408">Törli a következőt: <ph name="ITEM_TITLE" />?</translation>
-<translation id="4793679854893018356">További információ arról, hogy miként gondoskodik a Chrome az Ön biztonságáról</translation>
+<translation id="4793679854893018356">További információ arról, hogy miként gondoskodik a Ultimatum az Ön biztonságáról</translation>
 <translation id="4794291718671962615">(<ph name="MEGABYTES" />) <ph name="URL" /></translation>
 <translation id="4807098396393229769">A kártyán feltüntetett név</translation>
 <translation id="480990236307250886">A kezdőoldal megnyitása</translation>
 <translation id="4822710610088666676"><ph name="TAB_GROUP_TITLE" /> lapcsoport bezárva és mentve</translation>
 <translation id="482405935591409882">Keresés a lapok és a csoportok között</translation>
 <translation id="4834250788637067901">A Google Pay szolgáltatásban használt fizetési módok, ajánlatok és címek</translation>
-<translation id="4835385943915508971">A Chrome nem fér hozzá a kért forráshoz.</translation>
+<translation id="4835385943915508971">A Ultimatum nem fér hozzá a kért forráshoz.</translation>
 <translation id="483742037940503070">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> lapot tartalmazó, <ph name="COLOR_NAME" /> színű lapcsoport visszaállítása új háttérbeli lapcsoportként.}other{<ph name="TAB_COUNT_MANY" /> lapot tartalmazó, <ph name="COLOR_NAME" /> színű lapcsoport visszaállítása új háttérbeli lapcsoportként.}}</translation>
 <translation id="4849731766219625109"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />-fiók használata</translation>
 <translation id="4850886885716139402">Nézet</translation>
 <translation id="4852014461738377247">Bejelentkezés…</translation>
 <translation id="4860895144060829044">Hívás</translation>
 <translation id="4864369630010738180">Bejelentkezés...</translation>
-<translation id="4866368707455379617">Nem lehetséges a(z) <ph name="MODULE" /> telepítése a Chrome-hoz</translation>
+<translation id="4866368707455379617">Nem lehetséges a(z) <ph name="MODULE" /> telepítése a Ultimatum-hoz</translation>
 <translation id="4871568871368204250">A szinkronizálás kikapcsolása</translation>
 <translation id="487567923005969537">AI-mód engedélyezése</translation>
 <translation id="4875775213178255010">Javasolt tartalmak</translation>
@@ -934,27 +934,27 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="4880127995492972015">Fordítás…</translation>
 <translation id="4881695831933465202">Megnyitás</translation>
 <translation id="488187801263602086">Fájl átnevezése</translation>
-<translation id="4885273946141277891">Ilyen sok Chrome-példány nem futhat egyszerre.</translation>
+<translation id="4885273946141277891">Ilyen sok Ultimatum-példány nem futhat egyszerre.</translation>
 <translation id="4890973535105146893">Nincsenek mentett jelszavak a Google-fiókjában</translation>
 <translation id="4905823827770127520">Az oldalra mutató link hozzáfűzése</translation>
 <translation id="4908869848243824489">Discover by Google</translation>
 <translation id="4910889077668685004">Fizetési alkalmazások</translation>
 <translation id="4911042367886397055">Üdvözöljük ismét, <ph name="USER_NAME" />!</translation>
 <translation id="4913169188695071480">Frissítés leállítása</translation>
-<translation id="4921224083091001889">Ha az összes eszközén szeretne hozzáférni jelszavaihoz és egyebekhez, jelentkezzen be a Chrome-ba a következő fiókkal: <ph name="EMAIL" /></translation>
+<translation id="4921224083091001889">Ha az összes eszközén szeretne hozzáférni jelszavaihoz és egyebekhez, jelentkezzen be a Ultimatum-ba a következő fiókkal: <ph name="EMAIL" /></translation>
 <translation id="4923173329789776645">A szervezet nem javasolja a letöltést</translation>
 <translation id="4925120120285606924">Képernyőkép (<ph name="CURRENT_DATE_ISO" />)</translation>
 <translation id="4926901776383726965">Képeket és fájlokat menthet az offline megtekintéshez vagy más alkalmazásokban való megosztáshoz</translation>
 <translation id="492699891214363151">{BOOKMARKS_COUNT,plural, =1{1 könyvjelzőt és egyéb elemeket csak erre az eszközre ment a rendszer. Ha a többi eszközén is használni szeretné őket, mentse őket Google-fiókjába.}other{# könyvjelzőt és egyéb elemeket csak erre az eszközre ment a rendszer. Ha a többi eszközén is használni szeretné őket, mentse őket Google-fiókjába.}}</translation>
-<translation id="4932247056774066048">Mivel kijelentkezik a(z) <ph name="DOMAIN_NAME" /> által kezelt fiókból, a rendszer törli az Ön Chrome-adatait erről az eszközről. Google-fiókjában továbbra is megmaradnak ezek az adatok.</translation>
+<translation id="4932247056774066048">Mivel kijelentkezik a(z) <ph name="DOMAIN_NAME" /> által kezelt fiókból, a rendszer törli az Ön Ultimatum-adatait erről az eszközről. Google-fiókjában továbbra is megmaradnak ezek az adatok.</translation>
 <translation id="4943703118917034429">Virtuális valóság</translation>
 <translation id="4943872375798546930">Nincs találat</translation>
 <translation id="4957722034734105353">További információ...</translation>
 <translation id="4959115606310463263">Az alsó bejelentkezési lap félmagasságban megnyitva</translation>
 <translation id="4961107849584082341">Bármely nyelvre lefordíthatja ezt az oldalt</translation>
-<translation id="4964614743143953889">A Chrome figyelmezteti a nem biztonságos webhelyekre és letöltésekre</translation>
+<translation id="4964614743143953889">A Ultimatum figyelmezteti a nem biztonságos webhelyekre és letöltésekre</translation>
 <translation id="496607651705915226">Ha új jelszavakat szeretne menteni és használni Google-fiókjában, frissítse a Google Play-szolgáltatásokat.</translation>
-<translation id="4971753085054504448">További találatok megjelenítéséhez próbáljon valami másra keresni, vagy nyissa meg a teljes Chrome-előzményeket.</translation>
+<translation id="4971753085054504448">További találatok megjelenítéséhez próbáljon valami másra keresni, vagy nyissa meg a teljes Ultimatum-előzményeket.</translation>
 <translation id="497421865427891073">Előrelépés</translation>
 <translation id="497983151715419057">Itt tekintheti át az inaktív lapokat és csoportokat</translation>
 <translation id="498624032394115435">A link birtokában bárki szerkesztheti az összes lapot.</translation>
@@ -981,7 +981,7 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="506254248375231072">Nincs lap</translation>
 <translation id="5075939510584558547">Mentés titkosítás nélkül</translation>
 <translation id="5078638979202084724">Összes lap hozzáadása a könyvjelzőkhöz</translation>
-<translation id="5085038751173179818">Jelentkezzen be erre a webhelyre és a Chrome-ba, hogy az összes eszközén hozzáférhessen könyvjelzőihez és még sok minden máshoz</translation>
+<translation id="5085038751173179818">Jelentkezzen be erre a webhelyre és a Ultimatum-ba, hogy az összes eszközén hozzáférhessen könyvjelzőihez és még sok minden máshoz</translation>
 <translation id="5088347662971855383">A Gemini rögzítése</translation>
 <translation id="5091199029769593641">Új lap megnyitásakor hamarosan látni fogja a(z) <ph name="SITE_NAME" /> webhely történeteit. A követett webhelyeket a Google-fiókjába menti a rendszer. A Discover beállításaiban kezelheti őket.</translation>
 <translation id="509429900233858213">Hiba történt.</translation>
@@ -989,7 +989,7 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="510275257476243843">1 óra van hátra</translation>
 <translation id="5114895953710637392">Az alkalmazásszűrő lap be van zárva.</translation>
 <translation id="5115811374190515607">ide: <ph name="PRODUCT_NAME" /></translation>
-<translation id="5116239826668864748">Bármikor használhatja a Chrome-ot, amikor üzenetekben, dokumentumokban és más alkalmazásokban linkekre kattint</translation>
+<translation id="5116239826668864748">Bármikor használhatja a Ultimatum-ot, amikor üzenetekben, dokumentumokban és más alkalmazásokban linkekre kattint</translation>
 <translation id="5118713593561876160">Érdeklődési körök</translation>
 <translation id="5122378528687922675">Ha segítségre van szükséged, fordulj az egyik szülődhöz (<ph name="PARENT_NAME_1" /> vagy <ph name="PARENT_NAME_2" />)</translation>
 <translation id="5123685120097942451">Inkognitó lap</translation>
@@ -1012,11 +1012,11 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="5206168361184759344">{FILE_COUNT,plural, =1{Fájl letöltése…}other{# fájl letöltése…}}</translation>
 <translation id="5210286577605176222">Ugrás az előző lapra</translation>
 <translation id="5210365745912300556">Lap bezárása</translation>
-<translation id="5212800876504289412">A módosítás befejezéséhez indítsa újra a Chrome-ot. A lapok automatikusan újra megnyílnak az újraindításkor.</translation>
+<translation id="5212800876504289412">A módosítás befejezéséhez indítsa újra a Ultimatum-ot. A lapok automatikusan újra megnyílnak az újraindításkor.</translation>
 <translation id="5213114823401215820">Bezárt csoport ismételt megnyitása</translation>
 <translation id="5215957675041756913">Az adatok és a fiók kezelése</translation>
 <translation id="5218324087477576825">Meg kell adni a kártya számát</translation>
-<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> és továbbiak <ph name="SEPARATOR" /> A Chrome eltávolította ezeket az engedélyeket, mert Ön az utóbbi időben nem kereste fel ezt a webhelyet</translation>
+<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> és továbbiak <ph name="SEPARATOR" /> A Ultimatum eltávolította ezeket az engedélyeket, mert Ön az utóbbi időben nem kereste fel ezt a webhelyet</translation>
 <translation id="5222676887888702881">Kijelentkezés</translation>
 <translation id="5226378907213531272">Minden alkalommal fel kell oldania a képernyő zárolását, amikor az autót használja</translation>
 <translation id="5227554086496586518">Koppintson a keresési találatok megtekintéséhez</translation>
@@ -1036,7 +1036,7 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="5313967007315987356">Webhely hozzáadása</translation>
 <translation id="5316947901395241499">A rendszergazda kikapcsolta a jelszavak mentését</translation>
 <translation id="5317780077021120954">Mentés</translation>
-<translation id="5319359161174645648">A Google a Chrome-ot ajánlja</translation>
+<translation id="5319359161174645648">A Google a Ultimatum-ot ajánlja</translation>
 <translation id="5326246328175179736">Ezzel a fiókkal nem tud bejelentkezni</translation>
 <translation id="5327248766486351172">Név</translation>
 <translation id="5328542107300944283">Használat a következővel: <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
@@ -1049,7 +1049,7 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="5375374982898812658">Azonnal elveszíti a(z) „<ph name="GROUP_NAME" />” lapcsoporthoz való hozzáférését, és a lapcsoport az összes eszközéről törlődik</translation>
 <translation id="5375577065097716013">Képkeresés – Google Lens <ph name="BEGIN_NEW" />Új<ph name="END_NEW" /></translation>
 <translation id="5390367025924544771">A(z) <ph name="WEBSITE_ORIGIN" /> használni szeretné az Ön digitális pénztárcájából származó személyes adatokat. Csak akkor folytassa, ha megbízik ebben a webhelyben. A veszélyes webhelyek megpróbálhatják csellel rávenni Önt olyan adatok felfedésére, mint a hivatalos neve vagy a személyazonosító okmányának száma.</translation>
-<translation id="5395376160638294582">Biztosítsa, hogy mindig használhassa a Google-fiókjában lévő Chrome-adatokat</translation>
+<translation id="5395376160638294582">Biztosítsa, hogy mindig használhassa a Google-fiókjában lévő Ultimatum-adatokat</translation>
 <translation id="539881862970320163">Erős jelszó javasolt. A billentyűzet el van rejtve.</translation>
 <translation id="5409881200985013443">Elküldi a(z) <ph name="ONE_TIME_CODE" /> kódot a következő ügyfélre: <ph name="CLIENT_NAME" />?</translation>
 <translation id="5410300144953132176"><ph name="OWNER_FULL_NAME" /> (<ph name="OWNER_EMAIL" />) arra kéri, hogy csatlakozzon egy lapcsoporthoz. A link birtokában bárki szerkesztheti az összes lapot, ezért legyen körültekintő a csatlakozáskor. A link 48 óra múlva lejár.</translation>
@@ -1061,7 +1061,7 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="543271133149552180"><ph name="TAB_TITLE" />, több másik mellett kiválasztott inkognitó lap kép a képben módban</translation>
 <translation id="5436928407363358055">Ha egyszerűen szeretné folytatni ott, ahol abbahagyta, szinkronizálja az előzményeket és a lapokat.</translation>
 <translation id="5438292632479953702">Letöltés újra</translation>
-<translation id="5439191312780166229">Figyelmezteti Önt a veszélyes webhelyekre (még azokra is, amelyekről a Google korábban nem tudott), azáltal hogy több, webhelyekről származó adatot elemez, mint a normál védelem. Beállíthatja a Chrome figyelmeztetéseinek kihagyását.</translation>
+<translation id="5439191312780166229">Figyelmezteti Önt a veszélyes webhelyekre (még azokra is, amelyekről a Google korábban nem tudott), azáltal hogy több, webhelyekről származó adatot elemez, mint a normál védelem. Beállíthatja a Ultimatum figyelmeztetéseinek kihagyását.</translation>
 <translation id="5441137934526263133">Nem működik a webhely? A harmadik felektől származó cookie-k le vannak tiltva</translation>
 <translation id="5441466871879044658">Fordítás erre a nyelvre</translation>
 <translation id="5444999712122199445">Vissza a webhelyre</translation>
@@ -1072,7 +1072,7 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="5469852975082458401">Az oldalakon szövegkurzorral navigálhat. A funkciót az F7 gombbal kapcsolhatja ki.</translation>
 <translation id="5471273988133666918">A(z) <ph name="TAB_TITLE" /> lapot nem lehet áthelyezni</translation>
 <translation id="548278423535722844">Megnyitás térképalkalmazásban</translation>
-<translation id="5489222148748465285">A Chrome folytassa a keresést?</translation>
+<translation id="5489222148748465285">A Ultimatum folytassa a keresést?</translation>
 <translation id="5490848366863949315"><ph name="TAB_TITLE" />, több másik mellett kiválasztott lap kép a képben módban</translation>
 <translation id="5494920125229734069">Összes kiválasztása</translation>
 <translation id="549660026907543296">Csatlakozás mint <ph name="MEMBER_FULL_NAME" /></translation>
@@ -1080,7 +1080,7 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="5526281268548144413">Nem zárható be több ablakban</translation>
 <translation id="5532536403031755365">A Speciális védelem segítségével plusz biztonsági réteget adhat hozzá az internetes fenyegetések elleni védelemhez.</translation>
 <translation id="5548606607480005320">Biztonsági ellenőrzés</translation>
-<translation id="5554520618550346933">Amikor Ön jelszavakat használ, a Chrome figyelmezteti, ha közzé lettek téve az interneten. Az eljárás során jelszavai és felhasználónevei titkosítva vannak, így senki nem láthatja őket, még a Google sem.</translation>
+<translation id="5554520618550346933">Amikor Ön jelszavakat használ, a Ultimatum figyelmezteti, ha közzé lettek téve az interneten. Az eljárás során jelszavai és felhasználónevei titkosítva vannak, így senki nem láthatja őket, még a Google sem.</translation>
 <translation id="5555525474779371165">Válassza ki, hogy milyen védelmet nyújtson a Biztonságos Böngészés</translation>
 <translation id="5556459405103347317">Újratöltés</translation>
 <translation id="555671485580955310">Szinkronizálási előzmények és lapok</translation>
@@ -1093,10 +1093,10 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="5578795271662203820">A kép keresése a(z) <ph name="SEARCH_ENGINE" /> keresővel</translation>
 <translation id="5596627076506792578">További lehetőségek</translation>
 <translation id="5599455543593328020">Inkognitó mód</translation>
-<translation id="5601180634394228718">Az adatokat a Chrome-élmény javítására használó további beállításokért keresse fel a <ph name="BEGIN_LINK" />Google-szolgáltatások<ph name="END_LINK" /> oldalát.</translation>
+<translation id="5601180634394228718">Az adatokat a Ultimatum-élmény javítására használó további beállításokért keresse fel a <ph name="BEGIN_LINK" />Google-szolgáltatások<ph name="END_LINK" /> oldalát.</translation>
 <translation id="5601924940067278327">Bármely eszközéről hozzáférhet lapjaihoz és egyebekhez</translation>
 <translation id="5611398002774823980">Mentés a fiókba</translation>
-<translation id="5613381935190035031">Ha az összes eszközén szeretne hozzáférni lapjaihoz és egyebekhez, jelentkezzen be a Chrome-ba a következő fiókkal: <ph name="EMAIL" /></translation>
+<translation id="5613381935190035031">Ha az összes eszközén szeretne hozzáférni lapjaihoz és egyebekhez, jelentkezzen be a Ultimatum-ba a következő fiókkal: <ph name="EMAIL" /></translation>
 <translation id="5614625640221885312">Bejelentkezve valamennyi eszközén hozzáférhet könyvjelzőihez, jelszavaihoz és egyebekhez</translation>
 <translation id="5619633276517849615">Szervezete bekapcsolta a Biztonságos Böngészést</translation>
 <translation id="5620163320393916465">Nincsenek mentett jelszavak</translation>
@@ -1112,21 +1112,21 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="5657871969392618475">Az adatait profilzárolás védi</translation>
 <translation id="5659593005791499971">E-mail</translation>
 <translation id="5665379678064389456">Esemény létrehozása a(z) <ph name="APP_NAME" /> alkalmazásban</translation>
-<translation id="5683547024293500885">A Chrome nem tud frissítéseket keresni</translation>
+<translation id="5683547024293500885">A Ultimatum nem tud frissítéseket keresni</translation>
 <translation id="5683916195767086779">Lapcsoport</translation>
 <translation id="5686790454216892815">A fájl neve túl hosszú</translation>
 <translation id="569536719314091526">Bármely nyelvre lefordíthatja ezt az oldalt a További lehetőségek gomb segítségével</translation>
-<translation id="5696597120588531049">A Chrome segíthet az adatvédelmi incidensek, a nem biztonságos webhelyek és egyebek elleni védekezésben</translation>
+<translation id="5696597120588531049">A Ultimatum segíthet az adatvédelmi incidensek, a nem biztonságos webhelyek és egyebek elleni védekezésben</translation>
 <translation id="5698878456427040674">Ellenőrizze, hogy a kiválasztott fiók támogatott-e.</translation>
 <translation id="5709213329446699338">A(z) <ph name="SITE" /> soros porthoz szeretne csatlakozni</translation>
 <translation id="5715150588940290235">Törli a mentett biztonsági kódokat?</translation>
-<translation id="571930967925877633">Könyvjelzői, előzményei és más Chrome-adatai a továbbiakban nem lesznek szinkronizálva a Google-fiókjával.</translation>
+<translation id="571930967925877633">Könyvjelzői, előzményei és más Ultimatum-adatai a továbbiakban nem lesznek szinkronizálva a Google-fiókjával.</translation>
 <translation id="572328651809341494">Nemrég megnyitott lapok</translation>
 <translation id="5728072125198221967">Összekapcsolt Google-szolgáltatások</translation>
 <translation id="5734658507307260911"><ph name="TAB_TITLE" />, rögzített, hangot lejátszó inkognitó lap</translation>
 <translation id="5744751019568455640">Ezekből a hangokból választhatja ki, hogy melyik olvassa fel a weboldalakat. Ha tetszik Önnek ez a hang, és szeretné, hogy továbbra is használjam, csak koppintson a hang nevére.</translation>
 <translation id="574845902699630049">Megosztás mint <ph name="OWNER_FULL_NAME" /></translation>
-<translation id="5749068826913805084">A Chrome-nak tárhelyhozzáférésre van szüksége a fájlok letöltéséhez.</translation>
+<translation id="5749068826913805084">A Ultimatum-nak tárhelyhozzáférésre van szüksége a fájlok letöltéséhez.</translation>
 <translation id="5749237766298580851">Ki <ph name="SEPARATOR" /> Nem javasolt</translation>
 <translation id="5752232708629533680">Csak GIF megosztása</translation>
 <translation id="5753570386948603678">Törlés az előzmények közül</translation>
@@ -1145,14 +1145,14 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="5811144606237321538"><ph name="TAB_TITLE" />, több kiválasztott rögzített némított lap</translation>
 <translation id="5814749351757353073">Naprakész lehet a kedvenc webhelyeivel</translation>
 <translation id="5823093032261493462">Mindenképpen le szeretné tölteni a(z) „<ph name="FILE_NAME" />” fájlt innen: <ph name="DOWNLOAD_DOMAIN" />?</translation>
-<translation id="5825135637446025843">A Chrome újraindítása után az új szolgáltatótól mentett információkat használja a rendszer a jelszavak, azonosítókulcsok, címek, fizetési módok és egyéb információk automatikus kitöltéséhez.</translation>
-<translation id="5828921839638612740">Az adatokat a Chrome beállításaiban törölheti</translation>
+<translation id="5825135637446025843">A Ultimatum újraindítása után az új szolgáltatótól mentett információkat használja a rendszer a jelszavak, azonosítókulcsok, címek, fizetési módok és egyéb információk automatikus kitöltéséhez.</translation>
+<translation id="5828921839638612740">Az adatokat a Ultimatum beállításaiban törölheti</translation>
 <translation id="5829586821381540080">Mentve ide: <ph name="FOLDER_NAME" /></translation>
 <translation id="583281660410589416">Ismeretlen</translation>
 <translation id="5833984609253377421">Link megosztása</translation>
-<translation id="5839058148541733625">Chrome Dino</translation>
+<translation id="5839058148541733625">Ultimatum Dino</translation>
 <translation id="5841444063256914865">Mindenképpen le szeretné tölteni a következő fájlt: <ph name="FILE_NAME" />?</translation>
-<translation id="5847265694842662173">A Chrome megakadályozta, hogy a visszaélésszerű és nem használt webhelyek értesítéseket küldjenek</translation>
+<translation id="5847265694842662173">A Ultimatum megakadályozta, hogy a visszaélésszerű és nem használt webhelyek értesítéseket küldjenek</translation>
 <translation id="5848257610304005265">Megnyitja a PDF-et a következővel: <ph name="APP_NAME" />?</translation>
 <translation id="5849288995120328556">Leállítja a megosztást?</translation>
 <translation id="5853623416121554550">szüneteltetve</translation>
@@ -1166,8 +1166,8 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="5865733239029070421">Automatikusan elküldi a használati statisztikákat és hibajelentéseket a Google-nak</translation>
 <translation id="5869522115854928033">Mentett jelszavak</translation>
 <translation id="5870416898561279542">Az ismétlődő lapok és csoportok, valamint a(z) <ph name="DAYS_INACTIVE" /> napja nem használt lapok ide kerülnek,<ph name="AUTODELETE_SECTION" /> A <ph name="DECLUTTER_SETTINGS_TITLE" /> között ez bármikor módosítható.</translation>
-<translation id="587735546353481577">Webhely követéséhez lépjen a kívánt webhelyhez, nyissa meg a Chrome menüjét, majd koppintson a Követés pontra.</translation>
-<translation id="5885378508678660271">Értesítések <ph name="SEPARATOR" /> A Chrome eltávolította ezeket az engedélyeket, mert ez a webhely veszélyes</translation>
+<translation id="587735546353481577">Webhely követéséhez lépjen a kívánt webhelyhez, nyissa meg a Ultimatum menüjét, majd koppintson a Követés pontra.</translation>
+<translation id="5885378508678660271">Értesítések <ph name="SEPARATOR" /> A Ultimatum eltávolította ezeket az engedélyeket, mert ez a webhely veszélyes</translation>
 <translation id="5899667542927581604">„Nincs azonosítókulcs” munkalap bezárva</translation>
 <translation id="5907542076239273525">Könyvjelző mentve ide: <ph name="FOLDER_NAME" /></translation>
 <translation id="5911301511366365629"><ph name="TAB_TITLE" />, kiválasztott, hangot lejátszó inkognitó lap</translation>
@@ -1178,23 +1178,23 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="5942872142862698679">A Google használata a kereséshez</translation>
 <translation id="5945035219773565305">Aktuális javaslat:  <ph name="RECOMMENDATION" /></translation>
 <translation id="5951119116059277034">Élő oldal megtekintése</translation>
-<translation id="5956665950594638604">A Chrome súgójának megnyitása új lapon</translation>
+<translation id="5956665950594638604">A Ultimatum súgójának megnyitása új lapon</translation>
 <translation id="59577092665511740">Válasszon egy fiókot.</translation>
 <translation id="5958275228015807058">A fájlokat és oldalakat a Letöltések között találja meg</translation>
-<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{A Chrome megakadályozta, hogy egy olyan webhely értesítéseket küldjön Önnek, amelyet nem keresett fel mostanában}other{A Chrome megakadályozta, hogy olyan webhelyek értesítéseket küldjenek Önnek, amelyeket nem keresett fel mostanában}}</translation>
+<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{A Ultimatum megakadályozta, hogy egy olyan webhely értesítéseket küldjön Önnek, amelyet nem keresett fel mostanában}other{A Ultimatum megakadályozta, hogy olyan webhelyek értesítéseket küldjenek Önnek, amelyeket nem keresett fel mostanában}}</translation>
 <translation id="5962718611393537961">Koppintson az összecsukáshoz</translation>
 <translation id="5964869237734432770">Képleírások leállítása</translation>
 <translation id="5972844218283131174">Összes kijelölésének megszüntetése</translation>
 <translation id="5975083100439434680">Kicsinyítés</translation>
 <translation id="5977976211062815271">Ezen az eszközön</translation>
 <translation id="5978661847409534366">{ITEMS_COUNT,plural, =1{1 oldal az olvasólistán}other{# oldal az olvasólistán}}</translation>
-<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> A Chrome eltávolította ezeket az engedélyeket, mert Ön az utóbbi időben nem kereste fel ezt a webhelyet</translation>
+<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> A Ultimatum eltávolította ezeket az engedélyeket, mert Ön az utóbbi időben nem kereste fel ezt a webhelyet</translation>
 <translation id="5995726099713306770">Ismét letölti az oldalt?</translation>
 <translation id="6000066717592683814">A Google megtartása</translation>
 <translation id="6000203700195075278">Újrakövetés</translation>
 <translation id="6011308810877101166">Keresési javaslatok javítása</translation>
 <translation id="6013305291643746595">Rendezés folyamatban: legrégibb elöl</translation>
-<translation id="6022659036123304283">Tegye személyessé a Chrome-ot</translation>
+<translation id="6022659036123304283">Tegye személyessé a Ultimatum-ot</translation>
 <translation id="6026538407078977628">Kibontás teljes képernyőre</translation>
 <translation id="6030719887161080597">A webhelyek által a hirdetésteljesítmény méréséhez használt adatok kezelése</translation>
 <translation id="6039379616847168523">Ugrás a következő lapra</translation>
@@ -1223,7 +1223,7 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="6125864963080902918"><ph name="BEGIN_LINK" />További részletek<ph name="END_LINK" /></translation>
 <translation id="6127860394906721547">A következő webhelyekket tartalmazó, <ph name="TITLE_OF_GROUP" /> nevű, <ph name="COLOR_NAME" /> színű lapcsoport megnyitása: <ph name="URL_LIST" />.</translation>
 <translation id="6130303040046284160">Lap kis méretre állítása</translation>
-<translation id="6132075343662013154">A Chrome felkínálja a jelszó mentését.</translation>
+<translation id="6132075343662013154">A Ultimatum felkínálja a jelszó mentését.</translation>
 <translation id="6134168885321518274">Keresősáv megnyitása</translation>
 <translation id="6135608400322377268">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> lap}other{<ph name="TAB_COUNT_MANY" /> lap}}</translation>
 <translation id="6137022273846704445">A(z) <ph name="APP_NAME" /> nyelve</translation>
@@ -1234,10 +1234,10 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="6146563240635539929">Videók</translation>
 <translation id="614890671148262506">Mindig legyenek engedélyezve az erről a webhelyről érkező értesítések</translation>
 <translation id="6150320133806434356">A könyvjelző mentése megtörtént</translation>
-<translation id="6150706324143004339">Ha Chrome-adatokat szeretne használni és tárolni Google-fiókjában, frissítse a Chrome-ot</translation>
+<translation id="6150706324143004339">Ha Ultimatum-adatokat szeretne használni és tárolni Google-fiókjában, frissítse a Ultimatum-ot</translation>
 <translation id="6154478581116148741">Kapcsolja be a képernyőzárat a Beállítások menüben, hogy exportálhassa az ezen az eszközön tárolt jelszavait</translation>
 <translation id="6156323911414505561">Könyvjelzősáv megjelenítése</translation>
-<translation id="6162892189396105610">Azoknak az oldalaknak az előtöltése, amelyeket a Chrome szerint Ön valószínűleg felkeres.</translation>
+<translation id="6162892189396105610">Azoknak az oldalaknak az előtöltése, amelyeket a Ultimatum szerint Ön valószínűleg felkeres.</translation>
 <translation id="6165508094623778733">További információ</translation>
 <translation id="6170675927290506430">Ugrás az értesítési beállításokhoz</translation>
 <translation id="6184972259157699660"><ph name="TAB_TITLE" />, némított inkognitó lap</translation>
@@ -1246,7 +1246,7 @@ Előfordulhat, hogy Google-fiókjában (a <ph name="BEGIN_LINK" />myactivity.goo
 <translation id="6193448654517602979">Lapok kiválasztása</translation>
 <translation id="6196315980958524839">A jelszavakat ezen az eszközön menti a rendszer a Google Jelszókezelőbe.</translation>
 <translation id="6202812185118613467">A szinkronizálás megkezdéséhez jelentkezzen be újra.</translation>
-<translation id="6204781143409202534">A Chrome lehetséges spamet észlelt innen: <ph name="DOMAIN" />.</translation>
+<translation id="6204781143409202534">A Ultimatum lehetséges spamet észlelt innen: <ph name="DOMAIN" />.</translation>
 <translation id="6205314730813004066">Hirdetésekhez kapcsolódó adatvédelem</translation>
 <translation id="6210282067670792090">Használja a címsávban ezt a billentyűparancsot a keresőmotorokhoz és webhelykereséshez tartozó gyorsparancsokkal.</translation>
 <translation id="6210748933810148297">Nem <ph name="EMAIL" />?</translation>
@@ -1260,12 +1260,12 @@ Egyes webhelyek például válaszolhatnak rá úgy, hogy olyan hirdetéseket jel
 <translation id="6247557882553405851">Google Jelszókezelő</translation>
 <translation id="6248988683584659830">Keresés a beállításokban</translation>
 <translation id="6250847299079540062"><ph name="TAB_TITLE" />, több kiválasztott rögzített inkognitó lap</translation>
-<translation id="6251449557817521191">Itt tekintheti meg Chrome-előzményeit</translation>
+<translation id="6251449557817521191">Itt tekintheti meg Ultimatum-előzményeit</translation>
 <translation id="6254139308321626268">Jelenleg PDF-fájlt tekint meg</translation>
-<translation id="6255809143828972562">A Chrome eszközeivel biztonságosan böngészhet, és kézben tarthatja az irányítást</translation>
+<translation id="6255809143828972562">A Ultimatum eszközeivel biztonságosan böngészhet, és kézben tarthatja az irányítást</translation>
 <translation id="6264376385120300461">Letöltés mindenképpen</translation>
 <translation id="6264485186158353794">Vissza a biztonsághoz</translation>
-<translation id="6267106249090587268">Értesítések <ph name="SEPARATOR" /> A Chrome spam vagy megtévesztő tartalom miatt eltávolította ezeket az engedélyeket</translation>
+<translation id="6267106249090587268">Értesítések <ph name="SEPARATOR" /> A Ultimatum spam vagy megtévesztő tartalom miatt eltávolította ezeket az engedélyeket</translation>
 <translation id="6276708887952587684">Az oldal forrásának megtekintése</translation>
 <translation id="6277522088822131679">Hiba történt az oldal nyomtatásakor. Próbálja újra.</translation>
 <translation id="6278428485366576908">Téma</translation>
@@ -1281,7 +1281,7 @@ Egyes webhelyek például válaszolhatnak rá úgy, hogy olyan hirdetéseket jel
 <translation id="6312687380483398334">Webalkalmazások (csendes)</translation>
 <translation id="6315386555979018699">Törlés és folytatás</translation>
 <translation id="6316139424528454185">Nem támogatott Android-verzió</translation>
-<translation id="631839948975905034">Inkognitó ablakok zárolása a Chrome elhagyásakor</translation>
+<translation id="631839948975905034">Inkognitó ablakok zárolása a Ultimatum elhagyásakor</translation>
 <translation id="6324916366299863871">Billentyűparancs szerkesztése</translation>
 <translation id="6324977638108296054">Nem sikerült linket létrehozni a kiemelt szöveghez</translation>
 <translation id="6333140779060797560">Megosztás a következőn keresztül: <ph name="APPLICATION" /></translation>
@@ -1303,7 +1303,7 @@ Egyes webhelyek például válaszolhatnak rá úgy, hogy olyan hirdetéseket jel
 <translation id="6394791151443660613">Keresés: <ph name="SEARCH_QUERY" /></translation>
 <translation id="6397616442223433927">Ismét online</translation>
 <translation id="6399363707848566877">Mostantól könnyedén hozzáadhat lapokat csoportokhoz</translation>
-<translation id="6401458660421980302">Ha szeretné elküldeni ezt a lapot másik eszközre, jelentkezzen be a Chrome-ba az adott eszközön</translation>
+<translation id="6401458660421980302">Ha szeretné elküldeni ezt a lapot másik eszközre, jelentkezzen be a Ultimatum-ba az adott eszközön</translation>
 <translation id="6404511346730675251">Könyvjelző szerkesztése</translation>
 <translation id="6406506848690869874">Szinkronizálás</translation>
 <translation id="6408370409308816490"><ph name="TAB_TITLE" />, kiválasztott rögzített, tartalmat megosztó inkognitó lap</translation>
@@ -1323,24 +1323,24 @@ Egyes webhelyek például válaszolhatnak rá úgy, hogy olyan hirdetéseket jel
 <translation id="6452534462676960500">Új tevékenység</translation>
 <translation id="6459045781120991510">Felmérések</translation>
 <translation id="6461962085415701688">A fájlt nem lehet megnyitni</translation>
-<translation id="6464977750820128603">Megnézheti a Chrome böngészővel felkeresett webhelyeket, és beállíthat hozzájuk időzítéseket.\n\nAz időzítéssel ellátott webhelyek adatait és a látogatás hosszát megkapja a Google. Ezek az adatok a digitális jóllét funkció továbbfejlesztésére szolgálnak.</translation>
+<translation id="6464977750820128603">Megnézheti a Ultimatum böngészővel felkeresett webhelyeket, és beállíthat hozzájuk időzítéseket.\n\nAz időzítéssel ellátott webhelyek adatait és a látogatás hosszát megkapja a Google. Ezek az adatok a digitális jóllét funkció továbbfejlesztésére szolgálnak.</translation>
 <translation id="6468703991511753953">A címsáv jelenleg alul van</translation>
-<translation id="6470181189905173055">Itt jelennek majd meg a(z) <ph name="APP_LABEL" /> használata közben a Chrome-ban megnyitott oldalai.</translation>
+<translation id="6470181189905173055">Itt jelennek majd meg a(z) <ph name="APP_LABEL" /> használata közben a Ultimatum-ban megnyitott oldalai.</translation>
 <translation id="6473086018775716761">A megosztási lehetőségek listája félmagasságban van megnyitva.</translation>
 <translation id="6475951671322991020">Videó letöltése</translation>
 <translation id="6477928892249167417">Úgy tűnik, ezek a webhelyek fontosak Önnek:</translation>
-<translation id="6479881432656947268">Keresse fel a Chrome Webáruházat.</translation>
-<translation id="6481963882741794338">A Chrome és más Google-szolgáltatások összekapcsolása személyre szabási és egyéb célokból</translation>
+<translation id="6479881432656947268">Keresse fel a Ultimatum Webáruházat.</translation>
+<translation id="6481963882741794338">A Ultimatum és más Google-szolgáltatások összekapcsolása személyre szabási és egyéb célokból</translation>
 <translation id="6482749332252372425">A következő fájl letöltése tárhelyhiány miatt nem sikerült: <ph name="FILE_NAME" />.</translation>
 <translation id="6486420406192123355">Ez a PDF-fájl egy nem biztonságos kapcsolatot használó webhelyről származik</translation>
 <translation id="650224091954855786">{FILE_COUNT,plural, =1{Fájl letöltve}other{# letöltés befejeződött}}</translation>
-<translation id="6508722015517270189">Indítsa újra a Chrome-ot</translation>
+<translation id="6508722015517270189">Indítsa újra a Ultimatum-ot</translation>
 <translation id="6513924416597632811">A következő keresési kifejezés találatoldalára mutató link másolása: <ph name="SEARCH_QUERY" />. Forrás: <ph name="PAGE_URL" /></translation>
 <translation id="6518133107902771759">Ellenőrzés</translation>
 <translation id="6521218807522232085">Létrehozhatja, mentheti és kezelheti jelszavait, hogy egyszerűen bejelentkezhessen.</translation>
 <translation id="6527303717912515753">Megosztás</translation>
-<translation id="652948702951888897">Chrome-előzmények</translation>
-<translation id="6532866250404780454">A Chrome-ban felkeresett webhelyek nem fognak megjelenni. A webhelyekkel kapcsolatos összes időzítés törlődik.</translation>
+<translation id="652948702951888897">Ultimatum-előzmények</translation>
+<translation id="6532866250404780454">A Ultimatum-ban felkeresett webhelyek nem fognak megjelenni. A webhelyekkel kapcsolatos összes időzítés törlődik.</translation>
 <translation id="6539092367496845964">Hiba történt. Próbálja újra később.</translation>
 <translation id="6541983376925655882">{NUM_HOURS,plural, =1{1 órája ellenőrizve}other{# órája ellenőrizve}}</translation>
 <translation id="6545017243486555795">Összes adat törlése</translation>
@@ -1355,7 +1355,7 @@ Egyes webhelyek például válaszolhatnak rá úgy, hogy olyan hirdetéseket jel
 <translation id="6569373978618239158">Új lap megnyitásakor látni fogja a(z) <ph name="SITE_NAME" /> webhely történeteit. A követett webhelyeket a Google-fiókjába menti a rendszer. A Discover beállításaiban kezelheti őket.</translation>
 <translation id="657177046675873214">Ha az összes eszközén hozzá szeretné férni könyvjelzőihez, kapcsolja be a „Könyvjelzők” lehetőséget a beállításokban</translation>
 <translation id="6573096386450695060">Engedélyezés mindig</translation>
-<translation id="6573431926118603307">A más eszközökön futó Chrome böngészőben megnyitott lapok itt jelennek meg.</translation>
+<translation id="6573431926118603307">A más eszközökön futó Ultimatum böngészőben megnyitott lapok itt jelennek meg.</translation>
 <translation id="6583199322650523874">Az aktuális oldal felvétele a könyvjelzők közé</translation>
 <translation id="6588043302623806746">Biztonságos DNS használata</translation>
 <translation id="6590471736817333463">Csökkentse akár 60%-kal is adatforgalmát</translation>
@@ -1363,28 +1363,28 @@ Egyes webhelyek például válaszolhatnak rá úgy, hogy olyan hirdetéseket jel
 <translation id="6594347733515723558">Rendezés-/nézetbeállítások</translation>
 <translation id="6595046016124923392">A leírások pontosítása érdekében a képeket a böngésző elküldi a Google-nak.</translation>
 <translation id="661266467055912436">Javítja az Ön és mindenki más biztonságát az interneten.</translation>
-<translation id="6621391692573306628">A lap másik eszközre való elküldéséhez jelentkezzen be a Chrome-ba mindkét eszközön</translation>
+<translation id="6621391692573306628">A lap másik eszközre való elküldéséhez jelentkezzen be a Ultimatum-ba mindkét eszközön</translation>
 <translation id="6627583120233659107">Mappa szerkesztése</translation>
 <translation id="6633067410344541938">Inkognitó lapok zárolásának feloldása</translation>
 <translation id="6636623428211296678">Felfedezheti alább a többi beállítást, vagy befejezheti most az áttekintést</translation>
-<translation id="6637100877383020115">Az alkalmazás továbbfejlesztése érdekében a Chrome használati és hibaadatokat küld a Google-nak. <ph name="BEGIN_UMA_LINK" />Kezelés<ph name="END_UMA_LINK" /></translation>
+<translation id="6637100877383020115">Az alkalmazás továbbfejlesztése érdekében a Ultimatum használati és hibaadatokat küld a Google-nak. <ph name="BEGIN_UMA_LINK" />Kezelés<ph name="END_UMA_LINK" /></translation>
 <translation id="6641780377503683465"><ph name="INTEREST" /> eltávolítása</translation>
 <translation id="6642299196749785472">Lapok csatolása</translation>
 <translation id="6647441008198474441">Az Ön által felkeresett URL-ek el lesznek küldve a Google-nak, hogy előrejelezzük, mely webhelyeket fogja esetleg legközelebb felkeresni.</translation>
 <translation id="6648977384226967773">{CONTACT,plural, =1{<ph name="CONTACT_PREVIEW" />\u2026 és további <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" />}other{<ph name="CONTACT_PREVIEW" />\u2026 és további <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" />}}</translation>
 <translation id="6649642165559792194">Kép előnézete <ph name="BEGIN_NEW" />Új<ph name="END_NEW" /></translation>
 <translation id="6659594942844771486">Lap</translation>
-<translation id="6661521899577697780">A Chrome Keresés funkciójára való feliratkozás félmagasságban megnyitva</translation>
+<translation id="6661521899577697780">A Ultimatum Keresés funkciójára való feliratkozás félmagasságban megnyitva</translation>
 <translation id="666731172850799929">Megnyitás itt: <ph name="APP_NAME" /></translation>
 <translation id="6669390930482049506">Értesítést kérek</translation>
-<translation id="6670767097276846646">Egyes bővítmények keresőmotorokkal bővíthetik ki a Chrome-ot</translation>
+<translation id="6670767097276846646">Egyes bővítmények keresőmotorokkal bővíthetik ki a Ultimatum-ot</translation>
 <translation id="6671495933530132209">Kép másolása</translation>
 <translation id="6672697278890207089">Adja meg összetett jelszavát</translation>
 <translation id="6672917148207387131">A(z) <ph name="DOMAIN" /> hozzáadása</translation>
 <translation id="6674571176963658787">A szinkronizálás megkezdéséhez adja meg összetett jelszavát.</translation>
-<translation id="6676927815633975364">Bejelentkezés erre a webhelyre és a Chrome-ba</translation>
+<translation id="6676927815633975364">Bejelentkezés erre a webhelyre és a Ultimatum-ba</translation>
 <translation id="6684262542644248484">Jelentkezzen be egy webhelyre.</translation>
-<translation id="6684809838922667136">A Chrome fejlesztése</translation>
+<translation id="6684809838922667136">A Ultimatum fejlesztése</translation>
 <translation id="6689436252814043643">Az Olvasási mód nem áll rendelkezésre.</translation>
 <translation id="669971068476817798">Koppintson a Mentés gombra.</translation>
 <translation id="6700279777779583398">A választott beállításait mentettük</translation>
@@ -1408,18 +1408,18 @@ Egyes webhelyek például válaszolhatnak rá úgy, hogy olyan hirdetéseket jel
 <translation id="6764137532716892442">Megosztott <ph name="GROUP_TITLE" /> lapcsoport új tevékenységgel</translation>
 <translation id="6767294960381293877">Lap megosztására szolgáló eszközök listája félmagasságban megnyitva.</translation>
 <translation id="6783664456110886353">{TAB_COUNT,plural, =1{<ph name="INCOGNITO_TAB_COUNT" /> inkognitó- és <ph name="TAB_COUNT_ONE" /> további lap bezárul}other{<ph name="INCOGNITO_TAB_COUNT" /> inkognitó- és <ph name="TAB_COUNT_MANY" /> további lap bezárul}}</translation>
-<translation id="6785476624617658922">A Chrome és a ChromeOS Kiegészítő Általános Szerződési Feltételei</translation>
+<translation id="6785476624617658922">A Ultimatum és a UltimatumOS Kiegészítő Általános Szerződési Feltételei</translation>
 <translation id="6786747875388722282">Bővítmények</translation>
 <translation id="6787600234697426339">Elérte a maximális ablakszámot (<ph name="MAX_INSTANCE_COUNT" />)</translation>
 <translation id="6795633245022906657">Új lap gyors megnyitása. A gyorsparancs szerkesztéséhez lépjen a Beálltásokhoz.</translation>
-<translation id="679588508577699489">A Chrome beállítása alapértelmezett böngészőként</translation>
+<translation id="679588508577699489">A Ultimatum beállítása alapértelmezett böngészőként</translation>
 <translation id="679956319013005046">Az automatikus kitöltéshez használni kívánt szolgáltatás beállításához először adja hozzá a szolgáltatást az <ph name="BEGIN_LINK" />Android-beállításokban<ph name="END_LINK" />.</translation>
 <translation id="6802555630140434547">Az ablak be lesz zárva</translation>
 <translation id="6803791793483522764">Értesítések áttekintése</translation>
 <translation id="6809470175540814047">Megnyitás inkognitó ablakban</translation>
 <translation id="6811034713472274749">Az oldal megtekinthető</translation>
 <translation id="6813359536773993594">{FILE_COUNT,plural, =1{Képek, 1 kép a listában}other{Képek, # kép a listában}}</translation>
-<translation id="6813446258015311409">Bejelentkezés a Chrome-ba, megnyitva.</translation>
+<translation id="6813446258015311409">Bejelentkezés a Ultimatum-ba, megnyitva.</translation>
 <translation id="6815692190508268848">A megjelenési beállítások alkalmazva</translation>
 <translation id="6817747507826986771">Az oldal gyors megosztása. A gyorsparancs szerkesztéséhez tartsa lenyomva.</translation>
 <translation id="6820686453637990663">CVC</translation>
@@ -1428,7 +1428,7 @@ Egyes webhelyek például válaszolhatnak rá úgy, hogy olyan hirdetéseket jel
 <translation id="6828070228333235514">Árkövetés leállítása</translation>
 <translation id="6830728435402077660">Nem biztonságos</translation>
 <translation id="6831043979455480757">Fordítás</translation>
-<translation id="6835182496791325827">Értesítést kaphat, amikor a Chrome megtalálja a legjobb találatokat a kereséseihez, amíg Ön távol van.</translation>
+<translation id="6835182496791325827">Értesítést kaphat, amikor a Ultimatum megtalálja a legjobb találatokat a kereséseihez, amíg Ön távol van.</translation>
 <translation id="6846298663435243399">Betöltés…</translation>
 <translation id="6850409657436465440">A letöltés még mindig folyamatban van</translation>
 <translation id="6850830437481525139"><ph name="TAB_COUNT" /> lap bezárva</translation>
@@ -1451,7 +1451,7 @@ Egyes webhelyek például válaszolhatnak rá úgy, hogy olyan hirdetéseket jel
 <translation id="6886500155621657325">{ITEMS_COUNT,plural, =1{1 jelszó}other{# jelszó}}</translation>
 <translation id="688730033107341407">Kijelentkezés után a Google-fiókjában lévő könyvjelzői, jelszavai és egyéb tartalmai el lesznek távolítva erről az eszközről.</translation>
 <translation id="6896758677409633944">Másolás</translation>
-<translation id="6898797562238201317">Saját összetett jelszó használata a Google-fiókjában tárolt Chrome-adatok mindegyikének titkosításához</translation>
+<translation id="6898797562238201317">Saját összetett jelszó használata a Google-fiókjában tárolt Ultimatum-adatok mindegyikének titkosításához</translation>
 <translation id="6900532703269623216">Speciális védelem</translation>
 <translation id="6903907808598579934">Szinkronizálás bekapcsolása</translation>
 <translation id="6906448540340261898">Biztosítsa, hogy mindig használhassa a Google-fiókjában lévő jelszavakat</translation>
@@ -1461,7 +1461,7 @@ Egyes webhelyek például válaszolhatnak rá úgy, hogy olyan hirdetéseket jel
 <translation id="6910211073230771657">Törölve</translation>
 <translation id="6916590542764765824">Bővítmények kezelése</translation>
 <translation id="6918398787259831832">Ha a probléma továbbra is fennáll, <ph name="BEGIN_LINK" />itt talál további információt<ph name="END_LINK" /> a következőről: <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> A Chrome eltávolította ezeket az engedélyeket, mert Ön az utóbbi időben nem kereste fel ezt a webhelyet</translation>
+<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> A Ultimatum eltávolította ezeket az engedélyeket, mert Ön az utóbbi időben nem kereste fel ezt a webhelyet</translation>
 <translation id="6927821422725196292">{TABS_COUNT,plural, =1{1 lap}other{<ph name="NUMBER_OF_TABS" /> lap}}</translation>
 <translation id="6929224077895306814">Az eszközére és a Google-fiókjába mentett biztonsági kódok is törlődnek</translation>
 <translation id="6933180670536678127"><ph name="TAB_TITLE" />, kiválasztott rögzített, hangot lejátszó lap</translation>
@@ -1490,30 +1490,30 @@ Egyes webhelyek például válaszolhatnak rá úgy, hogy olyan hirdetéseket jel
 <translation id="7020741890149022655">Felvétel olvasólistára <ph name="BEGIN_NEW" />Új<ph name="END_NEW" /></translation>
 <translation id="7022756207310403729">Megnyitás böngészőben</translation>
 <translation id="7029809446516969842">Jelszavak</translation>
-<translation id="7037994709569287156">A Chrome beállítása alapértelmezettként</translation>
+<translation id="7037994709569287156">A Ultimatum beállítása alapértelmezettként</translation>
 <translation id="7053256416619638731">Erősítse meg jelszavait ezen az eszközön</translation>
 <translation id="7053983685419859001">Letiltás</translation>
 <translation id="7054588988317389591">Lekéri a képleírásokat?</translation>
-<translation id="7057969023583258980">A teljes Chrome-előzmények megnyitása</translation>
+<translation id="7057969023583258980">A teljes Ultimatum-előzmények megnyitása</translation>
 <translation id="7063006564040364415">Nem sikerült csatlakozni a szinkronizálószerverhez.</translation>
 <translation id="7063106218165698546">Szabja személyre a lapcsoportot, majd válassza a Kész gombot</translation>
 <translation id="7071521146534760487">Fiók kezelése</translation>
 <translation id="707155805709242880">Alább válassza ki a szinkronizálni kívánt elemeket</translation>
 <translation id="7072949719501323344"><ph name="TAB_TITLE" />, több másik mellett kiválasztott, kitűzött inkognitó lap kép a képben módban</translation>
 <translation id="7077143737582773186">SD-kártya</translation>
-<translation id="7078916049958741685">Az Ön Chrome-adatai is törlődjenek erről az eszközről</translation>
+<translation id="7078916049958741685">Az Ön Ultimatum-adatai is törlődjenek erről az eszközről</translation>
 <translation id="7080145768121641840"><ph name="TAB_TITLE" />, kiválasztott rögzített némított lap</translation>
 <translation id="7084115944294706056">Címsáv pozíciójának kiválasztása</translation>
-<translation id="7085332316435785646">Válassza ki, hogy szeretné-e használni a Chrome-előzményeket személyre szabott élmények biztosításához a Google-szolgáltatásokban.</translation>
-<translation id="7088681679121566888">A Chrome naprakész</translation>
+<translation id="7085332316435785646">Válassza ki, hogy szeretné-e használni a Ultimatum-előzményeket személyre szabott élmények biztosításához a Google-szolgáltatásokban.</translation>
+<translation id="7088681679121566888">A Ultimatum naprakész</translation>
 <translation id="7098100324909062850"><ph name="TAB_TITLE" />, több kiválasztott némított inkognitó lap</translation>
 <translation id="7106762743910369165">Böngészőjét a szervezete kezeli.</translation>
-<translation id="7111394291981742152">A Chrome nagyobb irányítást ad afelett, hogy milyen hirdetések jelenjenek meg Önnek, és korlátozza, hogy mely webhelyek tudhatnak meg Önről információkat, amikor személyre szabott hirdetéseket jelenítenek meg.</translation>
+<translation id="7111394291981742152">A Ultimatum nagyobb irányítást ad afelett, hogy milyen hirdetések jelenjenek meg Önnek, és korlátozza, hogy mely webhelyek tudhatnak meg Önről információkat, amikor személyre szabott hirdetéseket jelenítenek meg.</translation>
 <translation id="7111822978084196600">Nevezze el ezt az ablakot</translation>
 <translation id="7115358764509798967">Rendszerbeállítás</translation>
 <translation id="7117485132243600300">A követett tartalmak, javasolt témák és keresések kezelése</translation>
 <translation id="7119984597597798764"><ph name="INSTANCE_TITLE" /> bezárása</translation>
-<translation id="7121179479711575744">Bejelentkezés a Chrome-ba</translation>
+<translation id="7121179479711575744">Bejelentkezés a Ultimatum-ba</translation>
 <translation id="7136694880210472378">Legyen alapértelmezett</translation>
 <translation id="7136902389402789299">{NUM_SITES,plural, =1{1 webhely engedélyei felülvizsgálva}other{# webhely engedélyei felülvizsgálva}}</translation>
 <translation id="7138678301420049075">Egyéb</translation>
@@ -1523,8 +1523,8 @@ Egyes webhelyek például válaszolhatnak rá úgy, hogy olyan hirdetéseket jel
 <translation id="7149893636342594995">Az elmúlt 24 órából</translation>
 <translation id="71503698506017927">Az összetett jelszóval való titkosítás nem tartalmazza a Google Payben megadott fizetési módokat és címeket.
 
-A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában lévő Chrome-adatokat<ph name="END_LINK" />.</translation>
-<translation id="7165972437814027679">További információ arról, hogy miért tilt le bizonyos fájlokat a Chrome</translation>
+A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában lévő Ultimatum-adatokat<ph name="END_LINK" />.</translation>
+<translation id="7165972437814027679">További információ arról, hogy miért tilt le bizonyos fájlokat a Ultimatum</translation>
 <translation id="7168323970702333693">Bejelentkezve a következőként: <ph name="USER_NAME" />. Megnyitja a beállításokat.</translation>
 <translation id="7170930892977483182">Az eszközére és a Google Walletbe mentett biztonsági kódok is törlődnek</translation>
 <translation id="7173114856073700355">Beállítások megnyitása</translation>
@@ -1544,7 +1544,7 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="7197682514647286393">Böngészési adatok gyors törlése</translation>
 <translation id="719791532916917144">Billentyűparancsok</translation>
 <translation id="7207760545532569765"><ph name="TAB_COUNT" /> lap visszaállítása új háttérbeli lapokként.</translation>
-<translation id="7217781228893594884">Az inkognitó lapok a Chrome elhagyásakor zárolódnak</translation>
+<translation id="7217781228893594884">Az inkognitó lapok a Ultimatum elhagyásakor zárolódnak</translation>
 <translation id="7221869452894271364">Az oldal újratöltése</translation>
 <translation id="722681077040152344">Leiratkozott <ph name="COUNT" /> webhelyről</translation>
 <translation id="7227218174981371415">{FILE_COUNT,plural, =1{1 letöltés függőben}other{# letöltés függőben}}</translation>
@@ -1554,12 +1554,12 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="724510009481365878">Ez az oldal nem nyomtatható</translation>
 <translation id="7248671827512403053">Alkalmazás</translation>
 <translation id="7253951228444156601">Jelszavak ellenőrzése…</translation>
-<translation id="7260367682327802201">Előfordulhat, hogy Android-eszköze is rendelkezik hasonló beállítással. Ha a hirdetésmérés be van kapcsolva a Chrome-ban és Android-eszközén, akkor a vállalatok képesek lehetnek az egyes hirdetések hatékonyságának mérésére az Ön által felkeresett webhelyeken és az Ön által használt alkalmazásokban is.</translation>
+<translation id="7260367682327802201">Előfordulhat, hogy Android-eszköze is rendelkezik hasonló beállítással. Ha a hirdetésmérés be van kapcsolva a Ultimatum-ban és Android-eszközén, akkor a vállalatok képesek lehetnek az egyes hirdetések hatékonyságának mérésére az Ön által felkeresett webhelyeken és az Ön által használt alkalmazásokban is.</translation>
 <translation id="727288900855680735">Elküldi a(z) <ph name="ONE_TIME_CODE" /> kódot ide: <ph name="ORIGIN" />?</translation>
 <translation id="7274013316676448362">Letiltott oldal</translation>
 <translation id="7276868533747677875">Ha korábban exportálta a jelszavait, keresse meg a CSV-fájlt az eszközén, majd importálja a kívánt jelszókezelőbe.</translation>
 <translation id="728377807486816582">Koppintson a címsávra.</translation>
-<translation id="7289049772085228972">A Chrome a legerősebb védelmet biztosítja</translation>
+<translation id="7289049772085228972">A Ultimatum a legerősebb védelmet biztosítja</translation>
 <translation id="7289303553784750393">Ha online állapotban van, de a probléma továbbra is fennáll, más módon is próbálkozhat a(z) <ph name="SITE_ETLD_PLUS_ONE" /> webhelyen való folytatással.</translation>
 <translation id="7290209999329137901">Nem lehetséges az átnevezés</translation>
 <translation id="7291910923717764901">Képleírások hozzáadva ehhez az oldalhoz</translation>
@@ -1592,12 +1592,12 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="7400003506822844357">{FILE_COUNT,plural, =1{További 1 fájl a listában}other{További # fájl a listában}}</translation>
 <translation id="7400418766976504921">URL</translation>
 <translation id="7400424692675800399">Új ablak megnyitásához csökkentse az aktív és inaktív ablakok teljes számát, hogy legfeljebb <ph name="MAX_WINDOW_COUNT_MINUS_ONE" /> legyen megnyitva.</translation>
-<translation id="7403691278183511381">Chrome – Első futtatási élmény</translation>
+<translation id="7403691278183511381">Ultimatum – Első futtatási élmény</translation>
 <translation id="7411224099004328643">Google-fiók-felhasználó</translation>
 <translation id="7419565702166471774">Mindig használjon biztonságos kapcsolatokat</translation>
 <translation id="7421293530411019405">Kilép a lapcsoportból?</translation>
 <translation id="7435356471928173109">A rendszergazda kikapcsolta</translation>
-<translation id="7437998757836447326">Kijelentkezés a Chrome-ból</translation>
+<translation id="7437998757836447326">Kijelentkezés a Ultimatum-ból</translation>
 <translation id="7439467816829380878">Lap áthelyezése csoportba</translation>
 <translation id="7439749340204407129">Könyvjelzőkezelő megnyitása</translation>
 <translation id="7453810262525006706">Összecsukás oldalsó nézetbe</translation>
@@ -1631,7 +1631,7 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="7525248386620136756"><ph name="TAB_GROUPS_AND_TABS_PART" /> bezárva és mentve</translation>
 <translation id="7545347190366646170">Hozzáféréssel rendelkezők</translation>
 <translation id="7553482318994371148">Bezárt lapok újbóli megnyitása</translation>
-<translation id="7554643625247105821">Nem sikerült ellenőrizni a Chrome-verziót</translation>
+<translation id="7554643625247105821">Nem sikerült ellenőrizni a Ultimatum-verziót</translation>
 <translation id="7557508262441527045">Kijelentkezve</translation>
 <translation id="7573665567024262965">Alapértelmezett alkalmazások kiválasztása</translation>
 <translation id="757855969265046257">{FILES,plural, =1{<ph name="FILES_DOWNLOADED_ONE" /> fájl letöltve}other{<ph name="FILES_DOWNLOADED_MANY" /> fájl letöltve}}</translation>
@@ -1647,7 +1647,7 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="7612619742409846846">Bejelentkezve a Google rendszerébe mint</translation>
 <translation id="7612989789287281429">Bejelentkezés…</translation>
 <translation id="7619072057915878432">A következő fájl letöltése hálózati hibák miatt nem sikerült: <ph name="FILE_NAME" />.</translation>
-<translation id="7626032353295482388">A Chrome üdvözli Önt!</translation>
+<translation id="7626032353295482388">A Ultimatum üdvözli Önt!</translation>
 <translation id="7628417132421583481">A Jelszókezelő megnyitása</translation>
 <translation id="7630202231528827509">Szolgáltatói URL</translation>
 <translation id="7638584964844754484">Hibás összetett jelszó</translation>
@@ -1662,7 +1662,7 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="7666185984446444960"><ph name="TAB_GROUPS_AND_TABS_PART" /> bezárva</translation>
 <translation id="7682724950699840886">Próbálkozzon a következő tippekkel: Győződjön meg arról, hogy elegendő tárhely áll rendelkezésre az eszközön, majd próbálja újra az exportálást.</translation>
 <translation id="7686086654630106285">További információ a webhelyek által javasolt hirdetésekről</translation>
-<translation id="7690596512217303514">Eszköze nem tudta megnyitni a Chrome-ot. A probléma elhárításához töltse le a legújabb Chrome-frissítést eszköze alkalmazásboltjából.</translation>
+<translation id="7690596512217303514">Eszköze nem tudta megnyitni a Ultimatum-ot. A probléma elhárításához töltse le a legújabb Ultimatum-frissítést eszköze alkalmazásboltjából.</translation>
 <translation id="7691043218961417207">Követni kívánt tartalmak felfedezése</translation>
 <translation id="7692761875510935111">Gyorsan megnyithatja a böngészőben. A gyorsparancs szerkesztéséhez tartsa lenyomva.</translation>
 <translation id="7697383401610880082">Fogópont</translation>
@@ -1670,7 +1670,7 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="7702420606070050505">A legutóbbi tevékenységek alsó lapja teljes magasságban megnyitva</translation>
 <translation id="7707922173985738739">Mobiladat-kapcsolat használata</translation>
 <translation id="7708994397325774423">Az összes jelszó lekérése</translation>
-<translation id="7714077993070342304">Chrome-menü megnyitása</translation>
+<translation id="7714077993070342304">Ultimatum-menü megnyitása</translation>
 <translation id="7733878270780732638">Nincs elég tárhely az eszközön.</translation>
 <translation id="7740287852186792672">Keresés eredménye</translation>
 <translation id="774403695779169686"><ph name="TAB_TITLE" />, kiválasztott, tartalmat megosztó inkognitó lap</translation>
@@ -1697,9 +1697,9 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="7821130663268546430">Az összes megnyitott lapot megtalálja a Lapváltóban</translation>
 <translation id="7822705602465980873">Amikor be van jelentkezve, ezek az adatok a Google-fiókjához kapcsolódnak, hogy segítsék az Ön védelmét az összes Google-szolgáltatásban, például egy biztonsági incidens után fokozva a védelmet a Gmailben.</translation>
 <translation id="7824665136384946951">Szervezete kikapcsolta a Biztonságos Böngészést</translation>
-<translation id="7826342993930002256">Az Ön Chrome-ja, bárhol</translation>
+<translation id="7826342993930002256">Az Ön Ultimatum-ja, bárhol</translation>
 <translation id="7844171778363018843">Nincs szinkronizálásra kiválasztott adat</translation>
-<translation id="784453721355882533">Próbálja ki a Gemini a Chrome-ban funkciót, amellyel válaszokat, fontos információkat és egyebeket kaphat.</translation>
+<translation id="784453721355882533">Próbálja ki a Gemini a Ultimatum-ban funkciót, amellyel válaszokat, fontos információkat és egyebeket kaphat.</translation>
 <translation id="7846161022626028328">Valami hiba történt. Próbálja újra.</translation>
 <translation id="7846296061357476882">Google-szolgáltatások</translation>
 <translation id="784652447248278262">Aktuális ablak</translation>
@@ -1709,10 +1709,10 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="7853202427316060426">Aktivitás</translation>
 <translation id="7859988229622350291">Sosem fordított nyelvek</translation>
 <translation id="7866213166286285359">Itt fordíthat le oldalakat</translation>
-<translation id="7873610418439765081">Próbálja ki a Gemini a Chrome-ban funkciót, hogy válaszokat, fontos információkat és egyebeket kaphasson a További lehetőségek gombbal.</translation>
+<translation id="7873610418439765081">Próbálja ki a Gemini a Ultimatum-ban funkciót, hogy válaszokat, fontos információkat és egyebeket kaphasson a További lehetőségek gombbal.</translation>
 <translation id="7875915731392087153">E-mail létrehozása</translation>
 <translation id="7876243839304621966">Összes eltávolítása</translation>
-<translation id="7886917304091689118">Fut a Chrome-ban</translation>
+<translation id="7886917304091689118">Fut a Ultimatum-ban</translation>
 <translation id="7887174313503389866">Tekintse meg a legfontosabb adatvédelmi és biztonsági beállítások bemutatóját. További lehetőségekért lépjen az egyes beállításokhoz.</translation>
 <translation id="7913993612870913335">{FILE_COUNT,plural, =1{1 letöltést letiltott a szervezete}other{# letöltést letiltott a szervezete}}</translation>
 <translation id="7914399737746719723">Alkalmazás telepítve</translation>
@@ -1721,7 +1721,7 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="7921782882718083488">Oldal összegzése</translation>
 <translation id="7926975587469166629">Egyéni kártyanév</translation>
 <translation id="7927073875790626822">XR</translation>
-<translation id="7929587383660661825">A Chrome automatikusan visszavonja azoknak a webhelyeknek az engedélyeit, amelyek visszaélnek az értesítésekkel, vagy amelyeket Ön nem keresett fel a közelmúltban</translation>
+<translation id="7929587383660661825">A Ultimatum automatikusan visszavonja azoknak a webhelyeknek az engedélyeit, amelyek visszaélnek az értesítésekkel, vagy amelyeket Ön nem keresett fel a közelmúltban</translation>
 <translation id="7934668619883965330">A fájl nem tölthető le. A fájlformátum nem támogatott.</translation>
 <translation id="7942131818088350342">A(z) <ph name="PRODUCT_NAME" /> elavult.</translation>
 <translation id="7944772052836377867">A szinkronizálás ellenőrizni szeretné az Ön személyazonosságát</translation>
@@ -1738,7 +1738,7 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="7971136598759319605">1 napja volt aktív</translation>
 <translation id="7975379999046275268">Oldal előnézete <ph name="BEGIN_NEW" />Új<ph name="END_NEW" /></translation>
 <translation id="7977451675950311423">Figyelmezteti Önt, ha adatvédelmi incidensben érintett jelszót használ.</translation>
-<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> A Chrome eltávolította ezeket az engedélyeket, mert Ön az utóbbi időben nem kereste fel ezt a webhelyet</translation>
+<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> A Ultimatum eltávolította ezeket az engedélyeket, mert Ön az utóbbi időben nem kereste fel ezt a webhelyet</translation>
 <translation id="7995059495660416932">A tartalmakat akkor láthatja, amikor hozzáférhetővé válnak</translation>
 <translation id="799576009106109668">Gyorsabban böngészhet, mivel a rendszer proaktív módon tölti be a tartalmat az aktuálisan felkeresett weboldal alapján.</translation>
 <translation id="7998918019931843664">Bezárt lap megnyitása</translation>
@@ -1756,17 +1756,17 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="804335162455518893">Az SD-kártya nem található</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> inkognitó lap}other{<ph name="TAB_COUNT_NORMAL" /> inkognitó lap}}</translation>
 <translation id="8051695050440594747"><ph name="MEGABYTES" /> MB áll rendelkezésre</translation>
-<translation id="8058746566562539958">Megnyitás új Chrome-lapon</translation>
+<translation id="8058746566562539958">Megnyitás új Ultimatum-lapon</translation>
 <translation id="8062594758852531064">Kiterjesztett előtöltés:</translation>
 <translation id="8063895661287329888">A könyvjelző hozzáadása sikertelen volt.</translation>
 <translation id="8066816452984416180">Az oldal gyors felvétele a könyvjelzők közé. A gyorsparancs szerkesztéséhez tartsa lenyomva.</translation>
-<translation id="8072436850275034464">Bárhol újra megnyithatja a nemrég bezárt lapokat, ahol a Chrome-ot használja.</translation>
+<translation id="8072436850275034464">Bárhol újra megnyithatja a nemrég bezárt lapokat, ahol a Ultimatum-ot használja.</translation>
 <translation id="8073388330009372546">Kép megnyitása új lapon</translation>
 <translation id="8076492880354921740">Lapok</translation>
 <translation id="8078096376109663956">Csak szöveg megosztása.</translation>
 <translation id="8078348702936632821">Parancsikon kitűzése</translation>
 <translation id="8084285576995584326">Google-fiókadatok vezérlése</translation>
-<translation id="8084864785646838999">Előfordulhat, hogy az előzményeinek egy része nem jelenik meg itt. Az összes Chrome-előzmény megtekintéséhez nyissa meg a teljes Chrome-előzményeket. Előfordulhat továbbá, hogy a böngészési előzmények más formái még megtalálhatók Google-fiókjában a <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> webhelyen.</translation>
+<translation id="8084864785646838999">Előfordulhat, hogy az előzményeinek egy része nem jelenik meg itt. Az összes Ultimatum-előzmény megtekintéséhez nyissa meg a teljes Ultimatum-előzményeket. Előfordulhat továbbá, hogy a böngészési előzmények más formái még megtalálhatók Google-fiókjában a <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> webhelyen.</translation>
 <translation id="8088176524274673045">Ha szeretné engedélyezni a megosztást a közelben lévő személyekkel, olvastassa be velük ezt a QR-kódot</translation>
 <translation id="8090732854597034573">Ha segítségre van szükséged, fordulj a szülődhöz</translation>
 <translation id="8101414242770404289">Nincsenek lapok a következő időszakból: <ph name="TIME_PERIOD" /></translation>
@@ -1774,10 +1774,10 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="810433609302852">A tippekre vonatkozó értesítések funkció promóciós és használati lépéseket tartalmazó alsó lapja</translation>
 <translation id="8105893657415066307"><ph name="DESCRIPTION" /> <ph name="SEPARATOR" /> <ph name="FILE_SIZE" /></translation>
 <translation id="8107530384992929318">Rendezési beállítások bezárása</translation>
-<translation id="8110024788458304985">Hozzájárulás a Chrome funkcióinak és teljesítményének javításához</translation>
-<translation id="8110087112193408731">Chrome-beli tevékenysége megjelenjen a digitális jóllét funkcióban?</translation>
+<translation id="8110024788458304985">Hozzájárulás a Ultimatum funkcióinak és teljesítményének javításához</translation>
+<translation id="8110087112193408731">Ultimatum-beli tevékenysége megjelenjen a digitális jóllét funkcióban?</translation>
 <translation id="8118117428362942925">Ha segítségre van szükséged, fordulj a szülődhöz (<ph name="PARENT_NAME" />)</translation>
-<translation id="8118151008374483324">Ha az összes eszközén szeretne hozzáférni lapjaihoz és egyebekhez, jelentkezzen be a Chrome-ba</translation>
+<translation id="8118151008374483324">Ha az összes eszközén szeretne hozzáférni lapjaihoz és egyebekhez, jelentkezzen be a Ultimatum-ba</translation>
 <translation id="8120286190326371840">Nincsenek olyan jelszavak ezen az eszközön, amelyekhez illetéktelenül fértek hozzá</translation>
 <translation id="8122623268651408616">Rendezés folyamatban: legújabb elöl</translation>
 <translation id="8127542551745560481">Kezdőlap szerkesztése</translation>
@@ -1818,7 +1818,7 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="8260126382462817229">Próbáljon meg újra bejelentkezni</translation>
 <translation id="8261506727792406068">Törlés</translation>
 <translation id="82619448491672958">További lapok megtekintése</translation>
-<translation id="8265730590513812063">Chrome-menü megnyitása</translation>
+<translation id="8265730590513812063">Ultimatum-menü megnyitása</translation>
 <translation id="8266753737658117282">Folytatás a következővel: <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8266862848225348053">Letöltés helye</translation>
 <translation id="8271267069224406035">Ez spam</translation>
@@ -1832,7 +1832,7 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="8317318757008452355">Nyomtatási lehetőségek megnyitása</translation>
 <translation id="8320212361750431956">Legutóbbi tevékenység</translation>
 <translation id="832514020744584629"><ph name="PREF_TITLE" />  <ph name="BEGIN_NEW" />Új<ph name="END_NEW" /></translation>
-<translation id="8342727528718219152">A Chrome értesíteni fogja Önt azokról a webhelyekről, amelyek lehet, hogy túl sok értesítést küldenek</translation>
+<translation id="8342727528718219152">A Ultimatum értesíteni fogja Önt azokról a webhelyekről, amelyek lehet, hogy túl sok értesítést küldenek</translation>
 <translation id="834313815369870491">Sosem fordított webhelyek</translation>
 <translation id="8348215005712416247"><ph name="TAB_TITLE" />, több kiválasztott rögzített, felvételt készítő inkognitó lap</translation>
 <translation id="8348430946834215779">HTTPS használata, amikor csak lehetséges, és figyelmeztetés megjelenítése a protokollt nem támogató webhelyek betöltése előtt.</translation>
@@ -1846,12 +1846,12 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="8398389123831319859">Koppintson duplán, és tartsa lenyomva az ujját az inkognitó módba való váltáshoz</translation>
 <translation id="8402673309244746971">Ugrás a követésekhez</translation>
 <translation id="8413126021676339697">Az összes előzmény</translation>
-<translation id="8413795581997394485">Védelmet nyújt az ismert veszélyes webhelyekkel, letöltésekkel és bővítményekkel szemben. Amikor Ön felkeresi valamelyik webhelyet, a Chrome az URL obfuszkált részét egy olyan adatvédelmi szerveren keresztül küldi el a Google-nak, amely elrejti az Ön IP-címét. Ha valamelyik oldalon gyanús műveletet észlel, akkor a böngésző a teljes URL-eket és az oldal tartalmának egyes részeit is elküldi.</translation>
+<translation id="8413795581997394485">Védelmet nyújt az ismert veszélyes webhelyekkel, letöltésekkel és bővítményekkel szemben. Amikor Ön felkeresi valamelyik webhelyet, a Ultimatum az URL obfuszkált részét egy olyan adatvédelmi szerveren keresztül küldi el a Google-nak, amely elrejti az Ön IP-címét. Ha valamelyik oldalon gyanús műveletet észlel, akkor a böngésző a teljes URL-eket és az oldal tartalmának egyes részeit is elküldi.</translation>
 <translation id="8414396119627470038">Jelentkezzen be a(z) <ph name="SITE_ETLD_PLUS_ONE" /> webhelyre a következővel: <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8419144699778179708">Törli az előzményeket, köztük a keresőmező előzményeit is.</translation>
 <translation id="8419244640277402268">Hozzáadás</translation>
 <translation id="8422250855136581222">Nincsenek lapok ezen az eszközön</translation>
-<translation id="842386925677997438">A Chrome biztonsági eszközei</translation>
+<translation id="842386925677997438">A Ultimatum biztonsági eszközei</translation>
 <translation id="8427875596167638501">Félmagasságban megnyitott előnézeti ablak</translation>
 <translation id="8428213095426709021">Beállítások</translation>
 <translation id="8430824733382774043">Csak képernyőkép megosztása</translation>
@@ -1859,7 +1859,7 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="8438566539970814960">Keresések és böngészés javítása</translation>
 <translation id="8439974325294139057"><ph name="LANG" /> – A nyelv készen áll, indítsa újra a(z) <ph name="APP_NAME" /> alkalmazást</translation>
 <translation id="8442258441309440798">Nem állnak rendelkezésre hírek</translation>
-<translation id="8443209985646068659">A Chrome nem frissíthető</translation>
+<translation id="8443209985646068659">A Ultimatum nem frissíthető</translation>
 <translation id="8443600937324357591">Lap átvitele másik ablakba</translation>
 <translation id="8445448999790540984">Nem sikerült a jelszavak exportálása</translation>
 <translation id="8446884382197647889">További információ</translation>
@@ -1868,7 +1868,7 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="8455675988389029454">A könyvjelzők, jelszavak és egyebek elérése bármely eszközéről</translation>
 <translation id="8458341576712814616">Gyorsparancs</translation>
 <translation id="8458413889418591446">Ha szeretne gyorsan visszatérni a felkeresett webhelyekre, szinkronizálja az előzményeit és a lapjait.</translation>
-<translation id="84594714173170813">Továbbra is használhatja a Google-fiókjában lévő Chrome-adatokat</translation>
+<translation id="84594714173170813">Továbbra is használhatja a Google-fiókjában lévő Ultimatum-adatokat</translation>
 <translation id="8460008946585880786">Húzza az egyik lapot a másikra</translation>
 <translation id="8460448946170646641">A legfontosabb adatvédelmi és biztonsági beállítások áttekintése</translation>
 <translation id="8460932807646981183">Keresőmotorok és webhelyeken történő keresés kezelése</translation>
@@ -1890,8 +1890,8 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="8540136935098276800">Megfelelő formátumú URL-t adjon meg</translation>
 <translation id="854522910157234410">Az oldal megnyitása</translation>
 <translation id="8547466829003330976">PDF áttekintése AI segítségével</translation>
-<translation id="8551513938758868521">Inkognitó lapok zárolása a Chrome elhagyásakor</translation>
-<translation id="8559961053328923750">A Chrome korlátozza, hogy a webhelyek összesen mennyi adatot oszthatnak meg a böngészőn keresztül a hirdetések teljesítményének mérése érdekében.</translation>
+<translation id="8551513938758868521">Inkognitó lapok zárolása a Ultimatum elhagyásakor</translation>
+<translation id="8559961053328923750">A Ultimatum korlátozza, hogy a webhelyek összesen mennyi adatot oszthatnak meg a böngészőn keresztül a hirdetések teljesítményének mérése érdekében.</translation>
 <translation id="8559990750235505898">Más nyelvű oldalak fordításának felajánlása</translation>
 <translation id="8560602726703398413">Olvasási lista keresése a Google Könyvjelzők szolgáltatásban</translation>
 <translation id="85618473456579127">Koppintson a jobb felső sarokban a profilra.</translation>
@@ -1904,12 +1904,12 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="859046281437143747">Az ár követéséhez nyomja meg a További műveletek gombot</translation>
 <translation id="859064343657890103"><ph name="TAB_GROUP_TITLE" /> lapcsoport törölve</translation>
 <translation id="860043288473659153">Kártyatulajdonos neve</translation>
-<translation id="8602358303461588329">Bejelentkezés a Chrome-ba, bezárva.</translation>
+<translation id="8602358303461588329">Bejelentkezés a Ultimatum-ba, bezárva.</translation>
 <translation id="860282621117673749">Árcsökkenési értesítések</translation>
 <translation id="8611922158252451755">A link birtokában bárki szerkesztheti az összes lapot, ezért legyen körültekintő a megosztáskor. A link 48 óra múlva lejár.</translation>
 <translation id="8616006591992756292">Előfordulhat, hogy a böngészési előzmények más formái még megtalálhatók Google-fiókjában a <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> webhelyen.</translation>
 <translation id="8617240290563765734">Megnyitja a letöltött tartalomban szereplő javasolt URL-t?</translation>
-<translation id="8629093325209491835">Nyissa meg a Chrome-menü Beállítások szakaszát.</translation>
+<translation id="8629093325209491835">Nyissa meg a Ultimatum-menü Beállítások szakaszát.</translation>
 <translation id="8634050254805484913">Elrejtve keskeny képernyőkön</translation>
 <translation id="8635399646025169806">Megtartja a lapcsoportot?</translation>
 <translation id="8636825310635137004">Ha a többi eszközén is szeretné elérni lapjait, kapcsolja be a szinkronizálást</translation>
@@ -1928,15 +1928,15 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="8715300232952757586">A(z) <ph name="TAB_TITLE" /> bezáródik</translation>
 <translation id="8723453889042591629">Gyorsan lefordíthatja ezt az oldalt. A gyorsparancs szerkesztéséhez tartsa lenyomva.</translation>
 <translation id="8725066075913043281">Újrapróbálás</translation>
-<translation id="8727043961453758442">Hozza ki a legtöbbet a Chrome-ból</translation>
+<translation id="8727043961453758442">Hozza ki a legtöbbet a Ultimatum-ból</translation>
 <translation id="8731268612289859741">Biztonsági kód</translation>
 <translation id="8738163682604285902">Megtekinti az Olvasási módot?</translation>
 <translation id="8746155870861185046">Kiemelés megosztása</translation>
 <translation id="8748850008226585750">Tartalom elrejtve</translation>
 <translation id="8754448020583829686">Másolás link nélkül</translation>
 <translation id="8756969031206844760">Szeretné frissíteni a jelszót?</translation>
-<translation id="8765470054473112089">Amikor Ön beír valamit a címsávba vagy a keresőmezőbe, a Chrome a beírt szöveget elküldi az alapértelmezett keresőmotornak, hogy jobb javaslatokat biztosítson. Inkognitóban ki van kapcsolva ez a funkció.</translation>
-<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{A Chrome talált egy gyenge jelszót, amelyen lehetne javítani}other{A Chrome talált # gyenge jelszót, amelyen lehetne javítani}}</translation>
+<translation id="8765470054473112089">Amikor Ön beír valamit a címsávba vagy a keresőmezőbe, a Ultimatum a beírt szöveget elküldi az alapértelmezett keresőmotornak, hogy jobb javaslatokat biztosítson. Inkognitóban ki van kapcsolva ez a funkció.</translation>
+<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{A Ultimatum talált egy gyenge jelszót, amelyen lehetne javítani}other{A Ultimatum talált # gyenge jelszót, amelyen lehetne javítani}}</translation>
 <translation id="8766529642647037772">Szeretne létrehozni egy ehhez hasonló kiemelt linket?</translation>
 <translation id="8788265440806329501">Bezárta a navigációs előzményeket</translation>
 <translation id="8790193082819560975">Koppintással új lapon keresheti a termékhez tartozó vásárlási lehetőségeket.</translation>
@@ -1959,7 +1959,7 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="885480114717186641">Kérheti asztali webhely megjelenítését a következőhöz: <ph name="HOST_NAME" /></translation>
 <translation id="8856607253650333758">Leírások lekérése</translation>
 <translation id="8863714995118816041">Újból megadta az engedélyeket a következő számára: <ph name="SITE_NAME" /></translation>
-<translation id="8865415417596392024">A fiókjában található Chrome-adatok</translation>
+<translation id="8865415417596392024">A fiókjában található Ultimatum-adatok</translation>
 <translation id="8872506776304248286">Megnyitás alkalmazásban</translation>
 <translation id="8890668505403261809">Keresés az inkognitó lapokon</translation>
 <translation id="8892234476517513962">Már be van jelentkezve</translation>
@@ -1971,7 +1971,7 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="8922289737868596582">A További lehetőségek gomb segítségével letölthet oldalakat offline használatra</translation>
 <translation id="8924575305646776101"><ph name="BEGIN_LINK" />További információ<ph name="END_LINK" /></translation>
 <translation id="892496902842311796">A(z) <ph name="LANG" /> nyelv készen áll</translation>
-<translation id="8937772741022875483">Eltávolítja Chrome-beli tevékenységét a digitális jóllét funkcióból?</translation>
+<translation id="8937772741022875483">Eltávolítja Ultimatum-beli tevékenységét a digitális jóllét funkcióból?</translation>
 <translation id="8942627711005830162">Megnyitás másik ablakban</translation>
 <translation id="8945143127965743188"><ph name="LANG" /> – Ezt a nyelvet nem lehetett letölteni. Próbálja újra később.</translation>
 <translation id="8946759102391960088">Őrizze meg a jelszavaihoz való hozzáférését</translation>
@@ -1983,12 +1983,12 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="8970887620466824814">Hiba történt.</translation>
 <translation id="8972098258593396643">Letölti az alapértelmezett mappába?</translation>
 <translation id="8987736167266086032">Ott folytathatja, ahol abbahagyta</translation>
-<translation id="8992769679401294069">Adatai az összetett jelszavával vannak titkosítva. Adja meg, ha Google-fiókjában Chrome-adatokat szeretne használni és menteni.</translation>
+<translation id="8992769679401294069">Adatai az összetett jelszavával vannak titkosítva. Adja meg, ha Google-fiókjában Ultimatum-adatokat szeretne használni és menteni.</translation>
 <translation id="8993760627012879038">Új lap megnyitása inkognitó módban</translation>
 <translation id="8995521496079646922">Alapértelmezés szerint a kiválasztott alkalmazások lesznek használva. Ha valamelyik alkalmazás még nincs az eszközön, hamarosan letöltődik.</translation>
 <translation id="8996847606757455498">Másik szolgáltató választása</translation>
 <translation id="8998837250940831980">Nem sikerült kis méretűre állítani a lapot. Próbálkozzon újra később.</translation>
-<translation id="9001604755921395912">Megnyitás Chrome inkognitó lapon</translation>
+<translation id="9001604755921395912">Megnyitás Ultimatum inkognitó lapon</translation>
 <translation id="9012585441087414258">Védelmet nyújt az ismert veszélyes webhelyekkel, letöltésekkel és bővítményekkel szemben. Ha valamelyik oldalon gyanús műveletet észlel, akkor a böngésző elküldi az URL-eket és az oldal tartalmának egyes részeit a Google Biztonságos Böngészésnek.</translation>
 <translation id="9019199799064251516">Folytatja autóprofil-zárolás nélkül?</translation>
 <translation id="9022774213089566801">Gyakran látogatott webhelyek</translation>
@@ -1996,7 +1996,7 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="9027728231343310283">Visszavonás – <ph name="SITE" /></translation>
 <translation id="9035378196785279980">Áthelyezés\u2026</translation>
 <translation id="9042893549633094279">Adatvédelem és biztonság</translation>
-<translation id="9047347135558855162">Gyors keresés indítása a Chrome-ban</translation>
+<translation id="9047347135558855162">Gyors keresés indítása a Ultimatum-ban</translation>
 <translation id="9050666287014529139">Összetett jelszó</translation>
 <translation id="9055497320631373736">Webhely ismét hozzáadva a lehetséges webhelyekhez</translation>
 <translation id="9057030985451135243">További információ a megosztott lapcsoportokról</translation>
@@ -2004,7 +2004,7 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="9063400323119781058">Sikeres leiratkozás</translation>
 <translation id="9063523880881406963">Kapcsolja ki az Asztali webhely kérése funkciót</translation>
 <translation id="9065203028668620118">Szerkesztés</translation>
-<translation id="9065383040763568503">A Chrome által nem fontosnak ítélt tárolt adatok (például a mentett beállítások nélküli vagy ritkán megnyitott webhelyek)</translation>
+<translation id="9065383040763568503">A Ultimatum által nem fontosnak ítélt tárolt adatok (például a mentett beállítások nélküli vagy ritkán megnyitott webhelyek)</translation>
 <translation id="9067341854474068781">„Nincs azonosítókulcs” munkalap teljes magasságban megnyitva</translation>
 <translation id="906781307897697745">itt: <ph name="PRODUCT_NAME" /></translation>
 <translation id="9068568736932147490"><ph name="TAB_TITLE" />, több kiválasztott rögzített, hangot lejátszó inkognitó lap</translation>
@@ -2014,8 +2014,8 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="9074739597929991885">Bluetooth</translation>
 <translation id="9081543426177426948">A rendszer inkognitó módban nem menti a meglátogatott webhelyeket</translation>
 <translation id="9086455579313502267">Nem sikerült elérni a hálózatot</translation>
-<translation id="9093915805850895575">Megnyitás Chrome-ablakban</translation>
-<translation id="909756639352028172">A lehető legjobban személyre szabott élmény érdekében vegye fel a Chrome-ot az Internetes és alkalmazástevékenységek és az összekapcsolt Google-szolgáltatások közé.</translation>
+<translation id="9093915805850895575">Megnyitás Ultimatum-ablakban</translation>
+<translation id="909756639352028172">A lehető legjobban személyre szabott élmény érdekében vegye fel a Ultimatum-ot az Internetes és alkalmazástevékenységek és az összekapcsolt Google-szolgáltatások közé.</translation>
 <translation id="9099220545925418560">A böngészési előzményei alapján. Ez a beállítás ki van kapcsolva.</translation>
 <translation id="9100610230175265781">Összetett jelszó szükséges</translation>
 <translation id="9101137867221042551">Kezelés</translation>
@@ -2051,9 +2051,9 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="9218430445555521422">Alapbeállítás</translation>
 <translation id="9219103736887031265">Képek</translation>
 <translation id="9222198206152536936">Ha az összes eszközén szeretne hozzáférni lapjaihoz és egyéb tartalmaihoz, jelentkezzen be a következő fiókkal: <ph name="EMAIL" /></translation>
-<translation id="924447568950697217">A Chrome beállítása alapértelmezett böngészőként</translation>
-<translation id="926205370408745186">Chrome-beli tevékenység eltávolítása a digitális jóllét funkcióból</translation>
-<translation id="927968626442779827">Használja az Egyszerűsített módot a Google Chrome-ban</translation>
+<translation id="924447568950697217">A Ultimatum beállítása alapértelmezett böngészőként</translation>
+<translation id="926205370408745186">Ultimatum-beli tevékenység eltávolítása a digitális jóllét funkcióból</translation>
+<translation id="927968626442779827">Használja az Egyszerűsített módot a Ultimatum-ban</translation>
 <translation id="928550791203542716">A(z) <ph name="SITE_NAME" /> webhely követve</translation>
 <translation id="930124987204876019">Előzmények, cookie-k, webhelyadatok, gyorsítótár törlése…</translation>
 <translation id="930834144334005936">A jelenlegi mód (<ph name="MODE_NAME" />) visszaállítása Keresési módra</translation>
@@ -2061,7 +2061,7 @@ A beállítás módosításához <ph name="BEGIN_LINK" />törölje a fiókjában
 <translation id="939598580284253335">Összetett jelszó megadása</translation>
 <translation id="94161319503679839"><ph name="TAB_TITLE" />, kitűzött inkognitó lap kép a képben módban</translation>
 <translation id="945522503751344254">Visszajelzés küldése</translation>
-<translation id="95817756606698420">A Chrome igénybe veheti a <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> keresőszolgáltatást, hogy Kínában kereshessen. Ezt a <ph name="BEGIN_LINK" />Beállításokban<ph name="END_LINK" /> módosíthatja.</translation>
+<translation id="95817756606698420">A Ultimatum igénybe veheti a <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> keresőszolgáltatást, hogy Kínában kereshessen. Ezt a <ph name="BEGIN_LINK" />Beállításokban<ph name="END_LINK" /> módosíthatja.</translation>
 <translation id="961856697154696964">Böngészési adatok törlése</translation>
 <translation id="963246339335003378">Feladatkezelő megnyitása</translation>
 <translation id="966131775676567255">Fiókadatok törlése…</translation>

@@ -24,9 +24,9 @@
 <translation id="1089606299949659462">Преглед је завршен!</translation>
 <translation id="1094555143448724771">Да бисте видели картице са других уређаја, синхронизујте картице и историју</translation>
 <translation id="1095761715416917775">Уверите се да увек можете да приступате синхронизованим подацима</translation>
-<translation id="1096091316906284742">Доња табела за омогућавање Chrome проналазака</translation>
+<translation id="1096091316906284742">Доња табела за омогућавање Ultimatum проналазака</translation>
 <translation id="1100066534610197918">Отвори у новој картици у групи</translation>
-<translation id="1103142993930332957">Желите ли да нам помогнете да побољшамо Chrome?</translation>
+<translation id="1103142993930332957">Желите ли да нам помогнете да побољшамо Ultimatum?</translation>
 <translation id="1105960400813249514">Снимање екрана</translation>
 <translation id="1108214977745280468">Прикажи увид у страницу</translation>
 <translation id="1108938384783527433">Синхронизација историје</translation>
@@ -34,20 +34,20 @@
 <translation id="1123537484474186311"><ph name="TAB_TITLE" />, картица у режиму слике у слици</translation>
 <translation id="1126696498560056882">Управљајте налозима на овом уређају</translation>
 <translation id="1135018701024399762">Режим без архивирања чува приватност прегледања од других који користе уређај</translation>
-<translation id="113752097246673894">Да би вам обележивачи и други садржај били доступни на свим уређајима, пријавите се у Chrome као <ph name="EMAIL" /></translation>
+<translation id="113752097246673894">Да би вам обележивачи и други садржај били доступни на свим уређајима, пријавите се у Ultimatum као <ph name="EMAIL" /></translation>
 <translation id="1138458427267715730">Добијајте обавештења када падне цена на било ком сајту широм веба</translation>
 <translation id="1140317858355046628">Ако је избришете, сви ће одмах изгубити приступ групи картица <ph name="GROUP_NAME" /> и она ће бити избрисана са свих уређаја.</translation>
 <translation id="1142732900304639782">Не нуди превод ових сајтова</translation>
 <translation id="1143193470214071120">Затворите прозор или управљајте прозорима</translation>
 <translation id="1149725087019908252">Скенира се <ph name="FILE_NAME" /></translation>
-<translation id="1150263420752757504"><ph name="APP_NAME" /> ће се отворити у Chrome-у. Ако наставите, прихватате <ph name="BEGIN_LINK1" />Google услове коришћења услуге<ph name="END_LINK1" /> и <ph name="BEGIN_LINK2" />додатне услове коришћења услуге за Google Chrome и Chrome ОС<ph name="END_LINK2" />.</translation>
+<translation id="1150263420752757504"><ph name="APP_NAME" /> ће се отворити у Ultimatum-у. Ако наставите, прихватате <ph name="BEGIN_LINK1" />Google услове коришћења услуге<ph name="END_LINK1" /> и <ph name="BEGIN_LINK2" />додатне услове коришћења услуге за Ultimatum и Ultimatum ОС<ph name="END_LINK2" />.</translation>
 <translation id="1154555449933432029">Нисте сачували ниједну лозинку у Google менаџеру лозинки.</translation>
 <translation id="115483310321669804">Користите лозинку <ph name="PASSWORD" /></translation>
 <translation id="1161065531352634524">Синхронизујте картице и историју</translation>
 <translation id="1165109137568919258">Снимите слику или додајте слику из фото-галерије да бисте претраживали</translation>
 <translation id="1173894706177603556">Преименуј</translation>
-<translation id="1174479719160874822">Chrome ће захтевати мобилни сајт када је екран узак</translation>
-<translation id="1175241315203286684">Администратор може даљински да уноси промене у профил и прегледач, да анализира информације о прегледачу помоћу извештавања и обавља друге неопходне задатке. Активностима на овом уређају може да се управља и ван Chrome-а.</translation>
+<translation id="1174479719160874822">Ultimatum ће захтевати мобилни сајт када је екран узак</translation>
+<translation id="1175241315203286684">Администратор може даљински да уноси промене у профил и прегледач, да анализира информације о прегледачу помоћу извештавања и обавља друге неопходне задатке. Активностима на овом уређају може да се управља и ван Ultimatum-а.</translation>
 <translation id="1177863135347784049">Прилагођено</translation>
 <translation id="1181037720776840403">Уклони</translation>
 <translation id="1183189057400844278">Да бисте били сигурни да увек можете да користите лозинке на Google налогу, потврдите свој идентитет</translation>
@@ -85,13 +85,13 @@
 <translation id="1318262688555255786">Делите линк до веб-странице <ph name="PAGE_TITLE" />. Извор: <ph name="PAGE_URL" /></translation>
 <translation id="1320912611264252795">Фолдери тока чувања обележивача су отворени до половине екрана</translation>
 <translation id="1327257854815634930">Историја навигације је отворена</translation>
-<translation id="1331212799747679585">Chrome не може да се ажурира. Још опција</translation>
-<translation id="1332501820983677155">Пречице за Google Chrome функције</translation>
+<translation id="1331212799747679585">Ultimatum не може да се ажурира. Још опција</translation>
+<translation id="1332501820983677155">Пречице за Ultimatum функције</translation>
 <translation id="1333491156693005331">Недавно проверено</translation>
 <translation id="1336996151357442890">Отказали сте пријаву за <ph name="SITE_NAME" />. Приказаће вам се упит при следећој посети.</translation>
 <translation id="1340839264183302272">Напусти групу</translation>
 <translation id="1342886103232377846">Да бисте проверили да ли има угрожених лозинки, идите у Google менаџер лозинки</translation>
-<translation id="1343830902827845050">Пријавите се у Chrome</translation>
+<translation id="1343830902827845050">Пријавите се у Ultimatum</translation>
 <translation id="1344653310988386453">Уврстите линк до истакнутог текста</translation>
 <translation id="1355088659320425659">Историја и картице</translation>
 <translation id="1360432990279830238">Одјављујете се и искључујете синхрониз?</translation>
@@ -105,12 +105,12 @@
 <translation id="1383876407941801731">Претражи</translation>
 <translation id="1384704387250346179">Прев. сл. уз Google обј. <ph name="BEGIN_NEW" />Ново<ph name="END_NEW" /></translation>
 <translation id="1386674309198842382">Последња активност: пре <ph name="LAST_UPDATED" /> дан/а</translation>
-<translation id="1390418506739274310">Можете да видите историју из других апликација које отварају линкове у Chrome-у. Google налог може да има друге облике историје прегледања на <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
+<translation id="1390418506739274310">Можете да видите историју из других апликација које отварају линкове у Ultimatum-у. Google налог може да има друге облике историје прегледања на <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="139752016751285248">Доња табела са увидима у цене је отворена преко целог екрана</translation>
 <translation id="1397811292916898096">Претражите помоћу: <ph name="PRODUCT_NAME" /></translation>
-<translation id="1398057416966591719">Можете да <ph name="BEGIN_LINK1" />управљате тиме који Chrome подаци се чувају<ph name="END_LINK1" /> на Google налогу.
+<translation id="1398057416966591719">Можете да <ph name="BEGIN_LINK1" />управљате тиме који Ultimatum подаци се чувају<ph name="END_LINK1" /> на Google налогу.
 
-Још подешавања која користе податке за побољшање доживљаја Chrome-а потражите у <ph name="BEGIN_LINK2" />Google услугама<ph name="END_LINK2" />.</translation>
+Још подешавања која користе податке за побољшање доживљаја Ultimatum-а потражите у <ph name="BEGIN_LINK2" />Google услугама<ph name="END_LINK2" />.</translation>
 <translation id="1407069428457324124">Тамна тема</translation>
 <translation id="1407135791313364759">Отвори све</translation>
 <translation id="1409879593029778104">Преузимање датотеке <ph name="FILE_NAME" /> је спречено јер она већ постоји.</translation>
@@ -124,10 +124,10 @@
 <translation id="1448440926884431741">Организујте производе које пратите у Обележивачима</translation>
 <translation id="1455845192930279203">Ипак желите да преузмете фајл <ph name="FILE_NAME" /> (<ph name="FILE_SIZE" />) са домена <ph name="DOWNLOAD_DOMAIN" />?</translation>
 <translation id="1460751212339734034">Уштедите време, куцајте мање</translation>
-<translation id="1466383950273130737">Изаберите језик за Chrome</translation>
+<translation id="1466383950273130737">Изаберите језик за Ultimatum</translation>
 <translation id="1477626028522505441">Преузимање датотеке <ph name="FILE_NAME" /> није успело због проблема на серверу.</translation>
 <translation id="147982357559798527">Промењено</translation>
-<translation id="1480287803138246127">Део историје се можда неће приказивати овде. Да бисте видели комплетну историју Chrome-а, отворите целу историју Chrome-а.</translation>
+<translation id="1480287803138246127">Део историје се можда неће приказивати овде. Да бисте видели комплетну историју Ultimatum-а, отворите целу историју Ultimatum-а.</translation>
 <translation id="1493287004536771723">Пратите <ph name="SITE_NAME" /></translation>
 <translation id="1495677929897281669">Назад на картицу</translation>
 <translation id="1496514951988037011">корисничко име</translation>
@@ -137,14 +137,14 @@
 <translation id="1515901671075971249">Пречице за навигацију помоћу тастера Tab</translation>
 <translation id="1516966594427080024">Отворите нови прозор у режиму без архивирања</translation>
 <translation id="1521774566618522728">Активан је данас</translation>
-<translation id="153446405401665083">Доступна је нова верзија Chrome-а</translation>
+<translation id="153446405401665083">Доступна је нова верзија Ultimatum-а</translation>
 <translation id="1540012742443808215">Трака за адресу је тренутно у врху</translation>
-<translation id="1544084554881119930">Начини плаћања и адресе неће бити шифровани. Историја прегледања из Chrome-а се неће синхронизовати.
-Само неко ко има приступну фразу може да чита шифроване податке. Приступна фраза се не шаље Google-у нити се чува на Google-у. Ако заборавите приступну фразу или желите да промените ово подешавање, <ph name="BEGIN_LINK" />обришите Chrome податке на налогу<ph name="END_LINK" />.</translation>
+<translation id="1544084554881119930">Начини плаћања и адресе неће бити шифровани. Историја прегледања из Ultimatum-а се неће синхронизовати.
+Само неко ко има приступну фразу може да чита шифроване податке. Приступна фраза се не шаље Google-у нити се чува на Google-у. Ако заборавите приступну фразу или желите да промените ово подешавање, <ph name="BEGIN_LINK" />обришите Ultimatum податке на налогу<ph name="END_LINK" />.</translation>
 <translation id="1544826120773021464">Да бисте управљали Google налогом, додирните дугме „Управљајте налогом“</translation>
 <translation id="1549000191223877751">Премести у други прозор</translation>
-<translation id="1553358976309200471">Ажурирај Chrome</translation>
-<translation id="1554532453982918912">Помозите да Chrome постане бољи за људе који га користе попут вас</translation>
+<translation id="1553358976309200471">Ажурирај Ultimatum</translation>
+<translation id="1554532453982918912">Помозите да Ultimatum постане бољи за људе који га користе попут вас</translation>
 <translation id="1568636008098739136">Слушајте ову страницу. Да бисте изменили ову пречицу, додирните и задржите.</translation>
 <translation id="1571041387761170095">Нема слабих лозинки или лозинки које користите за више налога</translation>
 <translation id="1578591621182011812">{NUM_PASSWORDS,plural, =1{1 угрожена лозинка на овом уређају}one{# угрожена лозинка на овом уређају}few{# угрожене лозинке на овом уређају}other{# угрожених лозинки на овом уређају}}</translation>
@@ -171,24 +171,24 @@
 <translation id="1702907158640575240">Управљани прегледач</translation>
 <translation id="170478069042229393"><ph name="TAB_TITLE" />, закачена картица без архивирања</translation>
 <translation id="1718835860248848330">Последњих сат времена</translation>
-<translation id="1726477445370128854">Можете да прегледате и претражујете брже када Chrome предучита странице за које сматра да ћете их можда посетити</translation>
+<translation id="1726477445370128854">Можете да прегледате и претражујете брже када Ultimatum предучита странице за које сматра да ћете их можда посетити</translation>
 <translation id="1728803206919861584">Желите да сачувате приступни кључ ван режима без архивирања?</translation>
 <translation id="1732514748744806741">Ако су вам лозинке угрожене, обавестићемо вас о томе</translation>
-<translation id="1737694586321018892">Набавите најјачу Chrome заштиту</translation>
+<translation id="1737694586321018892">Набавите најјачу Ultimatum заштиту</translation>
 <translation id="1747593111377567311">{NUM_SITES,plural, =1{1 сајт је недавно послао много обавештења}one{# сајт је недавно послао много обавештења}few{# сајта су недавно послала много обавештења}other{# сајтова је недавно послало много обавештења}}</translation>
 <translation id="1749561566933687563">Синхронизујте обележиваче</translation>
 <translation id="1750238553597293878">Наставите да користите лозинке на Google налогу</translation>
 <translation id="17513872634828108">Отворене картице</translation>
 <translation id="1753744496844366747">Aa</translation>
 <translation id="1760873718737761808">{FILE_COUNT,plural, =1{Странице, 1 страница на листи}one{Странице, # страница на листи}few{Странице, # странице на листи}other{Странице, # страница на листи}}</translation>
-<translation id="1771929606532798550">Google-у се шаљу информације о вашем коришћењу Chrome-а, али нису повезане са вама\n\nАко Chrome откаже, детаљи о отказивању могу да обухватају неке личне податке\n\nАко синхронизујете историју са Google налогом, показатељи могу да садрже и информације о URL-овима које посећујете</translation>
+<translation id="1771929606532798550">Google-у се шаљу информације о вашем коришћењу Ultimatum-а, али нису повезане са вама\n\nАко Ultimatum откаже, детаљи о отказивању могу да обухватају неке личне податке\n\nАко синхронизујете историју са Google налогом, показатељи могу да садрже и информације о URL-овима које посећујете</translation>
 <translation id="1778457539567749232">Означи као непрочитано</translation>
 <translation id="1779766957982586368">Затварање прозора</translation>
 <translation id="1780023393214832643">Лозинке су сачуване на налогу <ph name="USERNAME" /></translation>
 <translation id="1791662854739702043">Инсталирано</translation>
 <translation id="1792959175193046959">Промените подразумевану локацију за преузимање у било ком тренутку</translation>
 <translation id="1796666869097395659">Умањите картицу да бисте се касније вратили на њу</translation>
-<translation id="1799920918471566157">Савети за Chrome</translation>
+<translation id="1799920918471566157">Савети за Ultimatum</translation>
 <translation id="1807246157184219062">Светлa</translation>
 <translation id="1807709131360304325">Отворите нови прозор</translation>
 <translation id="1810845389119482123">Почетно подешавање синхронизације није завршено</translation>
@@ -197,13 +197,13 @@
 <translation id="1820408774134375111">Доња табела за пријављивање</translation>
 <translation id="1823492026305965829">Пријави ме као <ph name="USER_FULL_NAME" /></translation>
 <translation id="1824902652744048041">Додирните Избриши податке прегледања</translation>
-<translation id="1825772852827001597">Начини плаћања и адресе из Google Pay-а се неће шифровати. Историја прегледања из Chrome-а се неће синхронизовати.
-Само неко ко има приступну фразу може да чита шифроване податке. Приступна фраза се не шаље Google-у нити се чува на Google-у. Ако заборавите приступну фразу или желите да промените ово подешавање, <ph name="BEGIN_LINK" />избришите Chrome податке на налогу<ph name="END_LINK" />.</translation>
+<translation id="1825772852827001597">Начини плаћања и адресе из Google Pay-а се неће шифровати. Историја прегледања из Ultimatum-а се неће синхронизовати.
+Само неко ко има приступну фразу може да чита шифроване податке. Приступна фраза се не шаље Google-у нити се чува на Google-у. Ако заборавите приступну фразу или желите да промените ово подешавање, <ph name="BEGIN_LINK" />избришите Ultimatum податке на налогу<ph name="END_LINK" />.</translation>
 <translation id="1829244130665387512">Пронађи на страници</translation>
 <translation id="1832459821645506983">Да, омогући</translation>
-<translation id="1845958458910716240">Да бисте заштитили податке, дозволите да Chrome уклања дозволе са сајтова које дуже нисте посећивали</translation>
-<translation id="1871098866036088250">Отвори у прегледачу Chrome</translation>
-<translation id="1877026089748256423">Chrome је застарео</translation>
+<translation id="1845958458910716240">Да бисте заштитили податке, дозволите да Ultimatum уклања дозволе са сајтова које дуже нисте посећивали</translation>
+<translation id="1871098866036088250">Отвори у прегледачу Ultimatum</translation>
+<translation id="1877026089748256423">Ultimatum је застарео</translation>
 <translation id="1877073879466606884">Профил на који сте пријављени је профил којим се управља. Администратор може даљински да уноси промене у подешавања профила, да анализира информације о прегледачу помоћу извештавања и обавља друге неопходне задатке.</translation>
 <translation id="1879904908408734349">Доња табела за пријављивање је затворена</translation>
 <translation id="1883903952484604915">Моје датотеке</translation>
@@ -215,7 +215,7 @@
 <translation id="1910950723001426294">Листа опција за дељење је затворена.</translation>
 <translation id="191726024256261717">Прегледајте дозволе</translation>
 <translation id="1917766536967060661">Одмах ћете изгубити приступ групи картица <ph name="GROUP_NAME" /> и <ph name="BLOCKED_MEMBER_FULL_NAME" /> (<ph name="BLOCKED_MEMBER_EMAIL" />) више неће моћи да комуницира са вама у Google услугама.</translation>
-<translation id="1919130412786645364">Дозволи пријављивање у Chrome</translation>
+<translation id="1919130412786645364">Дозволи пријављивање у Ultimatum</translation>
 <translation id="1922362554271624559">Предложени језици</translation>
 <translation id="1924255092154549435">Картица је проширена</translation>
 <translation id="1925021887439448749">Унесите прилагођену веб-адресу</translation>
@@ -225,11 +225,11 @@
 <translation id="1944535645109964458">Није доступан ниједан приступни кôд</translation>
 <translation id="1957557050935255529">PDF се учитава…</translation>
 <translation id="1959679933317802873">Чека се садржај</translation>
-<translation id="1960290143419248813">Chrome ажурирања више нису подржана за ову верзију Android-а</translation>
+<translation id="1960290143419248813">Ultimatum ажурирања више нису подржана за ову верзију Android-а</translation>
 <translation id="1962061488333185936"><ph name="TAB_TITLE" />, вишеструко изабрана картица са звуком</translation>
 <translation id="1963976881984600709">Стандардна заштита</translation>
 <translation id="1966710179511230534">Ажурирајте податке за пријављивање.</translation>
-<translation id="1969037871259811890">Брисањем података прегледања не одјављујете се са Google налога. Да бисте то урадили, <ph name="BEGIN_LINK1" />одјавите се из Chrome-а<ph name="END_LINK1" />.</translation>
+<translation id="1969037871259811890">Брисањем података прегледања не одјављујете се са Google налога. Да бисте то урадили, <ph name="BEGIN_LINK1" />одјавите се из Ultimatum-а<ph name="END_LINK1" />.</translation>
 <translation id="197288927597451399">Задржи</translation>
 <translation id="1973912524893600642">Задржи податке</translation>
 <translation id="1974060860693918893">Напредне опције</translation>
@@ -242,7 +242,7 @@
 <translation id="2021896219286479412">Контроле сајта на целом екрану</translation>
 <translation id="2029669011553795746">Опција за омогућавање обавештења о саветима је отворена до половине екрана</translation>
 <translation id="2038563949887743358">Укључи захтевање верзије сајта за рачунаре</translation>
-<translation id="204321170514947529"><ph name="APP_NAME" /> такође има податке у Chrome-у</translation>
+<translation id="204321170514947529"><ph name="APP_NAME" /> такође има податке у Ultimatum-у</translation>
 <translation id="2047378580182589770">Додирните и задржите да бисте искључили режим без архивирања</translation>
 <translation id="2049574241039454490"><ph name="FILE_SIZE_OF_TOTAL" /> <ph name="SEPARATOR" /> <ph name="DESCRIPTION" /></translation>
 <translation id="2051669996101374349">Користите HTTPS кад год је то могуће и добијајте упозорење пре учитавања сајтова који га не подржавају. Не можете да промените ово подешавање јер је омогућена Напредна заштита.</translation>
@@ -265,9 +265,9 @@
 <translation id="2138283760993967204">Икона Управљајте</translation>
 <translation id="2138632817776076519"><ph name="TAB_TITLE" />, изабрана картица за снимање</translation>
 <translation id="2141396931810938595">На основу коришћења</translation>
-<translation id="2145315049852051678">Chrome редовно проверава да ли прегледач има најбезбеднија подешавања. Обавестићемо вас ако треба да прегледате нешто.</translation>
+<translation id="2145315049852051678">Ultimatum редовно проверава да ли прегледач има најбезбеднија подешавања. Обавестићемо вас ако треба да прегледате нешто.</translation>
 <translation id="2149973817440762519">Измените обележивач</translation>
-<translation id="2163089732491971196">Да бисте користили и чували Chrome податке на Google налогу, унесите приступну фразу</translation>
+<translation id="2163089732491971196">Да бисте користили и чували Ultimatum податке на Google налогу, унесите приступну фразу</translation>
 <translation id="2166228530126694506">Верзија <ph name="VERSION_NUMBER" /></translation>
 <translation id="2172688499998841696">Описи слика су искључени</translation>
 <translation id="2172905120685242547">Желите да затворите прозор?</translation>
@@ -280,7 +280,7 @@
 <translation id="2194856509914051091">Шта треба имати у виду</translation>
 <translation id="2205701497928406883"><ph name="TAB_TITLE" />, закачена картица за дељење</translation>
 <translation id="22091350895006575">Додај корисничко име</translation>
-<translation id="221494669172414749">Ако отворите Chrome без закључавања профила, уклонићете сачуване лозинке и начине плаћања из аутомобила. Коришћењем закључавања профила штитите податке.</translation>
+<translation id="221494669172414749">Ако отворите Ultimatum без закључавања профила, уклонићете сачуване лозинке и начине плаћања из аутомобила. Коришћењем закључавања профила штитите податке.</translation>
 <translation id="2226826835915474236">Неактивне пречице</translation>
 <translation id="2227179592712503583">Уклони предлог</translation>
 <translation id="2227444325776770048">Настави као <ph name="USER_FULL_NAME" /></translation>
@@ -311,7 +311,7 @@
 <translation id="2332515770639153015">Побољшано безбедно прегледање је укључено</translation>
 <translation id="233375395665273385">Избриши и одјави ме</translation>
 <translation id="2341410551640223969">Инсталирање апликације <ph name="WEBAPK_NAME" /> није успело.</translation>
-<translation id="2349710944427398404">Сви подаци које користи Chrome, укључујући налоге, обележиваче и сачувана подешавања</translation>
+<translation id="2349710944427398404">Сви подаци које користи Ultimatum, укључујући налоге, обележиваче и сачувана подешавања</translation>
 <translation id="235789365079050412">Google политика приватности</translation>
 <translation id="2359808026110333948">Настави</translation>
 <translation id="2362083820973145409">Пријављени сте као <ph name="USER_NAME" />. <ph name="USER_EMAIL" />. Отвара подешавања.</translation>
@@ -333,7 +333,7 @@
 <translation id="2427025860753516072">{FILE_COUNT,plural, =1{Видеи, 1 видео на листи}one{Видеи, # видео на листи}few{Видеи, # видеа на листи}other{Видеи, # видеа на листи}}</translation>
 <translation id="2433507940547922241">Изглед</translation>
 <translation id="2439153523196674349">Преглед сајта <ph name="SITE_NAME" /></translation>
-<translation id="2449931042095204989">Када Google сајт или апликација затражи да приватно предучитава линкове на страници, Chrome шифрује и предучитава странице преко Google сервера без колачића. На тај начин се ваш идентитет крије од предучитаног сајта.</translation>
+<translation id="2449931042095204989">Када Google сајт или апликација затражи да приватно предучитава линкове на страници, Ultimatum шифрује и предучитава странице преко Google сервера без колачића. На тај начин се ваш идентитет крије од предучитаног сајта.</translation>
 <translation id="2450019289047528273">Начини плаћања и друге информације из Google новчаника</translation>
 <translation id="2450083983707403292">Да ли желите да поново почнете да преузимате датотеку <ph name="FILE_NAME" />?</translation>
 <translation id="2451607499823206582">Прати се</translation>
@@ -342,17 +342,17 @@
 <translation id="2466378451804467735"><ph name="TAB_TITLE" />, вишеструко изабрана картица са искљученим звуком</translation>
 <translation id="2468444275314013497">Прегледач делује у реду</translation>
 <translation id="2471632347767899461">Пробајте да претражите центар за помоћ</translation>
-<translation id="2472163211318554013">Пријавите се да бисте искористили Chrome на најбољи начин</translation>
+<translation id="2472163211318554013">Пријавите се да бисте искористили Ultimatum на најбољи начин</translation>
 <translation id="247737702124049222">Описи слика су укључени</translation>
 <translation id="2479148705183875116">Иди у Подешавања</translation>
 <translation id="2482878487686419369">Обавештења</translation>
 <translation id="2496180316473517155">Историја прегледања</translation>
 <translation id="2497852260688568942">Администратор је онемогућио синхронизацију</translation>
-<translation id="250020030759455918">У Chrome-у ћете видети да ли сте пријављени, податке прегледања и податке о сајту за <ph name="SITE_NAME" /></translation>
+<translation id="250020030759455918">У Ultimatum-у ћете видети да ли сте пријављени, податке прегледања и податке о сајту за <ph name="SITE_NAME" /></translation>
 <translation id="2510106555128151389"><ph name="WEBAPK_NAME" /> се инсталира...</translation>
 <translation id="2512234228327349533">Претражите опције куповине</translation>
 <translation id="2513403576141822879">Више подешавања у вези са приватношћу, безбедношћу и прикупљањем података потражите у одељку <ph name="BEGIN_LINK" />Синхронизација и Google услуге<ph name="END_LINK" /></translation>
-<translation id="2515921719039583189">Бришете Chrome податке са овог уређаја?</translation>
+<translation id="2515921719039583189">Бришете Ultimatum податке са овог уређаја?</translation>
 <translation id="2517113738956581680">Табела у пуној величини</translation>
 <translation id="2523184218357549926">URL-ови страница које посећујете се шаљу Google-у</translation>
 <translation id="2524132927880411790">Иди на гласовну претрагу апликације Google</translation>
@@ -374,9 +374,9 @@
 <translation id="2569733278091928697">Моћи ћете лако да управљате контролама медија, сесијама без архивирања, преузимањима и другим садржајем</translation>
 <translation id="2571711316400087311">Понуди слање страница на другим језицима у Google преводилац</translation>
 <translation id="2571834852878229351">Направићу своју</translation>
-<translation id="2574249610672786438">Да бисте видели картице на било којем уређају на ком користите Chrome, пријавите се на свим уређајима</translation>
+<translation id="2574249610672786438">Да бисте видели картице на било којем уређају на ком користите Ultimatum, пријавите се на свим уређајима</translation>
 <translation id="2577981599306533385"><ph name="MEMBER_FULL_NAME" /> (<ph name="EMAIL" />) ће одмах изгубити приступ групи картица <ph name="GROUP_NAME" /> и више неће моћи да комуницира са вама у Google услугама.</translation>
-<translation id="2581165646603367611">Овим ћете обрисати колачиће, кеш и друге податке сајтова које Chrome не сматра важним.</translation>
+<translation id="2581165646603367611">Овим ћете обрисати колачиће, кеш и друге податке сајтова које Ultimatum не сматра важним.</translation>
 <translation id="2587052924345400782">Доступна је новија верзија</translation>
 <translation id="2593272815202181319">Фиксне ширине</translation>
 <translation id="260403163289591229">Пратите</translation>
@@ -415,8 +415,8 @@
 <translation id="2779651927720337254">није успело</translation>
 <translation id="2781151931089541271">Још 1 сек</translation>
 <translation id="2789486458103222910">Потврди</translation>
-<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Chrome је пронашао лозинку коју користите за више налога и коју можете да побољшате}one{Chrome је пронашао # лозинку коју користите за више налога и коју можете да побољшате}few{Chrome је пронашао # лозинке које користите за више налога и које можете да побољшате}other{Chrome је пронашао # лозинки које користите за више налога и које можете да побољшате}}</translation>
-<translation id="2794551654724114396">Укључите обавештења о корисним саветима који ће вам помоћи да искористите Chrome на најбољи начин</translation>
+<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Ultimatum је пронашао лозинку коју користите за више налога и коју можете да побољшате}one{Ultimatum је пронашао # лозинку коју користите за више налога и коју можете да побољшате}few{Ultimatum је пронашао # лозинке које користите за више налога и које можете да побољшате}other{Ultimatum је пронашао # лозинки које користите за више налога и које можете да побољшате}}</translation>
+<translation id="2794551654724114396">Укључите обавештења о корисним саветима који ће вам помоћи да искористите Ultimatum на најбољи начин</translation>
 <translation id="2805210243313393104">Нека вам обележивачи и други садржај буду доступни на свим уређајима</translation>
 <translation id="2805756323405976993">Апликације</translation>
 <translation id="2819849308549746319">Откажи пријаву на све</translation>
@@ -433,7 +433,7 @@
 <translation id="2842985007712546952">Надређени фолдер</translation>
 <translation id="2854916915045135148">Додирните и задржите да бисте прешли у режим без архивирања</translation>
 <translation id="2860954141821109167">Уверите се да је нека апликација за телефон омогућена на овом уређају</translation>
-<translation id="2861923151411510142">Неке Chrome функције више неће бити доступне</translation>
+<translation id="2861923151411510142">Неке Ultimatum функције више неће бити доступне</translation>
 <translation id="286473047976978798">Желите да примените подешавања изгледа?</translation>
 <translation id="2869416538780777323">{OTHER_TAB_COUNT,plural, =1{<ph name="URL" /> и још 1 картица}one{<ph name="URL" /> и још <ph name="TAB_COUNT_MANY" /> картица}few{<ph name="URL" /> и још <ph name="TAB_COUNT_MANY" /> картице}other{<ph name="URL" /> и још <ph name="TAB_COUNT_MANY" /> картица}}</translation>
 <translation id="2869430948265924908">Да бисте заштитили осетљив садржај у аутомобилу, морате да примените закључавање профила аутомобила.  То можете да урадите помоћу PIN-а, кода или лозинке.</translation>
@@ -441,10 +441,10 @@
 <translation id="2871733351037274014">Предучитавајте странице</translation>
 <translation id="2876136027428473467"><ph name="CHILD_NAME" /> жели да одобрите овај веб-сајт:</translation>
 <translation id="2876556152483133018">Претрага сајта</translation>
-<translation id="2876628302275096482">Сазнајте више о томе <ph name="BEGIN_LINK" />како Chrome штити приватност података<ph name="END_LINK" /></translation>
+<translation id="2876628302275096482">Сазнајте више о томе <ph name="BEGIN_LINK" />како Ultimatum штити приватност података<ph name="END_LINK" /></translation>
 <translation id="2878607776582720720"><ph name="TAB_TITLE" />, вишеструко изабрана картица без архивирања која се дели</translation>
 <translation id="2885355868600171871">Пређите на траку за адресу</translation>
-<translation id="2888126860611144412">О Chrome прегледачу</translation>
+<translation id="2888126860611144412">О Ultimatum прегледачу</translation>
 <translation id="2891154217021530873">Заустави учитавање странице</translation>
 <translation id="2893168226686371498">Подразумевани прегледач</translation>
 <translation id="2894821468041866720">Не успорава приметно прегледач или уређај.</translation>
@@ -463,14 +463,14 @@
 <translation id="2923908459366352541">Назив је неважећи</translation>
 <translation id="2932150158123903946">Меморијски простор за Google <ph name="APP_NAME" /></translation>
 <translation id="2932222164150889403">Тастатура се неће променити</translation>
-<translation id="2936980480904111527">Chrome обавештења олакшавају ствари</translation>
+<translation id="2936980480904111527">Ultimatum обавештења олакшавају ствари</translation>
 <translation id="2940075786175545812">Опција за одобравање или neодобравање веб-сајта</translation>
 <translation id="2942036813789421260">Картица за преглед је затворена</translation>
 <translation id="2951071800649516099">Додајте странице на листу за читање за касније</translation>
 <translation id="2954586176076923855">Премести траку за адресу на врх</translation>
 <translation id="2961208450284224863">{READING_LIST_UNREAD_PAGE_COUNT,plural, =1{<ph name="READING_LIST_UNREAD_PAGE_COUNT_ONE" /> непрочитана страница}one{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> непрочитана страница}few{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> непрочитане странице}other{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> непрочитаних страница}}</translation>
 <translation id="2972109037780336501">Аутоматски уклањај дозволе</translation>
-<translation id="2976550651269220761">Неки Chrome подаци још нису сачувани на Google налогу.\nПробајте да сачекате неколико минута пре него што се одјавите. Ако се одјавите одмах, ови подаци ће бити избрисани.</translation>
+<translation id="2976550651269220761">Неки Ultimatum подаци још нису сачувани на Google налогу.\nПробајте да сачекате неколико минута пре него што се одјавите. Ако се одјавите одмах, ови подаци ће бити избрисани.</translation>
 <translation id="2977350910003566746">Сортира се према последњем отварању</translation>
 <translation id="297771753501244313">По последњем отварању</translation>
 <translation id="2979639724566107830">Отворите у новом прозору</translation>
@@ -493,15 +493,15 @@
 <translation id="3035527385626181784"><ph name="TAB_TITLE" />, изабрана картица за дељење</translation>
 <translation id="3036750288708366620"><ph name="BEGIN_LINK" />Потражите помоћ<ph name="END_LINK" /></translation>
 <translation id="3037177537145227281">Прати се цена</translation>
-<translation id="3037517125981011456">Приказује упите за пријављивање у Chrome</translation>
+<translation id="3037517125981011456">Приказује упите за пријављивање у Ultimatum</translation>
 <translation id="3038272154009688107">Прикажи све сајтове</translation>
 <translation id="3057938290530993634">Додирните и задржите да бисте закачили најпосећеније веб-сајтове ради лакшег приступа следећи пут</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> обележивач}one{<ph name="BOOKMARKS_COUNT_MANY" /> обележивач}few{<ph name="BOOKMARKS_COUNT_MANY" /> обележивача}other{<ph name="BOOKMARKS_COUNT_MANY" /> обележивача}}</translation>
-<translation id="3062802207422175757">Чланци о вашим интересовањима у Chrome-у</translation>
+<translation id="3062802207422175757">Чланци о вашим интересовањима у Ultimatum-у</translation>
 <translation id="3066573403916685335">Помери надоле</translation>
 <translation id="3067505415088964188">Цена је ниска</translation>
 <translation id="3070005020161560471">Аутоматски преводи</translation>
-<translation id="3072980200212375806"><ph name="APP_NAME" /> ће се отворити у Chrome-у. Ако наставите, прихватате <ph name="BEGIN_LINK1" />Google услове коришћења услуге<ph name="END_LINK1" /> и <ph name="BEGIN_LINK2" />додатне услове коришћења услуге за Google Chrome и Chrome ОС<ph name="END_LINK2" />. Примењује се и <ph name="BEGIN_LINK3" />политика приватности<ph name="END_LINK3" />.</translation>
+<translation id="3072980200212375806"><ph name="APP_NAME" /> ће се отворити у Ultimatum-у. Ако наставите, прихватате <ph name="BEGIN_LINK1" />Google услове коришћења услуге<ph name="END_LINK1" /> и <ph name="BEGIN_LINK2" />додатне услове коришћења услуге за Ultimatum и Ultimatum ОС<ph name="END_LINK2" />. Примењује се и <ph name="BEGIN_LINK3" />политика приватности<ph name="END_LINK3" />.</translation>
 <translation id="3080525922482950719">Можете да сачувате странице да бисте их читали касније или офлајн</translation>
 <translation id="3087734570205094154">Дно</translation>
 <translation id="3091010850649238832">Прикажи садржај привремене меморије</translation>
@@ -511,7 +511,7 @@
 <translation id="3123734510202723619">Саопштења</translation>
 <translation id="3134385238404760368">Нема недавних картица</translation>
 <translation id="3135655388926735587">Додирните Недавне картице</translation>
-<translation id="314939179385989105">Chrome почетна страница</translation>
+<translation id="314939179385989105">Ultimatum почетна страница</translation>
 <translation id="3158667104057012316">Сортира се по ручном редоследу</translation>
 <translation id="3159335509547415276">Сазнајте више о блокираним налозима</translation>
 <translation id="3161699713309727585"><ph name="BUTTON_TEXT" />, отвара се на новој картици</translation>
@@ -531,7 +531,7 @@
 <translation id="3236059992281584593">Још 1 мин</translation>
 <translation id="3237087289225714896">Стандардно предучитавање:</translation>
 <translation id="3244271242291266297">ММ</translation>
-<translation id="3245429137663807393">Ако делите и Chrome извештаје о коришћењу, ти извештаји обухватају URL-ове које посећујете</translation>
+<translation id="3245429137663807393">Ако делите и Ultimatum извештаје о коришћењу, ти извештаји обухватају URL-ове које посећујете</translation>
 <translation id="3250563604907490871">Описи слика ће се наставити када се повежете на WiFi</translation>
 <translation id="3254409185687681395">Обележите ову страницу</translation>
 <translation id="3265093782546847662">Све странице са <ph name="DOMAIN" /></translation>
@@ -568,22 +568,22 @@
 <translation id="3435575784518354875">Да бисте задржали приступ лозинкама, извезите их одмах, ажурирајте Google Play услуге, па их поново увезите у Google менаџер лозинки. <ph name="BEGIN_LINK" />Погледајте комплетна упутства<ph name="END_LINK" />.</translation>
 <translation id="3435738964857648380">Безбедност</translation>
 <translation id="3435914367318771664">Додај картицу у нову групу</translation>
-<translation id="3438681572027105609">Да би вам лозинке и други садржај били доступни на свим уређајима, пријавите се у Chrome</translation>
+<translation id="3438681572027105609">Да би вам лозинке и други садржај били доступни на свим уређајима, пријавите се у Ultimatum</translation>
 <translation id="3439276997620616816">Овде ћете пронаћи недавне картице</translation>
 <translation id="3443221991560634068">Поновно учитавање актуелне странице</translation>
 <translation id="3444179773590444986">Желите да делите повратне информације о тамној теми за сајтове?</translation>
 <translation id="3448874648066942074">Резимирај страницу помоћу AI-ја</translation>
-<translation id="3452832259067974318">Ради заштите приватности Chrome неће аутоматски уносити вашу лозинку у ово поље.</translation>
+<translation id="3452832259067974318">Ради заштите приватности Ultimatum неће аутоматски уносити вашу лозинку у ово поље.</translation>
 <translation id="3474624961160222204">Настави као <ph name="NAME" /></translation>
 <translation id="3478363558367712427">Можете да одаберете претраживач</translation>
 <translation id="3482805106082349287">Претражујте помоћу тастатуре, гласа, без архивирања или камером</translation>
-<translation id="3487903178221457900">Извезени фајл може да буде доступан другима, укључујући апликације. Када их извезете, лозинке се бришу из Chrome-а.</translation>
+<translation id="3487903178221457900">Извезени фајл може да буде доступан другима, укључујући апликације. Када их извезете, лозинке се бришу из Ultimatum-а.</translation>
 <translation id="3488199663160411179">име</translation>
 <translation id="3493531032208478708"><ph name="BEGIN_LINK" />Сазнајте више<ph name="END_LINK" /> о предложеном садржају</translation>
 <translation id="3499246418971111862">chrome_qrcode_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="350276055892098337">Сортирај по најстаријем</translation>
 <translation id="3507132249039706973">Стандардна заштита је укључена</translation>
-<translation id="3509330069915219067">Офлајн. Chrome не може да тражи ажурирања.</translation>
+<translation id="3509330069915219067">Офлајн. Ultimatum не може да тражи ажурирања.</translation>
 <translation id="3513019849832307207">Придружи ме и отвори</translation>
 <translation id="3513704683820682405">Проширена реалност</translation>
 <translation id="3516053221628030540">Иди на Google Play</translation>
@@ -615,10 +615,10 @@
 <translation id="3623240789707551553">{DOMAIN_COUNT,plural, =1{и још 1 сајт}one{и још # сајт}few{и још # сајта}other{и још # сајтова}}</translation>
 <translation id="3625870480639975468">Враћање зума на почетне вредности</translation>
 <translation id="3631987586758005671">Дели се са: <ph name="DEVICE_NAME" /></translation>
-<translation id="3635073343384702370">Chrome може да проверава лозинке када их сачувате</translation>
+<translation id="3635073343384702370">Ultimatum може да проверава лозинке када их сачувате</translation>
 <translation id="3636940436873918441">Жељени језици</translation>
-<translation id="3637744895182738742">Ако сте заборавили приступну фразу или желите да промените ово подешавање, <ph name="BEGIN_LINK" />избришите Chrome податке на налогу<ph name="END_LINK" />.</translation>
-<translation id="3641581193271938629">Омогућавање Chrome проналазака је затворено</translation>
+<translation id="3637744895182738742">Ако сте заборавили приступну фразу или желите да промените ово подешавање, <ph name="BEGIN_LINK" />избришите Ultimatum податке на налогу<ph name="END_LINK" />.</translation>
+<translation id="3641581193271938629">Омогућавање Ultimatum проналазака је затворено</translation>
 <translation id="3647019414263135904">Отворите или затворите искачући прозор са контекстом</translation>
 <translation id="3653111872753786013"><ph name="WEBSITE_TITLE" />: <ph name="WEBSITE_URL" /></translation>
 <translation id="3674208116086565128">Иди на почетну страницу апликације Google</translation>
@@ -636,7 +636,7 @@
 <translation id="3710501561113687889">Да бисте наставили, <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> ће делити <ph name="FIELDS_STRING" /> са овим сајтом.</translation>
 <translation id="3710560693796335511">Сарадња</translation>
 <translation id="3714430408451673233">Доња табела картице до половине екрана.</translation>
-<translation id="3718765429352682176">Можете да видите историју из других апликација које отварају линкове у Chrome-у.</translation>
+<translation id="3718765429352682176">Можете да видите историју из других апликација које отварају линкове у Ultimatum-у.</translation>
 <translation id="3721119614952978349">Ви и Google</translation>
 <translation id="3727000368239390918">Пријавите се да бисте приступали картицама и другом садржају на свим уређајима</translation>
 <translation id="3737319253362202215">Подешавања превода</translation>
@@ -690,8 +690,8 @@
 <translation id="3943322906274039960"><ph name="TAB_TITLE" />, закачена картица у режиму слике у слици</translation>
 <translation id="3950820424414687140">Пријави ме</translation>
 <translation id="395377504920307820">Користи без налога</translation>
-<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Chrome ће учитати страницу када буде спремна}one{Chrome ће учитати странице када буду спремне}few{Chrome ће учитати странице када буду спремне}other{Chrome ће учитати странице када буду спремне}}</translation>
-<translation id="3969142555815019568">Chrome не може да вам проверава лозинке</translation>
+<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Ultimatum ће учитати страницу када буде спремна}one{Ultimatum ће учитати странице када буду спремне}few{Ultimatum ће учитати странице када буду спремне}other{Ultimatum ће учитати странице када буду спремне}}</translation>
+<translation id="3969142555815019568">Ultimatum не може да вам проверава лозинке</translation>
 <translation id="3969863827134279083">Помери нагоре</translation>
 <translation id="397105322502079400">Израчунавање...</translation>
 <translation id="397583555483684758">Синхронизација више не функционише</translation>
@@ -702,10 +702,10 @@
 <translation id="3987993985790029246">Копирај линк</translation>
 <translation id="3994236846568425219">Укључите тамну тему када је тамна тема укључена на уређају</translation>
 <translation id="4000212216660919741">Офлајн почетна страница</translation>
-<translation id="4000670338830950598">Прилагодите и контролишите Google Chrome помоћу истакнуте ставке</translation>
+<translation id="4000670338830950598">Прилагодите и контролишите Ultimatum помоћу истакнуте ставке</translation>
 <translation id="4015643064997321279">{NUM_PASSWORDS,plural, =1{1 угрожена лозинка на Google налогу}one{# угрожена лозинка на Google налогу}few{# угрожене лозинке на Google налогу}other{# угрожених лозинки на Google налогу}}</translation>
 <translation id="4016425174436051808">Праћење није успело. Дошло је до грешке.</translation>
-<translation id="4023638601467301498">Да би вам обележивачи и други садржај били доступни на свим уређајима, пријавите се у Chrome</translation>
+<translation id="4023638601467301498">Да би вам обележивачи и други садржај били доступни на свим уређајима, пријавите се у Ultimatum</translation>
 <translation id="4024768890073681126">Родитељ управља прегледачем</translation>
 <translation id="4027569221211770437">Фолдер <ph name="FOLDER_TITLE" /></translation>
 <translation id="4034817413553209278">{HOURS,plural, =1{# ч}one{# ч}few{# ч}other{# ч}}</translation>
@@ -745,13 +745,13 @@
 <translation id="4180726336228139707">Само на овом уређају</translation>
 <translation id="4181841719683918333">Језици</translation>
 <translation id="4188221736490993796">Сортирај од Z до A</translation>
-<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{Chrome је спречио овај сајт да шаље обавештења због непожељног или обмањујућег садржаја}one{Chrome је спречио ове сајтове да шаљу обавештења због непожељног или обмањујућег садржаја}few{Chrome је спречио ове сајтове да шаљу обавештења због непожељног или обмањујућег садржаја}other{Chrome је спречио ове сајтове да шаљу обавештења због непожељног или обмањујућег садржаја}}</translation>
+<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{Ultimatum је спречио овај сајт да шаље обавештења због непожељног или обмањујућег садржаја}one{Ultimatum је спречио ове сајтове да шаљу обавештења због непожељног или обмањујућег садржаја}few{Ultimatum је спречио ове сајтове да шаљу обавештења због непожељног или обмањујућег садржаја}other{Ultimatum је спречио ове сајтове да шаљу обавештења због непожељног или обмањујућег садржаја}}</translation>
 <translation id="4195643157523330669">Отвори на новој картици</translation>
 <translation id="4197828496439691735">{NUM_TABS,plural, =1{1 картица на овом уређају}one{# картица на овом уређају}few{# картице на овом уређају}other{# картица на овом уређају}}</translation>
 <translation id="4198268995694216131">Додатни сајтови</translation>
 <translation id="4198423547019359126">Нема доступних локација за преузимања</translation>
 <translation id="4209029522667123437"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> • Користили сте на овом сајту</translation>
-<translation id="4214315110991671325">Ако дозволите колачиће, Chrome може да их користи за предучитавање.</translation>
+<translation id="4214315110991671325">Ако дозволите колачиће, Ultimatum може да их користи за предучитавање.</translation>
 <translation id="421517251707893998">Додирните Закачи ову пречицу</translation>
 <translation id="4216511743389425832">Слушајте ову страницу</translation>
 <translation id="4217657297368492684"><ph name="TAB_TITLE" />, изабрана закачена картица без архивирања у режиму слике у слици</translation>
@@ -759,7 +759,7 @@
 <translation id="4225895483398857530">Пречица за траку с алаткама</translation>
 <translation id="4232376164796433044">Лозинке и аутоматско попуњавање</translation>
 <translation id="4242533952199664413">Отвори подешавања</translation>
-<translation id="424864128008805179">Желите ли да се одјавите из Chrome-а?</translation>
+<translation id="424864128008805179">Желите ли да се одјавите из Ultimatum-а?</translation>
 <translation id="4249955472157341256">Сортирај према најновијем</translation>
 <translation id="4255841059940367080">Заштита у реалном времену коју омогућава вештачка интелигенција од опасних сајтова, преузимања и додатака која се заснива на подацима прегледања који се шаљу Google-у</translation>
 <translation id="4256782883801055595">Лиценце отвореног кода</translation>
@@ -768,7 +768,7 @@
 <translation id="4270730597186910506">Пратите производ или опозовите његово праћење.</translation>
 <translation id="4277529130885813215">Користи други уређај</translation>
 <translation id="427987768447457592">Нова група картица</translation>
-<translation id="4282440837784183472">Ваша организација, <ph name="MANAGED_DOMAIN" />, управља налогом на који се пријављујете и начином на који Chrome може да се користи. Администратор може да подеси или ограничи одређене функције.</translation>
+<translation id="4282440837784183472">Ваша организација, <ph name="MANAGED_DOMAIN" />, управља налогом на који се пријављујете и начином на који Ultimatum може да се користи. Администратор може да подеси или ограничи одређене функције.</translation>
 <translation id="4283234489712362947"><ph name="TAB_TITLE" />, картица без архивирања у режиму слике у слици</translation>
 <translation id="4285498937028063278">Откачи</translation>
 <translation id="4285846616383034558">Колачићи, кеш и други подаци о сајтовима</translation>
@@ -784,10 +784,10 @@
 <translation id="4311652497846705514">Желите да отворите PDF?</translation>
 <translation id="4313895677475587452">{NUM_SUSPICIOUS_NOTIFICATIONS,plural, =1{Могући непожељан садржај}one{Могући непожељан садржај (#)}few{Могући непожељан садржај (#)}other{Могући непожељан садржај (#)}}</translation>
 <translation id="4320177379694898372">Нема интернет везе</translation>
-<translation id="4326079409704643112">Да бисте користили и чували Chrome податке на Google налогу, потврдите свој идентитет</translation>
+<translation id="4326079409704643112">Да бисте користили и чували Ultimatum податке на Google налогу, потврдите свој идентитет</translation>
 <translation id="433213510553688132">Прати се…</translation>
 <translation id="4335835283689002019">Безбедно прегледање је искључено</translation>
-<translation id="4343250402091037179">Да бисте претраживали одређени сајт или део Chrome-а, унесите његову пречицу у траку за адресу и своју жељену тастерску пречицу.</translation>
+<translation id="4343250402091037179">Да бисте претраживали одређени сајт или део Ultimatum-а, унесите његову пречицу у траку за адресу и своју жељену тастерску пречицу.</translation>
 <translation id="4351244548802238354">Затвори дијалог</translation>
 <translation id="4352287748243729941">Желите да користите лозинку за <ph name="PROVIDER" />?</translation>
 <translation id="4355272626458588338">Ако додате обележивач, можете да се вратите на страницу која вам је важна</translation>
@@ -800,7 +800,7 @@
 <translation id="4384468725000734951">Користите Sogou за претрагу</translation>
 <translation id="4387647248986092471">Примени закључавање профила аутомобила</translation>
 <translation id="4387817230000841154">Отвори Преузимања</translation>
-<translation id="4395046795145457714">Табела за омогућавање Chrome проналазака отворена је у пуној висини</translation>
+<translation id="4395046795145457714">Табела за омогућавање Ultimatum проналазака отворена је у пуној висини</translation>
 <translation id="4398561997852463382"><ph name="TAB_TITLE" />, изабрана закачена картица без архивирања за снимање</translation>
 <translation id="4402611456429872546"><ph name="LANG" /> – Преузима се…</translation>
 <translation id="4404568932422911380">Нема обележивача</translation>
@@ -822,16 +822,16 @@
 <translation id="4460822871039013969"><ph name="TAB_TITLE" />, изабрана закачена картица за снимање</translation>
 <translation id="4460861538906892109">{ITEMS_COUNT,plural, =1{1 обележивач}one{# обележивач}few{# обележивача}other{# обележивача}}</translation>
 <translation id="4478161224666880173">Можете да користите <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> налог на овом сајту. Да бисте наставили, пријавите се на <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="4479972344484327217">Инсталира се <ph name="MODULE" /> за Chrome…</translation>
+<translation id="4479972344484327217">Инсталира се <ph name="MODULE" /> за Ultimatum…</translation>
 <translation id="4484496141267039529">Нема интернет везе. Пробајте поново касније.</translation>
-<translation id="4487967297491345095">Сви подаци Chrome апликација ће бити трајно избрисани. То обухвата све датотеке, подешавања, налоге, базе података итд.</translation>
+<translation id="4487967297491345095">Сви подаци Ultimatum апликација ће бити трајно избрисани. То обухвата све датотеке, подешавања, налоге, базе података итд.</translation>
 <translation id="4494315997125191493">Изаберите Управљајте да бисте видели све прозоре</translation>
 <translation id="4494806687727322324">Администратор је укључио чување лозинки</translation>
 <translation id="4508528996305412043">Мени картице фида је отворен</translation>
 <translation id="4509741852167209430">Ограничени типови података се деле између сајтова ради мерења учинка огласа, на пример, да ли сте обавили куповину после посете сајту</translation>
 <translation id="4513387527876475750">{DAYS,plural, =1{Пре # дана}one{Пре # дана}few{Пре # дана}other{Пре # дана}}</translation>
 <translation id="451872707440238414">Претражите обележиваче</translation>
-<translation id="4521489764227272523">Изабрани подаци су уклоњени из Chrome-а и са синхронизованих уређаја.
+<translation id="4521489764227272523">Изабрани подаци су уклоњени из Ultimatum-а и са синхронизованих уређаја.
 
 Google налог можда има друге облике историје прегледања, попут претрага и активности у другим Google услугама на <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="4523326818319942067">последњи сат</translation>
@@ -853,10 +853,10 @@ Google налог можда има друге облике историје п�
 <translation id="4595276580892809760">Приложите слике из галерије</translation>
 <translation id="4595805675102978678">Грешка у вези са Google налогом</translation>
 <translation id="4601095002996233687">Детаљна скенирања сумњивих преузимања.</translation>
-<translation id="4606559747793337066">Када сајт или апликација затражи да приватно предучитава линкове на страници, Chrome шифрује и предучитава странице преко Google сервера без колачића. На тај начин се ваш идентитет крије од предучитаног сајта.</translation>
+<translation id="4606559747793337066">Када сајт или апликација затражи да приватно предучитава линкове на страници, Ultimatum шифрује и предучитава странице преко Google сервера без колачића. На тај начин се ваш идентитет крије од предучитаног сајта.</translation>
 <translation id="4616150815774728855">Отвори <ph name="WEBAPK_NAME" /></translation>
 <translation id="4619564267100705184">Потврдите идентитет</translation>
-<translation id="4624065194742029982">Chrome режим без архивирања</translation>
+<translation id="4624065194742029982">Ultimatum режим без архивирања</translation>
 <translation id="4634124774493850572">Користи лозинку</translation>
 <translation id="463471994228293091">{PASSWORDS_COUNT,plural, =1{1 лозинка и друге ставке су сачувани само на овом уређају. Да бисте их користили на другим уређајима, сачувајте их на Google налогу.}one{# лозинка и друге ставке су сачувани само на овом уређају. Да бисте их користили на другим уређајима, сачувајте их на Google налогу.}few{# лозинке и друге ставке су сачувани само на овом уређају. Да бисте их користили на другим уређајима, сачувајте их на Google налогу.}other{# лозинки и друге ставке су сачувани само на овом уређају. Да бисте их користили на другим уређајима, сачувајте их на Google налогу.}}</translation>
 <translation id="4640331037679501949">{NUM_PASSWORDS,plural, =1{1 угрожена лозинка}one{# угрожена лозинка}few{# угрожене лозинке}other{# угрожених лозинки}}</translation>
@@ -871,7 +871,7 @@ Google налог можда има друге облике историје п�
 <translation id="4668347365065281350">Сви подаци које чувају сајтови, укључујући колачиће и друге локално сачуване податке</translation>
 <translation id="4673702426794876519">Прозор без архивирања</translation>
 <translation id="4675298276894277358">Овај сајт се више неће приказивати</translation>
-<translation id="4678082183394354975">Тамна тема за сајтове је укључена у Chrome-у</translation>
+<translation id="4678082183394354975">Тамна тема за сајтове је укључена у Ultimatum-у</translation>
 <translation id="4682306524980568490">Максимални број прозора који могу да се приказују је <ph name="MAX_INSTANCE_COUNT" /></translation>
 <translation id="4684427112815847243">Синхронизуј све</translation>
 <translation id="4685741273709472646">Изаберите са падајуће листе</translation>
@@ -893,7 +893,7 @@ Google налог можда има друге облике историје п�
 <translation id="4738836084190194332">Последња синхронизација: <ph name="WHEN" /></translation>
 <translation id="474121291218385686">Филтрирај према апликацији</translation>
 <translation id="4741753828624614066">Добијаћете побољшане предлоге на траци за адресу</translation>
-<translation id="4742795653798179840">Избрисани Chrome подаци</translation>
+<translation id="4742795653798179840">Избрисани Ultimatum подаци</translation>
 <translation id="4742970037960872810">Уклони истицање</translation>
 <translation id="4749960740855309258">Отворите нову картицу</translation>
 <translation id="4753600213727157212">Пријављени сте као <ph name="USER_NAME" />. <ph name="USER_EMAIL" />. Грешка у вези са Google налогом. Отвара подешавања.</translation>
@@ -911,21 +911,21 @@ Google налог можда има друге облике историје п�
 <translation id="4782929588435725897"><ph name="SEARCH_ENGINE" /> је подразумевани претраживач</translation>
 <translation id="4784349455504343791"><ph name="WEBSITE_ORIGIN" /> жели да користи личне податке из дигиталног новчаника.</translation>
 <translation id="4787736314074622408">Желите да избришете <ph name="ITEM_TITLE" />?</translation>
-<translation id="4793679854893018356">Сазнајте како вас Chrome штити</translation>
+<translation id="4793679854893018356">Сазнајте како вас Ultimatum штити</translation>
 <translation id="4794291718671962615">(<ph name="MEGABYTES" />) <ph name="URL" /></translation>
 <translation id="4807098396393229769">Име и презиме на картици</translation>
 <translation id="480990236307250886">Отвори почетну страницу</translation>
 <translation id="4822710610088666676">Група картица <ph name="TAB_GROUP_TITLE" /> је затворена и сачувана</translation>
 <translation id="482405935591409882">Претражите картице и групе</translation>
 <translation id="4834250788637067901">Начини плаћања, понуде и адресе који користе Google Pay</translation>
-<translation id="4835385943915508971">Chrome нема приступ захтеваном ресурсу.</translation>
+<translation id="4835385943915508971">Ultimatum нема приступ захтеваном ресурсу.</translation>
 <translation id="483742037940503070">{TAB_COUNT,plural, =1{Вратите групу картица са <ph name="TAB_COUNT_ONE" /> картицом, у боји <ph name="COLOR_NAME" />, као нову групу картица у позадини.}one{Вратите групу картица са <ph name="TAB_COUNT_MANY" /> картицом, у боји <ph name="COLOR_NAME" />, као нову групу картица у позадини.}few{Вратите групу картица са <ph name="TAB_COUNT_MANY" /> картице, у боји <ph name="COLOR_NAME" />, као нову групу картица у позадини.}other{Вратите групу картица са <ph name="TAB_COUNT_MANY" /> картица, у боји <ph name="COLOR_NAME" />, као нову групу картица у позадини.}}</translation>
 <translation id="4849731766219625109">Користите налог <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="4850886885716139402">Приказ</translation>
 <translation id="4852014461738377247">Пријављујете се…</translation>
 <translation id="4860895144060829044">Позовите</translation>
 <translation id="4864369630010738180">Пријављивање...</translation>
-<translation id="4866368707455379617">Инсталирање модула <ph name="MODULE" /> за Chrome није успело</translation>
+<translation id="4866368707455379617">Инсталирање модула <ph name="MODULE" /> за Ultimatum није успело</translation>
 <translation id="4871568871368204250">Искључите синхронизацију</translation>
 <translation id="487567923005969537">Омогућите AI режим</translation>
 <translation id="4875775213178255010">Предлози за садржај</translation>
@@ -934,27 +934,27 @@ Google налог можда има друге облике историје п�
 <translation id="4880127995492972015">Преведи…</translation>
 <translation id="4881695831933465202">Отвори</translation>
 <translation id="488187801263602086">Преименујте датотеку</translation>
-<translation id="4885273946141277891">Неподржан број Chrome инстанци.</translation>
+<translation id="4885273946141277891">Неподржан број Ultimatum инстанци.</translation>
 <translation id="4890973535105146893">Нема сачуваних лозинки на Google налогу</translation>
 <translation id="4905823827770127520">Уврстите линк до странице</translation>
 <translation id="4908869848243824489">Google Discover</translation>
 <translation id="4910889077668685004">Апликације за плаћање</translation>
 <translation id="4911042367886397055">Добро нам дошли поново, <ph name="USER_NAME" />.</translation>
 <translation id="4913169188695071480">Заустави освежавање</translation>
-<translation id="4921224083091001889">Да би вам лозинке и други садржај били доступни на свим уређајима, пријавите се у Chrome као <ph name="EMAIL" /></translation>
+<translation id="4921224083091001889">Да би вам лозинке и други садржај били доступни на свим уређајима, пријавите се у Ultimatum као <ph name="EMAIL" /></translation>
 <translation id="4923173329789776645">Организација не препоручује преузимање</translation>
 <translation id="4925120120285606924">Снимак екрана <ph name="CURRENT_DATE_ISO" /></translation>
 <translation id="4926901776383726965">Можете да чувате слике и фајлове да бисте их прегледали офлајн или делили у другим апликацијама</translation>
 <translation id="492699891214363151">{BOOKMARKS_COUNT,plural, =1{1 обележивач и друге ставке су сачувани само на овом уређају. Да бисте их користили на другим уређајима, сачувајте их на Google налогу.}one{# обележивач и друге ставке су сачувани само на овом уређају. Да бисте их користили на другим уређајима, сачувајте их на Google налогу.}few{# обележивача и друге ставке су сачувани само на овом уређају. Да бисте их користили на другим уређајима, сачувајте их на Google налогу.}other{# обележивача и друге ставке су сачувани само на овом уређају. Да бисте их користили на другим уређајима, сачувајте их на Google налогу.}}</translation>
-<translation id="4932247056774066048">Пошто се одјављујете са налога којим управља <ph name="DOMAIN_NAME" />, Chrome подаци биће избрисани са овог уређаја. Остаће на вашем Google налогу.</translation>
+<translation id="4932247056774066048">Пошто се одјављујете са налога којим управља <ph name="DOMAIN_NAME" />, Ultimatum подаци биће избрисани са овог уређаја. Остаће на вашем Google налогу.</translation>
 <translation id="4943703118917034429">Виртуелна реалност</translation>
 <translation id="4943872375798546930">Нема резултата</translation>
 <translation id="4957722034734105353">Сазнајте више...</translation>
 <translation id="4959115606310463263">Доња табела за пријављивање је отворена до половине екрана</translation>
 <translation id="4961107849584082341">Преведите ову страницу на било који језик</translation>
-<translation id="4964614743143953889">Chrome вас упозорава на небезбедне сајтове и преузимања</translation>
+<translation id="4964614743143953889">Ultimatum вас упозорава на небезбедне сајтове и преузимања</translation>
 <translation id="496607651705915226">Да бисте сачували и користили нове лозинке на Google налогу, ажурирајте Google Play услуге</translation>
-<translation id="4971753085054504448">Пробајте да потражите нешто друго или отворите целу историју Chrome-а да бисте видели још резултата.</translation>
+<translation id="4971753085054504448">Пробајте да потражите нешто друго или отворите целу историју Ultimatum-а да бисте видели још резултата.</translation>
 <translation id="497421865427891073">Кретање унапред</translation>
 <translation id="497983151715419057">Прегледајте неактивне картице и групе овде</translation>
 <translation id="498624032394115435">Свако са линком може да мења све картице.</translation>
@@ -981,7 +981,7 @@ Google налог можда има друге облике историје п�
 <translation id="506254248375231072">Нема картица</translation>
 <translation id="5075939510584558547">Сачувајте без шифровања</translation>
 <translation id="5078638979202084724">Обележавање свих картица</translation>
-<translation id="5085038751173179818">Пријавите се на овај сајт и у Chrome да би вам обележивачи и други садржај били доступни на свим уређајима</translation>
+<translation id="5085038751173179818">Пријавите се на овај сајт и у Ultimatum да би вам обележивачи и други садржај били доступни на свим уређајима</translation>
 <translation id="5088347662971855383">Закачи Gemini</translation>
 <translation id="5091199029769593641">Ускоро ћете видети приче са <ph name="SITE_NAME" /> када отворите нову картицу. Сајтови које пратите се чувају на Google налогу. Њима можете да управљате у подешавањима Discover-а.</translation>
 <translation id="509429900233858213">Дошло је до грешке.</translation>
@@ -989,7 +989,7 @@ Google налог можда има друге облике историје п�
 <translation id="510275257476243843">Још 1 сат</translation>
 <translation id="5114895953710637392">Табела са филтерима апликација је затворена.</translation>
 <translation id="5115811374190515607">у <ph name="PRODUCT_NAME" /></translation>
-<translation id="5116239826668864748">Можете да користите Chrome сваки пут када додирнете линкове у порукама, документима и другим апликацијама</translation>
+<translation id="5116239826668864748">Можете да користите Ultimatum сваки пут када додирнете линкове у порукама, документима и другим апликацијама</translation>
 <translation id="5118713593561876160">Интересовања</translation>
 <translation id="5122378528687922675">Ако ти треба помоћ, питај родитеља (<ph name="PARENT_NAME_1" /> или <ph name="PARENT_NAME_2" />)</translation>
 <translation id="5123685120097942451">Картица без архивирања</translation>
@@ -1012,11 +1012,11 @@ Google налог можда има друге облике историје п�
 <translation id="5206168361184759344">{FILE_COUNT,plural, =1{Преузима се фајл…}one{Преузима се # фајл…}few{Преузимају се # фајла…}other{Преузима се # фајлова…}}</translation>
 <translation id="5210286577605176222">Прелазак на претходну картицу</translation>
 <translation id="5210365745912300556">Затвори картицу</translation>
-<translation id="5212800876504289412">Рестартујте Chrome да бисте довршили ову промену. Картице се аутоматски поново отварају када рестартујете.</translation>
+<translation id="5212800876504289412">Рестартујте Ultimatum да бисте довршили ову промену. Картице се аутоматски поново отварају када рестартујете.</translation>
 <translation id="5213114823401215820">Поново отвори затворену групу</translation>
 <translation id="5215957675041756913">Контролишите податке и налог</translation>
 <translation id="5218324087477576825">Број картице, обавезно</translation>
-<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> и друге <ph name="SEPARATOR" /> Chrome је уклонио дозволе за ове сајтове јер их нисте недавно посећивали</translation>
+<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> и друге <ph name="SEPARATOR" /> Ultimatum је уклонио дозволе за ове сајтове јер их нисте недавно посећивали</translation>
 <translation id="5222676887888702881">Одјави ме</translation>
 <translation id="5226378907213531272">Откључаћете екран сваки пут када користите аутомобил</translation>
 <translation id="5227554086496586518">Додирните да бисте видели резултате претраге</translation>
@@ -1036,7 +1036,7 @@ Google налог можда има друге облике историје п�
 <translation id="5313967007315987356">Додајте сајт</translation>
 <translation id="5316947901395241499">Администратор је искључио чување лозинки</translation>
 <translation id="5317780077021120954">Сачувај</translation>
-<translation id="5319359161174645648">Google препоручује Chrome</translation>
+<translation id="5319359161174645648">Google препоручује Ultimatum</translation>
 <translation id="5326246328175179736">Не можете да се пријавите помоћу овог налога</translation>
 <translation id="5327248766486351172">Назив</translation>
 <translation id="5328542107300944283">Користите уз <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
@@ -1049,7 +1049,7 @@ Google налог можда има друге облике историје п�
 <translation id="5375374982898812658">Одмах ћете изгубити приступ групи картица <ph name="GROUP_NAME" /> и она ће бити избрисана са свих уређаја</translation>
 <translation id="5375577065097716013">Тражите слику уз Google објектив <ph name="BEGIN_NEW" />Ново<ph name="END_NEW" /></translation>
 <translation id="5390367025924544771"><ph name="WEBSITE_ORIGIN" /> жели да користи личне податке из дигиталног новчаника. Наставите само уколико сматрате да је овај сајт поуздан. Опасни сајтови могу да вас преваре да откријете ствари попут пуног имена и презимена или броја личне карте.</translation>
-<translation id="5395376160638294582">Уверите се да увек можете да користите Chrome податке на Google налогу</translation>
+<translation id="5395376160638294582">Уверите се да увек можете да користите Ultimatum податке на Google налогу</translation>
 <translation id="539881862970320163">Предложена је јака лозинка. Тастатура је сакривена.</translation>
 <translation id="5409881200985013443">Желите ли да пошаљете <ph name="ONE_TIME_CODE" /> на <ph name="CLIENT_NAME" />?</translation>
 <translation id="5410300144953132176"><ph name="OWNER_FULL_NAME" /> (<ph name="OWNER_EMAIL" />) жели да се придружите групи картица. Свако са линком може да мења све картице, па будите пажљиви када се придружујете. Линк истиче за 48 сати.</translation>
@@ -1061,7 +1061,7 @@ Google налог можда има друге облике историје п�
 <translation id="543271133149552180"><ph name="TAB_TITLE" />, вишеструко изабрана картица без архивирања у режиму слике у слици</translation>
 <translation id="5436928407363358055">Да бисте лако наставили тамо где сте стали, синхронизујте историју и картице</translation>
 <translation id="5438292632479953702">Преузми поново</translation>
-<translation id="5439191312780166229">Упозорава вас на опасне сајтове, чак и на оне за које Google раније није знао, анализирајући више података са сајтова него стандардна заштита. Можете да изаберете да прескочите упозорења Chrome-а.</translation>
+<translation id="5439191312780166229">Упозорава вас на опасне сајтове, чак и на оне за које Google раније није знао, анализирајући више података са сајтова него стандардна заштита. Можете да изаберете да прескочите упозорења Ultimatum-а.</translation>
 <translation id="5441137934526263133">Да ли сајт не ради? Колачићи треће стране су блокирани</translation>
 <translation id="5441466871879044658">Преводите на овај језик</translation>
 <translation id="5444999712122199445">Назад на сајт</translation>
@@ -1072,7 +1072,7 @@ Google налог можда има друге облике историје п�
 <translation id="5469852975082458401">Можете да се крећете страницама помоћу курсора за текст. Притисните F7 да бисте то искључили.</translation>
 <translation id="5471273988133666918">Премештање картице <ph name="TAB_TITLE" /> није успело</translation>
 <translation id="548278423535722844">Отворите у апликацији за мапе</translation>
-<translation id="5489222148748465285">Желите да Chrome настави да тражи?</translation>
+<translation id="5489222148748465285">Желите да Ultimatum настави да тражи?</translation>
 <translation id="5490848366863949315"><ph name="TAB_TITLE" />, вишеструко изабрана картица у режиму слике у слици</translation>
 <translation id="5494920125229734069">Избор свих ставки</translation>
 <translation id="549660026907543296">Придружите се као <ph name="MEMBER_FULL_NAME" /></translation>
@@ -1080,7 +1080,7 @@ Google налог можда има друге облике историје п�
 <translation id="5526281268548144413">Не можете да затворите у више прозора</translation>
 <translation id="5532536403031755365">Додајте још један ниво заштите од онлајн претњи помоћу побољшане заштите</translation>
 <translation id="5548606607480005320">Безбедносна провера</translation>
-<translation id="5554520618550346933">Када користите лозинку, Chrome вас упозорава ако је она објављена онлајн. Док то ради, ваше лозинке и корисничка имена су шифровани, па нико не може да их прочита, укључујући Google.</translation>
+<translation id="5554520618550346933">Када користите лозинку, Ultimatum вас упозорава ако је она објављена онлајн. Док то ради, ваше лозинке и корисничка имена су шифровани, па нико не може да их прочита, укључујући Google.</translation>
 <translation id="5555525474779371165">Одаберите заштиту помоћу Безбедног прегледања</translation>
 <translation id="5556459405103347317">Учитај поново</translation>
 <translation id="555671485580955310">Синхронизуј историју и картице</translation>
@@ -1093,10 +1093,10 @@ Google налог можда има друге облике историје п�
 <translation id="5578795271662203820">Потражи ову слику на <ph name="SEARCH_ENGINE" />-у</translation>
 <translation id="5596627076506792578">Још опција</translation>
 <translation id="5599455543593328020">Режим без архивирања</translation>
-<translation id="5601180634394228718">Још подешавања која користе податке за побољшање доживљаја Chrome-а потражите у <ph name="BEGIN_LINK" />Google услугама<ph name="END_LINK" />.</translation>
+<translation id="5601180634394228718">Још подешавања која користе податке за побољшање доживљаја Ultimatum-а потражите у <ph name="BEGIN_LINK" />Google услугама<ph name="END_LINK" />.</translation>
 <translation id="5601924940067278327">Приступајте картицама и другом садржају на свим уређајима</translation>
 <translation id="5611398002774823980">Сачувај на налогу</translation>
-<translation id="5613381935190035031">Да би вам картице и други садржај били доступни на свим уређајима, пријавите се у Chrome као <ph name="EMAIL" /></translation>
+<translation id="5613381935190035031">Да би вам картице и други садржај били доступни на свим уређајима, пријавите се у Ultimatum као <ph name="EMAIL" /></translation>
 <translation id="5614625640221885312">Пријавите се да бисте приступали обележивачима, лозинкама и другом садржају на свим уређајима</translation>
 <translation id="5619633276517849615">Организација је укључила Безбедно прегледање</translation>
 <translation id="5620163320393916465">Нема сачуваних лозинки</translation>
@@ -1112,21 +1112,21 @@ Google налог можда има друге облике историје п�
 <translation id="5657871969392618475">Информације су заштићене закључавањем профила</translation>
 <translation id="5659593005791499971">Имејл</translation>
 <translation id="5665379678064389456">Направите догађај у апликацији <ph name="APP_NAME" /></translation>
-<translation id="5683547024293500885">Chrome не може да тражи ажурирања</translation>
+<translation id="5683547024293500885">Ultimatum не може да тражи ажурирања</translation>
 <translation id="5683916195767086779">Група картица</translation>
 <translation id="5686790454216892815">Име датотеке је предугачко</translation>
 <translation id="569536719314091526">Преведите ову страницу на било који језик помоћу дугмета Још опција</translation>
-<translation id="5696597120588531049">Chrome може да вас штити од упада у податке, небезбедних веб-сајтова и друго</translation>
+<translation id="5696597120588531049">Ultimatum може да вас штити од упада у податке, небезбедних веб-сајтова и друго</translation>
 <translation id="5698878456427040674">Проверите да ли је изабрани налог подржан.</translation>
 <translation id="5709213329446699338"><ph name="SITE" /> жели да се повеже са серијским портом</translation>
 <translation id="5715150588940290235">Желите да избришете сачуване безбедносне кодове?</translation>
-<translation id="571930967925877633">Обележивачи, историја и други Chrome подаци више се неће синхронизовати са Google налогом</translation>
+<translation id="571930967925877633">Обележивачи, историја и други Ultimatum подаци више се неће синхронизовати са Google налогом</translation>
 <translation id="572328651809341494">Недавно коришћене картице</translation>
 <translation id="5728072125198221967">Повезане Google услуге</translation>
 <translation id="5734658507307260911"><ph name="TAB_TITLE" />, закачена картица без архивирања са звуком</translation>
 <translation id="5744751019568455640">Ево гласова које можете да изаберете за читање веб-страница. Ако вам се свиђа овај глас и желите да наставим да га користим, само додирните назив гласа.</translation>
 <translation id="574845902699630049">Дели као <ph name="OWNER_FULL_NAME" /></translation>
-<translation id="5749068826913805084">Chrome-у је потребан приступ меморијском простору да би преузимао датотеке.</translation>
+<translation id="5749068826913805084">Ultimatum-у је потребан приступ меморијском простору да би преузимао датотеке.</translation>
 <translation id="5749237766298580851">Искључено <ph name="SEPARATOR" /> Не препоручује се</translation>
 <translation id="5752232708629533680">Делите само GIF</translation>
 <translation id="5753570386948603678">Избриши из историје</translation>
@@ -1145,14 +1145,14 @@ Google налог можда има друге облике историје п�
 <translation id="5811144606237321538"><ph name="TAB_TITLE" />, вишеструко изабрана закачена картица са искљученим звуком</translation>
 <translation id="5814749351757353073">Будите у току са омиљеним сајтовима</translation>
 <translation id="5823093032261493462">Ипак желите да преузмете фајл <ph name="FILE_NAME" /> са домена <ph name="DOWNLOAD_DOMAIN" />?</translation>
-<translation id="5825135637446025843">Када се Chrome поново покрене, информације сачуване од новог добављача ће се користити за аутоматско попуњавање лозинки, приступних кључева, адреса, начина плаћања и других информација.</translation>
-<translation id="5828921839638612740">Можете да избришете податке у Chrome подешавањима</translation>
+<translation id="5825135637446025843">Када се Ultimatum поново покрене, информације сачуване од новог добављача ће се користити за аутоматско попуњавање лозинки, приступних кључева, адреса, начина плаћања и других информација.</translation>
+<translation id="5828921839638612740">Можете да избришете податке у Ultimatum подешавањима</translation>
 <translation id="5829586821381540080">Сачувано у фолдеру <ph name="FOLDER_NAME" /></translation>
 <translation id="583281660410589416">Непознато</translation>
 <translation id="5833984609253377421">Дели линк</translation>
-<translation id="5839058148541733625">Chrome диносаурус</translation>
+<translation id="5839058148541733625">Ultimatum диносаурус</translation>
 <translation id="5841444063256914865">Желите ли ипак да преузмете фајл <ph name="FILE_NAME" />?</translation>
-<translation id="5847265694842662173">Chrome је спречио злонамерне и некоришћене сајтове да шаљу обавештења</translation>
+<translation id="5847265694842662173">Ultimatum је спречио злонамерне и некоришћене сајтове да шаљу обавештења</translation>
 <translation id="5848257610304005265">Желите да отворите PDF помоћу апликације <ph name="APP_NAME" />?</translation>
 <translation id="5849288995120328556">Желите да зауставите дељење?</translation>
 <translation id="5853623416121554550">паузирано</translation>
@@ -1166,8 +1166,8 @@ Google налог можда има друге облике историје п�
 <translation id="5865733239029070421">Аутоматски шаље Google-у статистику коришћења и извештаје о отказивању</translation>
 <translation id="5869522115854928033">Сачуване лозинке</translation>
 <translation id="5870416898561279542">Дуплe картицe и групe или оне које се не користе <ph name="DAYS_INACTIVE" /> дана премештају се овде<ph name="AUTODELETE_SECTION" />. То можете да промените у било ком тренутку у одељку <ph name="DECLUTTER_SETTINGS_TITLE" />.</translation>
-<translation id="587735546353481577">Да бисте пратили сајт, идите на њега, отворите Chrome мени и додирните Прати.</translation>
-<translation id="5885378508678660271">Обавештења <ph name="SEPARATOR" /> Chrome је уклонио ове дозволе јер је овај сајт опасан</translation>
+<translation id="587735546353481577">Да бисте пратили сајт, идите на њега, отворите Ultimatum мени и додирните Прати.</translation>
+<translation id="5885378508678660271">Обавештења <ph name="SEPARATOR" /> Ultimatum је уклонио ове дозволе јер је овај сајт опасан</translation>
 <translation id="5899667542927581604">Ниједна табела са приступним кључевима није затворена</translation>
 <translation id="5907542076239273525">Обележивач је сачуван у фолдеру <ph name="FOLDER_NAME" /></translation>
 <translation id="5911301511366365629"><ph name="TAB_TITLE" />, изабрана картица без архивирања са звуком</translation>
@@ -1178,23 +1178,23 @@ Google налог можда има друге облике историје п�
 <translation id="5942872142862698679">Користите Google за претрагу</translation>
 <translation id="5945035219773565305">Актуелна препорука: <ph name="RECOMMENDATION" /></translation>
 <translation id="5951119116059277034">Приказује се активна страница</translation>
-<translation id="5956665950594638604">Отварање Chrome центра за помоћ на новој картици</translation>
+<translation id="5956665950594638604">Отварање Ultimatum центра за помоћ на новој картици</translation>
 <translation id="59577092665511740">Изаберите налог.</translation>
 <translation id="5958275228015807058">Пронађите датотеке и странице у Преузимањима</translation>
-<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{Chrome је спречио сајт који дуго нисте посетили да вам шаље обавештења}one{Chrome је спречио сајтове које дуго нисте посетили да вам шаљу обавештења}few{Chrome је спречио сајтове које дуго нисте посетили да вам шаљу обавештења}other{Chrome је спречио сајтове које дуго нисте посетили да вам шаљу обавештења}}</translation>
+<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{Ultimatum је спречио сајт који дуго нисте посетили да вам шаље обавештења}one{Ultimatum је спречио сајтове које дуго нисте посетили да вам шаљу обавештења}few{Ultimatum је спречио сајтове које дуго нисте посетили да вам шаљу обавештења}other{Ultimatum је спречио сајтове које дуго нисте посетили да вам шаљу обавештења}}</translation>
 <translation id="5962718611393537961">Додирните да бисте скупили</translation>
 <translation id="5964869237734432770">Заустави описе слика</translation>
 <translation id="5972844218283131174">Опозови све</translation>
 <translation id="5975083100439434680">Умањивање</translation>
 <translation id="5977976211062815271">На овом уређају</translation>
 <translation id="5978661847409534366">{ITEMS_COUNT,plural, =1{1 страница на листи за читање}one{# страница на листи за читање}few{# странице на листи за читање}other{# страница на листи за читање}}</translation>
-<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Chrome је уклонио дозволе за ове сајтове јер их нисте недавно посећивали</translation>
+<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Ultimatum је уклонио дозволе за ове сајтове јер их нисте недавно посећивали</translation>
 <translation id="5995726099713306770">Желите да преузмете страницу поново?</translation>
 <translation id="6000066717592683814">Задржи Google</translation>
 <translation id="6000203700195075278">Поново прати</translation>
 <translation id="6011308810877101166">Побољшајте предлоге за претрагу</translation>
 <translation id="6013305291643746595">Сортира се према најстаријем</translation>
-<translation id="6022659036123304283">Прилагодите Chrome себи</translation>
+<translation id="6022659036123304283">Прилагодите Ultimatum себи</translation>
 <translation id="6026538407078977628">Проширите на приказ преко целог екрана</translation>
 <translation id="6030719887161080597">Управљајте информацијама које сајтови користе за мерење учинка огласа</translation>
 <translation id="6039379616847168523">Прелазак на следећу картицу</translation>
@@ -1223,7 +1223,7 @@ Google налог можда има друге облике историје п�
 <translation id="6125864963080902918"><ph name="BEGIN_LINK" />Још детаља<ph name="END_LINK" /></translation>
 <translation id="6127860394906721547">Отворите групу картица <ph name="TITLE_OF_GROUP" />, боје <ph name="COLOR_NAME" />, са сајтовима <ph name="URL_LIST" />.</translation>
 <translation id="6130303040046284160">Умањите картицу</translation>
-<translation id="6132075343662013154">Chrome ће вам понудити да сачува лозинку</translation>
+<translation id="6132075343662013154">Ultimatum ће вам понудити да сачува лозинку</translation>
 <translation id="6134168885321518274">Отворите траку за тражење</translation>
 <translation id="6135608400322377268">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> картица}one{<ph name="TAB_COUNT_MANY" /> картица}few{<ph name="TAB_COUNT_MANY" /> картице}other{<ph name="TAB_COUNT_MANY" /> картица}}</translation>
 <translation id="6137022273846704445">Језик апликације <ph name="APP_NAME" /></translation>
@@ -1234,10 +1234,10 @@ Google налог можда има друге облике историје п�
 <translation id="6146563240635539929">Видеи</translation>
 <translation id="614890671148262506">Увек дозволи обавештења са овог сајта</translation>
 <translation id="6150320133806434356">Обележивач је сачуван</translation>
-<translation id="6150706324143004339">Да бисте користили и чували Chrome податке на Google налогу, ажурирајте Chrome</translation>
+<translation id="6150706324143004339">Да бисте користили и чували Ultimatum податке на Google налогу, ажурирајте Ultimatum</translation>
 <translation id="6154478581116148741">Укључите откључавање екрана у Подешавањима да бисте извезли лозинке са уређаја</translation>
 <translation id="6156323911414505561">Прикажи траку са обележивачима</translation>
-<translation id="6162892189396105610">Предучитава странице за које Chrome сматра да ћете их вероватно посетити.</translation>
+<translation id="6162892189396105610">Предучитава странице за које Ultimatum сматра да ћете их вероватно посетити.</translation>
 <translation id="6165508094623778733">Сазнајте више</translation>
 <translation id="6170675927290506430">Иди у подешавања обавештења</translation>
 <translation id="6184972259157699660"><ph name="TAB_TITLE" />, картица без архивирања са искљученим звуком</translation>
@@ -1246,7 +1246,7 @@ Google налог можда има друге облике историје п�
 <translation id="6193448654517602979">Изаберите картице</translation>
 <translation id="6196315980958524839">Лозинке се чувају у Google менаџеру лозинки на овом уређају</translation>
 <translation id="6202812185118613467">Поново се пријавите да бисте започели синхронизацију</translation>
-<translation id="6204781143409202534">Chrome је открио могући непожељан садржај са домена <ph name="DOMAIN" />.</translation>
+<translation id="6204781143409202534">Ultimatum је открио могући непожељан садржај са домена <ph name="DOMAIN" />.</translation>
 <translation id="6205314730813004066">Приватност са огласима</translation>
 <translation id="6210282067670792090">У траци за адресу користите ову тастерску пречицу са пречицама за претраживаче и претрагу сајта</translation>
 <translation id="6210748933810148297">Нисте <ph name="EMAIL" />?</translation>
@@ -1260,12 +1260,12 @@ Google налог можда има друге облике историје п�
 <translation id="6247557882553405851">Google менаџеру лозинки</translation>
 <translation id="6248988683584659830">Претражите подешавања</translation>
 <translation id="6250847299079540062"><ph name="TAB_TITLE" />, вишеструко изабрана закачена картица без архивирања</translation>
-<translation id="6251449557817521191">Овде прегледајте историју Chrome-а</translation>
+<translation id="6251449557817521191">Овде прегледајте историју Ultimatum-а</translation>
 <translation id="6254139308321626268">Прегледате PDF фајл</translation>
-<translation id="6255809143828972562">Помоћу Chrome алатки можете безбедно да прегледате и задржите контролу</translation>
+<translation id="6255809143828972562">Помоћу Ultimatum алатки можете безбедно да прегледате и задржите контролу</translation>
 <translation id="6264376385120300461">Ипак преузми</translation>
 <translation id="6264485186158353794">Назад на безбедно</translation>
-<translation id="6267106249090587268">Обавештења <ph name="SEPARATOR" /> Chrome је уклонио ове дозволе због непожељног или обмањујућег садржаја</translation>
+<translation id="6267106249090587268">Обавештења <ph name="SEPARATOR" /> Ultimatum је уклонио ове дозволе због непожељног или обмањујућег садржаја</translation>
 <translation id="6276708887952587684">Прегледајте извор странице</translation>
 <translation id="6277522088822131679">Дошло је до проблема при штампању странице. Пробајте поново.</translation>
 <translation id="6278428485366576908">Тема</translation>
@@ -1281,7 +1281,7 @@ Google налог можда има друге облике историје п�
 <translation id="6312687380483398334">Веб-апликације (тихе)</translation>
 <translation id="6315386555979018699">Избриши и настави</translation>
 <translation id="6316139424528454185">Неподржана верзија Android-а</translation>
-<translation id="631839948975905034">Закључајте прозоре без архивирања после затварања Chrome-а</translation>
+<translation id="631839948975905034">Закључајте прозоре без архивирања после затварања Ultimatum-а</translation>
 <translation id="6324916366299863871">Измени пречицу</translation>
 <translation id="6324977638108296054">Прављење линка до истакнутог текста није успело</translation>
 <translation id="6333140779060797560">Дељење преко <ph name="APPLICATION" /></translation>
@@ -1297,13 +1297,13 @@ Google налог можда има друге облике историје п�
 <translation id="6356893102071098867">Проверите да ли сте изабрали одговарајући налог</translation>
 <translation id="6363990818884053551">Да бисте започели синхронизацију, потврдите свој идентитет</translation>
 <translation id="6364438453358674297">Желите ли да уклоните предлог из историје?</translation>
-<translation id="6380100320871303656">Чешће предучитава странице за које Chrome сматра да ћете их вероватно посетити. Ово подешавање може да доведе до повећане потрошње података.</translation>
+<translation id="6380100320871303656">Чешће предучитава странице за које Ultimatum сматра да ћете их вероватно посетити. Ово подешавање може да доведе до повећане потрошње података.</translation>
 <translation id="6382848304055775421">Извози се</translation>
 <translation id="6388152137132427505">Увек делите мудро. Линкови истичу за 48 сати.</translation>
 <translation id="6394791151443660613">Претражите: <ph name="SEARCH_QUERY" /></translation>
 <translation id="6397616442223433927">Поново сте онлајн</translation>
 <translation id="6399363707848566877">Сада можете лако да додајете картице у групе овде</translation>
-<translation id="6401458660421980302">Да бисте послали ову картицу на други уређај, пријавите се у Chrome на том уређају</translation>
+<translation id="6401458660421980302">Да бисте послали ову картицу на други уређај, пријавите се у Ultimatum на том уређају</translation>
 <translation id="6404511346730675251">Измена обележивача</translation>
 <translation id="6406506848690869874">Синхронизација</translation>
 <translation id="6408370409308816490"><ph name="TAB_TITLE" />, изабрана закачена картица без архивирања за дељење</translation>
@@ -1323,24 +1323,24 @@ Google налог можда има друге облике историје п�
 <translation id="6452534462676960500">Нова активност</translation>
 <translation id="6459045781120991510">Анкете</translation>
 <translation id="6461962085415701688">Не можете да отворите датотеку</translation>
-<translation id="6464977750820128603">Можете да видите сајтове које посећујете у Chrome-у и да подесите тајмере за њих.\n\nGoogle добија информације о сајтовима за које подесите тајмере и о томе колико дуго их посећујете. Те информације се користе за побољшање Дигиталног благостања.</translation>
+<translation id="6464977750820128603">Можете да видите сајтове које посећујете у Ultimatum-у и да подесите тајмере за њих.\n\nGoogle добија информације о сајтовима за које подесите тајмере и о томе колико дуго их посећујете. Те информације се користе за побољшање Дигиталног благостања.</translation>
 <translation id="6468703991511753953">Трака за адресу је тренутно у дну</translation>
-<translation id="6470181189905173055">Странице које сте отворили у Chrome-у док користите апликацију <ph name="APP_LABEL" /> ће се приказати овде.</translation>
+<translation id="6470181189905173055">Странице које сте отворили у Ultimatum-у док користите апликацију <ph name="APP_LABEL" /> ће се приказати овде.</translation>
 <translation id="6473086018775716761">Листа опција за дељење је отворена до половине екрана.</translation>
 <translation id="6475951671322991020">Преузми видео</translation>
 <translation id="6477928892249167417">Изгледа да су вам ови сајтови важни:</translation>
-<translation id="6479881432656947268">Посетите Chrome веб-продавницу</translation>
-<translation id="6481963882741794338">Повежите Chrome и друге Google услуге ради персонализације и других сврха</translation>
+<translation id="6479881432656947268">Посетите Ultimatum веб-продавницу</translation>
+<translation id="6481963882741794338">Повежите Ultimatum и друге Google услуге ради персонализације и других сврха</translation>
 <translation id="6482749332252372425">Преузимање датотеке <ph name="FILE_NAME" /> није успело због недостатка меморијског простора.</translation>
 <translation id="6486420406192123355">Овај PDF фајл је са сајта који користи небезбедну везу</translation>
 <translation id="650224091954855786">{FILE_COUNT,plural, =1{Фајл је преузет}one{# преузимање је довршено}few{# преузимања су довршена}other{# преузимања је довршено}}</translation>
-<translation id="6508722015517270189">Поново покрените Chrome</translation>
+<translation id="6508722015517270189">Поново покрените Ultimatum</translation>
 <translation id="6513924416597632811">Копирајте линк до странице резултата претраге за: <ph name="SEARCH_QUERY" />. Извор: <ph name="PAGE_URL" /></translation>
 <translation id="6518133107902771759">Верификуј</translation>
 <translation id="6521218807522232085">Правите и чувајте лозинке и управљајте њима да бисте се лако пријављивали</translation>
 <translation id="6527303717912515753">Дели</translation>
-<translation id="652948702951888897">Историја Chrome-а</translation>
-<translation id="6532866250404780454">Сајтови које посећујете у Chrome-у се неће приказивати. Биће избрисани тајмери за све сајтове.</translation>
+<translation id="652948702951888897">Историја Ultimatum-а</translation>
+<translation id="6532866250404780454">Сајтови које посећујете у Ultimatum-у се неће приказивати. Биће избрисани тајмери за све сајтове.</translation>
 <translation id="6539092367496845964">Дошло је до грешке. Пробајте поново касније.</translation>
 <translation id="6541983376925655882">{NUM_HOURS,plural, =1{Проверено пре 1 сат}one{Проверено пре # сат}few{Проверено пре # сата}other{Проверено пре # сати}}</translation>
 <translation id="6545017243486555795">Обриши све податке</translation>
@@ -1355,7 +1355,7 @@ Google налог можда има друге облике историје п�
 <translation id="6569373978618239158">Сада ћете видети приче са <ph name="SITE_NAME" /> када отворите нову картицу. Сајтови које пратите се чувају на Google налогу. Њима можете да управљате у подешавањима Discover-а.</translation>
 <translation id="657177046675873214">Да би вам обележивачи били доступни на свим уређајима, укључите Обележиваче у подешавањима</translation>
 <translation id="6573096386450695060">Увек дозволи</translation>
-<translation id="6573431926118603307">Овде ће се приказати картице које отворите у Chrome-у на другим уређајима.</translation>
+<translation id="6573431926118603307">Овде ће се приказати картице које отворите у Ultimatum-у на другим уређајима.</translation>
 <translation id="6583199322650523874">Обележавање тренутне странице</translation>
 <translation id="6588043302623806746">Користи безбедни DNS</translation>
 <translation id="6590471736817333463">Уштедите и до 60% података</translation>
@@ -1363,28 +1363,28 @@ Google налог можда има друге облике историје п�
 <translation id="6594347733515723558">Разна сортирања, прикази</translation>
 <translation id="6595046016124923392">Слике се шаљу Google-у ради побољшања описа.</translation>
 <translation id="661266467055912436">Побољшава безбедност за вас и друге на вебу.</translation>
-<translation id="6621391692573306628">Да бисте послали ову картицу на други уређај, пријавите се у Chrome на оба уређаја</translation>
+<translation id="6621391692573306628">Да бисте послали ову картицу на други уређај, пријавите се у Ultimatum на оба уређаја</translation>
 <translation id="6627583120233659107">Измени фолдер</translation>
 <translation id="6633067410344541938">Откључај картице без архивирања</translation>
 <translation id="6636623428211296678">Истражите још подешавања у наставку или завршите</translation>
-<translation id="6637100877383020115">Chrome шаље Google-у податке о коришћењу и отказивању ради побољшања апликације. <ph name="BEGIN_UMA_LINK" />Управљајте<ph name="END_UMA_LINK" /></translation>
+<translation id="6637100877383020115">Ultimatum шаље Google-у податке о коришћењу и отказивању ради побољшања апликације. <ph name="BEGIN_UMA_LINK" />Управљајте<ph name="END_UMA_LINK" /></translation>
 <translation id="6641780377503683465">Уклоните: <ph name="INTEREST" /></translation>
 <translation id="6642299196749785472">Приложите картице</translation>
 <translation id="6647441008198474441">URL-ови које посећујете се шаљу Google-у да би се предвидели сајтови које ћете можда следеће посетити</translation>
 <translation id="6648977384226967773">{CONTACT,plural, =1{<ph name="CONTACT_PREVIEW" />\u2026 и још <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" />}one{<ph name="CONTACT_PREVIEW" />\u2026 и још <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" />}few{<ph name="CONTACT_PREVIEW" />\u2026 и још <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" />}other{<ph name="CONTACT_PREVIEW" />\u2026 и још <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" />}}</translation>
 <translation id="6649642165559792194">Прикажи слику <ph name="BEGIN_NEW" />Ново<ph name="END_NEW" /></translation>
 <translation id="6659594942844771486">Картица</translation>
-<translation id="6661521899577697780">Опција за омогућавање Chrome проналазака отворена је до половине екрана</translation>
+<translation id="6661521899577697780">Опција за омогућавање Ultimatum проналазака отворена је до половине екрана</translation>
 <translation id="666731172850799929">Отвори у <ph name="APP_NAME" /></translation>
 <translation id="6669390930482049506">Обавештавај ме</translation>
-<translation id="6670767097276846646">Неки додаци могу да додају претраживаче у Chrome</translation>
+<translation id="6670767097276846646">Неки додаци могу да додају претраживаче у Ultimatum</translation>
 <translation id="6671495933530132209">Копирај слику</translation>
 <translation id="6672697278890207089">Унос приступне фразе</translation>
 <translation id="6672917148207387131">Додај <ph name="DOMAIN" /></translation>
 <translation id="6674571176963658787">Да бисте покренули синхронизацију, унесите приступну фразу</translation>
-<translation id="6676927815633975364">Пријавите се на овај сајт и у Chrome</translation>
+<translation id="6676927815633975364">Пријавите се на овај сајт и у Ultimatum</translation>
 <translation id="6684262542644248484">Пријавите се на веб-сајт</translation>
-<translation id="6684809838922667136">Побољшајте Chrome</translation>
+<translation id="6684809838922667136">Побољшајте Ultimatum</translation>
 <translation id="6689436252814043643">Режим читања није доступан</translation>
 <translation id="669971068476817798">Додирните Сачувај</translation>
 <translation id="6700279777779583398">Избори су сачувани</translation>
@@ -1408,18 +1408,18 @@ Google налог можда има друге облике историје п�
 <translation id="6764137532716892442">Дељена група картица <ph name="GROUP_TITLE" /> са новом активношћу</translation>
 <translation id="6767294960381293877">Листа уређаја са којима се дели картица је отворена на пола висине.</translation>
 <translation id="6783664456110886353">{TAB_COUNT,plural, =1{Затвориће се картице без архивирања (<ph name="INCOGNITO_TAB_COUNT" />) и још <ph name="TAB_COUNT_ONE" /> картица}one{Затвориће се картице без архивирања (<ph name="INCOGNITO_TAB_COUNT" />) и још <ph name="TAB_COUNT_MANY" /> картица}few{Затвориће се картице без архивирања (<ph name="INCOGNITO_TAB_COUNT" />) и још <ph name="TAB_COUNT_MANY" /> картице}other{Затвориће се картице без архивирања (<ph name="INCOGNITO_TAB_COUNT" />) и још <ph name="TAB_COUNT_MANY" /> картица}}</translation>
-<translation id="6785476624617658922">Додатни услови коришћења услуге за Chrome и Chrome ОС</translation>
+<translation id="6785476624617658922">Додатни услови коришћења услуге за Ultimatum и Ultimatum ОС</translation>
 <translation id="6786747875388722282">Додаци</translation>
 <translation id="6787600234697426339">Достигнуто је ограничење од <ph name="MAX_INSTANCE_COUNT" /> прозора</translation>
 <translation id="6795633245022906657">Брзо отворите нову картицу. Да бисте изменили ову пречицу, идите у Подешавања.</translation>
-<translation id="679588508577699489">Поставите Chrome за подразумевани прегледач</translation>
+<translation id="679588508577699489">Поставите Ultimatum за подразумевани прегледач</translation>
 <translation id="679956319013005046">Да бисте подесили жељену услугу за аутоматско попуњавање, прво додајте услугу у <ph name="BEGIN_LINK" />Android подешавањима<ph name="END_LINK" />.</translation>
 <translation id="6802555630140434547">Прозор ће бити затворен</translation>
 <translation id="6803791793483522764">Прегледајте обавештења</translation>
 <translation id="6809470175540814047">Отвори у прозору без архивирања</translation>
 <translation id="6811034713472274749">Страница је спремна за преглед</translation>
 <translation id="6813359536773993594">{FILE_COUNT,plural, =1{Слике, 1 слика на листи}one{Слике, # слика на листи}few{Слике, # слике на листи}other{Слике, # слика на листи}}</translation>
-<translation id="6813446258015311409">Пријављивање у Chrome, отворено.</translation>
+<translation id="6813446258015311409">Пријављивање у Ultimatum, отворено.</translation>
 <translation id="6815692190508268848">Примењена су подешавања изгледа</translation>
 <translation id="6817747507826986771">Брзо делите ову страницу. Да бисте изменили ову пречицу, додирните и задржите.</translation>
 <translation id="6820686453637990663">CVC</translation>
@@ -1428,7 +1428,7 @@ Google налог можда има друге облике историје п�
 <translation id="6828070228333235514">Заустави праћење цена</translation>
 <translation id="6830728435402077660">Није безбедно</translation>
 <translation id="6831043979455480757">Преведи</translation>
-<translation id="6835182496791325827">Добијајте обавештења када Chrome пронађе најбоље резултате за претраге док сте одсутни.</translation>
+<translation id="6835182496791325827">Добијајте обавештења када Ultimatum пронађе најбоље резултате за претраге док сте одсутни.</translation>
 <translation id="6846298663435243399">Учитава се...</translation>
 <translation id="6850409657436465440">Преузимање је још увек у току</translation>
 <translation id="6850830437481525139">Затворених картица: <ph name="TAB_COUNT" /></translation>
@@ -1451,7 +1451,7 @@ Google налог можда има друге облике историје п�
 <translation id="6886500155621657325">{ITEMS_COUNT,plural, =1{1 лозинка}one{# лозинка}few{# лозинке}other{# лозинки}}</translation>
 <translation id="688730033107341407">Када се одјавите, обележивачи, лозинке и други садржај са Google налога ће бити уклоњени са овог уређаја.</translation>
 <translation id="6896758677409633944">Копирај</translation>
-<translation id="6898797562238201317">Користите сопствену приступну фразу да бисте шифровали све Chrome податке на Google налогу</translation>
+<translation id="6898797562238201317">Користите сопствену приступну фразу да бисте шифровали све Ultimatum податке на Google налогу</translation>
 <translation id="6900532703269623216">Напредна заштита</translation>
 <translation id="6903907808598579934">Укључи синхронизацију</translation>
 <translation id="6906448540340261898">Уверите се да увек можете да користите лозинке на Google налогу</translation>
@@ -1461,7 +1461,7 @@ Google налог можда има друге облике историје п�
 <translation id="6910211073230771657">Избрисано</translation>
 <translation id="6916590542764765824">Управљајте додацима</translation>
 <translation id="6918398787259831832">Ако се овај проблем настави, <ph name="BEGIN_LINK" />сазнајте више<ph name="END_LINK" /> од: <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Chrome је уклонио дозволе за ове сајтове јер их нисте недавно посећивали</translation>
+<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Ultimatum је уклонио дозволе за ове сајтове јер их нисте недавно посећивали</translation>
 <translation id="6927821422725196292">{TABS_COUNT,plural, =1{1 картица}one{<ph name="NUMBER_OF_TABS" /> картица}few{<ph name="NUMBER_OF_TABS" /> картице}other{<ph name="NUMBER_OF_TABS" /> картица}}</translation>
 <translation id="6929224077895306814">Сви безбедносни кодови сачувани на уређају и Google налогу ће бити избрисани</translation>
 <translation id="6933180670536678127"><ph name="TAB_TITLE" />, изабрана закачена картица са звуком</translation>
@@ -1490,30 +1490,30 @@ Google налог можда има друге облике историје п�
 <translation id="7020741890149022655">Додај на листу за читање <ph name="BEGIN_NEW" />Ново<ph name="END_NEW" /></translation>
 <translation id="7022756207310403729">Отвори у прегледачу</translation>
 <translation id="7029809446516969842">Лозинке</translation>
-<translation id="7037994709569287156">Подеси Chrome као подразумевани прегледач</translation>
+<translation id="7037994709569287156">Подеси Ultimatum као подразумевани прегледач</translation>
 <translation id="7053256416619638731">Ојачајте лозинке на овом уређају</translation>
 <translation id="7053983685419859001">Блокирај</translation>
 <translation id="7054588988317389591">Желите да добијате описе слика?</translation>
-<translation id="7057969023583258980">Отвори комплетну историју Chrome-а</translation>
+<translation id="7057969023583258980">Отвори комплетну историју Ultimatum-а</translation>
 <translation id="7063006564040364415">Није могуће повезивање са сервером за синхронизацију.</translation>
 <translation id="7063106218165698546">Прилагодите групу картица и кликните на Готово</translation>
 <translation id="7071521146534760487">Управљајте налогом</translation>
 <translation id="707155805709242880">Одаберите ставке за синхронизацију у наставку</translation>
 <translation id="7072949719501323344"><ph name="TAB_TITLE" />, вишеструко изабрана закачена картица без архивирања у режиму слике у слици</translation>
 <translation id="7077143737582773186">SD картица</translation>
-<translation id="7078916049958741685">Избришите Chrome податке и са овог уређаја</translation>
+<translation id="7078916049958741685">Избришите Ultimatum податке и са овог уређаја</translation>
 <translation id="7080145768121641840"><ph name="TAB_TITLE" />, изабрана закачена картица са искљученим звуком</translation>
 <translation id="7084115944294706056">Одаберите место траке за адресу</translation>
-<translation id="7085332316435785646">Одаберите да ли ћете уврстити историју Chrome-а ради персонализованијих доживљаја у Google услугама</translation>
-<translation id="7088681679121566888">Chrome је ажуриран</translation>
+<translation id="7085332316435785646">Одаберите да ли ћете уврстити историју Ultimatum-а ради персонализованијих доживљаја у Google услугама</translation>
+<translation id="7088681679121566888">Ultimatum је ажуриран</translation>
 <translation id="7098100324909062850"><ph name="TAB_TITLE" />, вишеструко изабрана картица без архивирања са искљученим звуком</translation>
 <translation id="7106762743910369165">Организација управља прегледачем</translation>
-<translation id="7111394291981742152">Chrome вам пружа већу контролу над огласима које видите и ограничава информације које сајтови могу да сазнају о вама када приказују персонализоване огласе.</translation>
+<translation id="7111394291981742152">Ultimatum вам пружа већу контролу над огласима које видите и ограничава информације које сајтови могу да сазнају о вама када приказују персонализоване огласе.</translation>
 <translation id="7111822978084196600">Дајте назив овом прозору</translation>
 <translation id="7115358764509798967">Подразумевано за систем</translation>
 <translation id="7117485132243600300">Управљајте садржајем који пратите и предложеним темама и претрагама</translation>
 <translation id="7119984597597798764">Затворите <ph name="INSTANCE_TITLE" /></translation>
-<translation id="7121179479711575744">Пријави ме у Chrome</translation>
+<translation id="7121179479711575744">Пријави ме у Ultimatum</translation>
 <translation id="7136694880210472378">Постави као подразумевано</translation>
 <translation id="7136902389402789299">{NUM_SITES,plural, =1{Дозволе су прегледане за 1 сајт}one{Дозволе су прегледане за # сајт}few{Дозволе су прегледане за # сајта}other{Дозволе су прегледане за # сајтова}}</translation>
 <translation id="7138678301420049075">Друго</translation>
@@ -1523,8 +1523,8 @@ Google налог можда има друге облике историје п�
 <translation id="7149893636342594995">Последња 24 сата</translation>
 <translation id="71503698506017927">Шифровање помоћу приступне фразе не обухвата начине плаћања и адресе из Google Pay-а.
 
-Да бисте променили ово подешавање, <ph name="BEGIN_LINK" />избришите Chrome податке на налогу<ph name="END_LINK" />.</translation>
-<translation id="7165972437814027679">Сазнајте више о томе зашто Chrome блокира неке фајлове</translation>
+Да бисте променили ово подешавање, <ph name="BEGIN_LINK" />избришите Ultimatum податке на налогу<ph name="END_LINK" />.</translation>
+<translation id="7165972437814027679">Сазнајте више о томе зашто Ultimatum блокира неке фајлове</translation>
 <translation id="7168323970702333693">Пријављени сте као <ph name="USER_NAME" />. Отвара подешавања.</translation>
 <translation id="7170930892977483182">Сви безбедносни кодови сачувани на уређају и у Google новчанику биће избрисани</translation>
 <translation id="7173114856073700355">Отвори Подешавања</translation>
@@ -1544,7 +1544,7 @@ Google налог можда има друге облике историје п�
 <translation id="7197682514647286393">Брзо бришите податке прегледања</translation>
 <translation id="719791532916917144">Тастерска пречица</translation>
 <translation id="7207760545532569765">Вратите картице (<ph name="TAB_COUNT" />) као нове картице у позадини.</translation>
-<translation id="7217781228893594884">Картице без архивирања ће се закључати када напустите Chrome</translation>
+<translation id="7217781228893594884">Картице без архивирања ће се закључати када напустите Ultimatum</translation>
 <translation id="7221869452894271364">Поново учитајте ову страницу</translation>
 <translation id="722681077040152344">Отказали сте пријаву са <ph name="COUNT" /> сајта/сајтова</translation>
 <translation id="7227218174981371415">{FILE_COUNT,plural, =1{1 преузимање на чекању}one{# преузимање на чекању}few{# преузимања на чекању}other{# преузимања на чекању}}</translation>
@@ -1554,12 +1554,12 @@ Google налог можда има друге облике историје п�
 <translation id="724510009481365878">Не можете да одштампате ову страницу</translation>
 <translation id="7248671827512403053">Апликација</translation>
 <translation id="7253951228444156601">Проверавају се лозинке…</translation>
-<translation id="7260367682327802201">Android уређај може да има слично подешавање. Ако је мерење огласа укључено у Chrome-у и на Android уређају, компанија можда може да мери ефикасност огласа на веб-сајтовима које посећујете и у апликацијама које користите.</translation>
+<translation id="7260367682327802201">Android уређај може да има слично подешавање. Ако је мерење огласа укључено у Ultimatum-у и на Android уређају, компанија можда може да мери ефикасност огласа на веб-сајтовима које посећујете и у апликацијама које користите.</translation>
 <translation id="727288900855680735">Желите да пошаљете <ph name="ONE_TIME_CODE" /> на <ph name="ORIGIN" />?</translation>
 <translation id="7274013316676448362">Сајт је блокиран</translation>
 <translation id="7276868533747677875">Ако сте претходно извезли лозинке, потражите CSV фајл на уређају и увезите лозинке у жељени менаџер лозинки.</translation>
 <translation id="728377807486816582">Додирните траку за адресу</translation>
-<translation id="7289049772085228972">Имате најјачу Chrome заштиту</translation>
+<translation id="7289049772085228972">Имате најјачу Ultimatum заштиту</translation>
 <translation id="7289303553784750393">Ако сте онлајн, али овај проблем настави да се јавља, можете да пробате друге начине да бисте наставили на <ph name="SITE_ETLD_PLUS_ONE" />.</translation>
 <translation id="7290209999329137901">Промена назива није могућа</translation>
 <translation id="7291910923717764901">Додати су описи слика за ову страницу</translation>
@@ -1592,12 +1592,12 @@ Google налог можда има друге облике историје п�
 <translation id="7400003506822844357">{FILE_COUNT,plural, =1{1 други фајл на листи}one{# други фајл на листи}few{# друга фајла на листи}other{# других фајлова на листи}}</translation>
 <translation id="7400418766976504921">URL адреса</translation>
 <translation id="7400424692675800399">Да бисте отворили нови прозор, смањите укупан број активних и неактивних прозора на <ph name="MAX_WINDOW_COUNT_MINUS_ONE" /> или мање.</translation>
-<translation id="7403691278183511381">Chrome доживљај првог покретања</translation>
+<translation id="7403691278183511381">Ultimatum доживљај првог покретања</translation>
 <translation id="7411224099004328643">Корисник Google налога</translation>
 <translation id="7419565702166471774">Увек користи безбедне везе</translation>
 <translation id="7421293530411019405">Желите да напустите групу картица?</translation>
 <translation id="7435356471928173109">Искључио је администратор</translation>
-<translation id="7437998757836447326">Одјављивање из Chrome-а</translation>
+<translation id="7437998757836447326">Одјављивање из Ultimatum-а</translation>
 <translation id="7439467816829380878">Премести картицу у групу</translation>
 <translation id="7439749340204407129">Отворите менаџер обележивача</translation>
 <translation id="7453810262525006706">Скупите у бочни приказ</translation>
@@ -1631,7 +1631,7 @@ Google налог можда има друге облике историје п�
 <translation id="7525248386620136756">Затворено и сачувано: <ph name="TAB_GROUPS_AND_TABS_PART" /></translation>
 <translation id="7545347190366646170">Особе са приступом</translation>
 <translation id="7553482318994371148">Поново отвори затворене картице</translation>
-<translation id="7554643625247105821">Провера верзије Chrome-а није успела</translation>
+<translation id="7554643625247105821">Провера верзије Ultimatum-а није успела</translation>
 <translation id="7557508262441527045">Одјављени сте</translation>
 <translation id="7573665567024262965">Одаберите подразумеване апликације</translation>
 <translation id="757855969265046257">{FILES,plural, =1{Преузели сте <ph name="FILES_DOWNLOADED_ONE" /> датотеку}one{Преузели сте <ph name="FILES_DOWNLOADED_MANY" /> датотеку}few{Преузели сте <ph name="FILES_DOWNLOADED_MANY" /> датотеке}other{Преузели сте <ph name="FILES_DOWNLOADED_MANY" /> датотека}}</translation>
@@ -1647,7 +1647,7 @@ Google налог можда има друге облике историје п�
 <translation id="7612619742409846846">Пријављени сте у Google као</translation>
 <translation id="7612989789287281429">Пријављујете се…</translation>
 <translation id="7619072057915878432">Преузимање датотеке <ph name="FILE_NAME" /> није успело због проблема са мрежом.</translation>
-<translation id="7626032353295482388">Добро дошли у Chrome</translation>
+<translation id="7626032353295482388">Добро дошли у Ultimatum</translation>
 <translation id="7628417132421583481">Иди у Менаџер лозинки</translation>
 <translation id="7630202231528827509">URL добављача</translation>
 <translation id="7638584964844754484">Неисправна приступна фраза</translation>
@@ -1662,7 +1662,7 @@ Google налог можда има друге облике историје п�
 <translation id="7666185984446444960">Затворено: <ph name="TAB_GROUPS_AND_TABS_PART" /></translation>
 <translation id="7682724950699840886">Испробајте следеће савете: проверите да ли на уређају има довољно простора, па пробајте да поново извезете лозинке.</translation>
 <translation id="7686086654630106285">Више о огласима које предлажу сајтови</translation>
-<translation id="7690596512217303514">Уређај није могао да отвори Chrome. Да бисте решили овај проблем, преузмите најновије ажурирање Chrome-а из продавнице апликација.</translation>
+<translation id="7690596512217303514">Уређај није могао да отвори Ultimatum. Да бисте решили овај проблем, преузмите најновије ажурирање Ultimatum-а из продавнице апликација.</translation>
 <translation id="7691043218961417207">Истражите садржај за праћење</translation>
 <translation id="7692761875510935111">Брзо отворите у прегледачу. Да бисте изменили ову пречицу, додирните и задржите.</translation>
 <translation id="7697383401610880082">Идентификатор за превлачење</translation>
@@ -1670,7 +1670,7 @@ Google налог можда има друге облике историје п�
 <translation id="7702420606070050505">Доња табела са недавним активностима је отворена на целом екрану</translation>
 <translation id="7707922173985738739">Користи мобилне податке</translation>
 <translation id="7708994397325774423">Преузмите све лозинке</translation>
-<translation id="7714077993070342304">Отворите Chrome мени</translation>
+<translation id="7714077993070342304">Отворите Ultimatum мени</translation>
 <translation id="7733878270780732638">Нема довољно простора на уређају.</translation>
 <translation id="7740287852186792672">Резултати претраге</translation>
 <translation id="774403695779169686"><ph name="TAB_TITLE" />, изабрана картица без архивирања за дељење</translation>
@@ -1697,9 +1697,9 @@ Google налог можда има друге облике историје п�
 <translation id="7821130663268546430">Све отворене картице можете да пронађете у пребацивачу картица</translation>
 <translation id="7822705602465980873">Када сте пријављени, ови подаци су повезани са вашим Google налогом да бисмо вас заштитили у свим Google услугама, на пример, повећањем заштите у Gmail-у после безбедносног инцидента.</translation>
 <translation id="7824665136384946951">Организација је искључила Безбедно прегледање</translation>
-<translation id="7826342993930002256">Ваш Chrome, свуда</translation>
+<translation id="7826342993930002256">Ваш Ultimatum, свуда</translation>
 <translation id="7844171778363018843">Нема података изабраних за синхронизацију</translation>
-<translation id="784453721355882533">Испробајте Gemini у Chrome-у да бисте добијали одговоре, кључне закључке и друго.</translation>
+<translation id="784453721355882533">Испробајте Gemini у Ultimatum-у да бисте добијали одговоре, кључне закључке и друго.</translation>
 <translation id="7846161022626028328">Дошло је до грешке. Пробајте поново.</translation>
 <translation id="7846296061357476882">Google услуге</translation>
 <translation id="784652447248278262">Актуелни прозор</translation>
@@ -1709,10 +1709,10 @@ Google налог можда има друге облике историје п�
 <translation id="7853202427316060426">Активност</translation>
 <translation id="7859988229622350291">Никад не преводи</translation>
 <translation id="7866213166286285359">Преведите странице овде</translation>
-<translation id="7873610418439765081">Испробајте Gemini у Chrome-у да бисте добијали одговоре, кључне закључке и друго помоћу дугмета Још опција.</translation>
+<translation id="7873610418439765081">Испробајте Gemini у Ultimatum-у да бисте добијали одговоре, кључне закључке и друго помоћу дугмета Још опција.</translation>
 <translation id="7875915731392087153">Напишите имејл</translation>
 <translation id="7876243839304621966">Уклони све</translation>
-<translation id="7886917304091689118">Покренуто је у Chrome-у</translation>
+<translation id="7886917304091689118">Покренуто је у Ultimatum-у</translation>
 <translation id="7887174313503389866">Крените у обилазак кључних контрола приватности и безбедности. Више опција потражите у појединачним подешавањима.</translation>
 <translation id="7913993612870913335">{FILE_COUNT,plural, =1{1 блокира организација}one{# блокира организација}few{# блокира организација}other{# блокира организација}}</translation>
 <translation id="7914399737746719723">Апликација је инсталирана</translation>
@@ -1721,7 +1721,7 @@ Google налог можда има друге облике историје п�
 <translation id="7921782882718083488">Резимирај ову страницу</translation>
 <translation id="7926975587469166629">Надимак картице</translation>
 <translation id="7927073875790626822">Проширена стварност</translation>
-<translation id="7929587383660661825">Chrome аутоматски уклања дозволе са сајтова који злоупотребљавају обавештења или које нисте недавно посећивали</translation>
+<translation id="7929587383660661825">Ultimatum аутоматски уклања дозволе са сајтова који злоупотребљавају обавештења или које нисте недавно посећивали</translation>
 <translation id="7934668619883965330">Преузимање фајла није успело. Формат фајла није подржан.</translation>
 <translation id="7942131818088350342">Производ <ph name="PRODUCT_NAME" /> је застарео.</translation>
 <translation id="7944772052836377867">Синхронизација мора да потврди да сте то ви</translation>
@@ -1738,7 +1738,7 @@ Google налог можда има друге облике историје п�
 <translation id="7971136598759319605">Последња активност: пре 1 дан</translation>
 <translation id="7975379999046275268">Прикажи страницу <ph name="BEGIN_NEW" />Ново<ph name="END_NEW" /></translation>
 <translation id="7977451675950311423">Упозорава вас ако користите лозинку која је угрожена при повреди података.</translation>
-<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Chrome је уклонио дозволе за ове сајтове јер их нисте недавно посећивали</translation>
+<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Ultimatum је уклонио дозволе за ове сајтове јер их нисте недавно посећивали</translation>
 <translation id="7995059495660416932">Видећете садржај када постане доступан</translation>
 <translation id="799576009106109668">Прегледаћете брже јер се садржај проактивно учитава на основу актуелне посете веб-страници</translation>
 <translation id="7998918019931843664">Поново отворите затворену картицу</translation>
@@ -1756,17 +1756,17 @@ Google налог можда има друге облике историје п�
 <translation id="804335162455518893">SD картица није пронађена</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> картица без архивирања}one{<ph name="TAB_COUNT_NORMAL" /> картица без архивирања}few{<ph name="TAB_COUNT_NORMAL" /> картице без архивирања}other{<ph name="TAB_COUNT_NORMAL" /> картица без архивирања}}</translation>
 <translation id="8051695050440594747">Доступно је <ph name="MEGABYTES" /> MB</translation>
-<translation id="8058746566562539958">Отвори на новој Chrome картици</translation>
+<translation id="8058746566562539958">Отвори на новој Ultimatum картици</translation>
 <translation id="8062594758852531064">Продужено предучитавање:</translation>
 <translation id="8063895661287329888">Додавање обележивача није успело.</translation>
 <translation id="8066816452984416180">Брзо обележите ову страницу. Да бисте изменили ову пречицу, додирните и задржите.</translation>
-<translation id="8072436850275034464">Можете поново да отворите картице које сте недавно затворили на било ком уређају на ком користите Chrome</translation>
+<translation id="8072436850275034464">Можете поново да отворите картице које сте недавно затворили на било ком уређају на ком користите Ultimatum</translation>
 <translation id="8073388330009372546">Отвори слику на новој картици</translation>
 <translation id="8076492880354921740">Картице</translation>
 <translation id="8078096376109663956">Делите само текст</translation>
 <translation id="8078348702936632821">Закачи ову пречицу</translation>
 <translation id="8084285576995584326">Контролишите податке Google налога</translation>
-<translation id="8084864785646838999">Део историје се можда неће приказивати овде. Да бисте видели комплетну историју Chrome-а, отворите целу историју Chrome-а. Google налог може да има и друге облике историје прегледања на <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
+<translation id="8084864785646838999">Део историје се можда неће приказивати овде. Да бисте видели комплетну историју Ultimatum-а, отворите целу историју Ultimatum-а. Google налог може да има и друге облике историје прегледања на <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="8088176524274673045">Да бисте делили са људима у близини, дајте им да скенирају овај QR кôд</translation>
 <translation id="8090732854597034573">Ако ти треба помоћ, питај родитеља</translation>
 <translation id="8101414242770404289">Нема картица из периода <ph name="TIME_PERIOD" /></translation>
@@ -1774,10 +1774,10 @@ Google налог можда има друге облике историје п�
 <translation id="810433609302852">Доња табела са промоцијом функције обавештења са саветима и корацима за коришћење</translation>
 <translation id="8105893657415066307"><ph name="DESCRIPTION" /> <ph name="SEPARATOR" /> <ph name="FILE_SIZE" /></translation>
 <translation id="8107530384992929318">Затворите опције сортирања</translation>
-<translation id="8110024788458304985">Помозите нам да побољшамо функције и учинак Chrome ОС-а</translation>
-<translation id="8110087112193408731">Желите ли да се Chrome активности приказују у Дигиталном благостању?</translation>
+<translation id="8110024788458304985">Помозите нам да побољшамо функције и учинак Ultimatum ОС-а</translation>
+<translation id="8110087112193408731">Желите ли да се Ultimatum активности приказују у Дигиталном благостању?</translation>
 <translation id="8118117428362942925">Ако ти треба помоћ, питај родитеља (<ph name="PARENT_NAME" />)</translation>
-<translation id="8118151008374483324">Да би вам картице и други садржај били доступни на свим уређајима, пријавите се у Chrome</translation>
+<translation id="8118151008374483324">Да би вам картице и други садржај били доступни на свим уређајима, пријавите се у Ultimatum</translation>
 <translation id="8120286190326371840">Нема угрожених лозинки на овом уређају</translation>
 <translation id="8122623268651408616">Сортира се према најновијем</translation>
 <translation id="8127542551745560481">Измените почетну страницу</translation>
@@ -1818,7 +1818,7 @@ Google налог можда има друге облике историје п�
 <translation id="8260126382462817229">Пробајте поново да се пријавите</translation>
 <translation id="8261506727792406068">Избриши</translation>
 <translation id="82619448491672958">Прикажи друге картице</translation>
-<translation id="8265730590513812063">Отворите Chrome мени</translation>
+<translation id="8265730590513812063">Отворите Ultimatum мени</translation>
 <translation id="8266753737658117282">Наставите уз <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8266862848225348053">Локација за преузимање</translation>
 <translation id="8271267069224406035">Пријави као непожељно</translation>
@@ -1832,7 +1832,7 @@ Google налог можда има друге облике историје п�
 <translation id="8317318757008452355">Отворите опције за штампање</translation>
 <translation id="8320212361750431956">Недавна активност</translation>
 <translation id="832514020744584629"><ph name="PREF_TITLE" />  <ph name="BEGIN_NEW" />Ново<ph name="END_NEW" /></translation>
-<translation id="8342727528718219152">Chrome ће вас обавештавати о сајтовима који можда шаљу превише обавештења</translation>
+<translation id="8342727528718219152">Ultimatum ће вас обавештавати о сајтовима који можда шаљу превише обавештења</translation>
 <translation id="834313815369870491">Никад не преводи сајтове</translation>
 <translation id="8348215005712416247"><ph name="TAB_TITLE" />, вишеструко изабрана закачена картица без архивирања за снимање</translation>
 <translation id="8348430946834215779">Користите HTTPS кад год је то могуће и добијajте упозорење пре учитавања сајтова који га не подржавају</translation>
@@ -1846,12 +1846,12 @@ Google налог можда има друге облике историје п�
 <translation id="8398389123831319859">Двапут додирните и задржите да бисте прешли у режим без архивирања</translation>
 <translation id="8402673309244746971">Иди на Пратите</translation>
 <translation id="8413126021676339697">Прикажи сву историју</translation>
-<translation id="8413795581997394485">Штити вас од сајтова, преузимања и додатака за које се зна да су штетни. Када посетите сајт, Chrome шаље маскирани део URL-а Google-у преко сервера за приватност који крије IP адресу. Ако сајт ради нешто сумњиво, шаљу се и цели URL-ови и делови садржаја странице.</translation>
+<translation id="8413795581997394485">Штити вас од сајтова, преузимања и додатака за које се зна да су штетни. Када посетите сајт, Ultimatum шаље маскирани део URL-а Google-у преко сервера за приватност који крије IP адресу. Ако сајт ради нешто сумњиво, шаљу се и цели URL-ови и делови садржаја странице.</translation>
 <translation id="8414396119627470038">Пријавите се на <ph name="SITE_ETLD_PLUS_ONE" /> уз <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8419144699778179708">Брише историју, укључујући историју у оквиру за претрагу</translation>
 <translation id="8419244640277402268">Уврсти</translation>
 <translation id="8422250855136581222">Нема картица на овом уређају</translation>
-<translation id="842386925677997438">Chrome алатке за безбедност</translation>
+<translation id="842386925677997438">Ultimatum алатке за безбедност</translation>
 <translation id="8427875596167638501">Картица за преглед је полуотворена</translation>
 <translation id="8428213095426709021">Подешавања</translation>
 <translation id="8430824733382774043">Делите само снимак екрана</translation>
@@ -1859,7 +1859,7 @@ Google налог можда има друге облике историје п�
 <translation id="8438566539970814960">Побољшај претраге и прегледање</translation>
 <translation id="8439974325294139057"><ph name="LANG" /> – Језик је спреман, рестартујте апликацију <ph name="APP_NAME" /></translation>
 <translation id="8442258441309440798">Није доступна ниједна вест</translation>
-<translation id="8443209985646068659">Chrome се неће ажурирати</translation>
+<translation id="8443209985646068659">Ultimatum се неће ажурирати</translation>
 <translation id="8443600937324357591">Промени прозор картице</translation>
 <translation id="8445448999790540984">Извоз лозинки није успео</translation>
 <translation id="8446884382197647889">Сазнајте више</translation>
@@ -1868,7 +1868,7 @@ Google налог можда има друге облике историје п�
 <translation id="8455675988389029454">Приступајте обележивачима, лозинкама и другом садржају на свим уређајима</translation>
 <translation id="8458341576712814616">Пречица</translation>
 <translation id="8458413889418591446">Да бисте се брзо вратили на сајтове које сте посетили, синхронизујте историју и картице</translation>
-<translation id="84594714173170813">Наставите да користите Chrome податке на Google налогу</translation>
+<translation id="84594714173170813">Наставите да користите Ultimatum податке на Google налогу</translation>
 <translation id="8460008946585880786">Превуците једну картицу преко друге и отпустите је</translation>
 <translation id="8460448946170646641">Прегледајте кључне контроле приватности и безбедности</translation>
 <translation id="8460932807646981183">Управљајте претраживачима и претрагом сајта</translation>
@@ -1890,8 +1890,8 @@ Google налог можда има друге облике историје п�
 <translation id="8540136935098276800">Унесите исправно форматиран URL</translation>
 <translation id="854522910157234410">Отвори ову страницу</translation>
 <translation id="8547466829003330976">Прегледајте PDF помоћу AI-ja</translation>
-<translation id="8551513938758868521">Закључај картице без архивирања после затварања Chrome-а</translation>
-<translation id="8559961053328923750">Chrome ограничава укупну количину података коју сајтови могу да деле преко прегледача да би мерили учинак огласа</translation>
+<translation id="8551513938758868521">Закључај картице без архивирања после затварања Ultimatum-а</translation>
+<translation id="8559961053328923750">Ultimatum ограничава укупну количину података коју сајтови могу да деле преко прегледача да би мерили учинак огласа</translation>
 <translation id="8559990750235505898">Понуди превод страница на друге језике</translation>
 <translation id="8560602726703398413">Потражите листу за читање у Google обележивачима</translation>
 <translation id="85618473456579127">Додирните профил у горњем десном углу</translation>
@@ -1904,12 +1904,12 @@ Google налог можда има друге облике историје п�
 <translation id="859046281437143747">Пратите цену помоћу дугмета Још опција</translation>
 <translation id="859064343657890103">Група картица <ph name="TAB_GROUP_TITLE" /> је избрисана</translation>
 <translation id="860043288473659153">Име власника картице</translation>
-<translation id="8602358303461588329">Пријављивање у Chrome, затворено.</translation>
+<translation id="8602358303461588329">Пријављивање у Ultimatum, затворено.</translation>
 <translation id="860282621117673749">Обавештења о снижењима</translation>
 <translation id="8611922158252451755">Свако са линком може да мења све картице, па пазите шта делите. Линк истиче за 48 сати.</translation>
 <translation id="8616006591992756292">Google налог може да има друге облике историје прегледања на <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="8617240290563765734">Желите ли да отворите предложени URL наведен у преузетом садржају?</translation>
-<translation id="8629093325209491835">Отворите Chrome мени &gt; Подешавања</translation>
+<translation id="8629093325209491835">Отворите Ultimatum мени &gt; Подешавања</translation>
 <translation id="8634050254805484913">Скривена на уским екранима</translation>
 <translation id="8635399646025169806">Желите да задржите групу картица?</translation>
 <translation id="8636825310635137004">Да би вам картице биле доступне на другим уређајима, укључите синхронизацију.</translation>
@@ -1928,15 +1928,15 @@ Google налог можда има друге облике историје п�
 <translation id="8715300232952757586">Картица <ph name="TAB_TITLE" /> ће се затворити</translation>
 <translation id="8723453889042591629">Брзо преведите ову страницу. Да бисте изменили ову пречицу, додирните и задржите.</translation>
 <translation id="8725066075913043281">Пробајте поново</translation>
-<translation id="8727043961453758442">Искористите све предности Chrome-а</translation>
+<translation id="8727043961453758442">Искористите све предности Ultimatum-а</translation>
 <translation id="8731268612289859741">Безбедносни кôд</translation>
 <translation id="8738163682604285902">Желите да отворите Режим читања?</translation>
 <translation id="8746155870861185046">Дели истицање</translation>
 <translation id="8748850008226585750">Садржај је сакривен</translation>
 <translation id="8754448020583829686">Копирај без линка</translation>
 <translation id="8756969031206844760">Желите ли да ажурирате лозинку?</translation>
-<translation id="8765470054473112089">Када куцате у траци за адресу или у оквиру за претрагу, Chrome шаље текст који уносите подразумеваном претраживачу да бисте добијали боље предлоге. Ово је искључено у режиму без архивирања.</translation>
-<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Chrome је пронашао слабу лозинку коју можете да побољшате}one{Chrome је пронашао # слабу лозинку коју можете да побољшате}few{Chrome је пронашао # слабе лозинке које можете да побољшате}other{Chrome је пронашао # слабих лозинки које можете да побољшате}}</translation>
+<translation id="8765470054473112089">Када куцате у траци за адресу или у оквиру за претрагу, Ultimatum шаље текст који уносите подразумеваном претраживачу да бисте добијали боље предлоге. Ово је искључено у режиму без архивирања.</translation>
+<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Ultimatum је пронашао слабу лозинку коју можете да побољшате}one{Ultimatum је пронашао # слабу лозинку коју можете да побољшате}few{Ultimatum је пронашао # слабе лозинке које можете да побољшате}other{Ultimatum је пронашао # слабих лозинки које можете да побољшате}}</translation>
 <translation id="8766529642647037772">Желите ли да направите истакнути линк попут овог?</translation>
 <translation id="8788265440806329501">Историја навигације је затворена</translation>
 <translation id="8790193082819560975">Додирните да бисте претражили опције куповине за производ на новој картици.</translation>
@@ -1959,7 +1959,7 @@ Google налог можда има друге облике историје п�
 <translation id="885480114717186641">Можете да затражите верзију сајта за рачунар за <ph name="HOST_NAME" /></translation>
 <translation id="8856607253650333758">Преузимај описе</translation>
 <translation id="8863714995118816041">Дозволе су поново омогућене за <ph name="SITE_NAME" /></translation>
-<translation id="8865415417596392024">Chrome подаци на налогу</translation>
+<translation id="8865415417596392024">Ultimatum подаци на налогу</translation>
 <translation id="8872506776304248286">Отвори у апликацији</translation>
 <translation id="8890668505403261809">Претражите картице без архивирања</translation>
 <translation id="8892234476517513962">Већ сте пријављени</translation>
@@ -1971,7 +1971,7 @@ Google налог можда има друге облике историје п�
 <translation id="8922289737868596582">Преузмите странице помоћу дугмета Још опција да бисте их користили офлајн</translation>
 <translation id="8924575305646776101"><ph name="BEGIN_LINK" />Сазнајте више<ph name="END_LINK" /></translation>
 <translation id="892496902842311796">Језик <ph name="LANG" /> је спреман</translation>
-<translation id="8937772741022875483">Желите ли да уклоните Chrome активности из Дигиталног благостања?</translation>
+<translation id="8937772741022875483">Желите ли да уклоните Ultimatum активности из Дигиталног благостања?</translation>
 <translation id="8942627711005830162">Отвори у другом прозору</translation>
 <translation id="8945143127965743188"><ph name="LANG" /> – Преузимање овог језика није успело. Пробајте поново касније.</translation>
 <translation id="8946759102391960088">Задржите приступ лозинкама</translation>
@@ -1983,12 +1983,12 @@ Google налог можда има друге облике историје п�
 <translation id="8970887620466824814">Дошло је до грешке.</translation>
 <translation id="8972098258593396643">Преузимате у подразумевани фолдер?</translation>
 <translation id="8987736167266086032">Наставите тамо где сте стали</translation>
-<translation id="8992769679401294069">Подаци се шифрују помоћу приступне фразе. Унесите је да бисте користили и сачували Chrome податке на Google налогу.</translation>
+<translation id="8992769679401294069">Подаци се шифрују помоћу приступне фразе. Унесите је да бисте користили и сачували Ultimatum податке на Google налогу.</translation>
 <translation id="8993760627012879038">Отварање нове картице у режиму без архивирања</translation>
 <translation id="8995521496079646922">Апликације које сте одабрали ће се користити подразумевано. Ако апликација већ није на овом уређају, ускоро ће бити преузета.</translation>
 <translation id="8996847606757455498">Одаберите другог добављача</translation>
 <translation id="8998837250940831980">Умањивање картице није успело. Пробајте поново касније.</translation>
-<translation id="9001604755921395912">Chrome картица без архивирања</translation>
+<translation id="9001604755921395912">Ultimatum картица без архивирања</translation>
 <translation id="9012585441087414258">Штити вас од сајтова, преузимања и додатака за које се зна да су штетни. Ако страница уради нешто сумњиво, URL-ови и делови садржаја странице се шаљу у Google безбедно прегледање.</translation>
 <translation id="9019199799064251516">Желите да наставите без закључавања профила за аутомобил?</translation>
 <translation id="9022774213089566801">Често посећивано</translation>
@@ -1996,7 +1996,7 @@ Google налог можда има друге облике историје п�
 <translation id="9027728231343310283">Опозови <ph name="SITE" /></translation>
 <translation id="9035378196785279980">Преместите у\u2026</translation>
 <translation id="9042893549633094279">Приватност и безбедност</translation>
-<translation id="9047347135558855162">Брзо започните претрагу у Chrome-у</translation>
+<translation id="9047347135558855162">Брзо започните претрагу у Ultimatum-у</translation>
 <translation id="9050666287014529139">Приступна фраза</translation>
 <translation id="9055497320631373736">Сајт је враћен у потенцијалне сајтове</translation>
 <translation id="9057030985451135243">Сазнајте више о дељеним групама картица</translation>
@@ -2004,7 +2004,7 @@ Google налог можда има друге облике историје п�
 <translation id="9063400323119781058">Пријава је отказана</translation>
 <translation id="9063523880881406963">Искључи захтевање верзије сајта за рачунаре</translation>
 <translation id="9065203028668620118">Измени</translation>
-<translation id="9065383040763568503">Сачувани подаци које Chrome не сматра важним (нпр. сајтови без сачуваних подешавања или које не посећујете често)</translation>
+<translation id="9065383040763568503">Сачувани подаци које Ultimatum не сматра важним (нпр. сајтови без сачуваних подешавања или које не посећујете често)</translation>
 <translation id="9067341854474068781">Ниједна табела са приступним кључевима није отворена на целом екрану</translation>
 <translation id="906781307897697745">у: <ph name="PRODUCT_NAME" /></translation>
 <translation id="9068568736932147490"><ph name="TAB_TITLE" />, вишеструко изабрана закачена картица без архивирања са звуком</translation>
@@ -2014,8 +2014,8 @@ Google налог можда има друге облике историје п�
 <translation id="9074739597929991885">Bluetooth</translation>
 <translation id="9081543426177426948">Сајтови које посећујете се не чувају у режиму без архивирања</translation>
 <translation id="9086455579313502267">Не можемо да приступимо мрежи</translation>
-<translation id="9093915805850895575">Отвори у Chrome прозору</translation>
-<translation id="909756639352028172">Да бисте имали најперсонализованији доживљај, уврстите Chrome у активности на вебу и у апликацијама и повезане Google услуге</translation>
+<translation id="9093915805850895575">Отвори у Ultimatum прозору</translation>
+<translation id="909756639352028172">Да бисте имали најперсонализованији доживљај, уврстите Ultimatum у активности на вебу и у апликацијама и повезане Google услуге</translation>
 <translation id="9099220545925418560">На основу историје прегледања. Ово подешавање је искључено.</translation>
 <translation id="9100610230175265781">Потребна је приступна фраза</translation>
 <translation id="9101137867221042551">Управљање</translation>
@@ -2051,9 +2051,9 @@ Google налог можда има друге облике историје п�
 <translation id="9218430445555521422">Подеси као подразумевано</translation>
 <translation id="9219103736887031265">Слике</translation>
 <translation id="9222198206152536936">Да би вам картице и други садржај били доступни на свим уређајима, пријавите се као <ph name="EMAIL" /></translation>
-<translation id="924447568950697217">Поставите Chrome за подразумевани прегледач</translation>
-<translation id="926205370408745186">Уклоните Chrome активности из Дигиталног благостања</translation>
-<translation id="927968626442779827">Користите Lite режим у Google Chrome-у</translation>
+<translation id="924447568950697217">Поставите Ultimatum за подразумевани прегледач</translation>
+<translation id="926205370408745186">Уклоните Ultimatum активности из Дигиталног благостања</translation>
+<translation id="927968626442779827">Користите Lite режим у Ultimatum-у</translation>
 <translation id="928550791203542716">Пратите <ph name="SITE_NAME" /></translation>
 <translation id="930124987204876019">Избришите историју, колачиће, податке о сајтовима, кеш…</translation>
 <translation id="930834144334005936">Ресетујте актуелни режим <ph name="MODE_NAME" /> на Претрагу</translation>
@@ -2061,7 +2061,7 @@ Google налог можда има друге облике историје п�
 <translation id="939598580284253335">Унесите приступну фразу</translation>
 <translation id="94161319503679839"><ph name="TAB_TITLE" />, закачена картица без архивирања у режиму слике у слици</translation>
 <translation id="945522503751344254">Пошаљи повратне информације</translation>
-<translation id="95817756606698420">Chrome може да користи <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> за претрагу у Кини. Ово можете да промените у <ph name="BEGIN_LINK" />Подешавањима<ph name="END_LINK" />.</translation>
+<translation id="95817756606698420">Ultimatum може да користи <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> за претрагу у Кини. Ово можете да промените у <ph name="BEGIN_LINK" />Подешавањима<ph name="END_LINK" />.</translation>
 <translation id="961856697154696964">Избриши податке прегледања</translation>
 <translation id="963246339335003378">Отвори Менаџер задатака</translation>
 <translation id="966131775676567255">Бришу се подаци налога</translation>

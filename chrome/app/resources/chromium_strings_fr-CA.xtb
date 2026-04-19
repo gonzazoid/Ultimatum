@@ -2,762 +2,762 @@
 <!DOCTYPE translationbundle>
 <translationbundle lang="fr-CA">
 <translation id="1026101648481255140">Reprendre l'installation</translation>
-<translation id="1029669172902658969">Relancer Chromium OS pour le mettre à jour</translation>
-<translation id="1040916596585577953">Chromium vous recommande d'examiner cette extension</translation>
-<translation id="1042552502243217427">Lorsqu'un site demande de précharger des liens en privé sur sa page, Chromium utilise les serveurs de Google. Ceci permet de masquer votre identité au site préchargé et permet à Google de savoir quels sites sont préchargés.</translation>
+<translation id="1029669172902658969">Relancer Ultimatum OS pour le mettre à jour</translation>
+<translation id="1040916596585577953">Ultimatum vous recommande d'examiner cette extension</translation>
+<translation id="1042552502243217427">Lorsqu'un site demande de précharger des liens en privé sur sa page, Ultimatum utilise les serveurs de Google. Ceci permet de masquer votre identité au site préchargé et permet à Google de savoir quels sites sont préchargés.</translation>
 <translation id="1051793555070215510">Aidez-nous à améliorer la Navigation privée en répondant à ce sondage d'une minute.</translation>
 <translation id="1065672644894730302">Échec de lecture de vos préférences.
 
 Certaines fonctionnalités ne seront peut-être pas disponibles et les modifications apportées à vos préférences ne seront pas enregistrées.</translation>
-<translation id="1083934481477628225">Ton parent a désactivé le paramètre « Autorisations pour les sites, les applications et les extensions » dans Chromium</translation>
-<translation id="1090946077924227754">Pour rechercher une fonctionnalité ou une extension Chromium en particulier, entrez son raccourci dans la barre d'adresse, suivi de la touche de clavier que vous avez sélectionnée</translation>
-<translation id="1104942323762546749">Chromium veut exporter vos mots de passe. Pour autoriser cette action, entrez votre mot de passe Windows.</translation>
+<translation id="1083934481477628225">Ton parent a désactivé le paramètre « Autorisations pour les sites, les applications et les extensions » dans Ultimatum</translation>
+<translation id="1090946077924227754">Pour rechercher une fonctionnalité ou une extension Ultimatum en particulier, entrez son raccourci dans la barre d'adresse, suivi de la touche de clavier que vous avez sélectionnée</translation>
+<translation id="1104942323762546749">Ultimatum veut exporter vos mots de passe. Pour autoriser cette action, entrez votre mot de passe Windows.</translation>
 <translation id="112640046208448578">Identifiez des objets ou des lieux et copiez ou traduisez du texte. Lorsque vous utilisez la recherche d'images, une capture d'écran de la page est envoyée au serveur. <ph name="LEARN_MORE" /></translation>
-<translation id="113122355610423240">Chromium est votre navigateur par défaut</translation>
-<translation id="1131805035311359397">Pour vérifier si vos mots de passe sont en sécurité contre les violations de données et d'autres risques de sécurité, <ph name="BEGIN_LINK" />connectez-vous à Chromium<ph name="END_LINK" />.</translation>
-<translation id="1153368717515616349">Cliquez sur le menu Chromium</translation>
+<translation id="113122355610423240">Ultimatum est votre navigateur par défaut</translation>
+<translation id="1131805035311359397">Pour vérifier si vos mots de passe sont en sécurité contre les violations de données et d'autres risques de sécurité, <ph name="BEGIN_LINK" />connectez-vous à Ultimatum<ph name="END_LINK" />.</translation>
+<translation id="1153368717515616349">Cliquez sur le menu Ultimatum</translation>
 <translation id="1157985233335035034">Langues récemment sélectionnées</translation>
-<translation id="1171831736360285680"><ph name="PARTNER_NAME" /> a ajouté une extension qui pourrait modifier le fonctionnement de Chromium.
+<translation id="1171831736360285680"><ph name="PARTNER_NAME" /> a ajouté une extension qui pourrait modifier le fonctionnement de Ultimatum.
 
 <ph name="EXTENSION_NAME" /></translation>
 <translation id="1184145431117212167">L'installation a échoué, car votre version de Windows n'est pas prise en charge.</translation>
-<translation id="1185134272377778587">À propos de Chromium</translation>
+<translation id="1185134272377778587">À propos de Ultimatum</translation>
 <translation id="1203500561924088507">Merci pour l'installation. Vous devez redémarrer votre navigateur avant d'utiliser <ph name="BUNDLE_NAME" />.</translation>
 <translation id="1232234696885483911">Lorsque vous ouvrez la recherche d'images, le titre de la page, l'URL et le contenu, y compris les fichiers PDF, seront automatiquement envoyés au serveur. <ph name="LEARN_MORE" /></translation>
-<translation id="123265588161106468">Pendant votre connexion, vous pouvez utiliser vos mots de passe et bien plus encore à partir de votre compte Google dans Chromium. Pour modifier ceci, accédez à « Votre compte dans Chromium ».</translation>
-<translation id="1262876892872089030">Pendant que cet onglet était inactif, de la mémoire a été libérée pour maintenir la rapidité de Chromium. Vous pouvez choisir de toujours exclure ce site de l'inactivité.</translation>
-<translation id="1265577313130862557">Chromium a bloqué ce téléchargement, car le fichier est dangereux</translation>
-<translation id="126567311906253476">Lorsque vous vous connectez à des services Google comme Gmail ou YouTube avec <ph name="USER_EMAIL" />, vous pouvez vous connecter automatiquement à Chromium avec le même compte</translation>
-<translation id="1287534462498555020">Obtenez Chromium sur votre téléphone</translation>
+<translation id="123265588161106468">Pendant votre connexion, vous pouvez utiliser vos mots de passe et bien plus encore à partir de votre compte Google dans Ultimatum. Pour modifier ceci, accédez à « Votre compte dans Ultimatum ».</translation>
+<translation id="1262876892872089030">Pendant que cet onglet était inactif, de la mémoire a été libérée pour maintenir la rapidité de Ultimatum. Vous pouvez choisir de toujours exclure ce site de l'inactivité.</translation>
+<translation id="1265577313130862557">Ultimatum a bloqué ce téléchargement, car le fichier est dangereux</translation>
+<translation id="126567311906253476">Lorsque vous vous connectez à des services Google comme Gmail ou YouTube avec <ph name="USER_EMAIL" />, vous pouvez vous connecter automatiquement à Ultimatum avec le même compte</translation>
+<translation id="1287534462498555020">Obtenez Ultimatum sur votre téléphone</translation>
 <translation id="1290883685122687410">Erreur de configuration : <ph name="METAINSTALLER_EXIT_CODE" /> <ph name="WINDOWS_ERROR" /></translation>
-<translation id="1315551408014407711">Configurer votre nouveau profil Chromium</translation>
-<translation id="132092532143527429">Essayer avec Gemini dans Chromium</translation>
-<translation id="1324107359134968521">Chromium a besoin d'un accès au Bluetooth pour découvrir les appareils Bluetooth. <ph name="IDS_SERIAL_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
+<translation id="1315551408014407711">Configurer votre nouveau profil Ultimatum</translation>
+<translation id="132092532143527429">Essayer avec Gemini dans Ultimatum</translation>
+<translation id="1324107359134968521">Ultimatum a besoin d'un accès au Bluetooth pour découvrir les appareils Bluetooth. <ph name="IDS_SERIAL_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
 <translation id="1330562121671411446">Détecter la langue</translation>
-<translation id="1330742950061766891">Utiliser les paramètres du navigateur recommandés de Chromium</translation>
-<translation id="1342274909142618978">Supprimer également les données de Chromium (<ph name="URL" />)</translation>
+<translation id="1330742950061766891">Utiliser les paramètres du navigateur recommandés de Ultimatum</translation>
+<translation id="1342274909142618978">Supprimer également les données de Ultimatum (<ph name="URL" />)</translation>
 <translation id="1345251407431278948">La fonctionnalité a été épinglée! Vous pouvez à nouveau accéder à la recherche d'images à partir du nouveau bouton de la barre d'outils</translation>
 <translation id="1356661055722410047">Nouveau! Vous pouvez traduire à la fois le texte et les images sur votre écran</translation>
 <translation id="1383876407941801731">Rechercher</translation>
-<translation id="1397530502368084401">&amp;Gérer les profils Chromium</translation>
+<translation id="1397530502368084401">&amp;Gérer les profils Ultimatum</translation>
 <translation id="1404026649028693342">Toujours afficher le mode IA</translation>
 <translation id="141901961143729572">Faites part de vos commentaires</translation>
-<translation id="1465192221147974788">Pour partager votre fenêtre, autorisez l'enregistrement de l'écran pour Chromium dans les Réglages système.</translation>
-<translation id="1478370723027452770">Obtenir de l'aide avec Chrome for Testing</translation>
+<translation id="1465192221147974788">Pour partager votre fenêtre, autorisez l'enregistrement de l'écran pour Ultimatum dans les Réglages système.</translation>
+<translation id="1478370723027452770">Obtenir de l'aide avec Ultimatum for Testing</translation>
 <translation id="1497802159252041924">Erreur d'installation : <ph name="INSTALL_ERROR" /></translation>
 <translation id="1518627427551567882">Cette page est protégée</translation>
-<translation id="1524282610922162960">Partager un onglet de Chromium</translation>
-<translation id="154404805518949443">Connexion à Chromium</translation>
+<translation id="1524282610922162960">Partager un onglet de Ultimatum</translation>
+<translation id="154404805518949443">Connexion à Ultimatum</translation>
 <translation id="1547469039832541117">Termine la tâche mise en évidence.</translation>
-<translation id="1553461853655228091">Chromium a besoin de votre autorisation pour accéder à votre appareil photo afin de créer une carte 3D de votre environnement</translation>
-<translation id="1555494096857516577">{NUM_EXTENSIONS,plural, =1{Cette extension n'est plus prise en charge. Chromium vous recommande de la retirer.}one{Cette extension n'est plus prise en charge. Chromium vous recommande de la retirer.}other{Ces extensions ne sont plus prises en charge. Chromium vous recommande de les retirer.}}</translation>
-<translation id="1562320819937089394">Épingler Chromium</translation>
-<translation id="1574377791422810894">Les outils de sécurité de Chromium</translation>
-<translation id="1594928384848033697">Chromium souhaite supprimer vos données du gestionnaire de mots de passe. Tapez votre mot de passe Windows pour autoriser la suppression.</translation>
-<translation id="1607715478322902680">{COUNT,plural, =0{Votre administrateur exige que vous relanciez Chromium pour appliquer une mise à jour}=1{Votre administrateur exige que vous relanciez Chromium pour appliquer une mise à jour. Votre fenêtre de navigation privée ne sera pas rouverte.}one{Votre administrateur exige que vous relanciez Chromium pour appliquer une mise à jour. Votre fenêtre de navigation privée ne sera pas rouverte.}other{Votre administrateur exige que vous relanciez Chromium pour appliquer une mise à jour. Vos # fenêtres de navigation privée ne seront pas rouvertes.}}</translation>
-<translation id="1625909126243026060">Passer en revue les principaux paramètres de confidentialité et de sécurité dans Chromium</translation>
+<translation id="1553461853655228091">Ultimatum a besoin de votre autorisation pour accéder à votre appareil photo afin de créer une carte 3D de votre environnement</translation>
+<translation id="1555494096857516577">{NUM_EXTENSIONS,plural, =1{Cette extension n'est plus prise en charge. Ultimatum vous recommande de la retirer.}one{Cette extension n'est plus prise en charge. Ultimatum vous recommande de la retirer.}other{Ces extensions ne sont plus prises en charge. Ultimatum vous recommande de les retirer.}}</translation>
+<translation id="1562320819937089394">Épingler Ultimatum</translation>
+<translation id="1574377791422810894">Les outils de sécurité de Ultimatum</translation>
+<translation id="1594928384848033697">Ultimatum souhaite supprimer vos données du gestionnaire de mots de passe. Tapez votre mot de passe Windows pour autoriser la suppression.</translation>
+<translation id="1607715478322902680">{COUNT,plural, =0{Votre administrateur exige que vous relanciez Ultimatum pour appliquer une mise à jour}=1{Votre administrateur exige que vous relanciez Ultimatum pour appliquer une mise à jour. Votre fenêtre de navigation privée ne sera pas rouverte.}one{Votre administrateur exige que vous relanciez Ultimatum pour appliquer une mise à jour. Votre fenêtre de navigation privée ne sera pas rouverte.}other{Votre administrateur exige que vous relanciez Ultimatum pour appliquer une mise à jour. Vos # fenêtres de navigation privée ne seront pas rouvertes.}}</translation>
+<translation id="1625909126243026060">Passer en revue les principaux paramètres de confidentialité et de sécurité dans Ultimatum</translation>
 <translation id="1640672724030957280">Téléchargement en cours…</translation>
 <translation id="1680687534629375545">Poser des questions à la recherche d'images à propos de cette page</translation>
 <translation id="1709772298389099340">Fournit des privilèges élevés pour <ph name="BROWSER_NAME" />.</translation>
-<translation id="1715127912119967311">Pour contribuer à améliorer ces fonctionnalités, Chromium envoie vos interactions avec celles-ci à Google. Ces données peuvent être lues, traitées et annotées par des réviseurs humains.</translation>
+<translation id="1715127912119967311">Pour contribuer à améliorer ces fonctionnalités, Ultimatum envoie vos interactions avec celles-ci à Google. Ces données peuvent être lues, traitées et annotées par des réviseurs humains.</translation>
 <translation id="1722488837206509557">Cela vous permettra de sélectionner parmi les appareils accessibles et d'y afficher du contenu.</translation>
-<translation id="1733725117201708356">Chromium va bientôt supprimer les données de navigation</translation>
-<translation id="1736443181683099871">Chromium tentera de mettre à niveau les navigations vers le protocole HTTPS</translation>
-<translation id="1736662517232558588">Données Chromium effacées</translation>
-<translation id="1745121272106313518">Chromium redémarrera dans <ph name="REMAINING_TIME" /></translation>
-<translation id="1749104137266986751">Lorsque le protocole HTTPS n'est pas accessible, Chromium utilisera une connexion non sécurisée sans vous avertir</translation>
-<translation id="1774152462503052664">Laisser Chromium fonctionner en arrière-plan</translation>
-<translation id="1779356040007214683">Afin de rendre Chromium plus sûr, nous avons désactivé certaines extensions qui ne sont pas répertoriées dans la boutique <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> et qui ont pu être ajoutées à votre insu.</translation>
-<translation id="1808667845054772817">Réinstaller Chromium</translation>
-<translation id="1820835682567584003">Chromium essaie de <ph name="AUTHENTICATION_PURPOSE" /></translation>
-<translation id="183031085822326697">La prochaine fois que vous ouvrirez Chromium sur votre <ph name="DEVICE_TYPE" />, une invite vous proposera d'utiliser le gestionnaire de mots de passe Google.</translation>
+<translation id="1733725117201708356">Ultimatum va bientôt supprimer les données de navigation</translation>
+<translation id="1736443181683099871">Ultimatum tentera de mettre à niveau les navigations vers le protocole HTTPS</translation>
+<translation id="1736662517232558588">Données Ultimatum effacées</translation>
+<translation id="1745121272106313518">Ultimatum redémarrera dans <ph name="REMAINING_TIME" /></translation>
+<translation id="1749104137266986751">Lorsque le protocole HTTPS n'est pas accessible, Ultimatum utilisera une connexion non sécurisée sans vous avertir</translation>
+<translation id="1774152462503052664">Laisser Ultimatum fonctionner en arrière-plan</translation>
+<translation id="1779356040007214683">Afin de rendre Ultimatum plus sûr, nous avons désactivé certaines extensions qui ne sont pas répertoriées dans la boutique <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> et qui ont pu être ajoutées à votre insu.</translation>
+<translation id="1808667845054772817">Réinstaller Ultimatum</translation>
+<translation id="1820835682567584003">Ultimatum essaie de <ph name="AUTHENTICATION_PURPOSE" /></translation>
+<translation id="183031085822326697">La prochaine fois que vous ouvrirez Ultimatum sur votre <ph name="DEVICE_TYPE" />, une invite vous proposera d'utiliser le gestionnaire de mots de passe Google.</translation>
 <translation id="1838374766361614909">Effacer les termes de recherche</translation>
-<translation id="18552579716432081">Pour supprimer les données de navigation de cet appareil uniquement, tout en les conservant dans votre compte Google, <ph name="BEGIN_LINK" />déconnectez-vous de Chromium<ph name="END_LINK" />.</translation>
-<translation id="1857749206890802997">Téléchargez Chromium sur votre téléphone pour ouvrir ou créer de nouveaux groupes d'onglets en déplacement.</translation>
+<translation id="18552579716432081">Pour supprimer les données de navigation de cet appareil uniquement, tout en les conservant dans votre compte Google, <ph name="BEGIN_LINK" />déconnectez-vous de Ultimatum<ph name="END_LINK" />.</translation>
+<translation id="1857749206890802997">Téléchargez Ultimatum sur votre téléphone pour ouvrir ou créer de nouveaux groupes d'onglets en déplacement.</translation>
 <translation id="185970820835152459">Vous pouvez gérer les comptes Google auxquels vous êtes connecté. Vos comptes Google sont utilisés par le navigateur Chronium, par Play Store, par Gmail et autres. Si vous voulez ajouter un compte pour quelqu'un d'autre, comme un membre de votre famille, ajoutez plutôt une nouvelle personne à votre <ph name="DEVICE_TYPE" />. <ph name="LINK_BEGIN" />En savoir plus<ph name="LINK_END" /></translation>
 <translation id="1862852878885210965">Recherche avec la recherche d'images</translation>
 <translation id="1880677175115548835">Sélectionnez du texte</translation>
-<translation id="1881322772814446296">Vous vous connectez avec un compte géré et rendez son administrateur maître de votre profil Chromium. Vos données de Chromium, comme vos applications, vos favoris, votre historique, vos mots de passe et vos autres paramètres, vont être associées de manière permanente à <ph name="USER_NAME" />. Vous pourrez supprimer ces données à l'aide du tableau de bord des comptes Google, mais vous ne pourrez pas les associer à un autre compte. Vous pouvez également créer un nouveau profil pour maintenir vos données Chromium séparées. <ph name="LEARN_MORE" /></translation>
-<translation id="1896836275755235458">Chromium économise l'énergie de la pile en limitant l'activité en arrière-plan et les effets visuels, comme le défilement fluide et les fréquences d'images vidéo. <ph name="BEGIN_LINK" />En savoir plus sur l'Économiseur d'énergie<ph name="END_LINK" /></translation>
+<translation id="1881322772814446296">Vous vous connectez avec un compte géré et rendez son administrateur maître de votre profil Ultimatum. Vos données de Ultimatum, comme vos applications, vos favoris, votre historique, vos mots de passe et vos autres paramètres, vont être associées de manière permanente à <ph name="USER_NAME" />. Vous pourrez supprimer ces données à l'aide du tableau de bord des comptes Google, mais vous ne pourrez pas les associer à un autre compte. Vous pouvez également créer un nouveau profil pour maintenir vos données Ultimatum séparées. <ph name="LEARN_MORE" /></translation>
+<translation id="1896836275755235458">Ultimatum économise l'énergie de la pile en limitant l'activité en arrière-plan et les effets visuels, comme le défilement fluide et les fréquences d'images vidéo. <ph name="BEGIN_LINK" />En savoir plus sur l'Économiseur d'énergie<ph name="END_LINK" /></translation>
 <translation id="1898804291554630487">Posez une question à propos de cette page</translation>
-<translation id="1900969832270057921">Service de mise à jour Chromium</translation>
-<translation id="1911763535808217981">En désactivant cette option, vous pouvez vous connecter aux sites Google tels que Gmail sans vous connecter à Chromium</translation>
-<translation id="1929939181775079593">Chromium ne répond pas. Voulez-vous le relancer maintenant?</translation>
-<translation id="1933341829955786215">Votre organisation, <ph name="MANAGER" />, vous demande de vous connecter à Chromium</translation>
-<translation id="193439633299369377">Chromium OS doit être redémarré pour appliquer la mise à jour.</translation>
-<translation id="1951406923938785464">Chromium a bloqué ce téléchargement, car le type de fichier n'est pas souvent téléchargé et pourrait être dangereux</translation>
+<translation id="1900969832270057921">Service de mise à jour Ultimatum</translation>
+<translation id="1911763535808217981">En désactivant cette option, vous pouvez vous connecter aux sites Google tels que Gmail sans vous connecter à Ultimatum</translation>
+<translation id="1929939181775079593">Ultimatum ne répond pas. Voulez-vous le relancer maintenant?</translation>
+<translation id="1933341829955786215">Votre organisation, <ph name="MANAGER" />, vous demande de vous connecter à Ultimatum</translation>
+<translation id="193439633299369377">Ultimatum OS doit être redémarré pour appliquer la mise à jour.</translation>
+<translation id="1951406923938785464">Ultimatum a bloqué ce téléchargement, car le type de fichier n'est pas souvent téléchargé et pourrait être dangereux</translation>
 <translation id="1953553007165777902">Téléchargement en cours… <ph name="MINUTE" /> minute(s) restante(s)</translation>
-<translation id="1965068424387304464">Astuce Chromium : Enregistrer les mots de passe</translation>
-<translation id="1966382378801805537">Chromium ne parvient pas à déterminer quel est le navigateur par défaut ou à le définir</translation>
-<translation id="1990262977744080398">Découvrir pourquoi Chromium bloque certains fichiers, s'ouvre dans un nouvel onglet</translation>
-<translation id="1999715455684970349">Maintient votre logiciel Chromium à jour. Si ce service est désactivé ou arrêté, votre logiciel Chromium ne sera pas mis à jour, ce qui signifie que les vulnérabilités de sécurité qui pourraient survenir ne pourront pas être corrigées et que les fonctionnalités risquent de ne pas fonctionner. Ce service se désinstalle si aucun logiciel Chromium ne l'utilise.</translation>
-<translation id="2008474315282236005">Cette action entraînera la suppression d'un élément de cet appareil. Pour récupérer vos données plus tard, connectez-vous à Chromium en tant que <ph name="USER_EMAIL" />.</translation>
+<translation id="1965068424387304464">Astuce Ultimatum : Enregistrer les mots de passe</translation>
+<translation id="1966382378801805537">Ultimatum ne parvient pas à déterminer quel est le navigateur par défaut ou à le définir</translation>
+<translation id="1990262977744080398">Découvrir pourquoi Ultimatum bloque certains fichiers, s'ouvre dans un nouvel onglet</translation>
+<translation id="1999715455684970349">Maintient votre logiciel Ultimatum à jour. Si ce service est désactivé ou arrêté, votre logiciel Ultimatum ne sera pas mis à jour, ce qui signifie que les vulnérabilités de sécurité qui pourraient survenir ne pourront pas être corrigées et que les fonctionnalités risquent de ne pas fonctionner. Ce service se désinstalle si aucun logiciel Ultimatum ne l'utilise.</translation>
+<translation id="2008474315282236005">Cette action entraînera la suppression d'un élément de cet appareil. Pour récupérer vos données plus tard, connectez-vous à Ultimatum en tant que <ph name="USER_EMAIL" />.</translation>
 <translation id="2018879682492276940">Échec de l'installation. Veuillez réessayer.</translation>
-<translation id="2020032459870799438">Pour vérifier si vos autres mots de passe sont en sécurité contre les violations de données et d'autres risques de sécurité, <ph name="BEGIN_LINK" />connectez-vous à Chromium<ph name="END_LINK" />.</translation>
+<translation id="2020032459870799438">Pour vérifier si vos autres mots de passe sont en sécurité contre les violations de données et d'autres risques de sécurité, <ph name="BEGIN_LINK" />connectez-vous à Ultimatum<ph name="END_LINK" />.</translation>
 <translation id="2039417478970545937">Paramètres.</translation>
-<translation id="2049376729098081731">Choisissez si vous souhaitez inclure l'historique de Chromium pour rendre vos expériences des services Google plus personnalisées</translation>
-<translation id="2064856577282482477">Cliquez sur le bouton Personnaliser Chromium sur la page Nouvel onglet pour donner un nouveau style à Chromium</translation>
+<translation id="2049376729098081731">Choisissez si vous souhaitez inclure l'historique de Ultimatum pour rendre vos expériences des services Google plus personnalisées</translation>
+<translation id="2064856577282482477">Cliquez sur le bouton Personnaliser Ultimatum sur la page Nouvel onglet pour donner un nouveau style à Ultimatum</translation>
 <translation id="2066690553719545730">Toujours afficher le mode IA</translation>
-<translation id="2086476982681781442">Chromium a bloqué ce téléchargement, car le fichier est trompeur et pourrait apporter des modifications inattendues à votre appareil</translation>
-<translation id="208726765006323911">Une invite vous proposera d'essayer <ph name="FEATURE_NAME" /> la prochaine fois que vous ouvrirez Chromium pour iOS.</translation>
-<translation id="2099452623287920103">Vos mots de passe et d'autres données Chromium que vous avez enregistrés dans votre compte Google seront retirés de cet appareil. Pour les utiliser à nouveau dans Chromium, reconnectez-vous.</translation>
-<translation id="2120965832000301375">{COUNT,plural, =1{Votre organisation supprime automatiquement les données de navigation lorsque Chromium n'est pas utilisé pendant 1 minute. Cela peut inclure l'historique, le remplissage automatique et les téléchargements. Vos onglets resteront ouverts.}one{Votre organisation supprime automatiquement les données de navigation lorsque Chromium n'est pas utilisé pendant # minute. Cela peut inclure l'historique, le remplissage automatique et les téléchargements. Vos onglets resteront ouverts.}other{Votre organisation supprime automatiquement les données de navigation lorsque Chromium n'est pas utilisé pendant # minutes. Cela peut inclure l'historique, le remplissage automatique et les téléchargements. Vos onglets resteront ouverts.}}</translation>
+<translation id="2086476982681781442">Ultimatum a bloqué ce téléchargement, car le fichier est trompeur et pourrait apporter des modifications inattendues à votre appareil</translation>
+<translation id="208726765006323911">Une invite vous proposera d'essayer <ph name="FEATURE_NAME" /> la prochaine fois que vous ouvrirez Ultimatum pour iOS.</translation>
+<translation id="2099452623287920103">Vos mots de passe et d'autres données Ultimatum que vous avez enregistrés dans votre compte Google seront retirés de cet appareil. Pour les utiliser à nouveau dans Ultimatum, reconnectez-vous.</translation>
+<translation id="2120965832000301375">{COUNT,plural, =1{Votre organisation supprime automatiquement les données de navigation lorsque Ultimatum n'est pas utilisé pendant 1 minute. Cela peut inclure l'historique, le remplissage automatique et les téléchargements. Vos onglets resteront ouverts.}one{Votre organisation supprime automatiquement les données de navigation lorsque Ultimatum n'est pas utilisé pendant # minute. Cela peut inclure l'historique, le remplissage automatique et les téléchargements. Vos onglets resteront ouverts.}other{Votre organisation supprime automatiquement les données de navigation lorsque Ultimatum n'est pas utilisé pendant # minutes. Cela peut inclure l'historique, le remplissage automatique et les téléchargements. Vos onglets resteront ouverts.}}</translation>
 <translation id="2126108037660393668">La vérification du fichier téléchargé a échoué.</translation>
 <translation id="2135919691573380097">Signaler ce site</translation>
 <translation id="2137162749895930932">Fermer l'écran de traduction</translation>
-<translation id="215352261310130060">Chromium a bloqué ce téléchargement, car le site n'utilise pas de connexion sécurisée et le fichier a peut-être été altéré</translation>
+<translation id="215352261310130060">Ultimatum a bloqué ce téléchargement, car le site n'utilise pas de connexion sécurisée et le fichier a peut-être été altéré</translation>
 <translation id="2170098639895543546">Sélectionnez n'importe quel élément sur la page</translation>
-<translation id="2174178932569897599">Personnaliser Chromium</translation>
+<translation id="2174178932569897599">Personnaliser Ultimatum</translation>
 <translation id="2174917724755363426">L'installation n'est pas terminée. Voulez-vous vraiment annuler?</translation>
-<translation id="2185166961232948079">Chromium – Connexion au réseau – <ph name="PAGE_TITLE" /></translation>
+<translation id="2185166961232948079">Ultimatum – Connexion au réseau – <ph name="PAGE_TITLE" /></translation>
 <translation id="2190166659037789668">Erreur de vérification de la mise à jour : <ph name="UPDATE_CHECK_ERROR" />.</translation>
-<translation id="2199210295479376551">Retirer le compte de Chromium</translation>
-<translation id="2210502920229141283">Restez en sécurité lorsque vous êtes en déplacement grâce à la navigation sécurisée améliorée sur Chromium pour iOS</translation>
-<translation id="2210682093923538346">Site dangereux. Chromium a supprimé les notifications.</translation>
+<translation id="2199210295479376551">Retirer le compte de Ultimatum</translation>
+<translation id="2210502920229141283">Restez en sécurité lorsque vous êtes en déplacement grâce à la navigation sécurisée améliorée sur Ultimatum pour iOS</translation>
+<translation id="2210682093923538346">Site dangereux. Ultimatum a supprimé les notifications.</translation>
 <translation id="2236949375853147973">Mon activité</translation>
-<translation id="2238130810669087193">Pour obtenir vos adresses et bien plus encore sur tous vos appareils, connectez-vous à Chromium. Cette adresse sera enregistrée dans votre compte Google après votre connexion.</translation>
-<translation id="2241627712206172106">Si vous partagez un ordinateur avec vos proches, ceux-ci peuvent configurer Google Chrome comme bon leur semble et naviguer sur le Web à leur manière.</translation>
+<translation id="2238130810669087193">Pour obtenir vos adresses et bien plus encore sur tous vos appareils, connectez-vous à Ultimatum. Cette adresse sera enregistrée dans votre compte Google après votre connexion.</translation>
+<translation id="2241627712206172106">Si vous partagez un ordinateur avec vos proches, ceux-ci peuvent configurer Ultimatum comme bon leur semble et naviguer sur le Web à leur manière.</translation>
 <translation id="2283803047247799269">Rechercher cet onglet avec la recherche d'images</translation>
-<translation id="2287771843518581140">{NUM_TABS,plural, =1{Chromium recommande de suspendre l'onglet qui ralentit votre navigateur}one{Chromium recommande de suspendre l'onglet qui ralentit votre navigateur}other{Chromium recommande de suspendre les onglets qui ralentissent votre navigateur}}</translation>
+<translation id="2287771843518581140">{NUM_TABS,plural, =1{Ultimatum recommande de suspendre l'onglet qui ralentit votre navigateur}one{Ultimatum recommande de suspendre l'onglet qui ralentit votre navigateur}other{Ultimatum recommande de suspendre les onglets qui ralentissent votre navigateur}}</translation>
 <translation id="2307973900865360088">Garder dans le Dock</translation>
-<translation id="2313870531055795960">Il vérifie les URL en fonction d'une liste de sites non sécuritaires stockée dans Chromium. Si un site tente de voler votre mot de passe ou si vous téléchargez un fichier dangereux, Chromium peut également envoyer les URL concernées, y compris des extraits du contenu de pages, à la navigation sécurisée.</translation>
+<translation id="2313870531055795960">Il vérifie les URL en fonction d'une liste de sites non sécuritaires stockée dans Ultimatum. Si un site tente de voler votre mot de passe ou si vous téléchargez un fichier dangereux, Ultimatum peut également envoyer les URL concernées, y compris des extraits du contenu de pages, à la navigation sécurisée.</translation>
 <translation id="2332076562712130931">Cette action aura les effets suivants :
 <ph name="LINE_BREAKS" />
-• Réinitialiser certains des paramètres et des raccourcis de Chromium
+• Réinitialiser certains des paramètres et des raccourcis de Ultimatum
 <ph name="LINE_BREAK" />
 • Désactiver les extensions
 <ph name="LINE_BREAK" />
 • Supprimer les témoins et d'autres données temporaires relatives aux sites
 <ph name="LINE_BREAKS" />
 Les signets, l'historique et les mots de passe enregistrés ne seront pas touchés.</translation>
-<translation id="2343156876103232566">Pour envoyer un numéro d'ici vers votre téléphone Android, connectez-vous à Chromium sur vos deux appareils.</translation>
+<translation id="2343156876103232566">Pour envoyer un numéro d'ici vers votre téléphone Android, connectez-vous à Ultimatum sur vos deux appareils.</translation>
 <translation id="2356070529366658676">Demander</translation>
 <translation id="2359808026110333948">Continuer</translation>
-<translation id="2361918034042471035">L'extension « <ph name="EXTENSION_NAME" /> » souhaite que vous vous connectiez à Chromium</translation>
-<translation id="236943522426971115">Désactiver l'exécution de Chromium en arrière-plan pour les applis</translation>
-<translation id="2374216753258219393">Pour utiliser cette extension en tant que <ph name="USER_EMAIL_ADDRESS" />, connectez-vous à Chromium.</translation>
-<translation id="2384373936468275798">Chromium OS n'a pas pu synchroniser vos données, car vos renseignements de connexion ne sont plus à jour.</translation>
-<translation id="2398377054246527950">{NUM_DEVICES,plural, =0{Une ou plusieurs extensions Chromium ont accédé à 1 appareil HID}=1{Une ou plusieurs extensions Chromium ont accédé à 1 appareil HID}one{Une ou plusieurs extensions Chromium ont accédé à # appareil HID}other{Une ou plusieurs extensions Chromium ont accédé à # appareils HID}}</translation>
-<translation id="2401032172288869980">Chromium requiert l'autorisation d'accéder au microphone et à l'appareil photo pour ce site</translation>
+<translation id="2361918034042471035">L'extension « <ph name="EXTENSION_NAME" /> » souhaite que vous vous connectiez à Ultimatum</translation>
+<translation id="236943522426971115">Désactiver l'exécution de Ultimatum en arrière-plan pour les applis</translation>
+<translation id="2374216753258219393">Pour utiliser cette extension en tant que <ph name="USER_EMAIL_ADDRESS" />, connectez-vous à Ultimatum.</translation>
+<translation id="2384373936468275798">Ultimatum OS n'a pas pu synchroniser vos données, car vos renseignements de connexion ne sont plus à jour.</translation>
+<translation id="2398377054246527950">{NUM_DEVICES,plural, =0{Une ou plusieurs extensions Ultimatum ont accédé à 1 appareil HID}=1{Une ou plusieurs extensions Ultimatum ont accédé à 1 appareil HID}one{Une ou plusieurs extensions Ultimatum ont accédé à # appareil HID}other{Une ou plusieurs extensions Ultimatum ont accédé à # appareils HID}}</translation>
+<translation id="2401032172288869980">Ultimatum requiert l'autorisation d'accéder au microphone et à l'appareil photo pour ce site</translation>
 <translation id="2403703063067034158">Erreur de démarrage : une autre instance de configuration est actuellement en cours d'exécution, veuillez réessayer plus tard.</translation>
-<translation id="2418322681019544463">Ouvrez des liens dans Chromium à partir de n'importe quelle appli et gardez le navigateur à portée de main dans votre barre des tâches</translation>
-<translation id="2440750600860946460">Grâce aux <ph name="BEGIN_LINK" />outils de Chromium<ph name="END_LINK" />, vous pouvez naviguer en toute sécurité et garder le contrôle</translation>
+<translation id="2418322681019544463">Ouvrez des liens dans Ultimatum à partir de n'importe quelle appli et gardez le navigateur à portée de main dans votre barre des tâches</translation>
+<translation id="2440750600860946460">Grâce aux <ph name="BEGIN_LINK" />outils de Ultimatum<ph name="END_LINK" />, vous pouvez naviguer en toute sécurité et garder le contrôle</translation>
 <translation id="2451727308784734061">Utilisez votre raccourci pour accéder rapidement au gestionnaire de mots de passe. Vous pouvez déplacer votre raccourci vers l'écran d'accueil ou le lanceur d'applications de votre ordinateur.</translation>
-<translation id="2478295928299953161">Chromium va bientôt se fermer</translation>
-<translation id="2483889755041906834">Dans Chromium</translation>
+<translation id="2478295928299953161">Ultimatum va bientôt se fermer</translation>
+<translation id="2483889755041906834">Dans Ultimatum</translation>
 <translation id="2485422356828889247">Désinstaller</translation>
 <translation id="2513154137948333830">Redémarrage nécessaire : <ph name="INSTALL_SUCCESS" /></translation>
 <translation id="2542968102051442371">Sélectionnez du texte avec la recherche d'images</translation>
-<translation id="2554739539410784893">Chromium essaie de remplacer les mots de passe existants. Tapez votre mot de passe Windows pour autoriser cela.</translation>
-<translation id="2560420686485554789">Chromium a besoin d'accéder au stockage pour télécharger des fichiers</translation>
-<translation id="2572494885440352020">Aide de Chromium</translation>
+<translation id="2554739539410784893">Ultimatum essaie de remplacer les mots de passe existants. Tapez votre mot de passe Windows pour autoriser cela.</translation>
+<translation id="2560420686485554789">Ultimatum a besoin d'accéder au stockage pour télécharger des fichiers</translation>
+<translation id="2572494885440352020">Aide de Ultimatum</translation>
 <translation id="2575822587468774919">Sélectionner n'importe quel élément pour effectuer une recherche avec la recherche d'images</translation>
-<translation id="2576118232315942160">Pour obtenir vos mots de passe et bien plus encore sur tous vos appareils, connectez-vous à Chromium</translation>
-<translation id="2592940277904433508">Continuer à utiliser Chromium</translation>
+<translation id="2576118232315942160">Pour obtenir vos mots de passe et bien plus encore sur tous vos appareils, connectez-vous à Ultimatum</translation>
+<translation id="2592940277904433508">Continuer à utiliser Ultimatum</translation>
 <translation id="259935314519650377">Échec de la mise en cache du programme d'installation téléchargé. Erreur : <ph name="UNPACK_CACHING_ERROR_CODE" />.</translation>
 <translation id="2620436844016719705">Système</translation>
-<translation id="2629740064077610681">Votre organisation peut consulter et gérer les données de navigation, comme vos favoris, votre historique et vos mots de passe. Elle ne peut pas consulter les données de navigation dans d'autres profils Chromium</translation>
-<translation id="2635452620547538388">Confirmez votre identité pour utiliser et enregistrer les données Chromium dans votre compte, <ph name="ACCOUNT_EMAIL" /></translation>
-<translation id="2637732208198500597">{COUNT,plural, =0{La protection avancée nécessite que vous relanciez Chromium pour appliquer une mise à jour}=1{La protection avancée nécessite que vous relanciez Chromium pour appliquer une mise à jour. Votre fenêtre de navigation privée ne sera pas rouverte.}one{La protection avancée nécessite que vous relanciez Chromium pour appliquer une mise à jour. # fenêtre de navigation privée ne sera pas rouverte.}other{La protection avancée nécessite que vous relanciez Chromium pour appliquer une mise à jour. Vos # fenêtres de navigation privée ne seront pas rouvertes.}}</translation>
-<translation id="2648074677641340862">Une erreur de système d'exploitation s'est produite pendant l'installation. Veuillez télécharger de nouveau Chromium.</translation>
-<translation id="2661879430930417727">Si vous partagez un appareil avec vos proches, ceux-ci peuvent configurer Chromium comme bon leur semble et naviguer sur le Web de façon autonome.</translation>
-<translation id="2711502716910134313">Onglet Chromium</translation>
-<translation id="2718390899429598676">Pour une sécurité accrue, Chromium va chiffrer vos données.</translation>
-<translation id="2721354645805494590">Pour retirer votre compte Google de Chromium, déconnectez-vous</translation>
-<translation id="2722636413143664436">Pour obtenir vos mots de passe, vos favoris et plus encore sur tous vos appareils, connectez-vous à Chromium</translation>
+<translation id="2629740064077610681">Votre organisation peut consulter et gérer les données de navigation, comme vos favoris, votre historique et vos mots de passe. Elle ne peut pas consulter les données de navigation dans d'autres profils Ultimatum</translation>
+<translation id="2635452620547538388">Confirmez votre identité pour utiliser et enregistrer les données Ultimatum dans votre compte, <ph name="ACCOUNT_EMAIL" /></translation>
+<translation id="2637732208198500597">{COUNT,plural, =0{La protection avancée nécessite que vous relanciez Ultimatum pour appliquer une mise à jour}=1{La protection avancée nécessite que vous relanciez Ultimatum pour appliquer une mise à jour. Votre fenêtre de navigation privée ne sera pas rouverte.}one{La protection avancée nécessite que vous relanciez Ultimatum pour appliquer une mise à jour. # fenêtre de navigation privée ne sera pas rouverte.}other{La protection avancée nécessite que vous relanciez Ultimatum pour appliquer une mise à jour. Vos # fenêtres de navigation privée ne seront pas rouvertes.}}</translation>
+<translation id="2648074677641340862">Une erreur de système d'exploitation s'est produite pendant l'installation. Veuillez télécharger de nouveau Ultimatum.</translation>
+<translation id="2661879430930417727">Si vous partagez un appareil avec vos proches, ceux-ci peuvent configurer Ultimatum comme bon leur semble et naviguer sur le Web de façon autonome.</translation>
+<translation id="2711502716910134313">Onglet Ultimatum</translation>
+<translation id="2718390899429598676">Pour une sécurité accrue, Ultimatum va chiffrer vos données.</translation>
+<translation id="2721354645805494590">Pour retirer votre compte Google de Ultimatum, déconnectez-vous</translation>
+<translation id="2722636413143664436">Pour obtenir vos mots de passe, vos favoris et plus encore sur tous vos appareils, connectez-vous à Ultimatum</translation>
 <translation id="2738871930057338499">Impossible de se connecter à Internet. HTTP 403 Forbidden. Veuillez vérifier la configuration de votre mandataire.</translation>
 <translation id="2753623023919742414">Cliquer pour rechercher</translation>
-<translation id="2768103863314748511">Définissez Chromium comme visionneuse PDF par défaut</translation>
-<translation id="2785438272836277133">Cette extension contient des logiciels malveillants et est dangereuse. Retirez-la de Chromium afin qu'elle ne puisse plus voir ni modifier vos données sur les sites que vous visitez, y compris vos renseignements personnels.</translation>
+<translation id="2768103863314748511">Définissez Ultimatum comme visionneuse PDF par défaut</translation>
+<translation id="2785438272836277133">Cette extension contient des logiciels malveillants et est dangereuse. Retirez-la de Ultimatum afin qu'elle ne puisse plus voir ni modifier vos données sur les sites que vous visitez, y compris vos renseignements personnels.</translation>
 <translation id="2799223571221894425">Redémarrer</translation>
-<translation id="2803971713792056305">Votre Chromium</translation>
+<translation id="2803971713792056305">Votre Ultimatum</translation>
 <translation id="2816462166102338036">Rechercher cette vidéo avec la recherche d'images</translation>
 <translation id="2841525013647267359">Traduire à partir de la langue suivante :</translation>
 <translation id="2846251086934905009">Erreur d'installation : le programme d'installation n'a pas été terminé. L'installation a été annulée.</translation>
-<translation id="2847479871509788944">Supprimer de Chromium...</translation>
-<translation id="2850691299438350830">Il vous protège dans Chromium et peut être utilisé pour améliorer votre sécurité dans d'autres applications Google lorsque vous êtes connecté à votre compte</translation>
+<translation id="2847479871509788944">Supprimer de Ultimatum...</translation>
+<translation id="2850691299438350830">Il vous protège dans Ultimatum et peut être utilisé pour améliorer votre sécurité dans d'autres applications Google lorsque vous êtes connecté à votre compte</translation>
 <translation id="2885378588091291677">Moniteur d'activité</translation>
-<translation id="2910007522516064972">À propos de &amp;Chromium</translation>
+<translation id="2910007522516064972">À propos de &amp;Ultimatum</translation>
 <translation id="2915996080311180594">Redémarrer plus tard</translation>
 <translation id="2928420929544864228">Installation terminée.</translation>
-<translation id="2933336679234709858">Vos données sont chiffrées avec votre phrase de passe. Entrez-la pour utiliser et enregistrer les données Chromium dans votre compte Google.</translation>
+<translation id="2933336679234709858">Vos données sont chiffrées avec votre phrase de passe. Entrez-la pour utiliser et enregistrer les données Ultimatum dans votre compte Google.</translation>
 <translation id="2945997411976714835">Erreur d'installation : le processus d'installation n'a pas pu démarrer.</translation>
-<translation id="2948852018303413228">Connectez-vous plus rapidement aux sites à l'aide des mots de passe enregistrés pour Chromium sur iOS</translation>
-<translation id="2966959524256557996">Ajoutez un profil Chromium pour séparer les favoris, les mots de passe et les paramètres.</translation>
-<translation id="2970426615109535079">Votre organisation gère Chromium</translation>
-<translation id="2977470724722393594">Chromium est à jour</translation>
-<translation id="2977506796191543575">Si un site tente de voler votre mot de passe ou si vous téléchargez un fichier dangereux, Chromium peut également envoyer les URL concernées, y compris des extraits du contenu de pages, à la navigation sécurisée</translation>
-<translation id="2981563588585023386">Pour rester en sécurité en ligne avec les choix de tes parents, connecte-toi à Chromium</translation>
+<translation id="2948852018303413228">Connectez-vous plus rapidement aux sites à l'aide des mots de passe enregistrés pour Ultimatum sur iOS</translation>
+<translation id="2966959524256557996">Ajoutez un profil Ultimatum pour séparer les favoris, les mots de passe et les paramètres.</translation>
+<translation id="2970426615109535079">Votre organisation gère Ultimatum</translation>
+<translation id="2977470724722393594">Ultimatum est à jour</translation>
+<translation id="2977506796191543575">Si un site tente de voler votre mot de passe ou si vous téléchargez un fichier dangereux, Ultimatum peut également envoyer les URL concernées, y compris des extraits du contenu de pages, à la navigation sécurisée</translation>
+<translation id="2981563588585023386">Pour rester en sécurité en ligne avec les choix de tes parents, connecte-toi à Ultimatum</translation>
 <translation id="3003694935412297923">Toutes les tâches</translation>
-<translation id="3012615494352020668">{count,plural, =1{Chromium doit vérifier votre identité avant que certaines données puissent être enregistrées dans votre compte Google et utilisées sur tous vos appareils. Si vous vous déconnectez maintenant, ces données (1 élément) seront supprimées.}one{Chromium doit vérifier votre identité avant que certaines données puissent être enregistrées dans votre compte Google et utilisées sur tous vos appareils. Si vous vous déconnectez maintenant, ces données ({count} élément) seront supprimées.}other{Chromium doit vérifier votre identité avant que certaines données puissent être enregistrées dans votre compte Google et utilisées sur tous vos appareils. Si vous vous déconnectez maintenant, ces données ({count} éléments) seront supprimées.}}</translation>
-<translation id="3013473503895162900">Ouvrez l'URL <ph name="URL" /> dans un nouvel onglet dans Chromium.</translation>
-<translation id="3032706164202344641">Chromium ne peut pas vérifier vos mots de passe. Réessayez plus tard.</translation>
-<translation id="3032787606318309379">Ajout à Chromium en cours...</translation>
+<translation id="3012615494352020668">{count,plural, =1{Ultimatum doit vérifier votre identité avant que certaines données puissent être enregistrées dans votre compte Google et utilisées sur tous vos appareils. Si vous vous déconnectez maintenant, ces données (1 élément) seront supprimées.}one{Ultimatum doit vérifier votre identité avant que certaines données puissent être enregistrées dans votre compte Google et utilisées sur tous vos appareils. Si vous vous déconnectez maintenant, ces données ({count} élément) seront supprimées.}other{Ultimatum doit vérifier votre identité avant que certaines données puissent être enregistrées dans votre compte Google et utilisées sur tous vos appareils. Si vous vous déconnectez maintenant, ces données ({count} éléments) seront supprimées.}}</translation>
+<translation id="3013473503895162900">Ouvrez l'URL <ph name="URL" /> dans un nouvel onglet dans Ultimatum.</translation>
+<translation id="3032706164202344641">Ultimatum ne peut pas vérifier vos mots de passe. Réessayez plus tard.</translation>
+<translation id="3032787606318309379">Ajout à Ultimatum en cours...</translation>
 <translation id="3038232873781883849">Installation en attente…</translation>
 <translation id="3045032126857188731">Langue de la traduction : <ph name="LANGUAGE" /></translation>
 <translation id="3047590466164881923">Fermer la boîte de dialogue des commentaires</translation>
-<translation id="3068187312562070417">Autres profils Chromium</translation>
-<translation id="3068515742935458733">Aidez-nous à améliorer Chromium en nous envoyant des rapports d'erreur et des <ph name="UMA_LINK" />.</translation>
-<translation id="3079753320517721795">{NUM_DEVICES,plural, =0{Une ou plusieurs extensions Chromium ont accédé à 1 appareil USB}=1{Une ou plusieurs extensions Chromium ont accédé à 1 appareil USB}one{Une ou plusieurs extensions Chromium ont accédé à # appareil USB}other{Une ou plusieurs extensions Chromium ont accédé à # appareils USB}}</translation>
-<translation id="3095811995836568724">Historique de Chromium</translation>
-<translation id="3103660991484857065">Le programme d'installation n'a pas réussi à décompresser l'archive. Veuillez télécharger Chromium de nouveau.</translation>
+<translation id="3068187312562070417">Autres profils Ultimatum</translation>
+<translation id="3068515742935458733">Aidez-nous à améliorer Ultimatum en nous envoyant des rapports d'erreur et des <ph name="UMA_LINK" />.</translation>
+<translation id="3079753320517721795">{NUM_DEVICES,plural, =0{Une ou plusieurs extensions Ultimatum ont accédé à 1 appareil USB}=1{Une ou plusieurs extensions Ultimatum ont accédé à 1 appareil USB}one{Une ou plusieurs extensions Ultimatum ont accédé à # appareil USB}other{Une ou plusieurs extensions Ultimatum ont accédé à # appareils USB}}</translation>
+<translation id="3095811995836568724">Historique de Ultimatum</translation>
+<translation id="3103660991484857065">Le programme d'installation n'a pas réussi à décompresser l'archive. Veuillez télécharger Ultimatum de nouveau.</translation>
 <translation id="310459126943037700">Impossible de terminer la ou les tâches.</translation>
 <translation id="3104828284009500087">Recherchez n'importe quel contenu sur la page</translation>
-<translation id="3126784891977756556">Gardez vos mots de passe, vos favoris et votre historique parfaitement synchronisés sur tous vos appareils. Accédez facilement aux fonctionnalités que vous connaissez et que vous aimez en mettant à jour votre navigateur par défaut vers Chromium.</translation>
-<translation id="3130323860337406239">Chromium se sert de votre microphone.</translation>
+<translation id="3126784891977756556">Gardez vos mots de passe, vos favoris et votre historique parfaitement synchronisés sur tous vos appareils. Accédez facilement aux fonctionnalités que vous connaissez et que vous aimez en mettant à jour votre navigateur par défaut vers Ultimatum.</translation>
+<translation id="3130323860337406239">Ultimatum se sert de votre microphone.</translation>
 <translation id="3130333203120345554">Nouvelle recherche</translation>
 <translation id="3137969841538672700">Faire glisser pour rechercher</translation>
-<translation id="3144188012276422546">Cet onglet utilise des ressources supplémentaires. Pour améliorer vos performances, laissez Chromium le rendre inactif.</translation>
-<translation id="3149163023759831301">Pour partager votre écran, autorisez l'enregistrement de l'écran pour Chromium dans les Réglages système</translation>
-<translation id="3155163173539279776">Relancer Chromium</translation>
+<translation id="3144188012276422546">Cet onglet utilise des ressources supplémentaires. Pour améliorer vos performances, laissez Ultimatum le rendre inactif.</translation>
+<translation id="3149163023759831301">Pour partager votre écran, autorisez l'enregistrement de l'écran pour Ultimatum dans les Réglages système</translation>
+<translation id="3155163173539279776">Relancer Ultimatum</translation>
 <translation id="3161522574479303604">Toutes les langues</translation>
-<translation id="3179665906251668410">Ouvrir le lien dans une fenêtre de navi&amp;gation privée Chromium</translation>
-<translation id="3183357154200327217">Un autre programme sur votre ordinateur a ajouté un thème qui pourrait modifier le fonctionnement de Chromium.
+<translation id="3179665906251668410">Ouvrir le lien dans une fenêtre de navi&amp;gation privée Ultimatum</translation>
+<translation id="3183357154200327217">Un autre programme sur votre ordinateur a ajouté un thème qui pourrait modifier le fonctionnement de Ultimatum.
 
 <ph name="EXTENSION_NAME" /></translation>
-<translation id="3185330573522821672">Personnaliser votre nouveau profil Chromium</translation>
-<translation id="3224847870593914902">Pour retirer votre compte Google de Chromium, déconnectez-vous de Chromium sur la page Paramètres</translation>
-<translation id="3234316605225071811">Plus tard, Chromium pourrait vous demander si vous voulez utiliser les renseignements enregistrés pour remplir automatiquement les formulaires à votre place.</translation>
-<translation id="3258596308407688501">Chromium ne peut pas lire et écrire dans son répertoire de données :
+<translation id="3185330573522821672">Personnaliser votre nouveau profil Ultimatum</translation>
+<translation id="3224847870593914902">Pour retirer votre compte Google de Ultimatum, déconnectez-vous de Ultimatum sur la page Paramètres</translation>
+<translation id="3234316605225071811">Plus tard, Ultimatum pourrait vous demander si vous voulez utiliser les renseignements enregistrés pour remplir automatiquement les formulaires à votre place.</translation>
+<translation id="3258596308407688501">Ultimatum ne peut pas lire et écrire dans son répertoire de données :
 
 <ph name="USER_DATA_DIRECTORY" /></translation>
 <translation id="3286538390144397061">Redémarrer maintenant</translation>
-<translation id="328888136576916638">Les clés d'API Google sont manquantes. Certaines fonctionnalités de Chromium seront désactivées</translation>
-<translation id="3296368748942286671">Continuer l'exécution d'applications en arrière-plan après la fermeture de Chromium</translation>
-<translation id="3313189106987092621">Chromium vous avertira avant de charger un site en utilisant une connexion non sécurisée</translation>
-<translation id="3316771292331273802">Vous serez déconnecté de la plupart des sites lorsque vous fermerez toutes les fenêtres Chromium, à l'exception de votre compte Google si vous êtes connecté à Chromium. Pour permettre aux sites de se souvenir de vous, <ph name="SETTINGS_LINK" />.</translation>
-<translation id="3322413454779348750">Votre moteur de recherche par défaut a été modifié en dehors de Chromium. Pour vous protéger, Chromium l'a réinitialisé.</translation>
-<translation id="3331557257666250900">Connectez-vous à Chromium pour synchroniser vos mots de passe, vos favoris et plus encore sur tous vos appareils</translation>
+<translation id="328888136576916638">Les clés d'API Google sont manquantes. Certaines fonctionnalités de Ultimatum seront désactivées</translation>
+<translation id="3296368748942286671">Continuer l'exécution d'applications en arrière-plan après la fermeture de Ultimatum</translation>
+<translation id="3313189106987092621">Ultimatum vous avertira avant de charger un site en utilisant une connexion non sécurisée</translation>
+<translation id="3316771292331273802">Vous serez déconnecté de la plupart des sites lorsque vous fermerez toutes les fenêtres Ultimatum, à l'exception de votre compte Google si vous êtes connecté à Ultimatum. Pour permettre aux sites de se souvenir de vous, <ph name="SETTINGS_LINK" />.</translation>
+<translation id="3322413454779348750">Votre moteur de recherche par défaut a été modifié en dehors de Ultimatum. Pour vous protéger, Ultimatum l'a réinitialisé.</translation>
+<translation id="3331557257666250900">Connectez-vous à Ultimatum pour synchroniser vos mots de passe, vos favoris et plus encore sur tous vos appareils</translation>
 <translation id="3352986031709923790">Coin supérieur droit de la zone de recherche : droite <ph name="RIGHT" /> %, haut <ph name="TOP" /> %</translation>
-<translation id="3366305173356742781">Données Chromium dans votre compte</translation>
+<translation id="3366305173356742781">Données Ultimatum dans votre compte</translation>
 <translation id="3369405342922656244">Rechercher cette page avec la recherche d'images</translation>
-<translation id="3375770072980084583">Utilisez vos mots de passe avec Chromium sur votre téléphone</translation>
-<translation id="3387527074123400161">Chromium OS</translation>
-<translation id="3406848076815591792">Passer au profil Chromium existant?</translation>
+<translation id="3375770072980084583">Utilisez vos mots de passe avec Ultimatum sur votre téléphone</translation>
+<translation id="3387527074123400161">Ultimatum OS</translation>
+<translation id="3406848076815591792">Passer au profil Ultimatum existant?</translation>
 <translation id="3412460710772753638">Dans le gestionnaire de mots de passe sur cet appareil</translation>
-<translation id="3455907671758333080">Étendez la navigation sécurisée améliorée avec Chromium sur votre téléphone</translation>
-<translation id="3461644266919055473">Personnaliser Chromium</translation>
-<translation id="347328004046849135">Chromium vous avisera lorsque vous utilisez un mot de passe compromis pour vous connecter</translation>
-<translation id="3474745554856756813">Cette action entraînera la suppression de <ph name="ITEMS_COUNT" /> éléments de cet appareil. Pour récupérer vos données plus tard, connectez-vous à Chromium en tant que <ph name="USER_EMAIL" />.</translation>
-<translation id="3497319089134299931"><ph name="SHORTCUT" /> permet de basculer entre les profils Chromium</translation>
-<translation id="3509308970982693815">Veuillez fermer toutes les fenêtres Chromium et essayer de nouveau.</translation>
-<translation id="3522404737534491619">Pour partager votre fenêtre, autorisez l'enregistrement de l'écran pour Chromium dans les Réglages système</translation>
-<translation id="3530103706039034513">L'utilisateur (<ph name="EXISTING_USER" />) est déjà connecté.  Pour maintenir votre navigation séparée, connectez-vous à votre propre profil dans Chromium en tant que <ph name="USER_EMAIL_ADDRESS" />.</translation>
-<translation id="3531741627422851418">Code QR pour télécharger le navigateur Chromium sur les appareils mobiles</translation>
-<translation id="3561853857681580870">Pour partager votre écran, autorisez l'enregistrement de l'écran pour Chromium dans les Réglages système.</translation>
-<translation id="3588112919289558122">La protection renforcée désactive l'optimisation JavaScript pour les sites que Chromium ne reconnaît pas</translation>
+<translation id="3455907671758333080">Étendez la navigation sécurisée améliorée avec Ultimatum sur votre téléphone</translation>
+<translation id="3461644266919055473">Personnaliser Ultimatum</translation>
+<translation id="347328004046849135">Ultimatum vous avisera lorsque vous utilisez un mot de passe compromis pour vous connecter</translation>
+<translation id="3474745554856756813">Cette action entraînera la suppression de <ph name="ITEMS_COUNT" /> éléments de cet appareil. Pour récupérer vos données plus tard, connectez-vous à Ultimatum en tant que <ph name="USER_EMAIL" />.</translation>
+<translation id="3497319089134299931"><ph name="SHORTCUT" /> permet de basculer entre les profils Ultimatum</translation>
+<translation id="3509308970982693815">Veuillez fermer toutes les fenêtres Ultimatum et essayer de nouveau.</translation>
+<translation id="3522404737534491619">Pour partager votre fenêtre, autorisez l'enregistrement de l'écran pour Ultimatum dans les Réglages système</translation>
+<translation id="3530103706039034513">L'utilisateur (<ph name="EXISTING_USER" />) est déjà connecté.  Pour maintenir votre navigation séparée, connectez-vous à votre propre profil dans Ultimatum en tant que <ph name="USER_EMAIL_ADDRESS" />.</translation>
+<translation id="3531741627422851418">Code QR pour télécharger le navigateur Ultimatum sur les appareils mobiles</translation>
+<translation id="3561853857681580870">Pour partager votre écran, autorisez l'enregistrement de l'écran pour Ultimatum dans les Réglages système.</translation>
+<translation id="3588112919289558122">La protection renforcée désactive l'optimisation JavaScript pour les sites que Ultimatum ne reconnaît pas</translation>
 <translation id="3597003331831379823">Échec de l'exécution de la configuration avec des privilèges élevés. <ph name="METAINSTALLER_ERROR" /></translation>
-<translation id="3600428265489994557">Connectez-vous à Chromium</translation>
-<translation id="3639635944603682591">Les données de navigation de cette personne seront supprimées de cet appareil. Pour récupérer ces données, connectez-vous à Chromium en tant que <ph name="USER_EMAIL" />.</translation>
-<translation id="364817392622123556">{COUNT,plural, =0{Une nouvelle mise à jour de Chromium est proposée et sera appliquée dès que vous le relancerez.}=1{Une nouvelle mise à jour de Chromium est proposée et sera appliquée dès que vous le relancerez. Votre fenêtre de navigation privée ne sera pas rouverte.}one{Une nouvelle mise à jour de Chromium est proposée et sera appliquée dès que vous le relancerez. Votre fenêtre de navigation privée ne sera pas rouverte.}other{Une nouvelle mise à jour de Chromium est proposée et sera appliquée dès que vous le relancerez. Vos # fenêtres de navigation privée ne seront pas rouvertes.}}</translation>
-<translation id="3651803019964686660">Pour envoyer un numéro de <ph name="ORIGIN" /> vers votre téléphone Android, connectez-vous à Chromium sur les deux appareils.</translation>
+<translation id="3600428265489994557">Connectez-vous à Ultimatum</translation>
+<translation id="3639635944603682591">Les données de navigation de cette personne seront supprimées de cet appareil. Pour récupérer ces données, connectez-vous à Ultimatum en tant que <ph name="USER_EMAIL" />.</translation>
+<translation id="364817392622123556">{COUNT,plural, =0{Une nouvelle mise à jour de Ultimatum est proposée et sera appliquée dès que vous le relancerez.}=1{Une nouvelle mise à jour de Ultimatum est proposée et sera appliquée dès que vous le relancerez. Votre fenêtre de navigation privée ne sera pas rouverte.}one{Une nouvelle mise à jour de Ultimatum est proposée et sera appliquée dès que vous le relancerez. Votre fenêtre de navigation privée ne sera pas rouverte.}other{Une nouvelle mise à jour de Ultimatum est proposée et sera appliquée dès que vous le relancerez. Vos # fenêtres de navigation privée ne seront pas rouvertes.}}</translation>
+<translation id="3651803019964686660">Pour envoyer un numéro de <ph name="ORIGIN" /> vers votre téléphone Android, connectez-vous à Ultimatum sur les deux appareils.</translation>
 <translation id="3667616615096815454">Installation impossible, l'application est inconnue du serveur.</translation>
-<translation id="3675854891107786059">Utilisez votre <ph name="BEGIN_LINK" />propre phrase de passe<ph name="END_LINK" /> pour chiffrer toutes les données Chromium de votre compte Google. Les modes de paiement et les adresses de Google Pay ne seront pas chiffrés. L'historique de navigation de Chromium ne se synchronisera pas.</translation>
-<translation id="3685209450716071127">Chromium ne peut pas vérifier vos mots de passe. Essayez de vérifier votre connexion Internet.</translation>
-<translation id="370962675267501463">{COUNT,plural, =0{Votre administrateur vous recommande de relancer Chromium pour appliquer cette mise à jour}=1{Votre administrateur vous recommande de relancer Chromium pour appliquer cette mise à jour. Votre fenêtre de navigation privée ne sera pas rouverte.}one{Votre administrateur vous recommande de relancer Chromium pour appliquer cette mise à jour. Votre fenêtre de navigation privée ne sera pas rouverte.}other{Votre administrateur vous recommande de relancer Chromium pour appliquer cette mise à jour. Vos # fenêtres de navigation privée ne seront pas rouvertes.}}</translation>
-<translation id="3713809861844741608">Ouvrir le lien dans un nouvel ongle&amp;t Chromium</translation>
-<translation id="3728124580182886854">Associez Chromium et d'autres services Google à des fins de personnalisation et à d'autres fins</translation>
+<translation id="3675854891107786059">Utilisez votre <ph name="BEGIN_LINK" />propre phrase de passe<ph name="END_LINK" /> pour chiffrer toutes les données Ultimatum de votre compte Google. Les modes de paiement et les adresses de Google Pay ne seront pas chiffrés. L'historique de navigation de Ultimatum ne se synchronisera pas.</translation>
+<translation id="3685209450716071127">Ultimatum ne peut pas vérifier vos mots de passe. Essayez de vérifier votre connexion Internet.</translation>
+<translation id="370962675267501463">{COUNT,plural, =0{Votre administrateur vous recommande de relancer Ultimatum pour appliquer cette mise à jour}=1{Votre administrateur vous recommande de relancer Ultimatum pour appliquer cette mise à jour. Votre fenêtre de navigation privée ne sera pas rouverte.}one{Votre administrateur vous recommande de relancer Ultimatum pour appliquer cette mise à jour. Votre fenêtre de navigation privée ne sera pas rouverte.}other{Votre administrateur vous recommande de relancer Ultimatum pour appliquer cette mise à jour. Vos # fenêtres de navigation privée ne seront pas rouvertes.}}</translation>
+<translation id="3713809861844741608">Ouvrir le lien dans un nouvel ongle&amp;t Ultimatum</translation>
+<translation id="3728124580182886854">Associez Ultimatum et d'autres services Google à des fins de personnalisation et à d'autres fins</translation>
 <translation id="3729187154190517324">Approfondissez votre recherche en ajoutant plusieurs onglets, fichiers et outils à l'aide du bouton « Ajouter un onglet et plus ».</translation>
-<translation id="3788675262216168505">Gérer les profils Chromium</translation>
-<translation id="3790262771324122253">Découvrir pourquoi Chromium bloque certains téléchargements</translation>
-<translation id="379589255253486813">Chromium vous informera si vous devez examiner quelque chose</translation>
-<translation id="3798048725356732506">Les profils Chromium vous aident à séparer les différentes parties de votre vie. Ajoutez un nouveau profil maintenant.</translation>
-<translation id="3802055581630249637">Chromium précharge les pages que vous êtes susceptible de visiter, afin qu'elles se chargent plus rapidement lorsque vous le faites.</translation>
+<translation id="3788675262216168505">Gérer les profils Ultimatum</translation>
+<translation id="3790262771324122253">Découvrir pourquoi Ultimatum bloque certains téléchargements</translation>
+<translation id="379589255253486813">Ultimatum vous informera si vous devez examiner quelque chose</translation>
+<translation id="3798048725356732506">Les profils Ultimatum vous aident à séparer les différentes parties de votre vie. Ajoutez un nouveau profil maintenant.</translation>
+<translation id="3802055581630249637">Ultimatum précharge les pages que vous êtes susceptible de visiter, afin qu'elles se chargent plus rapidement lorsque vous le faites.</translation>
 <translation id="3810973564298564668">Gérer</translation>
-<translation id="3823384748599722168">Pour utiliser vos mots de passe enregistrés, balayez le code QR, téléchargez Chromium pour iOS et connectez-vous à votre compte Google</translation>
-<translation id="3837584850181228767">Astuce Chromium : Navigation sécurisée améliorée</translation>
+<translation id="3823384748599722168">Pour utiliser vos mots de passe enregistrés, balayez le code QR, téléchargez Ultimatum pour iOS et connectez-vous à votre compte Google</translation>
+<translation id="3837584850181228767">Astuce Ultimatum : Navigation sécurisée améliorée</translation>
 <translation id="3846683726093018685">**Résumer :** en une seule phrase de moins de 30 mots, décris le sujet principal et l'objectif du contenu de la capture d'écran.
 
           **Suggérer des questions :** génère une liste à puces de trois à cinq questions stimulantes qu'un utilisateur pourrait poser pour mieux comprendre la capture d'écran. Ces questions doivent inclure au moins une question portant précisément sur un objet visuel, sa conception ou son emplacement.</translation>
-<translation id="3848258323044014972"><ph name="PAGE_TITLE" /> – Chromium</translation>
+<translation id="3848258323044014972"><ph name="PAGE_TITLE" /> – Ultimatum</translation>
 <translation id="3885770153807205175">Sélecteur de langue</translation>
-<translation id="388648406173476553">Personnaliser et gérer Chromium. Votre attention est requise – cliquez pour plus de détails.</translation>
-<translation id="3889543394854987837">Cliquez sur votre nom pour ouvrir Chromium et commencer à naviguer.</translation>
+<translation id="388648406173476553">Personnaliser et gérer Ultimatum. Votre attention est requise – cliquez pour plus de détails.</translation>
+<translation id="3889543394854987837">Cliquez sur votre nom pour ouvrir Ultimatum et commencer à naviguer.</translation>
 <translation id="3892148308691398805">Copier le texte</translation>
-<translation id="390528597099634151"><ph name="EXISTING_USER" /> est déjà connecté à ce profil Chromium. Pour maintenir votre navigation séparée, Chromium peut créer un profil pour vous.</translation>
-<translation id="3909353120217047026">Cette extension enfreint la politique de la boutique en ligne Chrome Web Store et peut être dangereuse. Retirez-la de Chromium afin qu'elle ne puisse plus voir ni modifier vos données sur les sites que vous visitez, y compris vos renseignements personnels.</translation>
-<translation id="3937491663738985329">Personnaliser votre Chromium</translation>
+<translation id="390528597099634151"><ph name="EXISTING_USER" /> est déjà connecté à ce profil Ultimatum. Pour maintenir votre navigation séparée, Ultimatum peut créer un profil pour vous.</translation>
+<translation id="3909353120217047026">Cette extension enfreint la politique de la boutique en ligne Ultimatum Web Store et peut être dangereuse. Retirez-la de Ultimatum afin qu'elle ne puisse plus voir ni modifier vos données sur les sites que vous visitez, y compris vos renseignements personnels.</translation>
+<translation id="3937491663738985329">Personnaliser votre Ultimatum</translation>
 <translation id="3941890832296813527">Erreur d'installation : le nom du fichier du programme d'installation n'est pas valide ou n'est pas pris en charge.</translation>
-<translation id="3945058413678539331">Chromium essaie de copier des mots de passe. Pour autoriser cette action, entrez votre mot de passe Windows.</translation>
-<translation id="3954172517175569325">Vos adresses, vos mots de passe et vos modes de paiement que vous avez enregistrés dans votre compte Google seront retirés de cet appareil. Pour les utiliser à nouveau dans Chromium, reconnectez-vous.</translation>
+<translation id="3945058413678539331">Ultimatum essaie de copier des mots de passe. Pour autoriser cette action, entrez votre mot de passe Windows.</translation>
+<translation id="3954172517175569325">Vos adresses, vos mots de passe et vos modes de paiement que vous avez enregistrés dans votre compte Google seront retirés de cet appareil. Pour les utiliser à nouveau dans Ultimatum, reconnectez-vous.</translation>
 <translation id="395904275706073188">Les pages protégées ne peuvent pas être lues. Essayez une autre page.</translation>
-<translation id="3962647064319009959">Découvrez comment Chromium assure votre sécurité</translation>
-<translation id="3971865010372729242">Lorsque vous tapez dans la barre d'adresse ou le champ de recherche, Chromium envoie ce que vous tapez aux outils de recherche, d'IA et d'agent de votre organisation pour obtenir des suggestions.</translation>
-<translation id="3975724895399328945">À propos de &amp;Google Chrome for Testing</translation>
-<translation id="3997429360543082038">À propos de Chromium OS</translation>
-<translation id="4010059961270896984">Lorsque vous visitez un site, Chromium envoie une partie brouillée de l'URL à la <ph name="BEGIN_LINK" />navigation sécurisée Google<ph name="END_LINK" /> au moyen d'un serveur confidentiel qui masque votre adresse IP. Si un site présente un comportement suspect, les URL complètes ainsi que des extraits du contenu des pages sont aussi envoyés.</translation>
-<translation id="4019629340646866719">Chromium OS fonctionne grâce à d'autres <ph name="BEGIN_LINK_CROS_OSS" />logiciels libres<ph name="END_LINK_CROS_OSS" />, tout comme l'<ph name="BEGIN_LINK_LINUX_OSS" />environnement de conception Linux<ph name="END_LINK_LINUX_OSS" />.</translation>
+<translation id="3962647064319009959">Découvrez comment Ultimatum assure votre sécurité</translation>
+<translation id="3971865010372729242">Lorsque vous tapez dans la barre d'adresse ou le champ de recherche, Ultimatum envoie ce que vous tapez aux outils de recherche, d'IA et d'agent de votre organisation pour obtenir des suggestions.</translation>
+<translation id="3975724895399328945">À propos de &amp;Ultimatum for Testing</translation>
+<translation id="3997429360543082038">À propos de Ultimatum OS</translation>
+<translation id="4010059961270896984">Lorsque vous visitez un site, Ultimatum envoie une partie brouillée de l'URL à la <ph name="BEGIN_LINK" />navigation sécurisée Google<ph name="END_LINK" /> au moyen d'un serveur confidentiel qui masque votre adresse IP. Si un site présente un comportement suspect, les URL complètes ainsi que des extraits du contenu des pages sont aussi envoyés.</translation>
+<translation id="4019629340646866719">Ultimatum OS fonctionne grâce à d'autres <ph name="BEGIN_LINK_CROS_OSS" />logiciels libres<ph name="END_LINK_CROS_OSS" />, tout comme l'<ph name="BEGIN_LINK_LINUX_OSS" />environnement de conception Linux<ph name="END_LINK_LINUX_OSS" />.</translation>
 <translation id="4022972681110646219">Traduire le contenu à l'écran</translation>
 <translation id="4023601594785368013">Langue d'origine : <ph name="LANGUAGE" /></translation>
-<translation id="4023845192681161785">Ouvrez des liens dans Chromium à partir de n'importe quelle appli. Il est en outre épinglé à votre barre des tâches pour un accès facile.</translation>
-<translation id="4036079820698952681">Aidez-nous à améliorer Chromium en nous signalant les <ph name="BEGIN_LINK" />paramètres actuels<ph name="END_LINK" /></translation>
+<translation id="4023845192681161785">Ouvrez des liens dans Ultimatum à partir de n'importe quelle appli. Il est en outre épinglé à votre barre des tâches pour un accès facile.</translation>
+<translation id="4036079820698952681">Aidez-nous à améliorer Ultimatum en nous signalant les <ph name="BEGIN_LINK" />paramètres actuels<ph name="END_LINK" /></translation>
 <translation id="4050175100176540509">La dernière version propose d'importantes améliorations de la sécurité ainsi que de nouvelles fonctionnalités.</translation>
 <translation id="4055805654398742145">Gestionnaire de mots de passe</translation>
-<translation id="4061696872429826774">Un autre programme sur votre ordinateur a ajouté une extension qui pourrait modifier le fonctionnement de Chromium.
+<translation id="4061696872429826774">Un autre programme sur votre ordinateur a ajouté une extension qui pourrait modifier le fonctionnement de Ultimatum.
 
 <ph name="EXTENSION_NAME" /></translation>
-<translation id="4095980151185649725">{COUNT,plural, =1{Votre organisation ferme automatiquement Chromium lorsqu'il n'est pas utilisé pendant 1 minute. Les données de navigation sont supprimées. Cela peut inclure l'historique, le remplissage automatique et les téléchargements.}one{Votre organisation ferme automatiquement Chromium lorsqu'il n'est pas utilisé pendant # minutes. Les données de navigation sont supprimées. Cela peut inclure l'historique, le remplissage automatique et les téléchargements.}other{Votre organisation ferme automatiquement Chromium lorsqu'il n'est pas utilisé pendant # minutes. Les données de navigation sont supprimées. Cela peut inclure l'historique, le remplissage automatique et les téléchargements.}}</translation>
-<translation id="4118474109249235144">Navigation privée Chromium</translation>
-<translation id="4122186850977583290">Accéder à la page À propos de Chromium</translation>
-<translation id="4135244987012252068">Personnalisez Chromium pour donner un nouveau style à votre navigateur</translation>
-<translation id="4147856324248078748">Personnaliser votre Chromium</translation>
+<translation id="4095980151185649725">{COUNT,plural, =1{Votre organisation ferme automatiquement Ultimatum lorsqu'il n'est pas utilisé pendant 1 minute. Les données de navigation sont supprimées. Cela peut inclure l'historique, le remplissage automatique et les téléchargements.}one{Votre organisation ferme automatiquement Ultimatum lorsqu'il n'est pas utilisé pendant # minutes. Les données de navigation sont supprimées. Cela peut inclure l'historique, le remplissage automatique et les téléchargements.}other{Votre organisation ferme automatiquement Ultimatum lorsqu'il n'est pas utilisé pendant # minutes. Les données de navigation sont supprimées. Cela peut inclure l'historique, le remplissage automatique et les téléchargements.}}</translation>
+<translation id="4118474109249235144">Navigation privée Ultimatum</translation>
+<translation id="4122186850977583290">Accéder à la page À propos de Ultimatum</translation>
+<translation id="4135244987012252068">Personnalisez Ultimatum pour donner un nouveau style à votre navigateur</translation>
+<translation id="4147856324248078748">Personnaliser votre Ultimatum</translation>
 <translation id="4148957013307229264">Installation...</translation>
-<translation id="419998258129752635"><ph name="PAGE_TITLE" /> – Connexion au réseau – Chromium</translation>
-<translation id="421369550622382712">Découvrez des applications, des jeux, des extensions et des thèmes exceptionnels conçus pour Chromium.</translation>
-<translation id="4217080900579554343">Pour obtenir cette extension et plus sur tous vos ordinateurs, connectez-vous à Chromium</translation>
-<translation id="4217972271355023382">Pour rester en sécurité en ligne avec les choix de tes parents, passe à ton profil Chromium où tu as utilisé l'adresse <ph name="USER_EMAIL_ADDRESS" /> pour te connecter</translation>
+<translation id="419998258129752635"><ph name="PAGE_TITLE" /> – Connexion au réseau – Ultimatum</translation>
+<translation id="421369550622382712">Découvrez des applications, des jeux, des extensions et des thèmes exceptionnels conçus pour Ultimatum.</translation>
+<translation id="4217080900579554343">Pour obtenir cette extension et plus sur tous vos ordinateurs, connectez-vous à Ultimatum</translation>
+<translation id="4217972271355023382">Pour rester en sécurité en ligne avec les choix de tes parents, passe à ton profil Ultimatum où tu as utilisé l'adresse <ph name="USER_EMAIL_ADDRESS" /> pour te connecter</translation>
 <translation id="4222932583846282852">Annulation en cours…</translation>
 <translation id="4224210481850767180">L'installation a été annulée.</translation>
-<translation id="4230135487732243613">Associer vos données de Chromium à ce compte?</translation>
-<translation id="4251772536351901305">Vous avertit des sites dangereux, même ceux que Google ne connaissait pas auparavant, en analysant plus de données provenant des sites que la protection standard. Vous pouvez choisir d'ignorer les avertissements de Chromium.</translation>
-<translation id="4269093074552541569">Se déconnecter de Chromium</translation>
-<translation id="4271805377592243930">Obtenir de l'aide pour Chromium</translation>
+<translation id="4230135487732243613">Associer vos données de Ultimatum à ce compte?</translation>
+<translation id="4251772536351901305">Vous avertit des sites dangereux, même ceux que Google ne connaissait pas auparavant, en analysant plus de données provenant des sites que la protection standard. Vous pouvez choisir d'ignorer les avertissements de Ultimatum.</translation>
+<translation id="4269093074552541569">Se déconnecter de Ultimatum</translation>
+<translation id="4271805377592243930">Obtenir de l'aide pour Ultimatum</translation>
 <translation id="4281844954008187215">Conditions d'utilisation</translation>
-<translation id="4285930937574705105">Échec de l'installation suite à une erreur non spécifiée. Si Chromium est en cours d'exécution, veuillez le fermer, puis réessayer.</translation>
-<translation id="4298125729853015961">Exporter des mots de passe à partir de Chromium</translation>
+<translation id="4285930937574705105">Échec de l'installation suite à une erreur non spécifiée. Si Ultimatum est en cours d'exécution, veuillez le fermer, puis réessayer.</translation>
+<translation id="4298125729853015961">Exporter des mots de passe à partir de Ultimatum</translation>
 <translation id="4304713468139749426">Gestionnaire de mots de passe</translation>
 <translation id="4334241893986177674">Recherchez dans cette capture d'écran</translation>
 <translation id="4334294535648607276">Téléchargement terminé.</translation>
-<translation id="4384331407722351213">Lancer Chromium au démarrage de Windows</translation>
-<translation id="4384993550046411228">Accédez facilement aux fonctionnalités que vous connaissez et aimez, et auxquelles vous faites confiance en définissant Chromium comme navigateur par défaut. Chromium sera épinglé à votre barre des tâches pour un accès rapide.</translation>
-<translation id="439358628917130594"><ph name="MANAGER" /> exige que vous lisiez et acceptiez les conditions d'utilisation suivantes pour utiliser cet appareil. Ces dernières n'étendent pas, ne modifient pas ni ne restreignent pas les conditions d'utilisation de Chromium OS.</translation>
-<translation id="4407044323746248786">Quitter Chromium quand même?</translation>
+<translation id="4384331407722351213">Lancer Ultimatum au démarrage de Windows</translation>
+<translation id="4384993550046411228">Accédez facilement aux fonctionnalités que vous connaissez et aimez, et auxquelles vous faites confiance en définissant Ultimatum comme navigateur par défaut. Ultimatum sera épinglé à votre barre des tâches pour un accès rapide.</translation>
+<translation id="439358628917130594"><ph name="MANAGER" /> exige que vous lisiez et acceptiez les conditions d'utilisation suivantes pour utiliser cet appareil. Ces dernières n'étendent pas, ne modifient pas ni ne restreignent pas les conditions d'utilisation de Ultimatum OS.</translation>
+<translation id="4407044323746248786">Quitter Ultimatum quand même?</translation>
 <translation id="4413205837991854510">Toujours afficher le raccourci de la recherche d'images</translation>
-<translation id="4415566066719264597">Laisser Chromium s'exécuter en arrière-plan</translation>
-<translation id="4419831163359812184">{NUM_EXTENSIONS,plural, =1{Chromium vous recommande de la retirer. <ph name="BEGIN_LINK" />En savoir plus sur les extensions prises en charge<ph name="END_LINK" />}one{Chromium vous recommande de la retirer. <ph name="BEGIN_LINK" />En savoir plus sur les extensions prises en charge<ph name="END_LINK" />}other{Chromium vous recommande de les retirer. <ph name="BEGIN_LINK" />En savoir plus sur les extensions prises en charge<ph name="END_LINK" />}}</translation>
-<translation id="4423735387467980091">Personnaliser et commander Chrome</translation>
+<translation id="4415566066719264597">Laisser Ultimatum s'exécuter en arrière-plan</translation>
+<translation id="4419831163359812184">{NUM_EXTENSIONS,plural, =1{Ultimatum vous recommande de la retirer. <ph name="BEGIN_LINK" />En savoir plus sur les extensions prises en charge<ph name="END_LINK" />}one{Ultimatum vous recommande de la retirer. <ph name="BEGIN_LINK" />En savoir plus sur les extensions prises en charge<ph name="END_LINK" />}other{Ultimatum vous recommande de les retirer. <ph name="BEGIN_LINK" />En savoir plus sur les extensions prises en charge<ph name="END_LINK" />}}</translation>
+<translation id="4423735387467980091">Personnaliser et commander Ultimatum</translation>
 <translation id="4427306783828095590">La protection renforcée en fait plus pour bloquer l'hameçonnage et les logiciels nuisibles</translation>
 <translation id="4434353761996769206">Erreur du programme d'installation : <ph name="INSTALLER_ERROR" /></translation>
-<translation id="4438870983368648614"><ph name="MANAGER" /> gère Chromium</translation>
-<translation id="444069871276811466">Ajouter un profil Chromium</translation>
-<translation id="4447409407328223819">À propos de Chrome for Testing</translation>
-<translation id="4470974262661801543">Pour utiliser et enregistrer les données Chromium dans votre compte Google, saisissez votre phrase de passe</translation>
+<translation id="4438870983368648614"><ph name="MANAGER" /> gère Ultimatum</translation>
+<translation id="444069871276811466">Ajouter un profil Ultimatum</translation>
+<translation id="4447409407328223819">À propos de Ultimatum for Testing</translation>
+<translation id="4470974262661801543">Pour utiliser et enregistrer les données Ultimatum dans votre compte Google, saisissez votre phrase de passe</translation>
 <translation id="4493028449971051158">Erreur de démarrage : veuillez exécuter le programme d'installation en tant qu'administrateur.</translation>
 <translation id="4501471624619070934">L'installation a échoué, car l'accès est restreint dans ce pays.</translation>
-<translation id="4510853178268397146">Cette extension n'a pas publié de pratiques en matière de confidentialité, telles que la manière dont elle collecte et utilise les données. Chromium vous recommande de la retirer.</translation>
-<translation id="452711251841752011">Bienvenue à Chromium, une nouvelle fenêtre de navigateur a été ouverte</translation>
-<translation id="4531137820806573936">Chromium a besoin d'une autorisation pour cartographier votre environnement et suivre vos mains</translation>
-<translation id="4536805923587466102">Vous êtes déjà connecté en tant que <ph name="USER_EMAIL_ADDRESS" /> dans un autre profil Chromium</translation>
-<translation id="4548534452171747496">Chromium précharge les pages, ce qui accélère la navigation et la recherche. <ph name="BEGIN_LINK" />En savoir plus sur les pages de préchargement<ph name="END_LINK" /></translation>
+<translation id="4510853178268397146">Cette extension n'a pas publié de pratiques en matière de confidentialité, telles que la manière dont elle collecte et utilise les données. Ultimatum vous recommande de la retirer.</translation>
+<translation id="452711251841752011">Bienvenue à Ultimatum, une nouvelle fenêtre de navigateur a été ouverte</translation>
+<translation id="4531137820806573936">Ultimatum a besoin d'une autorisation pour cartographier votre environnement et suivre vos mains</translation>
+<translation id="4536805923587466102">Vous êtes déjà connecté en tant que <ph name="USER_EMAIL_ADDRESS" /> dans un autre profil Ultimatum</translation>
+<translation id="4548534452171747496">Ultimatum précharge les pages, ce qui accélère la navigation et la recherche. <ph name="BEGIN_LINK" />En savoir plus sur les pages de préchargement<ph name="END_LINK" /></translation>
 <translation id="4549180975214802957">Améliorez la sécurité en ligne pour tous en signalant un site que vous pensez dangereux.</translation>
-<translation id="4570813286784708942">Chromium a bloqué ce téléchargement, car vous avez désactivé la Navigation sécurisée et le fichier ne peut pas être vérifié</translation>
-<translation id="4583692638088316420">Essayez Lentille Google avec Chromium sur votre téléphone</translation>
+<translation id="4570813286784708942">Ultimatum a bloqué ce téléchargement, car vous avez désactivé la Navigation sécurisée et le fichier ne peut pas être vérifié</translation>
+<translation id="4583692638088316420">Essayez Lentille Google avec Ultimatum sur votre téléphone</translation>
 <translation id="4594305310729380060">Dans le gestionnaire de mots de passe sur cet appareil</translation>
-<translation id="459535195905078186">Applications de Chromium</translation>
+<translation id="459535195905078186">Applications de Ultimatum</translation>
 <translation id="4598116752460667024">Chercher n'importe quel processus dans la liste.</translation>
-<translation id="4613863813562375431">Version de Chromium OS</translation>
-<translation id="4621240073146040695">La mise à jour est presque terminée! Il ne reste plus qu'à relancer Chromium.</translation>
-<translation id="4625064703209785397">Accélère les sites avec le moteur V8 de Chromium, mais rend Chromium légèrement moins résistant aux attaques</translation>
-<translation id="4665829708273112819">Avertissement : Chromium ne peut pas empêcher les extensions d'enregistrer votre historique de navigation. Pour désactiver cette extension en mode de navigation privée, désélectionnez cette option.</translation>
-<translation id="4673151026126227699">Si vous partagez aussi les rapports d'utilisation de Chromium, ceux-ci incluent les URL des pages que vous visitez</translation>
-<translation id="4677944499843243528">Le profil semble être utilisé par un autre processus de Chromium (<ph name="PROCESS_ID" />) sur un autre ordinateur (<ph name="HOST_NAME" />). Chromium a verrouillé ce profil pour éviter qu'il ne soit endommagé. Si vous êtes sûr qu'aucun autre processus n'utilise ce profil, vous pouvez le déverrouiller et relancer Chromium.</translation>
+<translation id="4613863813562375431">Version de Ultimatum OS</translation>
+<translation id="4621240073146040695">La mise à jour est presque terminée! Il ne reste plus qu'à relancer Ultimatum.</translation>
+<translation id="4625064703209785397">Accélère les sites avec le moteur V8 de Ultimatum, mais rend Ultimatum légèrement moins résistant aux attaques</translation>
+<translation id="4665829708273112819">Avertissement : Ultimatum ne peut pas empêcher les extensions d'enregistrer votre historique de navigation. Pour désactiver cette extension en mode de navigation privée, désélectionnez cette option.</translation>
+<translation id="4673151026126227699">Si vous partagez aussi les rapports d'utilisation de Ultimatum, ceux-ci incluent les URL des pages que vous visitez</translation>
+<translation id="4677944499843243528">Le profil semble être utilisé par un autre processus de Ultimatum (<ph name="PROCESS_ID" />) sur un autre ordinateur (<ph name="HOST_NAME" />). Ultimatum a verrouillé ce profil pour éviter qu'il ne soit endommagé. Si vous êtes sûr qu'aucun autre processus n'utilise ce profil, vous pouvez le déverrouiller et relancer Ultimatum.</translation>
 <translation id="4680828127924988555">Annuler l'installation</translation>
-<translation id="469259825538636168">Certaines de vos données Chromium n'ont pas encore été enregistrées dans votre compte Google. Essayez d'attendre quelques minutes avant de vous déconnecter. Si vous vous déconnectez maintenant, ces données seront supprimées.</translation>
-<translation id="4708193446201257833">Pendant que vous êtes connecté, vous pouvez utiliser vos mots de passe et bien plus encore à partir de votre compte Google dans Chromium. <ph name="SHORTCUT" /> peut modifier les paramètres de vos services Google.</translation>
-<translation id="4708774505295300557">Un utilisateur s'est récemment connecté à Chromium sur cet ordinateur en tant que <ph name="ACCOUNT_EMAIL_LAST" />. Veuillez créer un autre utilisateur Chromium pour séparer vos données.</translation>
+<translation id="469259825538636168">Certaines de vos données Ultimatum n'ont pas encore été enregistrées dans votre compte Google. Essayez d'attendre quelques minutes avant de vous déconnecter. Si vous vous déconnectez maintenant, ces données seront supprimées.</translation>
+<translation id="4708193446201257833">Pendant que vous êtes connecté, vous pouvez utiliser vos mots de passe et bien plus encore à partir de votre compte Google dans Ultimatum. <ph name="SHORTCUT" /> peut modifier les paramètres de vos services Google.</translation>
+<translation id="4708774505295300557">Un utilisateur s'est récemment connecté à Ultimatum sur cet ordinateur en tant que <ph name="ACCOUNT_EMAIL_LAST" />. Veuillez créer un autre utilisateur Ultimatum pour séparer vos données.</translation>
 <translation id="4724676981607797757">Échec de l'installation en raison d'une erreur de protocole non pris en charge.</translation>
-<translation id="4746050847053251315">Quitter Chromium quand même?</translation>
-<translation id="4748217263233248895">Une mise à jour de sécurité spéciale pour Chromium vient d'être effectuée. Redémarrez maintenant, et nous restaurerons vos onglets.</translation>
-<translation id="4759645701210484457">Demander à Chromium</translation>
-<translation id="4771701986670315895">Vous n'avez pas effectué de visite récemment. Chromium a retiré <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> et <ph name="COUNT" /> autres.</translation>
-<translation id="4788777615168560705">Chromium ne peut pas vérifier vos mots de passe. Réessayez après 24 heures ou <ph name="BEGIN_LINK" />effectuez une vérification des mots de passe dans votre compte Google<ph name="END_LINK" />.</translation>
+<translation id="4746050847053251315">Quitter Ultimatum quand même?</translation>
+<translation id="4748217263233248895">Une mise à jour de sécurité spéciale pour Ultimatum vient d'être effectuée. Redémarrez maintenant, et nous restaurerons vos onglets.</translation>
+<translation id="4759645701210484457">Demander à Ultimatum</translation>
+<translation id="4771701986670315895">Vous n'avez pas effectué de visite récemment. Ultimatum a retiré <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> et <ph name="COUNT" /> autres.</translation>
+<translation id="4788777615168560705">Ultimatum ne peut pas vérifier vos mots de passe. Réessayez après 24 heures ou <ph name="BEGIN_LINK" />effectuez une vérification des mots de passe dans votre compte Google<ph name="END_LINK" />.</translation>
 <translation id="479167709087336770">Cela fait appel au même correcteur orthographique que celui qui est utilisé dans la recherche Google. Le texte que vous tapez dans le navigateur est envoyé à Google. Vous pouvez toujours modifier ce comportement dans les paramètres.</translation>
-<translation id="4814736265800133385">Utiliser Chromium sans compte</translation>
-<translation id="4888717733111232871">Règle de trafic entrant pour Chrome afin d'autoriser le trafic mDNS.</translation>
-<translation id="4893347770495441059">Relancer &amp;Chromium pour le mettre à jour</translation>
+<translation id="4814736265800133385">Utiliser Ultimatum sans compte</translation>
+<translation id="4888717733111232871">Règle de trafic entrant pour Ultimatum afin d'autoriser le trafic mDNS.</translation>
+<translation id="4893347770495441059">Relancer &amp;Ultimatum pour le mettre à jour</translation>
 <translation id="4918086044614829423">Accepter</translation>
 <translation id="4918844574251943176">Image copiée</translation>
-<translation id="4943838377383847465">Chromium fonctionne en mode arrière-plan.</translation>
-<translation id="494490797786467921">Cliquer sur le bouton pour fermer la boîte de dialogue de connexion à Chromium</translation>
-<translation id="4950660488495335294">Avec les profils Chromium, vous pouvez séparer toutes vos données Chromium. Créez des profils pour vos amis et votre famille, ou pour dissocier travail et divertissement.</translation>
-<translation id="4987820182225656817">Les invités peuvent utiliser Chromium sans rien laisser derrière eux.</translation>
-<translation id="4992938037305302429">Votre compte dans Chromium</translation>
-<translation id="4994636714258228724">Ajouter un utilisateur à Chromium</translation>
-<translation id="5083712646171654472">Gemini dans Chromium utilise la navigation automatique pour travailler dans vos onglets et accomplir les tâches que vous lui confiez. <ph name="LINK_BEGIN" />En savoir plus<ph name="LINK_END" /></translation>
-<translation id="5123973130450702873">Chromium a besoin de l'autorisation de suivre vos mains</translation>
-<translation id="5141988424377517949">Vous n'avez pas effectué de visite récemment. Chromium a retiré <ph name="PERMISSION_1" />,<ph name="PERMISSION_2" /> et <ph name="PERMISSION_3" />.</translation>
+<translation id="4943838377383847465">Ultimatum fonctionne en mode arrière-plan.</translation>
+<translation id="494490797786467921">Cliquer sur le bouton pour fermer la boîte de dialogue de connexion à Ultimatum</translation>
+<translation id="4950660488495335294">Avec les profils Ultimatum, vous pouvez séparer toutes vos données Ultimatum. Créez des profils pour vos amis et votre famille, ou pour dissocier travail et divertissement.</translation>
+<translation id="4987820182225656817">Les invités peuvent utiliser Ultimatum sans rien laisser derrière eux.</translation>
+<translation id="4992938037305302429">Votre compte dans Ultimatum</translation>
+<translation id="4994636714258228724">Ajouter un utilisateur à Ultimatum</translation>
+<translation id="5083712646171654472">Gemini dans Ultimatum utilise la navigation automatique pour travailler dans vos onglets et accomplir les tâches que vous lui confiez. <ph name="LINK_BEGIN" />En savoir plus<ph name="LINK_END" /></translation>
+<translation id="5123973130450702873">Ultimatum a besoin de l'autorisation de suivre vos mains</translation>
+<translation id="5141988424377517949">Vous n'avez pas effectué de visite récemment. Ultimatum a retiré <ph name="PERMISSION_1" />,<ph name="PERMISSION_2" /> et <ph name="PERMISSION_3" />.</translation>
 <translation id="5174969993834422967">Vous bloquez généralement les notifications. Pour permettre à ce site de vous envoyer des notifications, cliquez sur l'icône de notification dans le coin droit de votre barre d'adresse.</translation>
 <translation id="5174983315706567306">Espace disque insuffisant.</translation>
-<translation id="5187123684706427865">Le compte Chromium nécessite une réauthentification</translation>
-<translation id="5224391634244552924">Aucun mot de passe enregistré. Chromium ne peut vérifier vos mots de passe que si vous les enregistrez.</translation>
-<translation id="5231355151045086930">Se déconnecter de Chromium</translation>
+<translation id="5187123684706427865">Le compte Ultimatum nécessite une réauthentification</translation>
+<translation id="5224391634244552924">Aucun mot de passe enregistré. Ultimatum ne peut vérifier vos mots de passe que si vous les enregistrez.</translation>
+<translation id="5231355151045086930">Se déconnecter de Ultimatum</translation>
 <translation id="5234764350956374838">Fermer</translation>
 <translation id="5254739261293693943">Poser des questions à propos de cette vidéo</translation>
-<translation id="5276305953263010518">Obtenez l'appli Chromium pour enregistrer des mots de passe en déplacement</translation>
-<translation id="5277894862589591112">Pour appliquer vos modifications, relancez Chromium</translation>
+<translation id="5276305953263010518">Obtenez l'appli Ultimatum pour enregistrer des mots de passe en déplacement</translation>
+<translation id="5277894862589591112">Pour appliquer vos modifications, relancez Ultimatum</translation>
 <translation id="5286907366254680517">Détectée</translation>
-<translation id="5289287148052354622">Obtenir l'appli Chromium</translation>
-<translation id="5294316920224716406">Lors de la navigation en mode Navigation privée, Chromium vous avertira avant de charger un site en utilisant une connexion non sécurisée</translation>
-<translation id="5313228254328109263">Service interne de mise à jour de Chromium</translation>
+<translation id="5289287148052354622">Obtenir l'appli Ultimatum</translation>
+<translation id="5294316920224716406">Lors de la navigation en mode Navigation privée, Ultimatum vous avertira avant de charger un site en utilisant une connexion non sécurisée</translation>
+<translation id="5313228254328109263">Service interne de mise à jour de Ultimatum</translation>
 <translation id="5346389065299425353">Approfondissez votre recherche en ajoutant plusieurs onglets, fichiers et outils</translation>
-<translation id="5352264705793813212">Chromium a trouvé des recommandations de sécurité que vous pouvez examiner</translation>
-<translation id="5352361688875342522">Autres profils Chromium</translation>
-<translation id="5358375970380395591">Vous vous connectez avec un compte géré et rendez son administrateur maître de votre profil Chromium. Vos données de Chromium, comme vos applications, vos favoris, votre historique, vos mots de passe et vos autres paramètres, vont être associées de manière permanente à <ph name="USER_NAME" />. Vous pourrez supprimer ces données à l'aide du tableau de bord des comptes Google, mais vous ne pourrez pas les associer à un autre compte. <ph name="LEARN_MORE" /></translation>
+<translation id="5352264705793813212">Ultimatum a trouvé des recommandations de sécurité que vous pouvez examiner</translation>
+<translation id="5352361688875342522">Autres profils Ultimatum</translation>
+<translation id="5358375970380395591">Vous vous connectez avec un compte géré et rendez son administrateur maître de votre profil Ultimatum. Vos données de Ultimatum, comme vos applications, vos favoris, votre historique, vos mots de passe et vos autres paramètres, vont être associées de manière permanente à <ph name="USER_NAME" />. Vous pourrez supprimer ces données à l'aide du tableau de bord des comptes Google, mais vous ne pourrez pas les associer à un autre compte. <ph name="LEARN_MORE" /></translation>
 <translation id="5368118228313795342">Code supplémentaire : <ph name="EXTRA_CODE" />.</translation>
-<translation id="5377622451696208284">Pour bénéficier de la personnalisation, incluez Chromium dans l'activité sur le Web et dans les applications</translation>
-<translation id="5383439451358640070">Découvrir pourquoi Chromium bloque certains fichiers</translation>
-<translation id="5386450000063123300">Mise à jour de Chromium en cours (<ph name="PROGRESS_PERCENT" />)…</translation>
-<translation id="538767207339317086">Autoriser la connexion à Chromium</translation>
-<translation id="5405650547142096840">Supprimer de Chromium</translation>
-<translation id="5424544524441439284">Réduit les performances, mais rend Chromium plus résistant aux attaques</translation>
-<translation id="5427571867875391349">Faire de Chromium le navigateur par défaut</translation>
-<translation id="5438241569118040789"><ph name="PAGE_TITLE" /> - Chromium bêta</translation>
-<translation id="5460618461609401056">{NUM_TABS,plural, =1{Chromium recommande de suspendre l'onglet qui ralentit votre navigateur}one{Chromium recommande de suspendre l'onglet qui ralentit votre navigateur}other{Chromium recommande de suspendre les onglets qui ralentissent votre navigateur}}</translation>
-<translation id="5473971139929175403">Chromium peut ne pas fonctionner correctement parce qu'il n'est plus pris en charge sur cette distribution Linux</translation>
-<translation id="5475924890392386523">Chromium a bloqué ce téléchargement, car le fichier peut endommager vos comptes personnels et de réseaux sociaux</translation>
-<translation id="5480860683791598150">Chromium a besoin d'accéder à votre position afin de la partager avec ce site</translation>
-<translation id="549669000822060376">Veuillez patienter pendant que Chromium installe les dernières mises à jour système.</translation>
-<translation id="5496810170689441661">Chromium essaie de modifier des mots de passe. Pour autoriser cette action, entrez votre mot de passe Windows.</translation>
+<translation id="5377622451696208284">Pour bénéficier de la personnalisation, incluez Ultimatum dans l'activité sur le Web et dans les applications</translation>
+<translation id="5383439451358640070">Découvrir pourquoi Ultimatum bloque certains fichiers</translation>
+<translation id="5386450000063123300">Mise à jour de Ultimatum en cours (<ph name="PROGRESS_PERCENT" />)…</translation>
+<translation id="538767207339317086">Autoriser la connexion à Ultimatum</translation>
+<translation id="5405650547142096840">Supprimer de Ultimatum</translation>
+<translation id="5424544524441439284">Réduit les performances, mais rend Ultimatum plus résistant aux attaques</translation>
+<translation id="5427571867875391349">Faire de Ultimatum le navigateur par défaut</translation>
+<translation id="5438241569118040789"><ph name="PAGE_TITLE" /> - Ultimatum bêta</translation>
+<translation id="5460618461609401056">{NUM_TABS,plural, =1{Ultimatum recommande de suspendre l'onglet qui ralentit votre navigateur}one{Ultimatum recommande de suspendre l'onglet qui ralentit votre navigateur}other{Ultimatum recommande de suspendre les onglets qui ralentissent votre navigateur}}</translation>
+<translation id="5473971139929175403">Ultimatum peut ne pas fonctionner correctement parce qu'il n'est plus pris en charge sur cette distribution Linux</translation>
+<translation id="5475924890392386523">Ultimatum a bloqué ce téléchargement, car le fichier peut endommager vos comptes personnels et de réseaux sociaux</translation>
+<translation id="5480860683791598150">Ultimatum a besoin d'accéder à votre position afin de la partager avec ce site</translation>
+<translation id="549669000822060376">Veuillez patienter pendant que Ultimatum installe les dernières mises à jour système.</translation>
+<translation id="5496810170689441661">Ultimatum essaie de modifier des mots de passe. Pour autoriser cette action, entrez votre mot de passe Windows.</translation>
 <translation id="5524890928877629608">Coin supérieur gauche de la zone de recherche : gauche <ph name="LEFT" /> %, haut <ph name="TOP" /> %</translation>
-<translation id="5527463683072221100">Ouvrir les PDF dans Chromium</translation>
+<translation id="5527463683072221100">Ouvrir les PDF dans Ultimatum</translation>
 <translation id="5536164441519929134">Posez une question<ph name="LINE_BREAK" />sur cet onglet</translation>
 <translation id="5579324208890605088">Erreur de démarrage : veuillez exécuter le programme d'installation en tant qu'utilisateur normal et non en tant qu'administrateur.</translation>
-<translation id="5580770360767802657">Utilisez Chromium par défaut et épinglez-le</translation>
+<translation id="5580770360767802657">Utilisez Ultimatum par défaut et épinglez-le</translation>
 <translation id="5596627076506792578">Autres options</translation>
 <translation id="5605834417512968703">Sélectionner un élément à rechercher avec la recherche d'images ou appuyer sur Échap pour quitter la recherche d'images</translation>
 <translation id="5618818588972826921">Sélectionnez n'importe quel texte ou image pour effectuer une recherche avec la recherche d'images ou appuyez sur Échap pour quitter la recherche d'images</translation>
-<translation id="5623402015214259806">{0,plural, =0{Une mise à jour de Chromium est proposée}=1{Une mise à jour de Chromium est proposée}one{Une mise à jour de Chromium est proposée depuis # jour}other{Une mise à jour de Chromium est proposée depuis # jours}}</translation>
-<translation id="5643865575100044307">Supprimez toujours les données relatives aux sites sur votre appareil lorsque vous fermez Chromium</translation>
-<translation id="5653831366781983928">Veuillez redémarrer Chromium maintenant</translation>
+<translation id="5623402015214259806">{0,plural, =0{Une mise à jour de Ultimatum est proposée}=1{Une mise à jour de Ultimatum est proposée}one{Une mise à jour de Ultimatum est proposée depuis # jour}other{Une mise à jour de Ultimatum est proposée depuis # jours}}</translation>
+<translation id="5643865575100044307">Supprimez toujours les données relatives aux sites sur votre appareil lorsque vous fermez Ultimatum</translation>
+<translation id="5653831366781983928">Veuillez redémarrer Ultimatum maintenant</translation>
 <translation id="5690427481109656848">Google LLC</translation>
-<translation id="5698481217667032250">Afficher Chromium dans cette langue</translation>
+<translation id="5698481217667032250">Afficher Ultimatum dans cette langue</translation>
 <translation id="569897634095159764">Impossible de se connecter à Internet. Le serveur mandataire nécessite une authentification.</translation>
-<translation id="5713518899297503106">Les profils Chromium vous permettent de séparer votre navigation personnelle de votre travail. Ajoutez un nouveau profil maintenant.</translation>
-<translation id="5768371961535086509">Chromium libère de la mémoire à partir des onglets inactifs. Cela donne aux onglets actifs et aux autres applis plus de ressources informatiques, et assure la rapidité de Chromium. Vos onglets inactifs redeviennent automatiquement actifs lorsque vous y revenez. <ph name="BEGIN_LINK" />En savoir plus sur l'Économiseur de mémoire<ph name="END_LINK" /></translation>
-<translation id="5775198138441669627">Si vous avez oublié votre phrase de passe ou si vous souhaitez modifier ce paramètre, <ph name="SETTINGS_LINK" /> les données Chromium de votre compte</translation>
-<translation id="5800158606660203929">Personnalisez et gérez Chromium. Définissez Chromium comme navigateur par défaut.</translation>
+<translation id="5713518899297503106">Les profils Ultimatum vous permettent de séparer votre navigation personnelle de votre travail. Ajoutez un nouveau profil maintenant.</translation>
+<translation id="5768371961535086509">Ultimatum libère de la mémoire à partir des onglets inactifs. Cela donne aux onglets actifs et aux autres applis plus de ressources informatiques, et assure la rapidité de Ultimatum. Vos onglets inactifs redeviennent automatiquement actifs lorsque vous y revenez. <ph name="BEGIN_LINK" />En savoir plus sur l'Économiseur de mémoire<ph name="END_LINK" /></translation>
+<translation id="5775198138441669627">Si vous avez oublié votre phrase de passe ou si vous souhaitez modifier ce paramètre, <ph name="SETTINGS_LINK" /> les données Ultimatum de votre compte</translation>
+<translation id="5800158606660203929">Personnalisez et gérez Ultimatum. Définissez Ultimatum comme navigateur par défaut.</translation>
 <translation id="5809516625706423866">Impossible de se connecter à Internet. HTTP 401 Unauthorized. Veuillez vérifier la configuration de votre mandataire.</translation>
-<translation id="5817952762723416573">Accélère les sites avec le moteur V8 de Chromium, mais rend Chromium légèrement moins résistant aux attaques. Ce paramètre est désactivé.</translation>
-<translation id="5821520528363214608">Pour utiliser et enregistrer les données Chromium dans votre compte Google, mettez à jour Chromium</translation>
+<translation id="5817952762723416573">Accélère les sites avec le moteur V8 de Ultimatum, mais rend Ultimatum légèrement moins résistant aux attaques. Ce paramètre est désactivé.</translation>
+<translation id="5821520528363214608">Pour utiliser et enregistrer les données Ultimatum dans votre compte Google, mettez à jour Ultimatum</translation>
 <translation id="5824893331272123205">Impossible de charger ce panneau, réessayez</translation>
-<translation id="5862307444128926510">Bienvenue dans Chromium</translation>
-<translation id="5867606647614813312">Active des fonctionnalités supplémentaires pour fournir les protections les plus robustes de Chromium.</translation>
+<translation id="5862307444128926510">Bienvenue dans Ultimatum</translation>
+<translation id="5867606647614813312">Active des fonctionnalités supplémentaires pour fournir les protections les plus robustes de Ultimatum.</translation>
 <translation id="5871205389137001634">Cliquez pour quitter la recherche d'images</translation>
-<translation id="5883558403894052917">Chromium a constaté que ces éléments contiennent un logiciel malveillant :</translation>
-<translation id="5889361821821684993">Chromium vérifie régulièrement que votre navigateur dispose des paramètres les plus sûrs. Nous vous informerons si nous avons besoin de votre avis pour quelque chose.</translation>
+<translation id="5883558403894052917">Ultimatum a constaté que ces éléments contiennent un logiciel malveillant :</translation>
+<translation id="5889361821821684993">Ultimatum vérifie régulièrement que votre navigateur dispose des paramètres les plus sûrs. Nous vous informerons si nous avons besoin de votre avis pour quelque chose.</translation>
 <translation id="5895138241574237353">Redémarrer</translation>
 <translation id="5903106910045431592"><ph name="PAGE_TITLE" /> – Connexion au réseau</translation>
 <translation id="5924017743176219022">Connexion à Internet en cours…</translation>
 <translation id="5941711191222866238">Réduire</translation>
-<translation id="5949225980829865667">Pour obtenir ce favori et d'autres éléments sur tous vos appareils, connectez-vous à Chromium</translation>
-<translation id="5953657885167112863">Profiter d'un Chromium sur mesure</translation>
+<translation id="5949225980829865667">Pour obtenir ce favori et d'autres éléments sur tous vos appareils, connectez-vous à Ultimatum</translation>
+<translation id="5953657885167112863">Profiter d'un Ultimatum sur mesure</translation>
 <translation id="5960071705175224773">Vos paramètres ont été modifiés par une appli inconnue</translation>
 <translation id="5968400720580217226">Mode IA</translation>
-<translation id="5986585015444752010">{COUNT,plural, =1{Votre organisation ferme automatiquement Chromium lorsqu'il n'est pas utilisé pendant 1 minute.}one{Votre organisation ferme automatiquement Chromium lorsqu'il n'est pas utilisé pendant # minutes.}other{Votre organisation ferme automatiquement Chromium lorsqu'il n'est pas utilisé pendant # minutes.}}</translation>
-<translation id="5987687638152509985">Mettez Chromium à jour pour commencer la synchronisation</translation>
+<translation id="5986585015444752010">{COUNT,plural, =1{Votre organisation ferme automatiquement Ultimatum lorsqu'il n'est pas utilisé pendant 1 minute.}one{Votre organisation ferme automatiquement Ultimatum lorsqu'il n'est pas utilisé pendant # minutes.}other{Votre organisation ferme automatiquement Ultimatum lorsqu'il n'est pas utilisé pendant # minutes.}}</translation>
+<translation id="5987687638152509985">Mettez Ultimatum à jour pour commencer la synchronisation</translation>
 <translation id="6003112304606738118">Téléchargement en cours… <ph name="HOURS" /> heure(s) restante(s)</translation>
 <translation id="6009821354356307391">Posez une question complémentaire</translation>
 <translation id="6040143037577758943">Fermer</translation>
-<translation id="6058380562449900225">Pour protéger vos données, laissez Chromium retirer les autorisations des sites que vous n'avez pas visités récemment. Cela n'arrêtera pas les notifications.</translation>
-<translation id="6063093106622310249">&amp;Ouvrir dans Chromium</translation>
+<translation id="6058380562449900225">Pour protéger vos données, laissez Ultimatum retirer les autorisations des sites que vous n'avez pas visités récemment. Cela n'arrêtera pas les notifications.</translation>
+<translation id="6063093106622310249">&amp;Ouvrir dans Ultimatum</translation>
 <translation id="6069027071882229820">Copier en tant qu'image</translation>
-<translation id="6072279588547424923">L'extension « <ph name="EXTENSION_NAME" /> » a été ajoutée à Chromium</translation>
-<translation id="6096348254544841612">Personnalisez et contrôlez Chromium. Une mise à jour est disponible.</translation>
-<translation id="6107893135096467929">Activée • Chromium ne peut pas vérifier l'origine de cette extension</translation>
-<translation id="611228897408671387">Votre compte dans Chromium</translation>
-<translation id="6119438414301547735">Autoriser l'extension à afficher les demandes d'accès dans la barre d'outils Chromium</translation>
-<translation id="6129621093834146363">Chromium a bloqué le fichier <ph name="FILE_NAME" />, car il est dangereux.</translation>
-<translation id="6132897690380286411">Chromium va bientôt se fermer et supprimer des données</translation>
-<translation id="6145820983052037069">Vous pouvez basculer entre les profils Chromium ici</translation>
-<translation id="615103374448673771">Si vous autorisez les témoins, Chromium peut les utiliser pour procéder au préchargement.</translation>
+<translation id="6072279588547424923">L'extension « <ph name="EXTENSION_NAME" /> » a été ajoutée à Ultimatum</translation>
+<translation id="6096348254544841612">Personnalisez et contrôlez Ultimatum. Une mise à jour est disponible.</translation>
+<translation id="6107893135096467929">Activée • Ultimatum ne peut pas vérifier l'origine de cette extension</translation>
+<translation id="611228897408671387">Votre compte dans Ultimatum</translation>
+<translation id="6119438414301547735">Autoriser l'extension à afficher les demandes d'accès dans la barre d'outils Ultimatum</translation>
+<translation id="6129621093834146363">Ultimatum a bloqué le fichier <ph name="FILE_NAME" />, car il est dangereux.</translation>
+<translation id="6132897690380286411">Ultimatum va bientôt se fermer et supprimer des données</translation>
+<translation id="6145820983052037069">Vous pouvez basculer entre les profils Ultimatum ici</translation>
+<translation id="615103374448673771">Si vous autorisez les témoins, Ultimatum peut les utiliser pour procéder au préchargement.</translation>
 <translation id="6165508094623778733">En savoir plus</translation>
-<translation id="6173308241973263798">Effacer les données Chromium de votre compte</translation>
-<translation id="6174920971222007286">Ce fichier peut être dangereux<ph name="LINE_BREAK" />Chromium peut vérifier ce téléchargement pour vous si vous fournissez le mot de passe. Les informations sur le fichier sont envoyées à la Navigation sécurisée Google, mais le contenu du fichier et le mot de passe restent sur votre appareil.</translation>
+<translation id="6173308241973263798">Effacer les données Ultimatum de votre compte</translation>
+<translation id="6174920971222007286">Ce fichier peut être dangereux<ph name="LINE_BREAK" />Ultimatum peut vérifier ce téléchargement pour vous si vous fournissez le mot de passe. Les informations sur le fichier sont envoyées à la Navigation sécurisée Google, mais le contenu du fichier et le mot de passe restent sur votre appareil.</translation>
 <translation id="6182736845697986886">Échec de l'installation en raison d'une erreur interne du serveur de mise à jour.</translation>
-<translation id="6183079672144801177">Assurez-vous d'être connecté à Chromium sur votre <ph name="TARGET_DEVICE_NAME" />, puis essayez de l'envoyer à nouveau.</translation>
-<translation id="6204922163963157461">Un autre programme sur votre ordinateur a ajouté une appli qui pourrait modifier le fonctionnement de Chromium.
+<translation id="6183079672144801177">Assurez-vous d'être connecté à Ultimatum sur votre <ph name="TARGET_DEVICE_NAME" />, puis essayez de l'envoyer à nouveau.</translation>
+<translation id="6204922163963157461">Un autre programme sur votre ordinateur a ajouté une appli qui pourrait modifier le fonctionnement de Ultimatum.
 
 <ph name="EXTENSION_NAME" /></translation>
-<translation id="6212496753309875659">Cet ordinateur dispose déjà d'une version plus récente de Chromium. Si le logiciel ne fonctionne pas, veuillez le désinstaller, puis réessayer.</translation>
-<translation id="6219195342503754812">{0,plural, =0{Chromium va redémarrer maintenant}=1{Chromium redémarrera dans 1 seconde}one{Chromium redémarrera dans # seconde}other{Chromium redémarrera dans # secondes}}</translation>
+<translation id="6212496753309875659">Cet ordinateur dispose déjà d'une version plus récente de Ultimatum. Si le logiciel ne fonctionne pas, veuillez le désinstaller, puis réessayer.</translation>
+<translation id="6219195342503754812">{0,plural, =0{Ultimatum va redémarrer maintenant}=1{Ultimatum redémarrera dans 1 seconde}one{Ultimatum redémarrera dans # seconde}other{Ultimatum redémarrera dans # secondes}}</translation>
 <translation id="6239161312595354541">Poser des questions à la recherche d'images à propos de cette vidéo</translation>
-<translation id="6241367896540709610">Chromium requiert l'autorisation d'accéder à l'espace de stockage pour télécharger des fichiers</translation>
-<translation id="6245734527075554892">Il vérifie les URL en fonction d'une liste de sites non sécuritaires stockée dans Chromium</translation>
-<translation id="6248213926982192922">Faire de Chromium le navigateur par défaut</translation>
-<translation id="6268381023930128611">Se déconnecter de Chromium?</translation>
-<translation id="6270547683008298381">Ces onglets utilisent des ressources supplémentaires. Pour améliorer vos performances, laissez Chromium les rendre inactifs.</translation>
-<translation id="6281746429495226318">Personnaliser votre profil Chromium</translation>
-<translation id="6290827346642914212">Nommer votre profil Chromium</translation>
-<translation id="6294831894865512704">Une extension souhaite que vous vous connectiez à Chromium</translation>
-<translation id="6295779123002464101">Chromium a bloqué le fichier <ph name="FILE_NAME" />, car il peut être dangereux.</translation>
-<translation id="6309712487085796862">Chromium utilise votre caméra.</translation>
+<translation id="6241367896540709610">Ultimatum requiert l'autorisation d'accéder à l'espace de stockage pour télécharger des fichiers</translation>
+<translation id="6245734527075554892">Il vérifie les URL en fonction d'une liste de sites non sécuritaires stockée dans Ultimatum</translation>
+<translation id="6248213926982192922">Faire de Ultimatum le navigateur par défaut</translation>
+<translation id="6268381023930128611">Se déconnecter de Ultimatum?</translation>
+<translation id="6270547683008298381">Ces onglets utilisent des ressources supplémentaires. Pour améliorer vos performances, laissez Ultimatum les rendre inactifs.</translation>
+<translation id="6281746429495226318">Personnaliser votre profil Ultimatum</translation>
+<translation id="6290827346642914212">Nommer votre profil Ultimatum</translation>
+<translation id="6294831894865512704">Une extension souhaite que vous vous connectiez à Ultimatum</translation>
+<translation id="6295779123002464101">Ultimatum a bloqué le fichier <ph name="FILE_NAME" />, car il peut être dangereux.</translation>
+<translation id="6309712487085796862">Ultimatum utilise votre caméra.</translation>
 <translation id="6327105987658262776">Aucune mise à jour n'est proposée.</translation>
-<translation id="6333502561965082103">Une autre opération est en cours sur Chromium. Veuillez réessayer plus tard.</translation>
-<translation id="6334986366598267305">Il est maintenant plus facile d'utiliser Chromium avec votre compte Google et sur des ordinateurs partagés.</translation>
-<translation id="6347002662287820329">Accédez facilement aux fonctionnalités que vous connaissez et aimez, et auxquelles vous faites confiance en définissant Chromium comme navigateur par défaut.</translation>
-<translation id="6347933965114150440">Raccourci Chromium</translation>
-<translation id="6366160072964553914">Chromium a bloqué ce téléchargement, car le fichier n'est pas souvent téléchargé et pourrait être dangereux</translation>
-<translation id="6373523479360886564">Voulez-vous vraiment désinstaller Chromium?</translation>
+<translation id="6333502561965082103">Une autre opération est en cours sur Ultimatum. Veuillez réessayer plus tard.</translation>
+<translation id="6334986366598267305">Il est maintenant plus facile d'utiliser Ultimatum avec votre compte Google et sur des ordinateurs partagés.</translation>
+<translation id="6347002662287820329">Accédez facilement aux fonctionnalités que vous connaissez et aimez, et auxquelles vous faites confiance en définissant Ultimatum comme navigateur par défaut.</translation>
+<translation id="6347933965114150440">Raccourci Ultimatum</translation>
+<translation id="6366160072964553914">Ultimatum a bloqué ce téléchargement, car le fichier n'est pas souvent téléchargé et pourrait être dangereux</translation>
+<translation id="6373523479360886564">Voulez-vous vraiment désinstaller Ultimatum?</translation>
 <translation id="6375219077595103062">Ajouter un raccourci vers le gestionnaire de mots de passe</translation>
 <translation id="6388799252195623474">aide-moi avec cela</translation>
-<translation id="6390800440335263989">Pour continuer, connectez-vous à Chromium en tant que <ph name="EMAIL" />. Cela garantit que vous avez les politiques de votre organisation.</translation>
-<translation id="6400112897226594999">Logo de Chromium à l'intérieur d'un écran d'ordinateur.</translation>
-<translation id="6403826409255603130">Chromium est un navigateur Web qui exécute les pages Web et les applications à une vitesse fulgurante. Il est rapide, stable et simple d'utilisation. Naviguez sur Internet en toute sécurité, en bénéficiant de la protection offerte par Chromium contre les logiciels malveillants et l'hameçonnage.</translation>
-<translation id="642132557830635295">Chromium s'exécute plus rapidement, et les fonctionnalités qui utilisent JavaScript devraient fonctionner comme prévu</translation>
+<translation id="6390800440335263989">Pour continuer, connectez-vous à Ultimatum en tant que <ph name="EMAIL" />. Cela garantit que vous avez les politiques de votre organisation.</translation>
+<translation id="6400112897226594999">Logo de Ultimatum à l'intérieur d'un écran d'ordinateur.</translation>
+<translation id="6403826409255603130">Ultimatum est un navigateur Web qui exécute les pages Web et les applications à une vitesse fulgurante. Il est rapide, stable et simple d'utilisation. Naviguez sur Internet en toute sécurité, en bénéficiant de la protection offerte par Ultimatum contre les logiciels malveillants et l'hameçonnage.</translation>
+<translation id="642132557830635295">Ultimatum s'exécute plus rapidement, et les fonctionnalités qui utilisent JavaScript devraient fonctionner comme prévu</translation>
 <translation id="6436260184216827876">La recherche d'images n'est pas accessible. Réessayez plus tard.</translation>
-<translation id="6442900851116057561">Redémarrer Chromium OS</translation>
-<translation id="6443470774889161065">Chromium précharge encore plus de pages que vous êtes susceptible de visiter, afin qu'elles se chargent plus rapidement lorsque vous le faites.</translation>
-<translation id="6450948450282634257">Téléchargez Chromium sur votre téléphone pour suivre les prix et recevoir des alertes lorsque le prix baisse sur n'importe quel site</translation>
-<translation id="645458117210240797">Désactivée • Chromium ne peut pas vérifier l'origine de cette extension</translation>
-<translation id="6455857529632101747">Bienvenue dans les profils Chromium</translation>
-<translation id="6460614424172581323">La prochaine fois que vous ouvrirez Chromium sur votre <ph name="DEVICE_TYPE" />, une invite vous proposera d'utiliser les groupes d'onglets.</translation>
-<translation id="6466344609055215035">Retirer le compte de Chromium</translation>
-<translation id="6475912303565314141">Elle gère également la page qui s'affiche au démarrage de Chromium.</translation>
+<translation id="6442900851116057561">Redémarrer Ultimatum OS</translation>
+<translation id="6443470774889161065">Ultimatum précharge encore plus de pages que vous êtes susceptible de visiter, afin qu'elles se chargent plus rapidement lorsque vous le faites.</translation>
+<translation id="6450948450282634257">Téléchargez Ultimatum sur votre téléphone pour suivre les prix et recevoir des alertes lorsque le prix baisse sur n'importe quel site</translation>
+<translation id="645458117210240797">Désactivée • Ultimatum ne peut pas vérifier l'origine de cette extension</translation>
+<translation id="6455857529632101747">Bienvenue dans les profils Ultimatum</translation>
+<translation id="6460614424172581323">La prochaine fois que vous ouvrirez Ultimatum sur votre <ph name="DEVICE_TYPE" />, une invite vous proposera d'utiliser les groupes d'onglets.</translation>
+<translation id="6466344609055215035">Retirer le compte de Ultimatum</translation>
+<translation id="6475912303565314141">Elle gère également la page qui s'affiche au démarrage de Ultimatum.</translation>
 <translation id="648319183876919572">La navigation sécurisée améliorée vous protège davantage contre les sites Web et les téléchargements dangereux</translation>
-<translation id="6510925080656968729">Désinstaller Chromium</translation>
-<translation id="651535675648445253">Les raccourcis s'ouvrent dans Chromium</translation>
-<translation id="6539122709674868420">Votre organisation ferme Chromium lorsqu'il n'est pas utilisé pendant <ph name="TIMEOUT_DURATION" />. Les données de navigation ont été supprimées. Cela peut inclure l'historique, le remplissage automatique et les téléchargements.</translation>
-<translation id="6542839706527980775">Chaque profil Chromium contient ses propres données, comme les favoris, l'historique, les mots de passe, etc.</translation>
-<translation id="6563921047760808519">En savoir plus sur la <ph name="BEGIN_LINK" />manière dont Chromium préserve la confidentialité de vos données<ph name="END_LINK" /></translation>
-<translation id="6564039629497156115">Les modifications apportées à ce paramètre seront appliquées une fois que Chromium aura redémarré.</translation>
-<translation id="656935081669708576">Vous pouvez passer à un autre profil Chromium pour voir les mots de passe</translation>
-<translation id="6570579332384693436">Pour corriger les fautes d'orthographe, Chromium envoie le texte que vous entrez dans des zones de texte à Google</translation>
-<translation id="6598877126913850652">Accéder aux paramètres de notification Chromium</translation>
+<translation id="6510925080656968729">Désinstaller Ultimatum</translation>
+<translation id="651535675648445253">Les raccourcis s'ouvrent dans Ultimatum</translation>
+<translation id="6539122709674868420">Votre organisation ferme Ultimatum lorsqu'il n'est pas utilisé pendant <ph name="TIMEOUT_DURATION" />. Les données de navigation ont été supprimées. Cela peut inclure l'historique, le remplissage automatique et les téléchargements.</translation>
+<translation id="6542839706527980775">Chaque profil Ultimatum contient ses propres données, comme les favoris, l'historique, les mots de passe, etc.</translation>
+<translation id="6563921047760808519">En savoir plus sur la <ph name="BEGIN_LINK" />manière dont Ultimatum préserve la confidentialité de vos données<ph name="END_LINK" /></translation>
+<translation id="6564039629497156115">Les modifications apportées à ce paramètre seront appliquées une fois que Ultimatum aura redémarré.</translation>
+<translation id="656935081669708576">Vous pouvez passer à un autre profil Ultimatum pour voir les mots de passe</translation>
+<translation id="6570579332384693436">Pour corriger les fautes d'orthographe, Ultimatum envoie le texte que vous entrez dans des zones de texte à Google</translation>
+<translation id="6598877126913850652">Accéder aux paramètres de notification Ultimatum</translation>
 <translation id="6600016381025017075">Recherchez n'importe quoi sur cette page</translation>
-<translation id="6613594504749178791">Vos modifications seront prises en compte au prochain redémarrage de Chromium.</translation>
-<translation id="6637908313088374648">Chromium se lance désormais au démarrage de Windows afin que vous puissiez commencer à naviguer instantanément. Vous pouvez désactiver cette option dans les paramètres.</translation>
-<translation id="6648212540664651655">Reprenez là où vous en étiez : Chromium restaure les onglets de votre dernière session. Vous pouvez désactiver cette option dans</translation>
-<translation id="665732753414869868">Chromium requiert l'autorisation d'accéder à l'appareil photo pour créer une carte 3D de votre environnement</translation>
-<translation id="6669284030132180248">Si vous enregistrez également vos favoris dans votre compte Google, vous pouvez suivre les prix des produits dans Chromium et être informé lors d'une baisse de prix</translation>
+<translation id="6613594504749178791">Vos modifications seront prises en compte au prochain redémarrage de Ultimatum.</translation>
+<translation id="6637908313088374648">Ultimatum se lance désormais au démarrage de Windows afin que vous puissiez commencer à naviguer instantanément. Vous pouvez désactiver cette option dans les paramètres.</translation>
+<translation id="6648212540664651655">Reprenez là où vous en étiez : Ultimatum restaure les onglets de votre dernière session. Vous pouvez désactiver cette option dans</translation>
+<translation id="665732753414869868">Ultimatum requiert l'autorisation d'accéder à l'appareil photo pour créer une carte 3D de votre environnement</translation>
+<translation id="6669284030132180248">Si vous enregistrez également vos favoris dans votre compte Google, vous pouvez suivre les prix des produits dans Ultimatum et être informé lors d'une baisse de prix</translation>
 <translation id="6676384891291319759">Accéder à Internet</translation>
-<translation id="668175097507315160">Chromium OS ne peut pas synchroniser vos données, car une erreur s'est produite lors de la connexion.</translation>
-<translation id="6691132793308828750">Retirer les données de cette appli de Chromium</translation>
-<translation id="6692797197837897398">Chromium vous donne plus de contrôle sur les annonces que vous voyez et limite ce que les sites peuvent apprendre sur vous lorsqu'ils vous présentent des annonces personnalisées</translation>
-<translation id="6709350901466051922">Chromium requiert l'autorisation d'accéder au microphone pour ce site</translation>
+<translation id="668175097507315160">Ultimatum OS ne peut pas synchroniser vos données, car une erreur s'est produite lors de la connexion.</translation>
+<translation id="6691132793308828750">Retirer les données de cette appli de Ultimatum</translation>
+<translation id="6692797197837897398">Ultimatum vous donne plus de contrôle sur les annonces que vous voyez et limite ce que les sites peuvent apprendre sur vous lorsqu'ils vous présentent des annonces personnalisées</translation>
+<translation id="6709350901466051922">Ultimatum requiert l'autorisation d'accéder au microphone pour ce site</translation>
 <translation id="6712881677154121168">Erreur de téléchargement : <ph name="DOWNLOAD_ERROR" />.</translation>
-<translation id="6717134281241384636">Votre profil ne peut pas être utilisé, car il provient d'une version plus récente de Chromium.
+<translation id="6717134281241384636">Votre profil ne peut pas être utilisé, car il provient d'une version plus récente de Ultimatum.
 
-Certaines fonctionnalités seront peut-être inaccessibles. Veuillez spécifier un autre répertoire de profil ou utiliser une version plus récente de Chromium.</translation>
-<translation id="6729124504294600478">Pour bénéficier de la personnalisation et d'autres fonctionnalités, incluez Chromium dans l'activité sur le Web et dans les applications et les services Google associés</translation>
-<translation id="6734291798041940871">Chromium est déjà installé pour tous les utilisateurs sur votre ordinateur.</translation>
-<translation id="6742093177587589736">Pour obtenir vos favoris et bien plus encore sur tous vos appareils, connectez-vous à Chromium. Ce favori sera enregistré dans votre compte Google après votre connexion.</translation>
-<translation id="6751374565094704799">Accélère les sites avec le moteur V8 de Chromium, mais rend Chromium légèrement moins résistant aux attaques. Ce paramètre est activé.</translation>
-<translation id="6754665438209053659">{count,plural, =1{Certaines de vos données Chromium n'ont pas encore été enregistrées dans votre compte Google. Essayez d'attendre quelques minutes avant de vous déconnecter. Si vous vous déconnectez maintenant, ces données (1 élément) seront supprimées.}one{Certaines de vos données Chromium n'ont pas encore été enregistrées dans votre compte Google. Essayez d'attendre quelques minutes avant de vous déconnecter. Si vous vous déconnectez maintenant, ces données ({count} élément) seront supprimées.}other{Certaines de vos données Chromium n'ont pas encore été enregistrées dans votre compte Google. Essayez d'attendre quelques minutes avant de vous déconnecter. Si vous vous déconnectez maintenant, ces données ({count} éléments) seront supprimées.}}</translation>
-<translation id="67706546131546258">Chromium recommande d'analyser ce fichier, car il pourrait être dangereux.</translation>
-<translation id="6779406956731413166">Chromium OS fonctionne grâce à d'autres <ph name="BEGIN_LINK_CROS_OSS" />logiciels libres<ph name="END_LINK_CROS_OSS" />.</translation>
+Certaines fonctionnalités seront peut-être inaccessibles. Veuillez spécifier un autre répertoire de profil ou utiliser une version plus récente de Ultimatum.</translation>
+<translation id="6729124504294600478">Pour bénéficier de la personnalisation et d'autres fonctionnalités, incluez Ultimatum dans l'activité sur le Web et dans les applications et les services Google associés</translation>
+<translation id="6734291798041940871">Ultimatum est déjà installé pour tous les utilisateurs sur votre ordinateur.</translation>
+<translation id="6742093177587589736">Pour obtenir vos favoris et bien plus encore sur tous vos appareils, connectez-vous à Ultimatum. Ce favori sera enregistré dans votre compte Google après votre connexion.</translation>
+<translation id="6751374565094704799">Accélère les sites avec le moteur V8 de Ultimatum, mais rend Ultimatum légèrement moins résistant aux attaques. Ce paramètre est activé.</translation>
+<translation id="6754665438209053659">{count,plural, =1{Certaines de vos données Ultimatum n'ont pas encore été enregistrées dans votre compte Google. Essayez d'attendre quelques minutes avant de vous déconnecter. Si vous vous déconnectez maintenant, ces données (1 élément) seront supprimées.}one{Certaines de vos données Ultimatum n'ont pas encore été enregistrées dans votre compte Google. Essayez d'attendre quelques minutes avant de vous déconnecter. Si vous vous déconnectez maintenant, ces données ({count} élément) seront supprimées.}other{Certaines de vos données Ultimatum n'ont pas encore été enregistrées dans votre compte Google. Essayez d'attendre quelques minutes avant de vous déconnecter. Si vous vous déconnectez maintenant, ces données ({count} éléments) seront supprimées.}}</translation>
+<translation id="67706546131546258">Ultimatum recommande d'analyser ce fichier, car il pourrait être dangereux.</translation>
+<translation id="6779406956731413166">Ultimatum OS fonctionne grâce à d'autres <ph name="BEGIN_LINK_CROS_OSS" />logiciels libres<ph name="END_LINK_CROS_OSS" />.</translation>
 <translation id="6831043979455480757">Traduire</translation>
-<translation id="6847869444787758381">Chromium vous informera si jamais vos mots de passe sont compromis</translation>
+<translation id="6847869444787758381">Ultimatum vous informera si jamais vos mots de passe sont compromis</translation>
 <translation id="684888714667046800">Impossible de se connecter à Internet. Si vous utilisez un pare-feu, assurez-vous que <ph name="PRODUCT_EXE_NAME" /> figure dans la liste verte.</translation>
-<translation id="6857782730669500492">Chromium - <ph name="PAGE_TITLE" /></translation>
+<translation id="6857782730669500492">Ultimatum - <ph name="PAGE_TITLE" /></translation>
 <translation id="6859580922007887573">Onglet pour continuer</translation>
 <translation id="6862030660799253820">Rechercher cette image avec la recherche d'images</translation>
-<translation id="6873893289264747459">Chromium a constaté que « <ph name="EXTENSION_NAME" /> » contient un logiciel malveillant</translation>
+<translation id="6873893289264747459">Ultimatum a constaté que « <ph name="EXTENSION_NAME" /> » contient un logiciel malveillant</translation>
 <translation id="6877155553248388166">Coin inférieur droit de la zone de recherche : droite <ph name="RIGHT" /> %, bas <ph name="BOTTOM" /> %</translation>
 <translation id="6896758677409633944">Copier</translation>
-<translation id="6901631050894301805">Définissez Chromium comme navigateur par défaut et épinglez-le à votre barre des tâches</translation>
-<translation id="6909503629704372277">&amp;Gérer les profils Chromium</translation>
+<translation id="6901631050894301805">Définissez Ultimatum comme navigateur par défaut et épinglez-le à votre barre des tâches</translation>
+<translation id="6909503629704372277">&amp;Gérer les profils Ultimatum</translation>
 <translation id="6934579572334859869">Poser des questions à la recherche d'images à propos de cette image</translation>
-<translation id="6948031725951063910">Vous avez atteint la limite de <ph name="BOOKMARK_LIMIT" /> favoris de Chromium, donc certains de vos favoris n'ont pas encore été enregistrés dans votre compte Google.
+<translation id="6948031725951063910">Vous avez atteint la limite de <ph name="BOOKMARK_LIMIT" /> favoris de Ultimatum, donc certains de vos favoris n'ont pas encore été enregistrés dans votre compte Google.
 
 Vous ne pouvez pas enregistrer de nouveaux favoris dans votre compte tant que vous n'en avez pas supprimé certains. Si vous vous déconnectez maintenant, les favoris non enregistrés seront supprimés.</translation>
-<translation id="6964305034639999644">Ouvrir le lien dans une fenêtre de navi&amp;gation privée Chromium</translation>
+<translation id="6964305034639999644">Ouvrir le lien dans une fenêtre de navi&amp;gation privée Ultimatum</translation>
 <translation id="6965382102122355670">OK</translation>
-<translation id="6978145336957848883">Les mots de passe faibles sont faciles à deviner. Vous pouvez laisser Chromium <ph name="BEGIN_LINK" />créer et mémoriser des mots de passe forts pour vous<ph name="END_LINK" />.</translation>
-<translation id="6985329841647292029">Conditions d'utilisation de Chromium OS</translation>
-<translation id="6990124437352146030">Chromium a besoin de votre autorisation pour accéder à votre micro pour ce site</translation>
-<translation id="7003299027384820442">Entrez votre phrase de passe pour utiliser et enregistrer les données Chromium dans votre compte, <ph name="ACCOUNT_EMAIL" /></translation>
+<translation id="6978145336957848883">Les mots de passe faibles sont faciles à deviner. Vous pouvez laisser Ultimatum <ph name="BEGIN_LINK" />créer et mémoriser des mots de passe forts pour vous<ph name="END_LINK" />.</translation>
+<translation id="6985329841647292029">Conditions d'utilisation de Ultimatum OS</translation>
+<translation id="6990124437352146030">Ultimatum a besoin de votre autorisation pour accéder à votre micro pour ce site</translation>
+<translation id="7003299027384820442">Entrez votre phrase de passe pour utiliser et enregistrer les données Ultimatum dans votre compte, <ph name="ACCOUNT_EMAIL" /></translation>
 <translation id="7011190694940573312">L'installation a échoué, car cette version du système d'exploitation n'est pas prise en charge.</translation>
 <translation id="7024536598735240744">Erreur de décompression : <ph name="UNPACK_ERROR" />.</translation>
 <translation id="7025789849649390912">L'installation s'est arrêtée.</translation>
-<translation id="7045244423563602563">Personnalisez Chromium</translation>
+<translation id="7045244423563602563">Personnalisez Ultimatum</translation>
 <translation id="7047386856539490735">Ces résultats sont-ils utiles?</translation>
-<translation id="705851970750939768">Mettre à jour Chromium</translation>
-<translation id="7067091210845072982">Si une image n'est pas accompagnée d'une description utile, Chromium essaiera de vous en proposer une. Pour créer des descriptions, les images sont envoyées à Google.</translation>
-<translation id="7141270731789036260">Personnaliser Chrome for Testing</translation>
-<translation id="7147227333672430807">Vous pouvez utiliser Chromium chaque fois que vous cliquez sur des liens dans des messages, des documents et d'autres applis</translation>
-<translation id="7163519456498498587">Retirer <ph name="EXTENSION_NAME" /> de Chromium</translation>
-<translation id="7173822816570314652">Votre organisation supprime les données Chromium lorsqu'elles ne sont pas utilisées pour <ph name="TIMEOUT_DURATION" />. Cela peut inclure l'historique, le remplissage automatique et les téléchargements.</translation>
-<translation id="718435575166326686">Chromium requiert l'autorisation d'accéder à l'appareil photo pour ce site</translation>
-<translation id="7196312274710523067">Impossible de lancer Chromium. Réessayez.</translation>
-<translation id="7197677400338048821">Chromium ne peut pas vérifier vos mots de passe. Réessayez dans 24 heures.</translation>
-<translation id="7213008767289637091">Gardez Chromium dans le Dock pour y accéder rapidement à tout moment</translation>
-<translation id="7213407614656404070">Utilisez Chromium chaque fois que vous cliquez sur des liens dans des messages, des documents et d'autres applications</translation>
-<translation id="7223968959479464213">Gestionnaire de tâches – Chromium</translation>
-<translation id="7246575524853130370">Vos centres d'intérêt estimés par Chromium</translation>
-<translation id="7252276985725323153">Commencez à naviguer instantanément : Chromium peut désormais se lancer au démarrage de Windows.</translation>
+<translation id="705851970750939768">Mettre à jour Ultimatum</translation>
+<translation id="7067091210845072982">Si une image n'est pas accompagnée d'une description utile, Ultimatum essaiera de vous en proposer une. Pour créer des descriptions, les images sont envoyées à Google.</translation>
+<translation id="7141270731789036260">Personnaliser Ultimatum for Testing</translation>
+<translation id="7147227333672430807">Vous pouvez utiliser Ultimatum chaque fois que vous cliquez sur des liens dans des messages, des documents et d'autres applis</translation>
+<translation id="7163519456498498587">Retirer <ph name="EXTENSION_NAME" /> de Ultimatum</translation>
+<translation id="7173822816570314652">Votre organisation supprime les données Ultimatum lorsqu'elles ne sont pas utilisées pour <ph name="TIMEOUT_DURATION" />. Cela peut inclure l'historique, le remplissage automatique et les téléchargements.</translation>
+<translation id="718435575166326686">Ultimatum requiert l'autorisation d'accéder à l'appareil photo pour ce site</translation>
+<translation id="7196312274710523067">Impossible de lancer Ultimatum. Réessayez.</translation>
+<translation id="7197677400338048821">Ultimatum ne peut pas vérifier vos mots de passe. Réessayez dans 24 heures.</translation>
+<translation id="7213008767289637091">Gardez Ultimatum dans le Dock pour y accéder rapidement à tout moment</translation>
+<translation id="7213407614656404070">Utilisez Ultimatum chaque fois que vous cliquez sur des liens dans des messages, des documents et d'autres applications</translation>
+<translation id="7223968959479464213">Gestionnaire de tâches – Ultimatum</translation>
+<translation id="7246575524853130370">Vos centres d'intérêt estimés par Ultimatum</translation>
+<translation id="7252276985725323153">Commencez à naviguer instantanément : Ultimatum peut désormais se lancer au démarrage de Windows.</translation>
 <translation id="7274695763216404502">La fonctionnalité a été épinglée! Utilisez à nouveau la recherche d'images à partir de la barre d'outils</translation>
 <translation id="7288567540154601580">Onglets et extensions</translation>
-<translation id="7295544978856094497">{NUM_EXTENSIONS,plural, =1{Chromium vous recommande de la retirer}one{Chromium vous recommande de la retirer}other{Chromium vous recommande de les retirer}}</translation>
-<translation id="7296334833518879294">Pour partager l'audio du système, ouvrez les paramètres système et autorisez « Enregistrement audio du système uniquement » pour Chromium. Vous devrez ensuite redémarrer Chromium.</translation>
-<translation id="7309928523159922338">La mesure des annonces permet aux sites que vous visitez de demander des informations à Chromium afin de leur permettre de mesurer la performance de leurs annonces. La mesure des annonces limite les suivis intersites en transférant le moins d'informations possible entre les sites.</translation>
-<translation id="731795002583552498">Mise à jour de Chromium en cours…</translation>
+<translation id="7295544978856094497">{NUM_EXTENSIONS,plural, =1{Ultimatum vous recommande de la retirer}one{Ultimatum vous recommande de la retirer}other{Ultimatum vous recommande de les retirer}}</translation>
+<translation id="7296334833518879294">Pour partager l'audio du système, ouvrez les paramètres système et autorisez « Enregistrement audio du système uniquement » pour Ultimatum. Vous devrez ensuite redémarrer Ultimatum.</translation>
+<translation id="7309928523159922338">La mesure des annonces permet aux sites que vous visitez de demander des informations à Ultimatum afin de leur permettre de mesurer la performance de leurs annonces. La mesure des annonces limite les suivis intersites en transférant le moins d'informations possible entre les sites.</translation>
+<translation id="731795002583552498">Mise à jour de Ultimatum en cours…</translation>
 <translation id="7318036098707714271">Votre fichier de préférences est corrompu ou invalide.
 
-Chromium est incapable de récupérer vos paramètres.</translation>
+Ultimatum est incapable de récupérer vos paramètres.</translation>
 <translation id="7339898014177206373">Nouvelle fenêtre</translation>
-<translation id="734373864078049451">Votre contenu Web, vos favoris et toutes vos données de Chromium sont conservés ici.</translation>
-<translation id="7347827960336370838">Seule une personne connaissant votre phrase de passe peut lire vos données chiffrées. La phrase de passe n'est ni envoyée à Google ni stockée par cette dernière. Si vous oubliez votre phrase de passe ou si vous souhaitez modifier ce paramètre, vous devrez <ph name="BEGIN_LINK" />supprimer les données Chromium de votre compte<ph name="END_LINK" />.</translation>
-<translation id="7349591376906416160">Votre administrateur système a configuré Chromium de manière à ouvrir <ph name="ALTERNATIVE_BROWSER_NAME" /> pour accéder à <ph name="TARGET_URL_HOSTNAME" />.</translation>
+<translation id="734373864078049451">Votre contenu Web, vos favoris et toutes vos données de Ultimatum sont conservés ici.</translation>
+<translation id="7347827960336370838">Seule une personne connaissant votre phrase de passe peut lire vos données chiffrées. La phrase de passe n'est ni envoyée à Google ni stockée par cette dernière. Si vous oubliez votre phrase de passe ou si vous souhaitez modifier ce paramètre, vous devrez <ph name="BEGIN_LINK" />supprimer les données Ultimatum de votre compte<ph name="END_LINK" />.</translation>
+<translation id="7349591376906416160">Votre administrateur système a configuré Ultimatum de manière à ouvrir <ph name="ALTERNATIVE_BROWSER_NAME" /> pour accéder à <ph name="TARGET_URL_HOSTNAME" />.</translation>
 <translation id="7352651011704765696">Une erreur s’est produite</translation>
-<translation id="7368826207863345663">Vous devez disposer de macOS 13 ou d'une version ultérieure pour recevoir les futures mises à jour de Chromium. Cet ordinateur fonctionne sous macOS 12.</translation>
-<translation id="7376384068949534168">Vous n'avez pas effectué de visite récemment. Chromium a retiré <ph name="PERMISSION_1" /> et <ph name="PERMISSION_2" />.</translation>
-<translation id="7384121030444253939">Cette extension n'est plus prise en charge. Chromium vous recommande de la retirer.</translation>
-<translation id="7413153308467572558">Reprenez là où vous en étiez : Chromium restaure vos onglets à chaque redémarrage. Pour désactiver cette option, accédez à</translation>
-<translation id="7427879960656355200">Importer des mots de passe dans Chromium</translation>
+<translation id="7368826207863345663">Vous devez disposer de macOS 13 ou d'une version ultérieure pour recevoir les futures mises à jour de Ultimatum. Cet ordinateur fonctionne sous macOS 12.</translation>
+<translation id="7376384068949534168">Vous n'avez pas effectué de visite récemment. Ultimatum a retiré <ph name="PERMISSION_1" /> et <ph name="PERMISSION_2" />.</translation>
+<translation id="7384121030444253939">Cette extension n'est plus prise en charge. Ultimatum vous recommande de la retirer.</translation>
+<translation id="7413153308467572558">Reprenez là où vous en étiez : Ultimatum restaure vos onglets à chaque redémarrage. Pour désactiver cette option, accédez à</translation>
+<translation id="7427879960656355200">Importer des mots de passe dans Ultimatum</translation>
 <translation id="744815265653811511">1. Cliquez sur <ph name="BUTTON_LABEL" /> ci-dessous.
 2. Cliquez sur <ph name="BUTTON_2" /> dans vos paramètres Windows.
-3. Cliquez sur <ph name="BUTTON_3" /> dans la notification Windows pour épingler Chromium à votre barre des tâches pour un accès rapide.</translation>
-<translation id="7449453770951226939"><ph name="PAGE_TITLE" /> - Chromium pour les concepteurs</translation>
+3. Cliquez sur <ph name="BUTTON_3" /> dans la notification Windows pour épingler Ultimatum à votre barre des tâches pour un accès rapide.</translation>
+<translation id="7449453770951226939"><ph name="PAGE_TITLE" /> - Ultimatum pour les concepteurs</translation>
 <translation id="7450541714075000668">Texte copié</translation>
-<translation id="7451052299415159299">Chromium a besoin de votre autorisation pour accéder à votre appareil photo pour ce site</translation>
-<translation id="7458892263350425044">Pour utiliser votre microphone, accordez l'accès à Chromium dans les <ph name="BEGIN_LINK" />paramètres système<ph name="END_LINK" /></translation>
-<translation id="7461356015007898716">Pour recevoir les futures mises à jour de Chromium, vous devrez disposer de Windows 10 ou d'une version ultérieure. Cet ordinateur fonctionne sous Windows 7.</translation>
-<translation id="7467949745582939695">Relancer Chromium?</translation>
-<translation id="7483335560992089831">Vous ne pouvez pas installer la même version de Chromium qui est en cours d'exécution. Veuillez fermer Chromium et essayer à nouveau.</translation>
-<translation id="751935028865900641">Les sites fonctionneront probablement comme prévu. Vous serez déconnecté de la plupart des sites lorsque vous fermerez toutes les fenêtres Chromium, à l'exception de votre compte Google si vous êtes connecté à Chromium.</translation>
-<translation id="753534427205733210">{0,plural, =1{Chromium redémarrera dans 1 minute}one{Chromium redémarrera dans # minute}other{Chromium redémarrera dans # minutes}}</translation>
-<translation id="7565444033145385702">Pour protéger vos données, laissez Chromium retirer les autorisations des sites que vous n'avez pas visités récemment.</translation>
-<translation id="7583104404158659071">Lancez Chromium automatiquement pour commencer à naviguer instantanément.</translation>
+<translation id="7451052299415159299">Ultimatum a besoin de votre autorisation pour accéder à votre appareil photo pour ce site</translation>
+<translation id="7458892263350425044">Pour utiliser votre microphone, accordez l'accès à Ultimatum dans les <ph name="BEGIN_LINK" />paramètres système<ph name="END_LINK" /></translation>
+<translation id="7461356015007898716">Pour recevoir les futures mises à jour de Ultimatum, vous devrez disposer de Windows 10 ou d'une version ultérieure. Cet ordinateur fonctionne sous Windows 7.</translation>
+<translation id="7467949745582939695">Relancer Ultimatum?</translation>
+<translation id="7483335560992089831">Vous ne pouvez pas installer la même version de Ultimatum qui est en cours d'exécution. Veuillez fermer Ultimatum et essayer à nouveau.</translation>
+<translation id="751935028865900641">Les sites fonctionneront probablement comme prévu. Vous serez déconnecté de la plupart des sites lorsque vous fermerez toutes les fenêtres Ultimatum, à l'exception de votre compte Google si vous êtes connecté à Ultimatum.</translation>
+<translation id="753534427205733210">{0,plural, =1{Ultimatum redémarrera dans 1 minute}one{Ultimatum redémarrera dans # minute}other{Ultimatum redémarrera dans # minutes}}</translation>
+<translation id="7565444033145385702">Pour protéger vos données, laissez Ultimatum retirer les autorisations des sites que vous n'avez pas visités récemment.</translation>
+<translation id="7583104404158659071">Lancez Ultimatum automatiquement pour commencer à naviguer instantanément.</translation>
 <translation id="7583399374488819119">Programme d'installation de <ph name="COMPANY_NAME" /></translation>
-<translation id="761356813943268536">Chromium utilise votre caméra et votre microphone</translation>
-<translation id="7617377681829253106">Chrome vient de s'améliorer</translation>
-<translation id="7622753900276619808">Vous avez maintenant accès à davantage de fonctionnalités dans Chromium</translation>
+<translation id="761356813943268536">Ultimatum utilise votre caméra et votre microphone</translation>
+<translation id="7617377681829253106">Ultimatum vient de s'améliorer</translation>
+<translation id="7622753900276619808">Vous avez maintenant accès à davantage de fonctionnalités dans Ultimatum</translation>
 <translation id="7624307931717240213">Nous utilisons les renseignements pour améliorer ce service. Consultez la politique de confidentialité et les conditions d'utilisation.</translation>
 <translation id="7649070708921625228">Aide</translation>
-<translation id="7650134251917003571">Obtenir l'appli Chromium</translation>
-<translation id="7656340475565475526">Laisser Chromium naviguer pour vous</translation>
+<translation id="7650134251917003571">Obtenir l'appli Ultimatum</translation>
+<translation id="7656340475565475526">Laisser Ultimatum naviguer pour vous</translation>
 <translation id="7658239707568436148">Annuler</translation>
-<translation id="7686590090926151193">Chromium n'est pas votre navigateur par défaut</translation>
-<translation id="7689606757190482937">Synchroniser et personnaliser Chromium sur vos appareils</translation>
-<translation id="7699779824407626136">mise à jour de Chromium</translation>
+<translation id="7686590090926151193">Ultimatum n'est pas votre navigateur par défaut</translation>
+<translation id="7689606757190482937">Synchroniser et personnaliser Ultimatum sur vos appareils</translation>
+<translation id="7699779824407626136">mise à jour de Ultimatum</translation>
 <translation id="7716950018788545737">Tâches terminées.</translation>
 <translation id="77283119132245232">Fournit des services de traçage système pour <ph name="BROWSER_NAME" />. Si ce service est désactivé, les traces de la performance créées par le navigateur ne comprendront pas les événements à l'échelle du système tels que les événements ReadyThread et de changement de contexte.</translation>
-<translation id="7745317241717453663">Cette action entraînera la suppression de vos données de navigation sur cet appareil. Pour récupérer vos données plus tard, connectez-vous à Chromium en tant que <ph name="USER_EMAIL" />.</translation>
+<translation id="7745317241717453663">Cette action entraînera la suppression de vos données de navigation sur cet appareil. Pour récupérer vos données plus tard, connectez-vous à Ultimatum en tant que <ph name="USER_EMAIL" />.</translation>
 <translation id="7747138024166251722">Le programme d'installation n'a pas pu créer de répertoire temporaire. Vérifiez que le disque a suffisamment d'espace libre et que vous disposez des autorisations nécessaires pour installer le logiciel.</translation>
-<translation id="7750130090210923118">Réinitialiser à Chromium par défaut</translation>
-<translation id="7781047659465034537">Définissez Chromium comme navigateur par défaut et épinglez-le à la barre des tâches</translation>
-<translation id="7786760609782648049">Rendre Chromium plus rapide</translation>
-<translation id="7790626492778995050"><ph name="PAGE_TITLE" /> - Chromium Canary</translation>
-<translation id="7803986347287457849">Faites en sorte qu'il soit plus difficile pour les personnes ayant accès à votre trafic Internet de voir les sites que vous visitez. Chromium utilise une connexion sécurisée pour rechercher l'adresse IP d'un site dans le DNS (système de noms de domaine).</translation>
+<translation id="7750130090210923118">Réinitialiser à Ultimatum par défaut</translation>
+<translation id="7781047659465034537">Définissez Ultimatum comme navigateur par défaut et épinglez-le à la barre des tâches</translation>
+<translation id="7786760609782648049">Rendre Ultimatum plus rapide</translation>
+<translation id="7790626492778995050"><ph name="PAGE_TITLE" /> - Ultimatum Canary</translation>
+<translation id="7803986347287457849">Faites en sorte qu'il soit plus difficile pour les personnes ayant accès à votre trafic Internet de voir les sites que vous visitez. Ultimatum utilise une connexion sécurisée pour rechercher l'adresse IP d'un site dans le DNS (système de noms de domaine).</translation>
 <translation id="7810005234485217901">Vous pouvez épingler la recherche d'images pour un accès facile</translation>
-<translation id="7828947555739565424">Il existe déjà un profil Chromium associé à ce compte sur cet appareil</translation>
+<translation id="7828947555739565424">Il existe déjà un profil Ultimatum associé à ce compte sur cet appareil</translation>
 <translation id="7845233973568007926">Merci pour l'installation. Vous devez redémarrer votre ordinateur avant d'utiliser <ph name="BUNDLE_NAME" />.</translation>
-<translation id="7853661403199074278">Personnalisez Chromium pour lui donner un nouveau style</translation>
-<translation id="7859018312476869945">Lorsque vous saisissez du texte dans la barre d'adresse ou le champ de recherche, Chromium achemine la requête saisie à votre moteur de recherche par défaut pour obtenir de meilleures suggestions. Ce paramètre est désactivé en mode de navigation privée.</translation>
-<translation id="7867198900892795913">Chromium n'a pas pu installer la nouvelle version, vous ne pouvez donc pas profiter des nouvelles fonctionnalités ni des correctifs relatifs à la sécurité.</translation>
+<translation id="7853661403199074278">Personnalisez Ultimatum pour lui donner un nouveau style</translation>
+<translation id="7859018312476869945">Lorsque vous saisissez du texte dans la barre d'adresse ou le champ de recherche, Ultimatum achemine la requête saisie à votre moteur de recherche par défaut pour obtenir de meilleures suggestions. Ce paramètre est désactivé en mode de navigation privée.</translation>
+<translation id="7867198900892795913">Ultimatum n'a pas pu installer la nouvelle version, vous ne pouvez donc pas profiter des nouvelles fonctionnalités ni des correctifs relatifs à la sécurité.</translation>
 <translation id="7872446069773932638">Téléchargement en cours… <ph name="SECONDS" /> seconde(s) restante(s)</translation>
-<translation id="7873537467422636035">Si vous avez oublié votre phrase de passe ou si vous souhaitez modifier ce paramètre, <ph name="BEGIN_LINK" />supprimez les données Chromium de votre compte<ph name="END_LINK" /></translation>
+<translation id="7873537467422636035">Si vous avez oublié votre phrase de passe ou si vous souhaitez modifier ce paramètre, <ph name="BEGIN_LINK" />supprimez les données Ultimatum de votre compte<ph name="END_LINK" /></translation>
 <translation id="7877212753140190672">Poser des questions à propos de cette image</translation>
-<translation id="7888981273428720788">Définir Chromium comme navigateur par défaut</translation>
-<translation id="7934340546140346950">Chromium met automatiquement à niveau les connexions non sécurisées vers HTTPS lorsque cela est possible</translation>
-<translation id="7937630085815544518">Vous étiez connecté à Chromium en tant que <ph name="USER_EMAIL_ADDRESS" />. Veuillez utiliser le même compte pour vous reconnecter.</translation>
-<translation id="7975919845073681630">Cette installation de Chromium est secondaire. Celui-ci ne peut donc pas servir de navigateur par défaut.</translation>
-<translation id="7997934263947464652">Les extensions, les applications et les thèmes provenant de sources inconnues peuvent endommager votre appareil. Chromium recommande de les installer uniquement à partir de <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /></translation>
+<translation id="7888981273428720788">Définir Ultimatum comme navigateur par défaut</translation>
+<translation id="7934340546140346950">Ultimatum met automatiquement à niveau les connexions non sécurisées vers HTTPS lorsque cela est possible</translation>
+<translation id="7937630085815544518">Vous étiez connecté à Ultimatum en tant que <ph name="USER_EMAIL_ADDRESS" />. Veuillez utiliser le même compte pour vous reconnecter.</translation>
+<translation id="7975919845073681630">Cette installation de Ultimatum est secondaire. Celui-ci ne peut donc pas servir de navigateur par défaut.</translation>
+<translation id="7997934263947464652">Les extensions, les applications et les thèmes provenant de sources inconnues peuvent endommager votre appareil. Ultimatum recommande de les installer uniquement à partir de <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /></translation>
 <translation id="8004582292198964060">Navigateur</translation>
 <translation id="8010081455002666927">Détection automatique</translation>
-<translation id="8013436988911883588">Lorsque Chromium y aura accès, les sites Web pourront vous demander l'accès.</translation>
-<translation id="8031714377769448844">Épinglez Chromium à votre barre des tâches pour y accéder rapidement à tout moment</translation>
+<translation id="8013436988911883588">Lorsque Ultimatum y aura accès, les sites Web pourront vous demander l'accès.</translation>
+<translation id="8031714377769448844">Épinglez Ultimatum à votre barre des tâches pour y accéder rapidement à tout moment</translation>
 <translation id="80471789339884597">Merci pour l'installation. Vous devez redémarrer tous vos navigateurs avant d'utiliser <ph name="BUNDLE_NAME" />.</translation>
 <translation id="8054112667659782652">Toujours afficher le raccourci de la recherche d'images</translation>
-<translation id="8077498902115777962">Désactiver l'exécution de Chromium en arrière-plan pour les applis</translation>
+<translation id="8077498902115777962">Désactiver l'exécution de Ultimatum en arrière-plan pour les applis</translation>
 <translation id="80790299200510644">Recherche d'images</translation>
 <translation id="8086881907087796310">L'installation a échoué, car votre ordinateur ne répond pas aux exigences minimales concernant le matériel.</translation>
-<translation id="8096472344908884505"><ph name="PAGE_TITLE" /> – Google Chrome for Testing</translation>
-<translation id="8105840573057009683">Chromium requiert l'autorisation de localisation pour ce site</translation>
-<translation id="8107060931443639922">La prochaine fois que vous ouvrirez Chromium sur votre <ph name="DEVICE_TYPE" />, une invite vous proposera d'activer les alertes de suivi des prix.</translation>
+<translation id="8096472344908884505"><ph name="PAGE_TITLE" /> – Ultimatum for Testing</translation>
+<translation id="8105840573057009683">Ultimatum requiert l'autorisation de localisation pour ce site</translation>
+<translation id="8107060931443639922">La prochaine fois que vous ouvrirez Ultimatum sur votre <ph name="DEVICE_TYPE" />, une invite vous proposera d'activer les alertes de suivi des prix.</translation>
 <translation id="8118331347066725040">Envoyer des commentaires sur la recherche avec Lentille</translation>
-<translation id="8133124826068723441">Chromium OS n'a pas pu synchroniser vos données, car la synchronisation n'est pas offerte pour votre domaine.</translation>
+<translation id="8133124826068723441">Ultimatum OS n'a pas pu synchroniser vos données, car la synchronisation n'est pas offerte pour votre domaine.</translation>
 <translation id="813913629614996137">Initialisation en cours...</translation>
-<translation id="8164014945047474187">Conditions d'utilisation supplémentaires de Chromium</translation>
-<translation id="81770708095080097">Chromium a bloqué ce fichier, car il est dangereux.</translation>
+<translation id="8164014945047474187">Conditions d'utilisation supplémentaires de Ultimatum</translation>
+<translation id="81770708095080097">Ultimatum a bloqué ce fichier, car il est dangereux.</translation>
 <translation id="8177472873527554730">Impossible de trouver du contenu sur la page</translation>
-<translation id="8200109504272824693">Entrez votre phrase de passe pour utiliser et enregistrer les données Chromium dans votre compte, <ph name="USER_EMAIL" /></translation>
+<translation id="8200109504272824693">Entrez votre phrase de passe pour utiliser et enregistrer les données Ultimatum dans votre compte, <ph name="USER_EMAIL" /></translation>
 <translation id="8221491193165283816">Vous bloquez habituellement les notifications. Pour autoriser ce site à vous envoyer des notifications, cliquez ici.</translation>
-<translation id="8223363452568144035">Pour utiliser votre caméra, accordez l'accès à Chromium dans les <ph name="BEGIN_LINK" />paramètres système<ph name="END_LINK" /></translation>
-<translation id="8232193495299001329">Chromium ne peut pas vérifier l'origine de cette extension et elle peut s'avérer dangereuse. Retirez-la de Chromium afin qu'elle ne puisse plus voir ni modifier vos données sur les sites que vous visitez, y compris vos renseignements personnels.</translation>
-<translation id="8248265253516264921">Si une image n'est pas accompagnée d'une description utile, Chromium essaiera de vous en proposer une. Pour créer des descriptions, les images sont envoyées à Google. Vous pouvez désactiver cette option dans les paramètres à tout moment.</translation>
-<translation id="8254601181414348851">Vous connecter à Chromium avec un nouveau profil?</translation>
-<translation id="8286943863733751221"><ph name="BEGIN_LINK" />Chromium vous avertit<ph name="END_LINK" /> au sujet des sites et des téléchargements dangereux</translation>
-<translation id="8295827201165805317">Vous n'avez pas effectué de visite récemment. Chromium a retiré <ph name="PERMISSION" />.</translation>
-<translation id="8296236834352487533">Magasinez, traduisez et identifiez ce que vous voyez avec votre appareil photo dans l'appli Chromium iOS</translation>
+<translation id="8223363452568144035">Pour utiliser votre caméra, accordez l'accès à Ultimatum dans les <ph name="BEGIN_LINK" />paramètres système<ph name="END_LINK" /></translation>
+<translation id="8232193495299001329">Ultimatum ne peut pas vérifier l'origine de cette extension et elle peut s'avérer dangereuse. Retirez-la de Ultimatum afin qu'elle ne puisse plus voir ni modifier vos données sur les sites que vous visitez, y compris vos renseignements personnels.</translation>
+<translation id="8248265253516264921">Si une image n'est pas accompagnée d'une description utile, Ultimatum essaiera de vous en proposer une. Pour créer des descriptions, les images sont envoyées à Google. Vous pouvez désactiver cette option dans les paramètres à tout moment.</translation>
+<translation id="8254601181414348851">Vous connecter à Ultimatum avec un nouveau profil?</translation>
+<translation id="8286943863733751221"><ph name="BEGIN_LINK" />Ultimatum vous avertit<ph name="END_LINK" /> au sujet des sites et des téléchargements dangereux</translation>
+<translation id="8295827201165805317">Vous n'avez pas effectué de visite récemment. Ultimatum a retiré <ph name="PERMISSION" />.</translation>
+<translation id="8296236834352487533">Magasinez, traduisez et identifiez ce que vous voyez avec votre appareil photo dans l'appli Ultimatum iOS</translation>
 <translation id="8313851650939857356">Erreur de démarrage : <ph name="STARTUP_ERROR" />.</translation>
-<translation id="8318772038038596122">Votre organisation ferme Chromium lorsqu'il n'est pas utilisé pendant <ph name="TIMEOUT_DURATION" />.</translation>
+<translation id="8318772038038596122">Votre organisation ferme Ultimatum lorsqu'il n'est pas utilisé pendant <ph name="TIMEOUT_DURATION" />.</translation>
 <translation id="8321888067342493336">Enregistrer en tant qu'image</translation>
-<translation id="8330519371938183845">Se connecter pour synchroniser et personnaliser Chromium sur vos appareils</translation>
-<translation id="8340674089072921962"><ph name="USER_EMAIL_ADDRESS" /> utilisait précédemment Chromium</translation>
-<translation id="8359544530202147897">Mettez à jour Chromium pour continuer à utiliser les données Chromium dans votre compte Google, <ph name="ACCOUNT_EMAIL" /></translation>
-<translation id="8360718212975266891">Pour recevoir les futures mises à jour de Chromium, vous devrez disposer de Windows 10 ou d'une version ultérieure. Cet ordinateur fonctionne sous Windows 8.</translation>
+<translation id="8330519371938183845">Se connecter pour synchroniser et personnaliser Ultimatum sur vos appareils</translation>
+<translation id="8340674089072921962"><ph name="USER_EMAIL_ADDRESS" /> utilisait précédemment Ultimatum</translation>
+<translation id="8359544530202147897">Mettez à jour Ultimatum pour continuer à utiliser les données Ultimatum dans votre compte Google, <ph name="ACCOUNT_EMAIL" /></translation>
+<translation id="8360718212975266891">Pour recevoir les futures mises à jour de Ultimatum, vous devrez disposer de Windows 10 ou d'une version ultérieure. Cet ordinateur fonctionne sous Windows 8.</translation>
 <translation id="8362914115861174987">Langue cible</translation>
 <translation id="8367705492654390392">Posez une question</translation>
 <translation id="8370517070665726704">© <ph name="YEAR" /> Google LLC. Tous droits réservés.</translation>
-<translation id="8372327902843331129">Pour obtenir vos mots de passe et bien plus encore sur tous vos appareils, connectez-vous à Chromium. Ce mot de passe sera enregistré dans votre compte Google après votre connexion.</translation>
-<translation id="837460953767177950">Vous devrez ensuite redémarrer Chromium.</translation>
-<translation id="8397248745433792218">Chromium vous recommande de la retirer. <ph name="BEGIN_LINK" />En savoir plus sur les extensions prises en charge<ph name="END_LINK" /></translation>
-<translation id="8401454788024434101">Cette extension n'a pas été publiée par son développeur et pourrait être dangereuse. Retirez-la de Chromium afin qu'elle ne puisse plus voir ni modifier vos données sur les sites que vous visitez, y compris vos renseignements personnels.</translation>
-<translation id="8416884904046428725">Chromium doit confirmer votre identité avant que certaines données puissent être enregistrées dans votre compte Google et utilisées sur tous vos appareils. Si vous vous déconnectez maintenant, ces données seront supprimées.</translation>
-<translation id="8417404458978023919">{0,plural, =1{Redémarrer Chromium d'ici un jour}one{Redémarrer Chromium d'ici # jour}other{Redémarrer Chromium d'ici # jours}}</translation>
+<translation id="8372327902843331129">Pour obtenir vos mots de passe et bien plus encore sur tous vos appareils, connectez-vous à Ultimatum. Ce mot de passe sera enregistré dans votre compte Google après votre connexion.</translation>
+<translation id="837460953767177950">Vous devrez ensuite redémarrer Ultimatum.</translation>
+<translation id="8397248745433792218">Ultimatum vous recommande de la retirer. <ph name="BEGIN_LINK" />En savoir plus sur les extensions prises en charge<ph name="END_LINK" /></translation>
+<translation id="8401454788024434101">Cette extension n'a pas été publiée par son développeur et pourrait être dangereuse. Retirez-la de Ultimatum afin qu'elle ne puisse plus voir ni modifier vos données sur les sites que vous visitez, y compris vos renseignements personnels.</translation>
+<translation id="8416884904046428725">Ultimatum doit confirmer votre identité avant que certaines données puissent être enregistrées dans votre compte Google et utilisées sur tous vos appareils. Si vous vous déconnectez maintenant, ces données seront supprimées.</translation>
+<translation id="8417404458978023919">{0,plural, =1{Redémarrer Ultimatum d'ici un jour}one{Redémarrer Ultimatum d'ici # jour}other{Redémarrer Ultimatum d'ici # jours}}</translation>
 <translation id="8438543370129609977">Lorsque vous utilisez la recherche d'images, le titre de la page, l'URL et le contenu, y compris les fichiers PDF, sont envoyés au serveur. <ph name="LEARN_MORE" /></translation>
-<translation id="8447525028100794994">En savoir plus sur la manière de rechercher avec la recherche d'images dans Chromium</translation>
-<translation id="8453117565092476964">L'archive du programme d'installation est corrompue ou n'est pas valide. Veuillez télécharger Chromium à nouveau.</translation>
-<translation id="8458614432758743027">Chromium requiert Windows 10 ou une version ultérieure.</translation>
-<translation id="8463672209299734063">Facultatif : aidez-nous à améliorer les fonctionnalités ainsi que les performances de Chromium OS en envoyant automatiquement les données de diagnostic et d'utilisation à Google.</translation>
-<translation id="8471947159125090285">Pour utiliser et enregistrer des données Chromium dans votre compte Google, confirmez qu'il s'agit bien de vous</translation>
-<translation id="8482493977473846331">Affiche les invites de connexion dans Chromium</translation>
-<translation id="8493179195440786826">Chromium n'est pas à jour</translation>
-<translation id="850264194101621529">Merci d'avoir choisi Chromium comme navigateur par défaut!</translation>
-<translation id="8522801943730206384">Chromium peut vérifier vos mots de passe lorsque vous les enregistrez</translation>
-<translation id="8548787790260785208">Recevez un avertissement si Chromium trouve l'un de vos mots de passe dans une violation de données publique</translation>
+<translation id="8447525028100794994">En savoir plus sur la manière de rechercher avec la recherche d'images dans Ultimatum</translation>
+<translation id="8453117565092476964">L'archive du programme d'installation est corrompue ou n'est pas valide. Veuillez télécharger Ultimatum à nouveau.</translation>
+<translation id="8458614432758743027">Ultimatum requiert Windows 10 ou une version ultérieure.</translation>
+<translation id="8463672209299734063">Facultatif : aidez-nous à améliorer les fonctionnalités ainsi que les performances de Ultimatum OS en envoyant automatiquement les données de diagnostic et d'utilisation à Google.</translation>
+<translation id="8471947159125090285">Pour utiliser et enregistrer des données Ultimatum dans votre compte Google, confirmez qu'il s'agit bien de vous</translation>
+<translation id="8482493977473846331">Affiche les invites de connexion dans Ultimatum</translation>
+<translation id="8493179195440786826">Ultimatum n'est pas à jour</translation>
+<translation id="850264194101621529">Merci d'avoir choisi Ultimatum comme navigateur par défaut!</translation>
+<translation id="8522801943730206384">Ultimatum peut vérifier vos mots de passe lorsque vous les enregistrez</translation>
+<translation id="8548787790260785208">Recevez un avertissement si Ultimatum trouve l'un de vos mots de passe dans une violation de données publique</translation>
 <translation id="8555465886620020932">Erreur liée au service : <ph name="SERVICE_ERROR" />.</translation>
-<translation id="8556055872671007529">Certaines fonctionnalités et extensions Chromium sont dotées de raccourcis. Vous pouvez choisir de les réactiver.</translation>
+<translation id="8556055872671007529">Certaines fonctionnalités et extensions Ultimatum sont dotées de raccourcis. Vous pouvez choisir de les réactiver.</translation>
 <translation id="8556420416730706394">Vous pouvez épingler la recherche d'images pour un accès facile; cliquez sur le bouton Épingler en haut du panneau latéral</translation>
 <translation id="856656450041460113">Rechercher la liste de langues</translation>
-<translation id="8568283329061645092">Chromium peut vérifier vos mots de passe lorsque vous vous connectez avec votre compte Google</translation>
-<translation id="8576826849825683917">Plusieurs organisations gèrent Chromium</translation>
-<translation id="8586442755830160949">© <ph name="YEAR" /> Les auteurs de Chrome. Tous droits réservés.</translation>
+<translation id="8568283329061645092">Ultimatum peut vérifier vos mots de passe lorsque vous vous connectez avec votre compte Google</translation>
+<translation id="8576826849825683917">Plusieurs organisations gèrent Ultimatum</translation>
+<translation id="8586442755830160949">© <ph name="YEAR" /> Les auteurs de Ultimatum. Tous droits réservés.</translation>
 <translation id="8601359445272098721">Nouveau! Vous pouvez traduire à la fois le texte et les images sur votre écran en sélectionnant le bouton « Traduire l'écran »</translation>
-<translation id="8619360774459241877">Lancement de Chromium en cours…</translation>
+<translation id="8619360774459241877">Lancement de Ultimatum en cours…</translation>
 <translation id="8624541899164515475">Paramètres, s'ouvre dans un nouvel onglet.</translation>
-<translation id="8648201657708811153">Google Chrome for Testing ne peut pas être défini comme votre navigateur par défaut.</translation>
-<translation id="8697124171261953979">Elle définit également quelle page s'affiche lorsque vous démarrez Chromium ou que vous effectuez une recherche dans l'omnibox.</translation>
-<translation id="8704119203788522458">Voici votre Chromium</translation>
+<translation id="8648201657708811153">Ultimatum for Testing ne peut pas être défini comme votre navigateur par défaut.</translation>
+<translation id="8697124171261953979">Elle définit également quelle page s'affiche lorsque vous démarrez Ultimatum ou que vous effectuez une recherche dans l'omnibox.</translation>
+<translation id="8704119203788522458">Voici votre Ultimatum</translation>
 <translation id="8712637175834984815">OK</translation>
-<translation id="8719993436687031146">Se connecter à Chromium?</translation>
-<translation id="8745263398357414606">Tout conserver dans Chromium</translation>
+<translation id="8719993436687031146">Se connecter à Ultimatum?</translation>
+<translation id="8745263398357414606">Tout conserver dans Ultimatum</translation>
 <translation id="8747073452963259673">Coin inférieur gauche de la zone de recherche : gauche <ph name="LEFT" /> %, bas <ph name="BOTTOM" /> %</translation>
 <translation id="878572486461146056">Erreur d'installation : votre administrateur réseau a appliqué une politique de groupe qui empêche l'installation : <ph name="INSTALL_ERROR" /></translation>
-<translation id="8796602469536043152">Chromium a besoin de votre autorisation pour accéder à votre appareil photo et à votre micro pour ce site</translation>
+<translation id="8796602469536043152">Ultimatum a besoin de votre autorisation pour accéder à votre appareil photo et à votre micro pour ce site</translation>
 <translation id="8813277370772331957">Me le rappeler plus tard</translation>
-<translation id="8818550178040858407">Vous connecter à Chromium?</translation>
-<translation id="8823401858233292222">Faire de Chromium le navigateur par défaut et l'épingler à la barre des tâches</translation>
+<translation id="8818550178040858407">Vous connecter à Ultimatum?</translation>
+<translation id="8823401858233292222">Faire de Ultimatum le navigateur par défaut et l'épingler à la barre des tâches</translation>
 <translation id="8826492472752484139">Cliquez sur « Gestionnaire de mots de passe »</translation>
-<translation id="8833697763442816810">Système Chromium OS</translation>
-<translation id="8852026904190808918">Cette langue est utilisée pour afficher les menus, les paramètres, les alertes et d'autres textes dans Chromium</translation>
+<translation id="8833697763442816810">Système Ultimatum OS</translation>
+<translation id="8852026904190808918">Cette langue est utilisée pour afficher les menus, les paramètres, les alertes et d'autres textes dans Ultimatum</translation>
 <translation id="8862326446509486874">Vous ne disposez pas des droits requis pour faire une installation sur le système. Relancez l'installation une fois que vous serez connecté comme administrateur.</translation>
-<translation id="8876044221123442390">Ajouter un profil Chromium</translation>
-<translation id="8880203542552872219">Dans ce cas, veuillez modifier votre mot de passe enregistré dans Chromium pour qu'il corresponde à votre nouveau mot de passe.</translation>
-<translation id="8891709362986793894">Votre organisation vous demande de vous connecter à Chromium</translation>
-<translation id="8907580949721785412">Chromium essaie d'afficher les mots de passe. Pour autoriser cette action, entrez votre mot de passe Windows.</translation>
-<translation id="8932992523185907506">Chromium n'est plus votre navigateur par défaut. Faire de Chromium le navigateur par défaut?</translation>
-<translation id="8941642502866065432">Impossible de mettre à jour Chromium</translation>
-<translation id="897581876605952338">Logo de Chromium Enterprise</translation>
-<translation id="8981150672034878610">Impossible de démarrer Chromium parce qu'un problème est survenu lors de l'ouverture de votre profil. Essayez de redémarrer Chromium.</translation>
-<translation id="8988036198400390003">Gérer les profils Chromium</translation>
-<translation id="9019929317751753759">Afin de rendre Chromium plus sûr, nous avons désactivé l'extension suivante qui n'est pas répertoriée dans <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> et a pu être ajoutée à votre insu.</translation>
-<translation id="904366664621834601">Chromium a bloqué ce téléchargement, car le fichier d'archive comprend d'autres fichiers qui pourraient cacher des logiciels malveillants</translation>
-<translation id="9053882453960391422">Gardez vos mots de passe, vos favoris et votre historique parfaitement synchronisés sur tous vos appareils. Accédez facilement aux fonctionnalités que vous connaissez et que vous aimez en mettant à jour votre navigateur par défaut vers Chromium. Chromium sera épinglé à votre barre des tâches pour un accès rapide.</translation>
-<translation id="9062666675513499497">Vous connecter à Chromium lorsque vous vous connectez à d'autres services Google</translation>
-<translation id="9078733879136747090">Chromium a été automatiquement fermé</translation>
-<translation id="9089354809943900324">Chromium n'est pas à jour</translation>
-<translation id="9093206154853821181">{0,plural, =1{Chromium redémarrera dans une heure}one{Chromium redémarrera dans # heure}other{Chromium redémarrera dans # heures}}</translation>
+<translation id="8876044221123442390">Ajouter un profil Ultimatum</translation>
+<translation id="8880203542552872219">Dans ce cas, veuillez modifier votre mot de passe enregistré dans Ultimatum pour qu'il corresponde à votre nouveau mot de passe.</translation>
+<translation id="8891709362986793894">Votre organisation vous demande de vous connecter à Ultimatum</translation>
+<translation id="8907580949721785412">Ultimatum essaie d'afficher les mots de passe. Pour autoriser cette action, entrez votre mot de passe Windows.</translation>
+<translation id="8932992523185907506">Ultimatum n'est plus votre navigateur par défaut. Faire de Ultimatum le navigateur par défaut?</translation>
+<translation id="8941642502866065432">Impossible de mettre à jour Ultimatum</translation>
+<translation id="897581876605952338">Logo de Ultimatum Enterprise</translation>
+<translation id="8981150672034878610">Impossible de démarrer Ultimatum parce qu'un problème est survenu lors de l'ouverture de votre profil. Essayez de redémarrer Ultimatum.</translation>
+<translation id="8988036198400390003">Gérer les profils Ultimatum</translation>
+<translation id="9019929317751753759">Afin de rendre Ultimatum plus sûr, nous avons désactivé l'extension suivante qui n'est pas répertoriée dans <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> et a pu être ajoutée à votre insu.</translation>
+<translation id="904366664621834601">Ultimatum a bloqué ce téléchargement, car le fichier d'archive comprend d'autres fichiers qui pourraient cacher des logiciels malveillants</translation>
+<translation id="9053882453960391422">Gardez vos mots de passe, vos favoris et votre historique parfaitement synchronisés sur tous vos appareils. Accédez facilement aux fonctionnalités que vous connaissez et que vous aimez en mettant à jour votre navigateur par défaut vers Ultimatum. Ultimatum sera épinglé à votre barre des tâches pour un accès rapide.</translation>
+<translation id="9062666675513499497">Vous connecter à Ultimatum lorsque vous vous connectez à d'autres services Google</translation>
+<translation id="9078733879136747090">Ultimatum a été automatiquement fermé</translation>
+<translation id="9089354809943900324">Ultimatum n'est pas à jour</translation>
+<translation id="9093206154853821181">{0,plural, =1{Ultimatum redémarrera dans une heure}one{Ultimatum redémarrera dans # heure}other{Ultimatum redémarrera dans # heures}}</translation>
 <translation id="9106236359747881194">Sélectionner le texte à rechercher</translation>
-<translation id="9106612006984859720">Pour recevoir les futures mises à jour de Chromium, vous devrez disposer de Windows 10 ou d'une version ultérieure. Cet ordinateur fonctionne sous Windows 8.1.</translation>
-<translation id="91086099826398415">Ouvrir le lien dans un nouvel ongle&amp;t Chromium</translation>
+<translation id="9106612006984859720">Pour recevoir les futures mises à jour de Ultimatum, vous devrez disposer de Windows 10 ou d'une version ultérieure. Cet ordinateur fonctionne sous Windows 8.1.</translation>
+<translation id="91086099826398415">Ouvrir le lien dans un nouvel ongle&amp;t Ultimatum</translation>
 <translation id="911206726377975832">Supprimer également vos données de navigation?</translation>
 <translation id="9134482777260927479">Aide aux devoirs</translation>
 <translation id="9148058034647219655">Quitter</translation>
-<translation id="9155105544013854680">Reprenez là où vous en étiez : Chromium peut restaurer vos onglets à chaque redémarrage. Pour activer cette option, accédez à</translation>
-<translation id="9158494823179993217">Votre administrateur système a configuré Chromium pour ouvrir un autre navigateur afin d'accéder à <ph name="TARGET_URL_HOSTNAME" />.</translation>
-<translation id="9183331186620388872">Conseil Chromium : Recherchez du contenu avec Lentille</translation>
-<translation id="9185526690718004400">Relancer &amp;Chromium pour le mettre à jour</translation>
-<translation id="9190841055450128916">Chromium (mDNS-In)</translation>
-<translation id="924957577793602335">Personnalisez Chromium</translation>
-<translation id="93478295209880648">Il se peut que Chromium ne fonctionne pas correctement, car il n'est plus compatible avec Windows XP ni Windows Vista</translation>
+<translation id="9155105544013854680">Reprenez là où vous en étiez : Ultimatum peut restaurer vos onglets à chaque redémarrage. Pour activer cette option, accédez à</translation>
+<translation id="9158494823179993217">Votre administrateur système a configuré Ultimatum pour ouvrir un autre navigateur afin d'accéder à <ph name="TARGET_URL_HOSTNAME" />.</translation>
+<translation id="9183331186620388872">Conseil Ultimatum : Recherchez du contenu avec Lentille</translation>
+<translation id="9185526690718004400">Relancer &amp;Ultimatum pour le mettre à jour</translation>
+<translation id="9190841055450128916">Ultimatum (mDNS-In)</translation>
+<translation id="924957577793602335">Personnalisez Ultimatum</translation>
+<translation id="93478295209880648">Il se peut que Ultimatum ne fonctionne pas correctement, car il n'est plus compatible avec Windows XP ni Windows Vista</translation>
 <translation id="945522503751344254">Envoyer un commentaire à Google</translation>
-<translation id="965162752251293939">Qui utilise Chromium?</translation>
-<translation id="967427899662692980">Profiter de la sécurité la plus robuste de Chromium</translation>
+<translation id="965162752251293939">Qui utilise Ultimatum?</translation>
+<translation id="967427899662692980">Profiter de la sécurité la plus robuste de Ultimatum</translation>
 <translation id="983803489796659991">L'installation a échoué, car le serveur de mise à jour ne dispose pas de données de hachage pour cette application.</translation>
-<translation id="985498048907240953">Utiliser Chromium sans compte</translation>
-<translation id="985602178874221306">Les auteurs de Chrome</translation>
+<translation id="985498048907240953">Utiliser Ultimatum sans compte</translation>
+<translation id="985602178874221306">Les auteurs de Ultimatum</translation>
 <translation id="989970834842471429">Sélectionnez n'importe quel texte ou image pour effectuer une recherche avec la recherche d'images</translation>
-<translation id="992780518932311116">Pour utiliser votre position, accordez l'accès à Chromium dans les <ph name="BEGIN_LINK" />paramètres système<ph name="END_LINK" /></translation>
+<translation id="992780518932311116">Pour utiliser votre position, accordez l'accès à Ultimatum dans les <ph name="BEGIN_LINK" />paramètres système<ph name="END_LINK" /></translation>
 </translationbundle>

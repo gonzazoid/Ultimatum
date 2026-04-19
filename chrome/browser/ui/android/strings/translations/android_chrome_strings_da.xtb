@@ -24,9 +24,9 @@
 <translation id="1089606299949659462">Gennemgangen er fuldført</translation>
 <translation id="1094555143448724771">Hvis du vil se faner fra dine andre enheder, skal du synkronisere dine faner og din historik</translation>
 <translation id="1095761715416917775">Sørg for, at du altid kan få adgang til dine synkroniserede data</translation>
-<translation id="1096091316906284742">Felt i bunden til tilvalg af Chrome Finds</translation>
+<translation id="1096091316906284742">Felt i bunden til tilvalg af Ultimatum Finds</translation>
 <translation id="1100066534610197918">Åbn i en ny fane i en gruppe</translation>
-<translation id="1103142993930332957">Vil du hjælpe med at forbedre Chrome?</translation>
+<translation id="1103142993930332957">Vil du hjælpe med at forbedre Ultimatum?</translation>
 <translation id="1105960400813249514">Screenshot</translation>
 <translation id="1108214977745280468">Se sideindsigt</translation>
 <translation id="1108938384783527433">Synkronisering af historik</translation>
@@ -34,20 +34,20 @@
 <translation id="1123537484474186311"><ph name="TAB_TITLE" />, fane i tilstanden integreret billede</translation>
 <translation id="1126696498560056882">Administrer konti på denne enhed</translation>
 <translation id="1135018701024399762">Inkognitotilstand sørger for, at din internetaktivitet er privat, så andre, der bruger din enhed, ikke kan se den</translation>
-<translation id="113752097246673894">Hvis du vil have dine bogmærker m.m. på alle dine enheder, skal du logge ind i Chrome som <ph name="EMAIL" /></translation>
+<translation id="113752097246673894">Hvis du vil have dine bogmærker m.m. på alle dine enheder, skal du logge ind i Ultimatum som <ph name="EMAIL" /></translation>
 <translation id="1138458427267715730">Få underretninger, når prisen falder på produktet på et hvilket som helst website på nettet</translation>
 <translation id="1140317858355046628">Hvis du sletter den, mister alle øjeblikkeligt adgangen til fanegruppen "<ph name="GROUP_NAME" />", og den slettes fra alle enheder.</translation>
 <translation id="1142732900304639782">Tilbyd ikke at oversætte disse websites</translation>
 <translation id="1143193470214071120">Luk et vindue, eller administrer vinduer</translation>
 <translation id="1149725087019908252">Scanner <ph name="FILE_NAME" /></translation>
-<translation id="1150263420752757504"><ph name="APP_NAME" /> åbnes i Chrome. Når du fortsætter, accepterer du <ph name="BEGIN_LINK1" />Googles servicevilkår<ph name="END_LINK1" /> og de <ph name="BEGIN_LINK2" />yderligere servicevilkår for Google Chrome og ChromeOS<ph name="END_LINK2" />.</translation>
+<translation id="1150263420752757504"><ph name="APP_NAME" /> åbnes i Ultimatum. Når du fortsætter, accepterer du <ph name="BEGIN_LINK1" />Googles servicevilkår<ph name="END_LINK1" /> og de <ph name="BEGIN_LINK2" />yderligere servicevilkår for Ultimatum og UltimatumOS<ph name="END_LINK2" />.</translation>
 <translation id="1154555449933432029">Du har ingen gemte adgangskoder i Google Adgangs­kode­admin­istrator.</translation>
 <translation id="115483310321669804">Brug adgangskoden <ph name="PASSWORD" /></translation>
 <translation id="1161065531352634524">Synkroniser faner og historik</translation>
 <translation id="1165109137568919258">Tag et billede, eller tilføj et billede fra dit billedgalleri for at søge</translation>
 <translation id="1173894706177603556">Omdøb</translation>
-<translation id="1174479719160874822">Chrome anmoder om mobilwebsitet, når skærmen er smal</translation>
-<translation id="1175241315203286684">Din administrator kan foretage ændringer i din profil og browser via fjernadgang, analysere oplysninger om browseren via rapportering og udføre andre nødvendige opgaver. Aktivitet på denne enhed administreres muligvis også uden for Chrome.</translation>
+<translation id="1174479719160874822">Ultimatum anmoder om mobilwebsitet, når skærmen er smal</translation>
+<translation id="1175241315203286684">Din administrator kan foretage ændringer i din profil og browser via fjernadgang, analysere oplysninger om browseren via rapportering og udføre andre nødvendige opgaver. Aktivitet på denne enhed administreres muligvis også uden for Ultimatum.</translation>
 <translation id="1177863135347784049">Tilpasset</translation>
 <translation id="1181037720776840403">Fjern</translation>
 <translation id="1183189057400844278">Verificer din identitet for at sikre, at du altid kan bruge adgangskoderne på din Google-konto</translation>
@@ -85,13 +85,13 @@
 <translation id="1318262688555255786">Del linket til websiden <ph name="PAGE_TITLE" />. Kilde: <ph name="PAGE_URL" /></translation>
 <translation id="1320912611264252795">Mapper i flow til lagring af bogmærker er åbnet i fuld højde</translation>
 <translation id="1327257854815634930">Navigationsoversigt er åbnet</translation>
-<translation id="1331212799747679585">Chrome kan ikke opdateres. Flere valgmuligheder</translation>
-<translation id="1332501820983677155">Funktionsgenveje i Google Chrome</translation>
+<translation id="1331212799747679585">Ultimatum kan ikke opdateres. Flere valgmuligheder</translation>
+<translation id="1332501820983677155">Funktionsgenveje i Ultimatum</translation>
 <translation id="1333491156693005331">Tjekket for nylig</translation>
 <translation id="1336996151357442890">Notifikationer fra <ph name="SITE_NAME" /> er frameldt. Du bliver spurgt igen, næste gang du besøger websitet.</translation>
 <translation id="1340839264183302272">Forlad gruppe</translation>
 <translation id="1342886103232377846">Gå til Google Adgangs­kode­admin­istrator for at tjekke, om der er kompromitterede adgangskoder</translation>
-<translation id="1343830902827845050">Log ind i Chrome</translation>
+<translation id="1343830902827845050">Log ind i Ultimatum</translation>
 <translation id="1344653310988386453">Medtag link til fremhævning</translation>
 <translation id="1355088659320425659">Historik og faner</translation>
 <translation id="1360432990279830238">Log ud, og deaktiver synkronisering?</translation>
@@ -105,12 +105,12 @@
 <translation id="1383876407941801731">Søg</translation>
 <translation id="1384704387250346179">Oversæt billedet med Google Lens <ph name="BEGIN_NEW" />Nyhed<ph name="END_NEW" /></translation>
 <translation id="1386674309198842382">Aktiv for <ph name="LAST_UPDATED" /> dage siden</translation>
-<translation id="1390418506739274310">Du kan muligvis se historikken fra andre apps, der åbner links i Chrome. Din Google-konto kan have andre former for browserhistorik på <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
+<translation id="1390418506739274310">Du kan muligvis se historikken fra andre apps, der åbner links i Ultimatum. Din Google-konto kan have andre former for browserhistorik på <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="139752016751285248">Felt i bunden med prisinfo åbnet i fuld højde</translation>
 <translation id="1397811292916898096">Søg med <ph name="PRODUCT_NAME" /></translation>
-<translation id="1398057416966591719">Du kan <ph name="BEGIN_LINK1" />administrere, hvilke Chrome-data der gemmes<ph name="END_LINK1" /> på din Google-konto.
+<translation id="1398057416966591719">Du kan <ph name="BEGIN_LINK1" />administrere, hvilke Ultimatum-data der gemmes<ph name="END_LINK1" /> på din Google-konto.
 
-Du kan finde flere indstillinger, der bruger data til at forbedre din Chrome-oplevelse, ved at gå til <ph name="BEGIN_LINK2" />Google-tjenester<ph name="END_LINK2" />.</translation>
+Du kan finde flere indstillinger, der bruger data til at forbedre din Ultimatum-oplevelse, ved at gå til <ph name="BEGIN_LINK2" />Google-tjenester<ph name="END_LINK2" />.</translation>
 <translation id="1407069428457324124">Mørkt tema</translation>
 <translation id="1407135791313364759">Åbn alle</translation>
 <translation id="1409879593029778104">Download af <ph name="FILE_NAME" /> blev forhindret, fordi filen allerede findes.</translation>
@@ -124,10 +124,10 @@ Du kan finde flere indstillinger, der bruger data til at forbedre din Chrome-opl
 <translation id="1448440926884431741">Organiser de produkter, du holder øje med, i Bogmærker</translation>
 <translation id="1455845192930279203">Vil du downloade "<ph name="FILE_NAME" />" (<ph name="FILE_SIZE" />) fra <ph name="DOWNLOAD_DOMAIN" /> alligevel?</translation>
 <translation id="1460751212339734034">Spar tid ved at indtaste mindre</translation>
-<translation id="1466383950273130737">Vælg sprog i Chrome</translation>
+<translation id="1466383950273130737">Vælg sprog i Ultimatum</translation>
 <translation id="1477626028522505441">Download af <ph name="FILE_NAME" /> mislykkedes på grund af serverproblemer.</translation>
 <translation id="147982357559798527">Ændret</translation>
-<translation id="1480287803138246127">Noget af din historik vises muligvis ikke her. Hvis du vil se hele din Chrome-historik, skal du åbne den komplette Chrome-historik.</translation>
+<translation id="1480287803138246127">Noget af din historik vises muligvis ikke her. Hvis du vil se hele din Ultimatum-historik, skal du åbne den komplette Ultimatum-historik.</translation>
 <translation id="1493287004536771723">Du følger <ph name="SITE_NAME" /></translation>
 <translation id="1495677929897281669">Tilbage til fanen</translation>
 <translation id="1496514951988037011">brugernavn</translation>
@@ -137,14 +137,14 @@ Du kan finde flere indstillinger, der bruger data til at forbedre din Chrome-opl
 <translation id="1515901671075971249">Genveje til fanenavigation</translation>
 <translation id="1516966594427080024">Åbn et nyt vindue i inkognitotilstand</translation>
 <translation id="1521774566618522728">Aktiv i dag</translation>
-<translation id="153446405401665083">En ny version af Chrome er tilgængelig</translation>
+<translation id="153446405401665083">En ny version af Ultimatum er tilgængelig</translation>
 <translation id="1540012742443808215">Adresselinjen vises i øjeblikket øverst</translation>
-<translation id="1544084554881119930">Betalingsmetoder og adresser krypteres ikke. Browserhistorik fra Chrome synkroniseres ikke.
-Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssætningen bliver ikke sendt til eller gemt af Google. Hvis du glemmer din adgangssætning eller vil ændre denne indstilling, skal du <ph name="BEGIN_LINK" />rydde Chrome-dataene på din konto<ph name="END_LINK" />.</translation>
+<translation id="1544084554881119930">Betalingsmetoder og adresser krypteres ikke. Browserhistorik fra Ultimatum synkroniseres ikke.
+Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssætningen bliver ikke sendt til eller gemt af Google. Hvis du glemmer din adgangssætning eller vil ændre denne indstilling, skal du <ph name="BEGIN_LINK" />rydde Ultimatum-dataene på din konto<ph name="END_LINK" />.</translation>
 <translation id="1544826120773021464">Tryk på knappen "Administrer konto" for at administrere din Google-konto</translation>
 <translation id="1549000191223877751">Flyt til et andet vindue</translation>
-<translation id="1553358976309200471">Opdater Chrome</translation>
-<translation id="1554532453982918912">Vær med til at gøre Chrome bedre for andre, der bruger Chrome på samme måde som dig</translation>
+<translation id="1553358976309200471">Opdater Ultimatum</translation>
+<translation id="1554532453982918912">Vær med til at gøre Ultimatum bedre for andre, der bruger Ultimatum på samme måde som dig</translation>
 <translation id="1568636008098739136">Få oplæst denne side. Hold fingeren på denne genvej for at redigere den.</translation>
 <translation id="1571041387761170095">Ingen svage eller genbrugte adgangskoder</translation>
 <translation id="1578591621182011812">{NUM_PASSWORDS,plural, =1{1 kompromitteret adgangskode på denne enhed}one{# kompromitteret adgangskode på denne enhed}other{# kompromitterede adgangskoder på denne enhed}}</translation>
@@ -171,24 +171,24 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="1702907158640575240">Administreret browser</translation>
 <translation id="170478069042229393"><ph name="TAB_TITLE" />, fastgjort inkognitofane</translation>
 <translation id="1718835860248848330">Seneste time</translation>
-<translation id="1726477445370128854">Du kan browse og søge hurtigere, når Chrome forudindlæser sider, som Chrome tror, du kunne være interesseret i at besøge</translation>
+<translation id="1726477445370128854">Du kan browse og søge hurtigere, når Ultimatum forudindlæser sider, som Ultimatum tror, du kunne være interesseret i at besøge</translation>
 <translation id="1728803206919861584">Vil du gemme adgangsnøglen uden for inkognito?</translation>
 <translation id="1732514748744806741">Hvis dine adgangskoder kompromitteres, kontakter vi dig</translation>
-<translation id="1737694586321018892">Få Chromes stærkeste beskyttelse</translation>
+<translation id="1737694586321018892">Få Ultimatums stærkeste beskyttelse</translation>
 <translation id="1747593111377567311">{NUM_SITES,plural, =1{1 website har for nylig sendt mange notifikationer}one{# website har for nylig sendt mange notifikationer}other{# websites har for nylig sendt mange notifikationer}}</translation>
 <translation id="1749561566933687563">Synkroniser dine bogmærker</translation>
 <translation id="1750238553597293878">Fortsæt med at bruge adgangskoderne på din Google-konto</translation>
 <translation id="17513872634828108">Åbne faner</translation>
 <translation id="1753744496844366747">Aa</translation>
 <translation id="1760873718737761808">{FILE_COUNT,plural, =1{Sider, 1 side på listen}one{Sider, # side på listen}other{Sider, # sider på listen}}</translation>
-<translation id="1771929606532798550">Der sendes oplysninger til Google om din brug af Chrome, men oplysningerne kan ikke knyttes til dig\n\nHvis Chrome oplever nedbrud, kan oplysningerne om nedbruddet omfatte visse personlige oplysninger\n\nHvis du synkroniserer din historik med din Google-konto, kan metrics også omfatte oplysninger om de webadresser, du besøger</translation>
+<translation id="1771929606532798550">Der sendes oplysninger til Google om din brug af Ultimatum, men oplysningerne kan ikke knyttes til dig\n\nHvis Ultimatum oplever nedbrud, kan oplysningerne om nedbruddet omfatte visse personlige oplysninger\n\nHvis du synkroniserer din historik med din Google-konto, kan metrics også omfatte oplysninger om de webadresser, du besøger</translation>
 <translation id="1778457539567749232">Markér som ulæst</translation>
 <translation id="1779766957982586368">Luk vindue</translation>
 <translation id="1780023393214832643">Adgangskoderne er gemt på <ph name="USERNAME" /></translation>
 <translation id="1791662854739702043">Installeret</translation>
 <translation id="1792959175193046959">Du kan til enhver tid skifte standardplaceringen for downloads</translation>
 <translation id="1796666869097395659">Minimer fanen, så du kan vende tilbage til den senere</translation>
-<translation id="1799920918471566157">Tips til Chrome</translation>
+<translation id="1799920918471566157">Tips til Ultimatum</translation>
 <translation id="1807246157184219062">Lys</translation>
 <translation id="1807709131360304325">Åbn et nyt vindue</translation>
 <translation id="1810845389119482123">Indledende konfiguration af synkronisering er ikke afsluttet</translation>
@@ -197,13 +197,13 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="1820408774134375111">Loginfeltet i bunden</translation>
 <translation id="1823492026305965829">Log ind som <ph name="USER_FULL_NAME" /></translation>
 <translation id="1824902652744048041">Tryk på Slet browserdata</translation>
-<translation id="1825772852827001597">Betalingsmetoder og adresser fra Google Pay krypteres ikke. Browserhistorik fra Chrome synkroniseres ikke.
-Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssætningen bliver ikke sendt til eller gemt af Google. Hvis du glemmer din adgangssætning eller vil ændre denne indstilling, skal du <ph name="BEGIN_LINK" />slette Chrome-dataene på din konto<ph name="END_LINK" />.</translation>
+<translation id="1825772852827001597">Betalingsmetoder og adresser fra Google Pay krypteres ikke. Browserhistorik fra Ultimatum synkroniseres ikke.
+Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssætningen bliver ikke sendt til eller gemt af Google. Hvis du glemmer din adgangssætning eller vil ændre denne indstilling, skal du <ph name="BEGIN_LINK" />slette Ultimatum-dataene på din konto<ph name="END_LINK" />.</translation>
 <translation id="1829244130665387512">Find på siden</translation>
 <translation id="1832459821645506983">Ja tak</translation>
-<translation id="1845958458910716240">Du kan beskytte dine data ved at lade Chrome fjerne tilladelser fra websites, du ikke har besøgt for nylig</translation>
-<translation id="1871098866036088250">Åbn i Chrome-browseren</translation>
-<translation id="1877026089748256423">Chrome er forældet</translation>
+<translation id="1845958458910716240">Du kan beskytte dine data ved at lade Ultimatum fjerne tilladelser fra websites, du ikke har besøgt for nylig</translation>
+<translation id="1871098866036088250">Åbn i Ultimatum-browseren</translation>
+<translation id="1877026089748256423">Ultimatum er forældet</translation>
 <translation id="1877073879466606884">Den profil, du er logget ind på, er en administreret profil. Din administrator kan foretage ændringer i dine profilindstillinger via fjernadgang, analysere oplysninger om browseren via rapportering og udføre andre nødvendige opgaver.</translation>
 <translation id="1879904908408734349">Loginfeltet i bunden er lukket</translation>
 <translation id="1883903952484604915">Mine filer</translation>
@@ -215,7 +215,7 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="1910950723001426294">Listen over delingsindstillinger er lukket.</translation>
 <translation id="191726024256261717">Se tilladelser</translation>
 <translation id="1917766536967060661">Du mister øjeblikkeligt adgang til fanegruppen "<ph name="GROUP_NAME" />", og <ph name="BLOCKED_MEMBER_FULL_NAME" /> (<ph name="BLOCKED_MEMBER_EMAIL" />) kan ikke længere interagere med dig i Google-tjenester.</translation>
-<translation id="1919130412786645364">Tillad login i Chrome</translation>
+<translation id="1919130412786645364">Tillad login i Ultimatum</translation>
 <translation id="1922362554271624559">Foreslåede sprog</translation>
 <translation id="1924255092154549435">Fanen er udvidet</translation>
 <translation id="1925021887439448749">Angiv tilpasset webadresse</translation>
@@ -225,11 +225,11 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="1944535645109964458">Ingen tilgængelige adgangsnøgler</translation>
 <translation id="1957557050935255529">Indlæser PDF-fil…</translation>
 <translation id="1959679933317802873">Venter på indhold</translation>
-<translation id="1960290143419248813">Chrome understøtter ikke længere denne version af Android</translation>
+<translation id="1960290143419248813">Ultimatum understøtter ikke længere denne version af Android</translation>
 <translation id="1962061488333185936"><ph name="TAB_TITLE" />, fane med multivalg, der afspiller lyd</translation>
 <translation id="1963976881984600709">Standardbeskyttelse</translation>
 <translation id="1966710179511230534">Opdater dine loginoplysninger.</translation>
-<translation id="1969037871259811890">Du bliver ikke logget ud af din Google-konto, når du sletter dine browserdata. Du skal <ph name="BEGIN_LINK1" />logge ud af Chrome<ph name="END_LINK1" /> for at logge ud af din konto.</translation>
+<translation id="1969037871259811890">Du bliver ikke logget ud af din Google-konto, når du sletter dine browserdata. Du skal <ph name="BEGIN_LINK1" />logge ud af Ultimatum<ph name="END_LINK1" /> for at logge ud af din konto.</translation>
 <translation id="197288927597451399">Behold</translation>
 <translation id="1973912524893600642">Behold data</translation>
 <translation id="1974060860693918893">Avanceret</translation>
@@ -242,7 +242,7 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="2021896219286479412">Kontrolelementer på website i fuld skærm</translation>
 <translation id="2029669011553795746">Tilvalg af notifikationer med tips er åbnet i halv højde</translation>
 <translation id="2038563949887743358">Slå computerversionen af websitet til</translation>
-<translation id="204321170514947529"><ph name="APP_NAME" /> har også data i Chrome</translation>
+<translation id="204321170514947529"><ph name="APP_NAME" /> har også data i Ultimatum</translation>
 <translation id="2047378580182589770">Hold fingeren nede for at skifte væk fra Inkognito</translation>
 <translation id="2049574241039454490"><ph name="FILE_SIZE_OF_TOTAL" /> <ph name="SEPARATOR" /> <ph name="DESCRIPTION" /></translation>
 <translation id="2051669996101374349">Brug HTTPS, når det er muligt, og bliv advaret før indlæsning af websites, der ikke understøtter HTTPS. Du kan ikke ændre denne indstilling, fordi du har aktiveret Avanceret beskyttelse.</translation>
@@ -265,9 +265,9 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="2138283760993967204">Ikon for administration</translation>
 <translation id="2138632817776076519"><ph name="TAB_TITLE" />, valgt fane, der optager</translation>
 <translation id="2141396931810938595">Baseret på din brug</translation>
-<translation id="2145315049852051678">Chrome tjekker jævnligt, om din browser har de sikreste indstillinger. Vi giver dig besked, hvis der er noget, du skal gennemgå.</translation>
+<translation id="2145315049852051678">Ultimatum tjekker jævnligt, om din browser har de sikreste indstillinger. Vi giver dig besked, hvis der er noget, du skal gennemgå.</translation>
 <translation id="2149973817440762519">Rediger bogmærke</translation>
-<translation id="2163089732491971196">Angiv din adgangssætning for at bruge og gemme Chrome-data på din Google-konto</translation>
+<translation id="2163089732491971196">Angiv din adgangssætning for at bruge og gemme Ultimatum-data på din Google-konto</translation>
 <translation id="2166228530126694506">Version <ph name="VERSION_NUMBER" /></translation>
 <translation id="2172688499998841696">Billedbeskrivelser er slået fra</translation>
 <translation id="2172905120685242547">Vil du lukke vinduet?</translation>
@@ -280,7 +280,7 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="2194856509914051091">Vigtige oplysninger</translation>
 <translation id="2205701497928406883"><ph name="TAB_TITLE" />, fastgjort fane, der deler indhold</translation>
 <translation id="22091350895006575">Tilføj brugernavn</translation>
-<translation id="221494669172414749">Hvis du åbner Chrome uden en profillås, fjernes dine gemte adgangskoder og betalingsmetoder fra bilen. Du kan beskytte disse data ved at bruge en profillås.</translation>
+<translation id="221494669172414749">Hvis du åbner Ultimatum uden en profillås, fjernes dine gemte adgangskoder og betalingsmetoder fra bilen. Du kan beskytte disse data ved at bruge en profillås.</translation>
 <translation id="2226826835915474236">Inaktive genveje</translation>
 <translation id="2227179592712503583">Fjern forslag</translation>
 <translation id="2227444325776770048">Fortsæt som <ph name="USER_FULL_NAME" /></translation>
@@ -311,7 +311,7 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="2332515770639153015">Udvidet beskyttet browsing er aktiveret</translation>
 <translation id="233375395665273385">Slet, og log ud</translation>
 <translation id="2341410551640223969"><ph name="WEBAPK_NAME" /> kunne ikke installeres.</translation>
-<translation id="2349710944427398404">Samlet mængde data, som Chrome anvender, herunder konti, bogmærker og gemte indstillinger</translation>
+<translation id="2349710944427398404">Samlet mængde data, som Ultimatum anvender, herunder konti, bogmærker og gemte indstillinger</translation>
 <translation id="235789365079050412">Googles privatlivspolitik</translation>
 <translation id="2359808026110333948">Fortsæt</translation>
 <translation id="2362083820973145409">Logget ind som <ph name="USER_NAME" />. <ph name="USER_EMAIL" />. Åbner indstillinger.</translation>
@@ -333,7 +333,7 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="2427025860753516072">{FILE_COUNT,plural, =1{Videoer, 1 video på listen}one{Videoer, # video på listen}other{Videoer, # videoer på listen}}</translation>
 <translation id="2433507940547922241">Udseende</translation>
 <translation id="2439153523196674349">Forhåndsvisning af <ph name="SITE_NAME" /></translation>
-<translation id="2449931042095204989">Når et Google-website eller en Google-app beder om at forudindlæse links privat på det pågældende website, krypterer og forudindlæser Chrome siderne via Googles servere uden cookies. På denne måde skjules din identitet fra det forudindlæste website.</translation>
+<translation id="2449931042095204989">Når et Google-website eller en Google-app beder om at forudindlæse links privat på det pågældende website, krypterer og forudindlæser Ultimatum siderne via Googles servere uden cookies. På denne måde skjules din identitet fra det forudindlæste website.</translation>
 <translation id="2450019289047528273">Betalingsmetoder og andre oplysninger fra Google Wallet</translation>
 <translation id="2450083983707403292">Vil du begynde at downloade <ph name="FILE_NAME" /> igen?</translation>
 <translation id="2451607499823206582">Overvågning</translation>
@@ -342,17 +342,17 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="2466378451804467735"><ph name="TAB_TITLE" />, fane med multivalg med lyden slået fra</translation>
 <translation id="2468444275314013497">Din browser ser sikker ud</translation>
 <translation id="2471632347767899461">Prøv at søge i Hjælp</translation>
-<translation id="2472163211318554013">Log ind for at få mest muligt ud af Chrome</translation>
+<translation id="2472163211318554013">Log ind for at få mest muligt ud af Ultimatum</translation>
 <translation id="247737702124049222">Billedbeskrivelser er slået til</translation>
 <translation id="2479148705183875116">Gå til Indstillinger</translation>
 <translation id="2482878487686419369">Notifikationer</translation>
 <translation id="2496180316473517155">Browserhistorik</translation>
 <translation id="2497852260688568942">Synkronisering er deaktiveret af din administrator.</translation>
-<translation id="250020030759455918">Du kan se loginstatus, browserdata og websiteoplysninger for <ph name="SITE_NAME" /> i Chrome</translation>
+<translation id="250020030759455918">Du kan se loginstatus, browserdata og websiteoplysninger for <ph name="SITE_NAME" /> i Ultimatum</translation>
 <translation id="2510106555128151389">Installerer <ph name="WEBAPK_NAME" />...</translation>
 <translation id="2512234228327349533">Søg efter købsmuligheder</translation>
 <translation id="2513403576141822879">Du kan finde flere indstillinger vedrørende privatliv, sikkerhed og dataindsamling ved at gå til <ph name="BEGIN_LINK" />Synkronisering og Google-tjenester<ph name="END_LINK" /></translation>
-<translation id="2515921719039583189">Vil du slette dine Chrome-data på denne enhed?</translation>
+<translation id="2515921719039583189">Vil du slette dine Ultimatum-data på denne enhed?</translation>
 <translation id="2517113738956581680">Felt i fuld størrelse</translation>
 <translation id="2523184218357549926">Sender webadresser på de sider, du besøger, til Google</translation>
 <translation id="2524132927880411790">Gå til stemmesøgning i Google-appen</translation>
@@ -374,9 +374,9 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="2569733278091928697">Du får mulighed for nemt at administrere mediestyring, inkognitosessioner, downloads og meget mere</translation>
 <translation id="2571711316400087311">Tilbyd at sende sider på andre sprog til Google Oversæt</translation>
 <translation id="2571834852878229351">Opret selv</translation>
-<translation id="2574249610672786438">Log ind på alle de enheder, hvor du bruger Chrome, for at se dine faner på dem</translation>
+<translation id="2574249610672786438">Log ind på alle de enheder, hvor du bruger Ultimatum, for at se dine faner på dem</translation>
 <translation id="2577981599306533385"><ph name="MEMBER_FULL_NAME" /> (<ph name="EMAIL" />) mister øjeblikkeligt adgang til fanegruppen "<ph name="GROUP_NAME" />" og kan ikke længere interagere med dig i Google-tjenester.</translation>
-<translation id="2581165646603367611">Dette rydder cookies, cache og andre data fra websites, som ikke er vigtige ifølge Chrome.</translation>
+<translation id="2581165646603367611">Dette rydder cookies, cache og andre data fra websites, som ikke er vigtige ifølge Ultimatum.</translation>
 <translation id="2587052924345400782">Der findes en nyere version</translation>
 <translation id="2593272815202181319">Enkelt tegnafstand</translation>
 <translation id="260403163289591229">Følger</translation>
@@ -415,8 +415,8 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="2779651927720337254">mislykkedes</translation>
 <translation id="2781151931089541271">1 sekund tilbage</translation>
 <translation id="2789486458103222910">OK</translation>
-<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Chrome har fundet en genbrugt adgangskode, som du kan forbedre}one{Chrome har fundet # genbrugt adgangskode, som du kan forbedre}other{Chrome har fundet # genbrugte adgangskoder, som du kan forbedre}}</translation>
-<translation id="2794551654724114396">Aktivér notifikationer for at få nyttige tips, der hjælper dig med at få mest muligt ud af Chrome</translation>
+<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Ultimatum har fundet en genbrugt adgangskode, som du kan forbedre}one{Ultimatum har fundet # genbrugt adgangskode, som du kan forbedre}other{Ultimatum har fundet # genbrugte adgangskoder, som du kan forbedre}}</translation>
+<translation id="2794551654724114396">Aktivér notifikationer for at få nyttige tips, der hjælper dig med at få mest muligt ud af Ultimatum</translation>
 <translation id="2805210243313393104">Få dine bogmærker m.m. på alle dine enheder</translation>
 <translation id="2805756323405976993">Apps</translation>
 <translation id="2819849308549746319">Frameld alle</translation>
@@ -433,7 +433,7 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="2842985007712546952">Overordnet mappe</translation>
 <translation id="2854916915045135148">Hold fingeren nede for at skifte til Inkognito</translation>
 <translation id="2860954141821109167">Sørg for, at opkaldsappen er aktiveret på denne enhed</translation>
-<translation id="2861923151411510142">Visse Chrome-funktioner vil ikke længere være tilgængelige</translation>
+<translation id="2861923151411510142">Visse Ultimatum-funktioner vil ikke længere være tilgængelige</translation>
 <translation id="286473047976978798">Vil du anvende dine præferencer for udseende?</translation>
 <translation id="2869416538780777323">{OTHER_TAB_COUNT,plural, =1{<ph name="URL" /> og 1 anden fane}one{<ph name="URL" /> og <ph name="TAB_COUNT_MANY" /> anden fane}other{<ph name="URL" /> og <ph name="TAB_COUNT_MANY" /> andre faner}}</translation>
 <translation id="2869430948265924908">Du skal oprette en lås for din bilprofil for at beskytte dit følsomme indhold i bilen.  Du kan gøre dette med en pinkode, en kode eller en adgangskode.</translation>
@@ -441,10 +441,10 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="2871733351037274014">Forudindlæs sider</translation>
 <translation id="2876136027428473467"><ph name="CHILD_NAME" /> vil have dig til at godkende dette website:</translation>
 <translation id="2876556152483133018">Websitesøgning</translation>
-<translation id="2876628302275096482">Se, <ph name="BEGIN_LINK" />hvordan Chrome beskytter dine data<ph name="END_LINK" /></translation>
+<translation id="2876628302275096482">Se, <ph name="BEGIN_LINK" />hvordan Ultimatum beskytter dine data<ph name="END_LINK" /></translation>
 <translation id="2878607776582720720"><ph name="TAB_TITLE" />, inkognitofane med multivalg, der deler indhold</translation>
 <translation id="2885355868600171871">Gå til adresselinjen</translation>
-<translation id="2888126860611144412">Om Chrome</translation>
+<translation id="2888126860611144412">Om Ultimatum</translation>
 <translation id="2891154217021530873">Stop sideindlæsning</translation>
 <translation id="2893168226686371498">Standardbrowser</translation>
 <translation id="2894821468041866720">Gør ikke din browser eller enhed mærkbart langsommere.</translation>
@@ -463,14 +463,14 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="2923908459366352541">Navnet er ugyldigt</translation>
 <translation id="2932150158123903946">Google <ph name="APP_NAME" />-lagerplads</translation>
 <translation id="2932222164150889403">Dit tastatur ændres ikke</translation>
-<translation id="2936980480904111527">Chrome-notifikationer gør tingene nemmere</translation>
+<translation id="2936980480904111527">Ultimatum-notifikationer gør tingene nemmere</translation>
 <translation id="2940075786175545812">Mulighed for at godkende eller ikke godkende et website</translation>
 <translation id="2942036813789421260">Fanen forhåndsvisning er lukket</translation>
 <translation id="2951071800649516099">Føj sider til din læseliste, så du kan læse dem senere</translation>
 <translation id="2954586176076923855">Flyt adresselinjen til toppen</translation>
 <translation id="2961208450284224863">{READING_LIST_UNREAD_PAGE_COUNT,plural, =1{<ph name="READING_LIST_UNREAD_PAGE_COUNT_ONE" /> ulæst side}one{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> ulæst side}other{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> ulæste sider}}</translation>
 <translation id="2972109037780336501">Fjern tilladelser automatisk</translation>
-<translation id="2976550651269220761">Nogle af dine Chrome-data er endnu ikke gemt på din Google-konto.\nPrøv at vente et par minutter, før du logger ud. Hvis du logger ud nu, slettes disse data.</translation>
+<translation id="2976550651269220761">Nogle af dine Ultimatum-data er endnu ikke gemt på din Google-konto.\nPrøv at vente et par minutter, før du logger ud. Hvis du logger ud nu, slettes disse data.</translation>
 <translation id="2977350910003566746">Sorteres efter sidst åbnet</translation>
 <translation id="297771753501244313">Sortér efter sidst åbnet</translation>
 <translation id="2979639724566107830">Åbn i nyt vindue</translation>
@@ -493,15 +493,15 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="3035527385626181784"><ph name="TAB_TITLE" />, valgt fane, der deler indhold</translation>
 <translation id="3036750288708366620"><ph name="BEGIN_LINK" />Få hjælp<ph name="END_LINK" /></translation>
 <translation id="3037177537145227281">Der holdes øje med prisen</translation>
-<translation id="3037517125981011456">Viser anmodninger om at logge ind i Chrome</translation>
+<translation id="3037517125981011456">Viser anmodninger om at logge ind i Ultimatum</translation>
 <translation id="3038272154009688107">Se alle websites</translation>
 <translation id="3057938290530993634">Hold fingeren på feltet for at fastgøre dine mest besøgte websites, så du nemt kan tilgå dem næste gang</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> bogmærke}one{<ph name="BOOKMARKS_COUNT_MANY" /> bogmærke}other{<ph name="BOOKMARKS_COUNT_MANY" /> bogmærker}}</translation>
-<translation id="3062802207422175757">Artikler om dine interesser i Chrome</translation>
+<translation id="3062802207422175757">Artikler om dine interesser i Ultimatum</translation>
 <translation id="3066573403916685335">Flyt ned</translation>
 <translation id="3067505415088964188">Prisen er lav</translation>
 <translation id="3070005020161560471">Oversæt automatisk</translation>
-<translation id="3072980200212375806"><ph name="APP_NAME" /> åbnes i Chrome. Når du fortsætter, accepterer du <ph name="BEGIN_LINK1" />Googles servicevilkår<ph name="END_LINK1" /> og de <ph name="BEGIN_LINK2" />yderligere servicevilkår for Google Chrome og ChromeOS<ph name="END_LINK2" />. <ph name="BEGIN_LINK3" />Privatlivspolitikken<ph name="END_LINK3" /> vil også gælde.</translation>
+<translation id="3072980200212375806"><ph name="APP_NAME" /> åbnes i Ultimatum. Når du fortsætter, accepterer du <ph name="BEGIN_LINK1" />Googles servicevilkår<ph name="END_LINK1" /> og de <ph name="BEGIN_LINK2" />yderligere servicevilkår for Ultimatum og UltimatumOS<ph name="END_LINK2" />. <ph name="BEGIN_LINK3" />Privatlivspolitikken<ph name="END_LINK3" /> vil også gælde.</translation>
 <translation id="3080525922482950719">Du kan gemme sider, som du vil læse senere, eller når du er offline</translation>
 <translation id="3087734570205094154">Bund</translation>
 <translation id="3091010850649238832">Vis indhold i udklipsholderen</translation>
@@ -511,7 +511,7 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="3123734510202723619">Meddelelser</translation>
 <translation id="3134385238404760368">Ingen faner åbnet for nylig</translation>
 <translation id="3135655388926735587">Tryk på Seneste faner</translation>
-<translation id="314939179385989105">Chromes startside</translation>
+<translation id="314939179385989105">Ultimatums startside</translation>
 <translation id="3158667104057012316">Sorteres i manuel rækkefølge</translation>
 <translation id="3159335509547415276">Få flere oplysninger om blokerede konti</translation>
 <translation id="3161699713309727585"><ph name="BUTTON_TEXT" /> – åbnes på en ny fane</translation>
@@ -531,7 +531,7 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="3236059992281584593">1 minut tilbage</translation>
 <translation id="3237087289225714896">Standardforudindlæsning:</translation>
 <translation id="3244271242291266297">MM</translation>
-<translation id="3245429137663807393">Hvis du også deler Chrome-brugsrapporter, omfatter de pågældende rapporter de webadresser, du besøger</translation>
+<translation id="3245429137663807393">Hvis du også deler Ultimatum-brugsrapporter, omfatter de pågældende rapporter de webadresser, du besøger</translation>
 <translation id="3250563604907490871">Billedbeskrivelserne genoptages, når du opretter forbindelse til Wi-Fi</translation>
 <translation id="3254409185687681395">Tilføj denne side som bogmærke</translation>
 <translation id="3265093782546847662">Alle sider på <ph name="DOMAIN" /></translation>
@@ -568,22 +568,22 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="3435575784518354875">Hvis du fortsat vil have adgang til dine adgangskoder, skal du eksportere dem nu, opdatere Google Play-tjenester og derefter importere dem til Google Adgangskodeadministrator igen. <ph name="BEGIN_LINK" />Se hele vejledningen<ph name="END_LINK" />.</translation>
 <translation id="3435738964857648380">Sikkerhed</translation>
 <translation id="3435914367318771664">Føj fane til ny gruppe</translation>
-<translation id="3438681572027105609">For at kunne se dine adgangskoder m.m. på alle dine enheder skal du logge ind på Chrome</translation>
+<translation id="3438681572027105609">For at kunne se dine adgangskoder m.m. på alle dine enheder skal du logge ind på Ultimatum</translation>
 <translation id="3439276997620616816">Her finder du dine seneste faner</translation>
 <translation id="3443221991560634068">Genindlæs den aktuelle side</translation>
 <translation id="3444179773590444986">Vil du dele feedback om Mørkt tema på websites?</translation>
 <translation id="3448874648066942074">Opsummer siden med AI</translation>
-<translation id="3452832259067974318">Af hensyn til privatlivsbeskyttelsen udfylder Chrome ikke din adgangskode automatisk i dette felt.</translation>
+<translation id="3452832259067974318">Af hensyn til privatlivsbeskyttelsen udfylder Ultimatum ikke din adgangskode automatisk i dette felt.</translation>
 <translation id="3474624961160222204">Fortsæt som <ph name="NAME" /></translation>
 <translation id="3478363558367712427">Du kan vælge din søgemaskine</translation>
 <translation id="3482805106082349287">Søg ved hjælp af tastaturet, stemmen, inkognitotilstand eller kameraet</translation>
-<translation id="3487903178221457900">Den eksporterede fil kan være tilgængelig for andre, herunder apps. Efter eksporten slettes dine adgangskoder fra Chrome.</translation>
+<translation id="3487903178221457900">Den eksporterede fil kan være tilgængelig for andre, herunder apps. Efter eksporten slettes dine adgangskoder fra Ultimatum.</translation>
 <translation id="3488199663160411179">navn</translation>
 <translation id="3493531032208478708"><ph name="BEGIN_LINK" />Få flere oplysninger<ph name="END_LINK" /> om anbefalet indhold</translation>
 <translation id="3499246418971111862">chrome_qrcode_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="350276055892098337">Sortér efter ældste</translation>
 <translation id="3507132249039706973">Standardbeskyttelse er aktiveret</translation>
-<translation id="3509330069915219067">Offline. Chrome kan ikke søge efter opdateringer.</translation>
+<translation id="3509330069915219067">Offline. Ultimatum kan ikke søge efter opdateringer.</translation>
 <translation id="3513019849832307207">Deltag og åbn</translation>
 <translation id="3513704683820682405">Augmented reality</translation>
 <translation id="3516053221628030540">Gå til Google Play</translation>
@@ -615,10 +615,10 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="3623240789707551553">{DOMAIN_COUNT,plural, =1{+ 1 website}one{+ # website}other{+ # websites}}</translation>
 <translation id="3625870480639975468">Nulstil zoom</translation>
 <translation id="3631987586758005671">Deler med <ph name="DEVICE_NAME" /></translation>
-<translation id="3635073343384702370">Chrome kan tjekke dine adgangskoder, når du gemmer dem</translation>
+<translation id="3635073343384702370">Ultimatum kan tjekke dine adgangskoder, når du gemmer dem</translation>
 <translation id="3636940436873918441">Foretrukne sprog</translation>
-<translation id="3637744895182738742">Hvis du glemmer din adgangssætning eller vil ændre denne indstilling, skal du <ph name="BEGIN_LINK" />slette Chrome-dataene på din konto<ph name="END_LINK" />.</translation>
-<translation id="3641581193271938629">Tilvalg af Chrome Finds er lukket</translation>
+<translation id="3637744895182738742">Hvis du glemmer din adgangssætning eller vil ændre denne indstilling, skal du <ph name="BEGIN_LINK" />slette Ultimatum-dataene på din konto<ph name="END_LINK" />.</translation>
+<translation id="3641581193271938629">Tilvalg af Ultimatum Finds er lukket</translation>
 <translation id="3647019414263135904">Åbn eller luk pop op-vinduet med kontekst</translation>
 <translation id="3653111872753786013"><ph name="WEBSITE_TITLE" />: <ph name="WEBSITE_URL" /></translation>
 <translation id="3674208116086565128">Gå til startsiden i Google-appen</translation>
@@ -636,7 +636,7 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="3710501561113687889">For at fortsætte deler <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> <ph name="FIELDS_STRING" /> med dette website.</translation>
 <translation id="3710560693796335511">Samarbejde</translation>
 <translation id="3714430408451673233">Feltet i bunden med faner er åbnet i halv højde.</translation>
-<translation id="3718765429352682176">Du kan muligvis se historikken fra andre apps, der åbner links i Chrome.</translation>
+<translation id="3718765429352682176">Du kan muligvis se historikken fra andre apps, der åbner links i Ultimatum.</translation>
 <translation id="3721119614952978349">Dig og Google</translation>
 <translation id="3727000368239390918">Log ind for at få adgang til dine faner m.m. på alle dine enheder</translation>
 <translation id="3737319253362202215">Indstillinger for oversættelse</translation>
@@ -690,8 +690,8 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="3943322906274039960"><ph name="TAB_TITLE" />, fastgjort fane i tilstanden integreret billede</translation>
 <translation id="3950820424414687140">Log ind</translation>
 <translation id="395377504920307820">Brug uden en konto</translation>
-<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Chrome indlæser din side, når det er muligt}one{Chrome indlæser din side, når det er muligt}other{Chrome indlæser dine sider, når det er muligt}}</translation>
-<translation id="3969142555815019568">Chrome kan ikke tjekke dine adgangskoder</translation>
+<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Ultimatum indlæser din side, når det er muligt}one{Ultimatum indlæser din side, når det er muligt}other{Ultimatum indlæser dine sider, når det er muligt}}</translation>
+<translation id="3969142555815019568">Ultimatum kan ikke tjekke dine adgangskoder</translation>
 <translation id="3969863827134279083">Flyt op</translation>
 <translation id="397105322502079400">Beregner...</translation>
 <translation id="397583555483684758">Synkroniseringen fungerer ikke mere</translation>
@@ -702,10 +702,10 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="3987993985790029246">Kopiér linket</translation>
 <translation id="3994236846568425219">Aktivér Mørkt tema, når enhedens mørke tema er aktiveret</translation>
 <translation id="4000212216660919741">Hjemmet er offline</translation>
-<translation id="4000670338830950598">Tilpas og administrer Google Chrome med et fremhævet element</translation>
+<translation id="4000670338830950598">Tilpas og administrer Ultimatum med et fremhævet element</translation>
 <translation id="4015643064997321279">{NUM_PASSWORDS,plural, =1{1 kompromitteret adgangskode på din Google-konto}one{# kompromitteret adgangskode på din Google-konto}other{# kompromitterede adgangskoder på din Google-konto}}</translation>
 <translation id="4016425174436051808">Indholdet kan ikke følges. Der opstod en fejl.</translation>
-<translation id="4023638601467301498">Hvis du vil have dine bogmærker m.m. på alle dine enheder skal du logge ind i Chrome</translation>
+<translation id="4023638601467301498">Hvis du vil have dine bogmærker m.m. på alle dine enheder skal du logge ind i Ultimatum</translation>
 <translation id="4024768890073681126">Din browser administreres af din forælder</translation>
 <translation id="4027569221211770437">Mappen <ph name="FOLDER_TITLE" /></translation>
 <translation id="4034817413553209278">{HOURS,plural, =1{# t.}one{# t.}other{# t.}}</translation>
@@ -745,13 +745,13 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="4180726336228139707">Kun på denne enhed</translation>
 <translation id="4181841719683918333">Sprog</translation>
 <translation id="4188221736490993796">Sortér fra Å til A</translation>
-<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{Chrome forhindrede dette website i at sende notifikationer på grund af spam eller vildledende indhold}one{Chrome forhindrede dette website i at sende notifikationer på grund af spam eller vildledende indhold}other{Chrome forhindrede disse websites i at sende notifikationer på grund af spam eller vildledende indhold}}</translation>
+<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{Ultimatum forhindrede dette website i at sende notifikationer på grund af spam eller vildledende indhold}one{Ultimatum forhindrede dette website i at sende notifikationer på grund af spam eller vildledende indhold}other{Ultimatum forhindrede disse websites i at sende notifikationer på grund af spam eller vildledende indhold}}</translation>
 <translation id="4195643157523330669">Åbn på ny fane</translation>
 <translation id="4197828496439691735">{NUM_TABS,plural, =1{1 fane på denne enhed}one{# fane på denne enhed}other{# faner på denne enhed}}</translation>
 <translation id="4198268995694216131">Yderligere websites</translation>
 <translation id="4198423547019359126">Der er ingen tilgængelige downloadplaceringer</translation>
 <translation id="4209029522667123437"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> • Du har brugt den på dette website</translation>
-<translation id="4214315110991671325">Hvis du tillader cookies, kan Chrome bruge dem til forudindlæsning.</translation>
+<translation id="4214315110991671325">Hvis du tillader cookies, kan Ultimatum bruge dem til forudindlæsning.</translation>
 <translation id="421517251707893998">Tryk på Fastgør denne genvej</translation>
 <translation id="4216511743389425832">Få oplæst denne side</translation>
 <translation id="4217657297368492684"><ph name="TAB_TITLE" />, valgt og fastgjort inkognitofane i tilstanden integreret billede</translation>
@@ -759,7 +759,7 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="4225895483398857530">Genvej til værktøjslinje</translation>
 <translation id="4232376164796433044">Adgangskoder og autofyld</translation>
 <translation id="4242533952199664413">Åbn Indstillinger</translation>
-<translation id="424864128008805179">Vil du logge ud af Chrome?</translation>
+<translation id="424864128008805179">Vil du logge ud af Ultimatum?</translation>
 <translation id="4249955472157341256">Sortér efter seneste</translation>
 <translation id="4255841059940367080">AI-baseret beskyttelse i realtid mod skadelige websites, downloads og udvidelser, der er baseret på dine browserdata, som sendes til Google</translation>
 <translation id="4256782883801055595">Open source-licenser</translation>
@@ -768,7 +768,7 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="4270730597186910506">Overvåg eller stop med at overvåge et produkt.</translation>
 <translation id="4277529130885813215">Brug en anden enhed</translation>
 <translation id="427987768447457592">Ny fanegruppe</translation>
-<translation id="4282440837784183472">Din organisation, <ph name="MANAGED_DOMAIN" />, administrerer den konto, du logger ind på, og hvordan Chrome kan bruges. Din administrator kan konfigurere eller begrænse visse funktioner.</translation>
+<translation id="4282440837784183472">Din organisation, <ph name="MANAGED_DOMAIN" />, administrerer den konto, du logger ind på, og hvordan Ultimatum kan bruges. Din administrator kan konfigurere eller begrænse visse funktioner.</translation>
 <translation id="4283234489712362947"><ph name="TAB_TITLE" />, inkognitofane i tilstanden integreret billede</translation>
 <translation id="4285498937028063278">Frigør</translation>
 <translation id="4285846616383034558">Cookies, cache og andre websitedata</translation>
@@ -784,10 +784,10 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="4311652497846705514">Vil du åbne PDF-filen?</translation>
 <translation id="4313895677475587452">{NUM_SUSPICIOUS_NOTIFICATIONS,plural, =1{Muligt spam}one{Muligt spam (#)}other{Muligt spam (#)}}</translation>
 <translation id="4320177379694898372">Ingen internetforbindelse</translation>
-<translation id="4326079409704643112">Verificer din identitet for at bruge og gemme Chrome-data på din Google-konto</translation>
+<translation id="4326079409704643112">Verificer din identitet for at bruge og gemme Ultimatum-data på din Google-konto</translation>
 <translation id="433213510553688132">Følger...</translation>
 <translation id="4335835283689002019">Beskyttet browsing er slået fra</translation>
-<translation id="4343250402091037179">Hvis du vil søge på et bestemt website eller en del af Chrome, skal du angive genvejen til det i adresselinjen efterfulgt af din foretrukne tastaturgenvej.</translation>
+<translation id="4343250402091037179">Hvis du vil søge på et bestemt website eller en del af Ultimatum, skal du angive genvejen til det i adresselinjen efterfulgt af din foretrukne tastaturgenvej.</translation>
 <translation id="4351244548802238354">Luk dialogboksen</translation>
 <translation id="4352287748243729941">Vil du bruge din adgangskode til <ph name="PROVIDER" />?</translation>
 <translation id="4355272626458588338">Du kan vende tilbage til en side, der er vigtig for dig, ved at tilføje et bogmærke.</translation>
@@ -800,7 +800,7 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="4384468725000734951">Søgning via Sogou</translation>
 <translation id="4387647248986092471">Opret en lås for din bilprofil</translation>
 <translation id="4387817230000841154">Åbn Downloads</translation>
-<translation id="4395046795145457714">Tilvalg af Chrome Finds er åbnet i fuld højde</translation>
+<translation id="4395046795145457714">Tilvalg af Ultimatum Finds er åbnet i fuld højde</translation>
 <translation id="4398561997852463382"><ph name="TAB_TITLE" />, valgt inkognitofane, der er fastgjort og optager</translation>
 <translation id="4402611456429872546"><ph name="LANG" /> – Downloader…</translation>
 <translation id="4404568932422911380">Der er ingen bogmærker</translation>
@@ -822,16 +822,16 @@ Kun personer med din adgangssætning kan læse dine krypterede data. Adgangssæt
 <translation id="4460822871039013969"><ph name="TAB_TITLE" />, valgt fane, der er fastgjort og optager</translation>
 <translation id="4460861538906892109">{ITEMS_COUNT,plural, =1{1 bogmærke}one{# bogmærke}other{# bogmærker}}</translation>
 <translation id="4478161224666880173">Du kan bruge din <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />-konto på dette website. Du kan fortsætte ved at logge ind på <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="4479972344484327217">Installerer <ph name="MODULE" /> til Chrome…</translation>
+<translation id="4479972344484327217">Installerer <ph name="MODULE" /> til Ultimatum…</translation>
 <translation id="4484496141267039529">Der er ingen forbindelse. Prøv igen senere.</translation>
-<translation id="4487967297491345095">Alle Chromes appdata slettes permanent. Dette omfatter alle filer, indstillinger, konti, databaser osv.</translation>
+<translation id="4487967297491345095">Alle Ultimatums appdata slettes permanent. Dette omfatter alle filer, indstillinger, konti, databaser osv.</translation>
 <translation id="4494315997125191493">Vælg Administrer for at se alle vinduer</translation>
 <translation id="4494806687727322324">Din administrator har aktiveret lagring af adgangskoder</translation>
 <translation id="4508528996305412043">Feedkortmenuen er åbnet</translation>
 <translation id="4509741852167209430">Begrænsede typer af data deles mellem websites for at måle, hvor effektive deres annoncer er, f.eks. om du har foretaget et køb, når du har besøgt et website</translation>
 <translation id="4513387527876475750">{DAYS,plural, =1{1 dag siden}one{1 dag siden}other{# dag siden}}</translation>
 <translation id="451872707440238414">Søg i dine bogmærker</translation>
-<translation id="4521489764227272523">De valgte data er fjernet fra Chrome og synkroniserede enheder.
+<translation id="4521489764227272523">De valgte data er fjernet fra Ultimatum og synkroniserede enheder.
 
 Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og aktivitet fra andre Google-tjenester, på <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="4523326818319942067">seneste time</translation>
@@ -853,10 +853,10 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="4595276580892809760">Vedhæft billeder fra galleriet</translation>
 <translation id="4595805675102978678">Google-kontofejl</translation>
 <translation id="4601095002996233687">Grundige scanninger efter mistænkelige downloads.</translation>
-<translation id="4606559747793337066">Når et website eller en app beder om at forudindlæse links privat på det pågældende website, krypterer og forudindlæser Chrome siderne via Googles servere uden cookies. På denne måde skjules din identitet fra det forudindlæste website.</translation>
+<translation id="4606559747793337066">Når et website eller en app beder om at forudindlæse links privat på det pågældende website, krypterer og forudindlæser Ultimatum siderne via Googles servere uden cookies. På denne måde skjules din identitet fra det forudindlæste website.</translation>
 <translation id="4616150815774728855">Åbn <ph name="WEBAPK_NAME" /></translation>
 <translation id="4619564267100705184">Verificer din identitet</translation>
-<translation id="4624065194742029982">Inkognitotilstand i Chrome</translation>
+<translation id="4624065194742029982">Inkognitotilstand i Ultimatum</translation>
 <translation id="4634124774493850572">Brug adgangskode</translation>
 <translation id="463471994228293091">{PASSWORDS_COUNT,plural, =1{1 adgangskode og andre elementer er kun gemt på denne enhed. Hvis du vil bruge dem på dine andre enheder, skal du gemme dem på din Google-konto.}one{# adgangskode og andre elementer er kun gemt på denne enhed. Hvis du vil bruge dem på dine andre enheder, skal du gemme dem på din Google-konto.}other{# adgangskoder og andre elementer er kun gemt på denne enhed. Hvis du vil bruge dem på dine andre enheder, skal du gemme dem på din Google-konto.}}</translation>
 <translation id="4640331037679501949">{NUM_PASSWORDS,plural, =1{1 kompromitteret adgangskode}one{# kompromitteret adgangskode}other{# kompromitterede adgangskoder}}</translation>
@@ -871,7 +871,7 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="4668347365065281350">Alle data, der gemmes af websites, bl.a. cookies og andre data, der er gemt lokalt</translation>
 <translation id="4673702426794876519">Inkognitovindue</translation>
 <translation id="4675298276894277358">Dette website vises ikke igen</translation>
-<translation id="4678082183394354975">Mørkt tema på websites er aktiveret i Chrome</translation>
+<translation id="4678082183394354975">Mørkt tema på websites er aktiveret i Ultimatum</translation>
 <translation id="4682306524980568490">Der kan kun vises <ph name="MAX_INSTANCE_COUNT" /> vinduer</translation>
 <translation id="4684427112815847243">Synkroniser alt</translation>
 <translation id="4685741273709472646">Vælg fra rullelisten</translation>
@@ -893,7 +893,7 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="4738836084190194332">Seneste synkronisering: <ph name="WHEN" /></translation>
 <translation id="474121291218385686">Filtrér efter app</translation>
 <translation id="4741753828624614066">Du får vist forbedrede forslag i adresselinjen</translation>
-<translation id="4742795653798179840">Chrome-dataene er slettet</translation>
+<translation id="4742795653798179840">Ultimatum-dataene er slettet</translation>
 <translation id="4742970037960872810">Fjern fremhævning</translation>
 <translation id="4749960740855309258">Åbn en ny fane</translation>
 <translation id="4753600213727157212">Logget ind som <ph name="USER_NAME" />. <ph name="USER_EMAIL" />. Google-kontofejl. Åbner indstillinger.</translation>
@@ -911,21 +911,21 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="4782929588435725897"><ph name="SEARCH_ENGINE" /> er din standardsøgemaskine</translation>
 <translation id="4784349455504343791"><ph name="WEBSITE_ORIGIN" /> vil gerne bruge personlige oplysninger fra din digitale pung.</translation>
 <translation id="4787736314074622408">Vil du slette <ph name="ITEM_TITLE" />?</translation>
-<translation id="4793679854893018356">Se, hvordan Chrome beskytter dig</translation>
+<translation id="4793679854893018356">Se, hvordan Ultimatum beskytter dig</translation>
 <translation id="4794291718671962615">(<ph name="MEGABYTES" />) <ph name="URL" /></translation>
 <translation id="4807098396393229769">Navn på kort</translation>
 <translation id="480990236307250886">Åbn startsiden</translation>
 <translation id="4822710610088666676">Fanegruppen <ph name="TAB_GROUP_TITLE" /> er lukket og gemt</translation>
 <translation id="482405935591409882">Søg i dine faner og grupper</translation>
 <translation id="4834250788637067901">Betalingsmetoder, tilbud og adresser, der bruger Google Pay</translation>
-<translation id="4835385943915508971">Chrome har ikke adgang til den ressource, du anmoder om.</translation>
+<translation id="4835385943915508971">Ultimatum har ikke adgang til den ressource, du anmoder om.</translation>
 <translation id="483742037940503070">{TAB_COUNT,plural, =1{Gendan fanegruppen med <ph name="TAB_COUNT_ONE" /> fane og farven <ph name="COLOR_NAME" /> som en ny fanegruppe i baggrunden.}one{Gendan fanegruppen med <ph name="TAB_COUNT_MANY" /> fane og farven <ph name="COLOR_NAME" /> som en ny fanegruppe i baggrunden.}other{Gendan fanegruppen med <ph name="TAB_COUNT_MANY" /> faner og farven <ph name="COLOR_NAME" /> som en ny fanegruppe i baggrunden.}}</translation>
 <translation id="4849731766219625109">Brug din <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />-konto</translation>
 <translation id="4850886885716139402">Se</translation>
 <translation id="4852014461738377247">Logger ind\u2026</translation>
 <translation id="4860895144060829044">Ring op</translation>
 <translation id="4864369630010738180">Logger ind...</translation>
-<translation id="4866368707455379617"><ph name="MODULE" /> kunne ikke installeres til Chrome</translation>
+<translation id="4866368707455379617"><ph name="MODULE" /> kunne ikke installeres til Ultimatum</translation>
 <translation id="4871568871368204250">Deaktiver synkronisering</translation>
 <translation id="487567923005969537">Aktivér AI-tilstand</translation>
 <translation id="4875775213178255010">Indholdsforslag</translation>
@@ -934,27 +934,27 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="4880127995492972015">Oversæt…</translation>
 <translation id="4881695831933465202">Åbn</translation>
 <translation id="488187801263602086">Omdøb fil</translation>
-<translation id="4885273946141277891">Der er flere forekomster af Chrome, end der understøttes.</translation>
+<translation id="4885273946141277891">Der er flere forekomster af Ultimatum, end der understøttes.</translation>
 <translation id="4890973535105146893">Ingen gemte adgangskoder på din Google-konto</translation>
 <translation id="4905823827770127520">Medtag et link til siden</translation>
 <translation id="4908869848243824489">Discover fra Google</translation>
 <translation id="4910889077668685004">Betalingsapps</translation>
 <translation id="4911042367886397055">Velkommen tilbage, <ph name="USER_NAME" />.</translation>
 <translation id="4913169188695071480">Stop med at opdatere</translation>
-<translation id="4921224083091001889">Hvis du vil have dine adgangskoder m.m. på alle dine enheder, skal du logge ind i Chrome som <ph name="EMAIL" /></translation>
+<translation id="4921224083091001889">Hvis du vil have dine adgangskoder m.m. på alle dine enheder, skal du logge ind i Ultimatum som <ph name="EMAIL" /></translation>
 <translation id="4923173329789776645">Din organisation anbefaler ikke denne download</translation>
 <translation id="4925120120285606924">Screenshot <ph name="CURRENT_DATE_ISO" /></translation>
 <translation id="4926901776383726965">Du kan gemme billeder og filer, så du kan se dem offline, eller dele dem i andre apps</translation>
 <translation id="492699891214363151">{BOOKMARKS_COUNT,plural, =1{1 bogmærke og andre elementer gemmes kun på denne enhed. Hvis du vil bruge dem på dine andre enheder, skal du gemme dem på din Google-konto.}one{# bogmærke og andre elementer er kun gemt på denne enhed. Hvis du vil bruge dem på dine andre enheder, skal du gemme dem på din Google-konto.}other{# bogmærker og andre elementer er kun gemt på denne enhed. Hvis du vil bruge dem på dine andre enheder, skal du gemme dem på din Google-konto.}}</translation>
-<translation id="4932247056774066048">Da du er ved at logge ud af en konto, der administreres af <ph name="DOMAIN_NAME" />, slettes dine Chrome-data fra denne enhed. Dataene vil stadig være at finde på din Google-konto.</translation>
+<translation id="4932247056774066048">Da du er ved at logge ud af en konto, der administreres af <ph name="DOMAIN_NAME" />, slettes dine Ultimatum-data fra denne enhed. Dataene vil stadig være at finde på din Google-konto.</translation>
 <translation id="4943703118917034429">Virtual reality</translation>
 <translation id="4943872375798546930">Ingen resultater</translation>
 <translation id="4957722034734105353">Flere oplysninger...</translation>
 <translation id="4959115606310463263">Loginfeltet i bunden er åbnet i halv højde</translation>
 <translation id="4961107849584082341">Oversæt denne side til et hvilket som helst sprog</translation>
-<translation id="4964614743143953889">Chrome advarer dig om usikre websites og downloads</translation>
+<translation id="4964614743143953889">Ultimatum advarer dig om usikre websites og downloads</translation>
 <translation id="496607651705915226">Opdater Google Play-tjenester for at gemme og bruge nye adgangskoder på din Google-konto</translation>
-<translation id="4971753085054504448">Prøv at søge efter noget andet, eller åbn hele Chrome-historikken for at se flere resultater.</translation>
+<translation id="4971753085054504448">Prøv at søge efter noget andet, eller åbn hele Ultimatum-historikken for at se flere resultater.</translation>
 <translation id="497421865427891073">Gå fremad</translation>
 <translation id="497983151715419057">Gennemgå dine inaktive faner og grupper her</translation>
 <translation id="498624032394115435">Alle med linket kan redigere alle faner.</translation>
@@ -981,7 +981,7 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="506254248375231072">Der er ingen faner</translation>
 <translation id="5075939510584558547">Gem uden kryptering</translation>
 <translation id="5078638979202084724">Tilføj alle faner som bogmærker</translation>
-<translation id="5085038751173179818">Log ind på dette website og i Chrome for at få adgang til dine bogmærker og meget mere på alle dine enheder</translation>
+<translation id="5085038751173179818">Log ind på dette website og i Ultimatum for at få adgang til dine bogmærker og meget mere på alle dine enheder</translation>
 <translation id="5088347662971855383">Fastgør Gemini</translation>
 <translation id="5091199029769593641">Du får snart vist historier fra <ph name="SITE_NAME" />, når du åbner en ny fane. De websites, du følger, gemmes på din Google-konto. Du kan administrere dem i indstillingerne for Discover.</translation>
 <translation id="509429900233858213">Der opstod en fejl.</translation>
@@ -989,7 +989,7 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="510275257476243843">1 time tilbage</translation>
 <translation id="5114895953710637392">Oversigten over filtrering efter app er lukket.</translation>
 <translation id="5115811374190515607">til <ph name="PRODUCT_NAME" /></translation>
-<translation id="5116239826668864748">Du kan nu bruge Chrome, hver gang du trykker på links i meddelelser, dokumenter og andre apps.</translation>
+<translation id="5116239826668864748">Du kan nu bruge Ultimatum, hver gang du trykker på links i meddelelser, dokumenter og andre apps.</translation>
 <translation id="5118713593561876160">Interesser</translation>
 <translation id="5122378528687922675">Spørg en af dine forældre, (<ph name="PARENT_NAME_1" /> eller <ph name="PARENT_NAME_2" />), hvis du har brug for hjælp</translation>
 <translation id="5123685120097942451">Inkognitofane</translation>
@@ -1012,11 +1012,11 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="5206168361184759344">{FILE_COUNT,plural, =1{Downloader fil…}one{Downloader # fil…}other{Downloader # filer…}}</translation>
 <translation id="5210286577605176222">Gå til den forrige fane</translation>
 <translation id="5210365745912300556">Luk fanen</translation>
-<translation id="5212800876504289412">Genstart Chrome for at gennemføre denne ændring. Fanerne åbnes automatisk igen, når du genstarter.</translation>
+<translation id="5212800876504289412">Genstart Ultimatum for at gennemføre denne ændring. Fanerne åbnes automatisk igen, når du genstarter.</translation>
 <translation id="5213114823401215820">Åbn den lukkede gruppe igen</translation>
 <translation id="5215957675041756913">Administrer dine data og din konto</translation>
 <translation id="5218324087477576825">Kortnummer, påkrævet</translation>
-<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> og andre <ph name="SEPARATOR" /> Chrome har fjernet disse tilladelser, fordi du ikke har besøgt websitet for nylig</translation>
+<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> og andre <ph name="SEPARATOR" /> Ultimatum har fjernet disse tilladelser, fordi du ikke har besøgt websitet for nylig</translation>
 <translation id="5222676887888702881">Log ud</translation>
 <translation id="5226378907213531272">Du skal låse din skærm op, hver gang du bruger bilen</translation>
 <translation id="5227554086496586518">Tryk for at se søgeresultaterne</translation>
@@ -1036,7 +1036,7 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="5313967007315987356">Tilføj website</translation>
 <translation id="5316947901395241499">Din administrator har deaktiveret lagring af adgangskoder</translation>
 <translation id="5317780077021120954">Gem</translation>
-<translation id="5319359161174645648">Google anbefaler Chrome</translation>
+<translation id="5319359161174645648">Google anbefaler Ultimatum</translation>
 <translation id="5326246328175179736">Du kan ikke logge ind med denne konto</translation>
 <translation id="5327248766486351172">Navn</translation>
 <translation id="5328542107300944283">Brug via <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
@@ -1049,7 +1049,7 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="5375374982898812658">Du mister øjeblikkeligt adgangen til fanegruppen "<ph name="GROUP_NAME" />", og den slettes fra alle dine enheder</translation>
 <translation id="5375577065097716013">Søg efter billedet med Google Lens <ph name="BEGIN_NEW" />Nyhed<ph name="END_NEW" /></translation>
 <translation id="5390367025924544771"><ph name="WEBSITE_ORIGIN" /> vil gerne bruge personlige oplysninger fra din digitale pung. Fortsæt kun, hvis du har tillid til dette website. Farlige websites kan narre dig til at afsløre ting som f.eks. dit juridiske navn eller id-nummer.</translation>
-<translation id="5395376160638294582">Sørg for, at du altid kan bruge Chrome-dataene på din Google-konto</translation>
+<translation id="5395376160638294582">Sørg for, at du altid kan bruge Ultimatum-dataene på din Google-konto</translation>
 <translation id="539881862970320163">En stærk adgangskode anbefales. Tastaturet er skjult.</translation>
 <translation id="5409881200985013443">Vil du angive <ph name="ONE_TIME_CODE" /> på <ph name="CLIENT_NAME" />?</translation>
 <translation id="5410300144953132176"><ph name="OWNER_FULL_NAME" /> (<ph name="OWNER_EMAIL" />) vil gerne invitere dig til en fanegruppe. Alle med linket kan redigere alle faner, så vær opmærksom på det, når du deltager. Linket udløber om 48 timer.</translation>
@@ -1061,7 +1061,7 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="543271133149552180"><ph name="TAB_TITLE" />, inkognitofane med multivalg i tilstanden integreret billede</translation>
 <translation id="5436928407363358055">Synkroniser din historik og dine faner for nemt at fortsætte, hvor du slap</translation>
 <translation id="5438292632479953702">Download igen</translation>
-<translation id="5439191312780166229">Advarer dig om skadelige websites – også websites, som Google ikke tidligere har kendt til – ved at analysere flere data fra websites end Standardbeskyttelse. Du kan vælge at springe Chrome-advarsler over.</translation>
+<translation id="5439191312780166229">Advarer dig om skadelige websites – også websites, som Google ikke tidligere har kendt til – ved at analysere flere data fra websites end Standardbeskyttelse. Du kan vælge at springe Ultimatum-advarsler over.</translation>
 <translation id="5441137934526263133">Fungerer websitet ikke? Tredjepartscookies er blokeret</translation>
 <translation id="5441466871879044658">Oversæt til dette sprog</translation>
 <translation id="5444999712122199445">Gå tilbage til websitet</translation>
@@ -1072,7 +1072,7 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="5469852975082458401">Du kan navigere på sider med en tekstmarkør. Tryk på F7, eller deaktiver.</translation>
 <translation id="5471273988133666918">Fanen <ph name="TAB_TITLE" /> kan ikke flyttes</translation>
 <translation id="548278423535722844">Åbn i kortapp</translation>
-<translation id="5489222148748465285">Skal Chrome fortsætte med at søge?</translation>
+<translation id="5489222148748465285">Skal Ultimatum fortsætte med at søge?</translation>
 <translation id="5490848366863949315"><ph name="TAB_TITLE" />, fane med multivalg i tilstanden integreret billede</translation>
 <translation id="5494920125229734069">Vælg alle</translation>
 <translation id="549660026907543296">Deltag som <ph name="MEMBER_FULL_NAME" /></translation>
@@ -1080,7 +1080,7 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="5526281268548144413">Kan ikke lukkes i flere vinduer</translation>
 <translation id="5532536403031755365">Bliv bedre sikret mod onlinetrusler med forbedret beskyttelse</translation>
 <translation id="5548606607480005320">Sikkerhedstjek</translation>
-<translation id="5554520618550346933">Når du bruger en adgangskode, underretter Chrome dig, hvis den er blevet afsløret online. I forbindelse med dette krypteres dine adgangskoder og brugernavne, så de kan ikke læses af nogen, heller ikke Google.</translation>
+<translation id="5554520618550346933">Når du bruger en adgangskode, underretter Ultimatum dig, hvis den er blevet afsløret online. I forbindelse med dette krypteres dine adgangskoder og brugernavne, så de kan ikke læses af nogen, heller ikke Google.</translation>
 <translation id="5555525474779371165">Vælg din beskyttelse i Beskyttet browsing</translation>
 <translation id="5556459405103347317">Genindlæs</translation>
 <translation id="555671485580955310">Synkroniser historik og faner</translation>
@@ -1093,10 +1093,10 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="5578795271662203820">Søg efter billedet på <ph name="SEARCH_ENGINE" /></translation>
 <translation id="5596627076506792578">Flere valgmuligheder</translation>
 <translation id="5599455543593328020">Inkognitotilstand</translation>
-<translation id="5601180634394228718">Du kan finde flere indstillinger, der bruger data til at forbedre din Chrome-oplevelse, ved at gå til <ph name="BEGIN_LINK" />Google-tjenester<ph name="END_LINK" />.</translation>
+<translation id="5601180634394228718">Du kan finde flere indstillinger, der bruger data til at forbedre din Ultimatum-oplevelse, ved at gå til <ph name="BEGIN_LINK" />Google-tjenester<ph name="END_LINK" />.</translation>
 <translation id="5601924940067278327">Få adgang til dine faner m.m. på alle dine enheder</translation>
 <translation id="5611398002774823980">Gem på konto</translation>
-<translation id="5613381935190035031">Log ind i Chrome som <ph name="EMAIL" /> for at få adgang til dine faner m.m. på alle dine enheder</translation>
+<translation id="5613381935190035031">Log ind i Ultimatum som <ph name="EMAIL" /> for at få adgang til dine faner m.m. på alle dine enheder</translation>
 <translation id="5614625640221885312">Log ind for at få adgang til dine bogmærker, adgangskoder og meget mere på alle dine enheder</translation>
 <translation id="5619633276517849615">Din organisation har aktiveret Beskyttet browsing</translation>
 <translation id="5620163320393916465">Der er ingen gemte adgangskoder</translation>
@@ -1112,21 +1112,21 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="5657871969392618475">Dine oplysninger er beskyttet af en profillås</translation>
 <translation id="5659593005791499971">Mail</translation>
 <translation id="5665379678064389456">Opret begivenhed i <ph name="APP_NAME" /></translation>
-<translation id="5683547024293500885">Chrome kan ikke søge efter opdateringer</translation>
+<translation id="5683547024293500885">Ultimatum kan ikke søge efter opdateringer</translation>
 <translation id="5683916195767086779">Fanegruppe</translation>
 <translation id="5686790454216892815">Filnavnet er for langt</translation>
 <translation id="569536719314091526">Oversæt denne side til et hvilket som helst sprog via knappen Flere valgmuligheder</translation>
-<translation id="5696597120588531049">Chrome kan hjælpe med at beskytte dig mod brud på datasikkerheden, usikre websites og meget mere</translation>
+<translation id="5696597120588531049">Ultimatum kan hjælpe med at beskytte dig mod brud på datasikkerheden, usikre websites og meget mere</translation>
 <translation id="5698878456427040674">Tjek, om den valgte konto understøttes.</translation>
 <translation id="5709213329446699338"><ph name="SITE" /> anmoder om at oprette forbindelse til en seriel port</translation>
 <translation id="5715150588940290235">Vil du slette de gemte sikkerhedskoder?</translation>
-<translation id="571930967925877633">Dine bogmærker, din historik og andre Chrome-data synkroniseres ikke længere med din Google-konto</translation>
+<translation id="571930967925877633">Dine bogmærker, din historik og andre Ultimatum-data synkroniseres ikke længere med din Google-konto</translation>
 <translation id="572328651809341494">Seneste faner</translation>
 <translation id="5728072125198221967">Tilknyttede Google-tjenester</translation>
 <translation id="5734658507307260911"><ph name="TAB_TITLE" />, fastgjort inkognitofane, der afspiller lyd</translation>
 <translation id="5744751019568455640">Her er de stemmer, som du kan vælge imellem til højtlæsning af dine websider. Hvis du kan lide denne stemme og vil have, at jeg fortsætter med at bruge den, skal du bare trykke på stemmenavnet.</translation>
 <translation id="574845902699630049">Del som <ph name="OWNER_FULL_NAME" /></translation>
-<translation id="5749068826913805084">Chrome skal have lageradgang for at kunne downloade filer.</translation>
+<translation id="5749068826913805084">Ultimatum skal have lageradgang for at kunne downloade filer.</translation>
 <translation id="5749237766298580851">Fra <ph name="SEPARATOR" /> Anbefales ikke</translation>
 <translation id="5752232708629533680">Del kun gif</translation>
 <translation id="5753570386948603678">Slet fra historik</translation>
@@ -1145,14 +1145,14 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="5811144606237321538"><ph name="TAB_TITLE" />, fastgjort fane med multivalg og lyden slået fra</translation>
 <translation id="5814749351757353073">Hold dig opdateret om dine foretrukne websites</translation>
 <translation id="5823093032261493462">Vil du downloade "<ph name="FILE_NAME" />" fra <ph name="DOWNLOAD_DOMAIN" /> alligevel?</translation>
-<translation id="5825135637446025843">Når Chrome er genstartet, bruges de oplysninger, der er gemt fra din nye udbyder, til automatisk at udfylde adgangskoder, adgangsnøgler, adresser, betalingsmetoder og andre oplysninger.</translation>
-<translation id="5828921839638612740">Du kan slette dataene i Chrome-indstillingerne</translation>
+<translation id="5825135637446025843">Når Ultimatum er genstartet, bruges de oplysninger, der er gemt fra din nye udbyder, til automatisk at udfylde adgangskoder, adgangsnøgler, adresser, betalingsmetoder og andre oplysninger.</translation>
+<translation id="5828921839638612740">Du kan slette dataene i Ultimatum-indstillingerne</translation>
 <translation id="5829586821381540080">Gemt i <ph name="FOLDER_NAME" /></translation>
 <translation id="583281660410589416">Ukendt</translation>
 <translation id="5833984609253377421">Del link</translation>
-<translation id="5839058148541733625">Chrome Dino</translation>
+<translation id="5839058148541733625">Ultimatum Dino</translation>
 <translation id="5841444063256914865">Vil du downloade "<ph name="FILE_NAME" />" alligevel?</translation>
-<translation id="5847265694842662173">Chrome forhindrede skadelige og ubrugte websites i at sende notifikationer</translation>
+<translation id="5847265694842662173">Ultimatum forhindrede skadelige og ubrugte websites i at sende notifikationer</translation>
 <translation id="5848257610304005265">Vil du åbne PDF-filen med <ph name="APP_NAME" />?</translation>
 <translation id="5849288995120328556">Vil du stoppe delingen?</translation>
 <translation id="5853623416121554550">sat på pause</translation>
@@ -1166,8 +1166,8 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="5865733239029070421">Sender automatisk brugsstatistikker og nedbrudsrapporter til Google</translation>
 <translation id="5869522115854928033">Gemte adgangskoder</translation>
 <translation id="5870416898561279542">Dubletter af faner og grupper eller faner og grupper, der ikke er blevet brugt i <ph name="DAYS_INACTIVE" /> dage, flyttes hertil<ph name="AUTODELETE_SECTION" />. Du kan til enhver tid ændre dette i <ph name="DECLUTTER_SETTINGS_TITLE" />.</translation>
-<translation id="587735546353481577">Følg et website ved at gå til websitet, åbne Chrome-menuen og trykke på Følg.</translation>
-<translation id="5885378508678660271">Notifikationer <ph name="SEPARATOR" /> Chrome har fjernet disse tilladelser, fordi dette website er farligt</translation>
+<translation id="587735546353481577">Følg et website ved at gå til websitet, åbne Ultimatum-menuen og trykke på Følg.</translation>
+<translation id="5885378508678660271">Notifikationer <ph name="SEPARATOR" /> Ultimatum har fjernet disse tilladelser, fordi dette website er farligt</translation>
 <translation id="5899667542927581604">Feltet "Ingen tilgængelige adgangsnøgler" blev lukket</translation>
 <translation id="5907542076239273525">Bogmærket er gemt i <ph name="FOLDER_NAME" /></translation>
 <translation id="5911301511366365629"><ph name="TAB_TITLE" />, valgt inkognitofane, der afspiller lyd</translation>
@@ -1178,23 +1178,23 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="5942872142862698679">Søgning via Google</translation>
 <translation id="5945035219773565305">Aktuel anbefaling:  <ph name="RECOMMENDATION" /></translation>
 <translation id="5951119116059277034">Ser onlineside</translation>
-<translation id="5956665950594638604">Åbn Hjælp til Chrome i en ny fane</translation>
+<translation id="5956665950594638604">Åbn Hjælp til Ultimatum i en ny fane</translation>
 <translation id="59577092665511740">Vælg en konto.</translation>
 <translation id="5958275228015807058">Find dine filer og sider i Downloads</translation>
-<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{Chrome forhindrede et website, du ikke har besøgt for nylig, i at sende dig notifikationer}one{Chrome forhindrede et website, du ikke har besøgt for nylig, i at sende dig notifikationer}other{Chrome forhindrede websites, du ikke har besøgt for nylig, i at sende dig notifikationer}}</translation>
+<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{Ultimatum forhindrede et website, du ikke har besøgt for nylig, i at sende dig notifikationer}one{Ultimatum forhindrede et website, du ikke har besøgt for nylig, i at sende dig notifikationer}other{Ultimatum forhindrede websites, du ikke har besøgt for nylig, i at sende dig notifikationer}}</translation>
 <translation id="5962718611393537961">Tryk for at skjule</translation>
 <translation id="5964869237734432770">Stop billedbeskrivelser</translation>
 <translation id="5972844218283131174">Fravælg alle</translation>
 <translation id="5975083100439434680">Zoom ud</translation>
 <translation id="5977976211062815271">På denne enhed</translation>
 <translation id="5978661847409534366">{ITEMS_COUNT,plural, =1{1 side på din læseliste}one{# side på din læseliste}other{# sider på din læseliste}}</translation>
-<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Chrome har fjernet disse tilladelser, fordi du ikke har besøgt websitet for nylig</translation>
+<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Ultimatum har fjernet disse tilladelser, fordi du ikke har besøgt websitet for nylig</translation>
 <translation id="5995726099713306770">Vil du downloade siden igen?</translation>
 <translation id="6000066717592683814">Behold Google</translation>
 <translation id="6000203700195075278">Følg igen</translation>
 <translation id="6011308810877101166">Gør søgeforslag bedre</translation>
 <translation id="6013305291643746595">Sorteres efter ældste</translation>
-<translation id="6022659036123304283">Gør Chrome til din egen</translation>
+<translation id="6022659036123304283">Gør Ultimatum til din egen</translation>
 <translation id="6026538407078977628">Udvid til fuld skærm</translation>
 <translation id="6030719887161080597">Administrer oplysninger, der anvendes af websites til at måle annonceeffektivitet</translation>
 <translation id="6039379616847168523">Gå til den næste fane</translation>
@@ -1223,7 +1223,7 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="6125864963080902918"><ph name="BEGIN_LINK" />Flere oplysninger<ph name="END_LINK" /></translation>
 <translation id="6127860394906721547">Åbn fanegruppen <ph name="TITLE_OF_GROUP" /> i farven <ph name="COLOR_NAME" /> med disse websites <ph name="URL_LIST" />.</translation>
 <translation id="6130303040046284160">Minimer fane</translation>
-<translation id="6132075343662013154">Chrome tilbyder at gemme din adgangskode</translation>
+<translation id="6132075343662013154">Ultimatum tilbyder at gemme din adgangskode</translation>
 <translation id="6134168885321518274">Åbn søgelinjen</translation>
 <translation id="6135608400322377268">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> fane}one{<ph name="TAB_COUNT_MANY" /> fane}other{<ph name="TAB_COUNT_MANY" /> faner}}</translation>
 <translation id="6137022273846704445">Sproget i <ph name="APP_NAME" /></translation>
@@ -1234,7 +1234,7 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="6146563240635539929">Videoer</translation>
 <translation id="614890671148262506">Tillad altid notifikationer fra dette website</translation>
 <translation id="6150320133806434356">Bogmærket er gemt</translation>
-<translation id="6150706324143004339">Hvis du vil bruge og gemme Chrome-data på din Google-konto, skal du opdatere Chrome</translation>
+<translation id="6150706324143004339">Hvis du vil bruge og gemme Ultimatum-data på din Google-konto, skal du opdatere Ultimatum</translation>
 <translation id="6154478581116148741">Aktivér skærmlåsen i Indstillinger for at eksportere dine adgangskoder fra denne enhed</translation>
 <translation id="6156323911414505561">Vis bogmærkelinjen</translation>
 <translation id="6162892189396105610">Forudindlæser sider, som Google tror, at der er stor chance for, at du besøger.</translation>
@@ -1246,7 +1246,7 @@ Din Google-konto kan have andre former for browserhistorik, f.eks. søgninger og
 <translation id="6193448654517602979">Vælg faner</translation>
 <translation id="6196315980958524839">Adgangskoder gemmes i Google Adgangs­kode­admin­istrator på denne enhed</translation>
 <translation id="6202812185118613467">Log ind igen for at synkronisere</translation>
-<translation id="6204781143409202534">Chrome har registreret muligt spam fra <ph name="DOMAIN" />.</translation>
+<translation id="6204781143409202534">Ultimatum har registreret muligt spam fra <ph name="DOMAIN" />.</translation>
 <translation id="6205314730813004066">Privatliv vedrørende annoncering</translation>
 <translation id="6210282067670792090">I adresselinjen kan du bruge denne tastaturgenvej til genveje til søgemaskiner og websitesøgning</translation>
 <translation id="6210748933810148297">Ikke <ph name="EMAIL" />?</translation>
@@ -1260,12 +1260,12 @@ Nogle websites kan f.eks. reagere på denne anmodning ved at vise dig annoncer, 
 <translation id="6247557882553405851">Google Adgangs­ko­de­administrator</translation>
 <translation id="6248988683584659830">Søg i indstillinger</translation>
 <translation id="6250847299079540062"><ph name="TAB_TITLE" />, fastgjort inkognitofane med multivalg</translation>
-<translation id="6251449557817521191">Se din Chrome-historik her</translation>
+<translation id="6251449557817521191">Se din Ultimatum-historik her</translation>
 <translation id="6254139308321626268">Du får vist en PDF-fil</translation>
-<translation id="6255809143828972562">Med værktøjer fra Chrome kan du søge sikkert på nettet og bevare styringen</translation>
+<translation id="6255809143828972562">Med værktøjer fra Ultimatum kan du søge sikkert på nettet og bevare styringen</translation>
 <translation id="6264376385120300461">Download alligevel</translation>
 <translation id="6264485186158353794">Tilbage i sikkerhed</translation>
-<translation id="6267106249090587268">Notifikationer <ph name="SEPARATOR" /> Chrome har fjernet disse tilladelser på grund af spam eller vildledende indhold</translation>
+<translation id="6267106249090587268">Notifikationer <ph name="SEPARATOR" /> Ultimatum har fjernet disse tilladelser på grund af spam eller vildledende indhold</translation>
 <translation id="6276708887952587684">Se sidekilden</translation>
 <translation id="6277522088822131679">Der opstod et problem med udskrivning af siden. Prøv igen.</translation>
 <translation id="6278428485366576908">Tema</translation>
@@ -1281,7 +1281,7 @@ Nogle websites kan f.eks. reagere på denne anmodning ved at vise dig annoncer, 
 <translation id="6312687380483398334">Webapps (lydløs)</translation>
 <translation id="6315386555979018699">Slet og fortsæt</translation>
 <translation id="6316139424528454185">Android-versionen understøttes ikke</translation>
-<translation id="631839948975905034">Lås inkognitovinduer, når du lukker Chrome</translation>
+<translation id="631839948975905034">Lås inkognitovinduer, når du lukker Ultimatum</translation>
 <translation id="6324916366299863871">Rediger genvej</translation>
 <translation id="6324977638108296054">Der kan ikke oprettes et link til fremhævning</translation>
 <translation id="6333140779060797560">Del via <ph name="APPLICATION" /></translation>
@@ -1297,13 +1297,13 @@ Nogle websites kan f.eks. reagere på denne anmodning ved at vise dig annoncer, 
 <translation id="6356893102071098867">Tjek, om du har valgt den rigtige konto</translation>
 <translation id="6363990818884053551">Verificer din identitet for at starte synkroniseringen</translation>
 <translation id="6364438453358674297">Vil du fjerne forslaget fra historikken?</translation>
-<translation id="6380100320871303656">Forudindlæser oftere sider, som Chrome tror, der er stor chance for, at du besøger. Denne indstilling kan medføre et højere dataforbrug.</translation>
+<translation id="6380100320871303656">Forudindlæser oftere sider, som Ultimatum tror, der er stor chance for, at du besøger. Denne indstilling kan medføre et højere dataforbrug.</translation>
 <translation id="6382848304055775421">Eksporterer</translation>
 <translation id="6388152137132427505">Del altid med omtanke. Links udløber efter 48 timer.</translation>
 <translation id="6394791151443660613">Søg: <ph name="SEARCH_QUERY" /></translation>
 <translation id="6397616442223433927">Online igen</translation>
 <translation id="6399363707848566877">Du kan nu nemt føje faner til grupper her</translation>
-<translation id="6401458660421980302">Hvis du vil sende denne fane til en anden enhed, skal du logge ind på Chrome på den pågældende enhed</translation>
+<translation id="6401458660421980302">Hvis du vil sende denne fane til en anden enhed, skal du logge ind på Ultimatum på den pågældende enhed</translation>
 <translation id="6404511346730675251">Rediger bogmærke</translation>
 <translation id="6406506848690869874">Synkronisering</translation>
 <translation id="6408370409308816490"><ph name="TAB_TITLE" />, valgt inkognitofane, der er fastgjort og deler indhold</translation>
@@ -1323,24 +1323,24 @@ Nogle websites kan f.eks. reagere på denne anmodning ved at vise dig annoncer, 
 <translation id="6452534462676960500">Ny aktivitet</translation>
 <translation id="6459045781120991510">Undersøgelser</translation>
 <translation id="6461962085415701688">Filen kan ikke åbnes</translation>
-<translation id="6464977750820128603">Du kan se websites, du har besøgt i Chrome, og indstille timere for dem.\n\nGoogle får oplysninger om de websites, du indstiller timere for, og hvor længe du er på dem. Disse oplysninger bruges til at forbedre Digital balance.</translation>
+<translation id="6464977750820128603">Du kan se websites, du har besøgt i Ultimatum, og indstille timere for dem.\n\nGoogle får oplysninger om de websites, du indstiller timere for, og hvor længe du er på dem. Disse oplysninger bruges til at forbedre Digital balance.</translation>
 <translation id="6468703991511753953">Adresselinjen vises i øjeblikket nederst</translation>
-<translation id="6470181189905173055">De sider, du åbnede i Chrome, mens du brugte <ph name="APP_LABEL" />, vises her.</translation>
+<translation id="6470181189905173055">De sider, du åbnede i Ultimatum, mens du brugte <ph name="APP_LABEL" />, vises her.</translation>
 <translation id="6473086018775716761">Listen over delingsindstillinger er åbnet i halv højde.</translation>
 <translation id="6475951671322991020">Download video</translation>
 <translation id="6477928892249167417">Disse websites lader til at være vigtige for dig:</translation>
-<translation id="6479881432656947268">Gå til Chrome Webshop</translation>
-<translation id="6481963882741794338">Tilknyt Chrome og andre Google-tjenester med henblik på personlig tilpasning og andre formål</translation>
+<translation id="6479881432656947268">Gå til Ultimatum Webshop</translation>
+<translation id="6481963882741794338">Tilknyt Ultimatum og andre Google-tjenester med henblik på personlig tilpasning og andre formål</translation>
 <translation id="6482749332252372425">Download af <ph name="FILE_NAME" /> mislykkedes, fordi der ikke er nok lagerplads.</translation>
 <translation id="6486420406192123355">Denne PDF-fil er fra et website med en usikker forbindelse</translation>
 <translation id="650224091954855786">{FILE_COUNT,plural, =1{Filen er downloadet}one{# fil er downloadet}other{# filer er downloadet}}</translation>
-<translation id="6508722015517270189">Genstart Chrome</translation>
+<translation id="6508722015517270189">Genstart Ultimatum</translation>
 <translation id="6513924416597632811">Kopiér linket til søgeresultatsiden for: <ph name="SEARCH_QUERY" />. Kilde: <ph name="PAGE_URL" /></translation>
 <translation id="6518133107902771759">Verificer</translation>
 <translation id="6521218807522232085">Opret, gem og administrer dine adgangskoder, så du nemt kan logge ind</translation>
 <translation id="6527303717912515753">Del</translation>
-<translation id="652948702951888897">Chrome-historik</translation>
-<translation id="6532866250404780454">Websites, du besøger i Chrome, vises ikke. Alle timere for websites slettes.</translation>
+<translation id="652948702951888897">Ultimatum-historik</translation>
+<translation id="6532866250404780454">Websites, du besøger i Ultimatum, vises ikke. Alle timere for websites slettes.</translation>
 <translation id="6539092367496845964">Noget gik galt. Prøv igen senere.</translation>
 <translation id="6541983376925655882">{NUM_HOURS,plural, =1{Tjekket for 1 time siden}one{Tjekket # time siden}other{Tjekket for # timer siden}}</translation>
 <translation id="6545017243486555795">Ryd alle data</translation>
@@ -1355,7 +1355,7 @@ Nogle websites kan f.eks. reagere på denne anmodning ved at vise dig annoncer, 
 <translation id="6569373978618239158">Du får nu vist historier fra <ph name="SITE_NAME" />, når du åbner en ny fane. De websites, du følger, gemmes på din Google-konto. Du kan administrere dem i indstillingerne for Discover.</translation>
 <translation id="657177046675873214">Aktivér "Bogmærker" i indstillingerne for at få adgang til dine bogmærker på alle dine enheder</translation>
 <translation id="6573096386450695060">Tillad altid</translation>
-<translation id="6573431926118603307">Faner, du har åbnet i Chrome på dine andre enheder, vises her.</translation>
+<translation id="6573431926118603307">Faner, du har åbnet i Ultimatum på dine andre enheder, vises her.</translation>
 <translation id="6583199322650523874">Føj et bogmærke til den aktuelle side</translation>
 <translation id="6588043302623806746">Brug et sikkert DNS</translation>
 <translation id="6590471736817333463">Spar op til 60 % data</translation>
@@ -1363,28 +1363,28 @@ Nogle websites kan f.eks. reagere på denne anmodning ved at vise dig annoncer, 
 <translation id="6594347733515723558">Valgmuligheder for visning og sortering</translation>
 <translation id="6595046016124923392">Billederne sendes til Google med henblik på at give dig bedre beskrivelser.</translation>
 <translation id="661266467055912436">Forbedrer din og alles sikkerhed på nettet.</translation>
-<translation id="6621391692573306628">Hvis du vil sende denne fane til en anden enhed, skal du logge ind på Chrome på begge enheder</translation>
+<translation id="6621391692573306628">Hvis du vil sende denne fane til en anden enhed, skal du logge ind på Ultimatum på begge enheder</translation>
 <translation id="6627583120233659107">Rediger mappen</translation>
 <translation id="6633067410344541938">Lås op for inkognito</translation>
 <translation id="6636623428211296678">Find flere indstillinger nedenfor, eller afslut nu</translation>
-<translation id="6637100877383020115">Chrome sender data om brug og nedbrud til Google for at hjælpe med at forbedre appen. <ph name="BEGIN_UMA_LINK" />Administrer<ph name="END_UMA_LINK" /></translation>
+<translation id="6637100877383020115">Ultimatum sender data om brug og nedbrud til Google for at hjælpe med at forbedre appen. <ph name="BEGIN_UMA_LINK" />Administrer<ph name="END_UMA_LINK" /></translation>
 <translation id="6641780377503683465">Fjern <ph name="INTEREST" /></translation>
 <translation id="6642299196749785472">Vedhæft faner</translation>
 <translation id="6647441008198474441">De websites, du besøger, sendes til Google for at forudsige, hvilke websites du kunne have lyst til at besøge som det næste</translation>
 <translation id="6648977384226967773">{CONTACT,plural, =1{<ph name="CONTACT_PREVIEW" />\u2026 og <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" /> mere}one{<ph name="CONTACT_PREVIEW" />\u2026 og <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" /> mere}other{<ph name="CONTACT_PREVIEW" />\u2026 og <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" /> mere}}</translation>
 <translation id="6649642165559792194">Se forhåndsvisning af <ph name="BEGIN_NEW" />Ny<ph name="END_NEW" /></translation>
 <translation id="6659594942844771486">Fane</translation>
-<translation id="6661521899577697780">Tilvalg af Chrome Finds er åbnet i halv højde</translation>
+<translation id="6661521899577697780">Tilvalg af Ultimatum Finds er åbnet i halv højde</translation>
 <translation id="666731172850799929">Åbn i <ph name="APP_NAME" /></translation>
 <translation id="6669390930482049506">Send mig notifikationer</translation>
-<translation id="6670767097276846646">Nogle udvidelser kan føje søgemaskiner til Chrome</translation>
+<translation id="6670767097276846646">Nogle udvidelser kan føje søgemaskiner til Ultimatum</translation>
 <translation id="6671495933530132209">Kopiér billede</translation>
 <translation id="6672697278890207089">Angiv din adgangssætning</translation>
 <translation id="6672917148207387131">Tilføj <ph name="DOMAIN" /></translation>
 <translation id="6674571176963658787">Angiv din adgangssætning for at starte synkroniseringen</translation>
-<translation id="6676927815633975364">Log ind på dette website og Chrome</translation>
+<translation id="6676927815633975364">Log ind på dette website og Ultimatum</translation>
 <translation id="6684262542644248484">Log ind på et website</translation>
-<translation id="6684809838922667136">Gør Chrome bedre</translation>
+<translation id="6684809838922667136">Gør Ultimatum bedre</translation>
 <translation id="6689436252814043643">Læsetilstand er ikke tilgængelig</translation>
 <translation id="669971068476817798">Tryk på Gem</translation>
 <translation id="6700279777779583398">Dine valg er gemt</translation>
@@ -1408,18 +1408,18 @@ Nogle websites kan f.eks. reagere på denne anmodning ved at vise dig annoncer, 
 <translation id="6764137532716892442">Delt <ph name="GROUP_TITLE" />-fanegruppe med ny aktivitet</translation>
 <translation id="6767294960381293877">Åben liste i halv højde over enheder, der skal deles en fane med.</translation>
 <translation id="6783664456110886353">{TAB_COUNT,plural, =1{<ph name="INCOGNITO_TAB_COUNT" /> inkognitofane og <ph name="TAB_COUNT_ONE" /> anden fane lukkes}one{<ph name="INCOGNITO_TAB_COUNT" /> inkognitofane og <ph name="TAB_COUNT_MANY" /> anden fane lukkes}other{<ph name="INCOGNITO_TAB_COUNT" /> inkognitofane og <ph name="TAB_COUNT_MANY" /> andre faner lukkes}}</translation>
-<translation id="6785476624617658922">Yderligere servicevilkår for Google Chrome og ChromeOS</translation>
+<translation id="6785476624617658922">Yderligere servicevilkår for Ultimatum og UltimatumOS</translation>
 <translation id="6786747875388722282">Udvidelser</translation>
 <translation id="6787600234697426339">Grænsen for maks. antal vinduer på <ph name="MAX_INSTANCE_COUNT" /> er nået</translation>
 <translation id="6795633245022906657">Åbn hurtigt en ny fane. Gå til Indstillinger for at redigere denne genvej.</translation>
-<translation id="679588508577699489">Gør Chrome til din standardbrowser</translation>
+<translation id="679588508577699489">Gør Ultimatum til din standardbrowser</translation>
 <translation id="679956319013005046">For at angive din foretrukne tjeneste til autofyld skal du først tilføje tjenesten i <ph name="BEGIN_LINK" />Android-indstillingerne<ph name="END_LINK" />.</translation>
 <translation id="6802555630140434547">Vinduet lukkes</translation>
 <translation id="6803791793483522764">Gennemgå notifikationer</translation>
 <translation id="6809470175540814047">Åbn i inkognitovindue</translation>
 <translation id="6811034713472274749">Siden kan nu ses</translation>
 <translation id="6813359536773993594">{FILE_COUNT,plural, =1{Billeder, 1 billede på listen}one{Billeder, # billede på listen}other{Billeder, # billeder på listen}}</translation>
-<translation id="6813446258015311409">Log ind i Chrome, åben.</translation>
+<translation id="6813446258015311409">Log ind i Ultimatum, åben.</translation>
 <translation id="6815692190508268848">Dine præferencer for udseende er anvendt</translation>
 <translation id="6817747507826986771">Del hurtigt denne side. Hold fingeren på genvejen for at redigere.</translation>
 <translation id="6820686453637990663">CVC</translation>
@@ -1428,7 +1428,7 @@ Nogle websites kan f.eks. reagere på denne anmodning ved at vise dig annoncer, 
 <translation id="6828070228333235514">Stop med at holde øje med prisen</translation>
 <translation id="6830728435402077660">Ikke sikker</translation>
 <translation id="6831043979455480757">Oversæt</translation>
-<translation id="6835182496791325827">Få notifikationer, når Chrome finder de bedste resultater for dine søgninger, mens du er væk.</translation>
+<translation id="6835182496791325827">Få notifikationer, når Ultimatum finder de bedste resultater for dine søgninger, mens du er væk.</translation>
 <translation id="6846298663435243399">Indlæser…</translation>
 <translation id="6850409657436465440">Der downloades stadig</translation>
 <translation id="6850830437481525139"><ph name="TAB_COUNT" /> faner blev lukket</translation>
@@ -1451,7 +1451,7 @@ Nogle websites kan f.eks. reagere på denne anmodning ved at vise dig annoncer, 
 <translation id="6886500155621657325">{ITEMS_COUNT,plural, =1{1 adgangskode}one{# adgangskode}other{# adgangskoder}}</translation>
 <translation id="688730033107341407">Når du er logget ud, fjernes dine bogmærker, adgangskoder m.m. på din Google-konto fra denne enhed.</translation>
 <translation id="6896758677409633944">Kopiér</translation>
-<translation id="6898797562238201317">Brug din egen adgangssætning til at kryptere alle Chrome-data på din Google-konto</translation>
+<translation id="6898797562238201317">Brug din egen adgangssætning til at kryptere alle Ultimatum-data på din Google-konto</translation>
 <translation id="6900532703269623216">Forbedret beskyttelse</translation>
 <translation id="6903907808598579934">Aktivér synkronisering</translation>
 <translation id="6906448540340261898">Sørg for, at du altid kan bruge adgangskoderne på din Google-konto</translation>
@@ -1461,7 +1461,7 @@ Nogle websites kan f.eks. reagere på denne anmodning ved at vise dig annoncer, 
 <translation id="6910211073230771657">Slettet</translation>
 <translation id="6916590542764765824">Administrer udvidelser</translation>
 <translation id="6918398787259831832">Hvis problemet fortsætter, kan du <ph name="BEGIN_LINK" />få flere oplysninger<ph name="END_LINK" /> fra <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Chrome har fjernet disse tilladelser, fordi du ikke har besøgt websitet for nylig</translation>
+<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Ultimatum har fjernet disse tilladelser, fordi du ikke har besøgt websitet for nylig</translation>
 <translation id="6927821422725196292">{TABS_COUNT,plural, =1{1 fane}one{<ph name="NUMBER_OF_TABS" /> fane}other{<ph name="NUMBER_OF_TABS" /> faner}}</translation>
 <translation id="6929224077895306814">Alle sikkerhedskoder, der er gemt på din enhed og på din Google-konto, slettes</translation>
 <translation id="6933180670536678127"><ph name="TAB_TITLE" />, valgt fane, der er fastgjort og afspiller lyd</translation>
@@ -1490,30 +1490,30 @@ Nogle websites kan f.eks. reagere på denne anmodning ved at vise dig annoncer, 
 <translation id="7020741890149022655">Føj til læseliste <ph name="BEGIN_NEW" />Nyhed<ph name="END_NEW" /></translation>
 <translation id="7022756207310403729">Åbn i browser</translation>
 <translation id="7029809446516969842">Adgangskoder</translation>
-<translation id="7037994709569287156">Gør Chrome til standardbrowser</translation>
+<translation id="7037994709569287156">Gør Ultimatum til standardbrowser</translation>
 <translation id="7053256416619638731">Opret stærkere adgangskoder på denne enhed</translation>
 <translation id="7053983685419859001">Bloker</translation>
 <translation id="7054588988317389591">Vil du have billedbeskrivelser?</translation>
-<translation id="7057969023583258980">Åbn hele Chrome-historikken</translation>
+<translation id="7057969023583258980">Åbn hele Ultimatum-historikken</translation>
 <translation id="7063006564040364415">Der kunne ikke oprettes forbindelse til synkroniseringsserveren.</translation>
 <translation id="7063106218165698546">Tilpas fanegruppen, og tryk på Udfør</translation>
 <translation id="7071521146534760487">Administrer konto</translation>
 <translation id="707155805709242880">Vælg, hvad der skal synkroniseres, nedenfor</translation>
 <translation id="7072949719501323344"><ph name="TAB_TITLE" />, fastgjort inkognitofane med multivalg i tilstanden integreret billede</translation>
 <translation id="7077143737582773186">SD-kort</translation>
-<translation id="7078916049958741685">Slet også dine Chrome-data på denne enhed</translation>
+<translation id="7078916049958741685">Slet også dine Ultimatum-data på denne enhed</translation>
 <translation id="7080145768121641840"><ph name="TAB_TITLE" />, valgt fane, der er fastgjort, med lyden slået fra</translation>
 <translation id="7084115944294706056">Vælg placering for adresselinje</translation>
-<translation id="7085332316435785646">Vælg, om du vil inkludere Chrome-historikken for at få mere personligt tilpassede oplevelser i Googles tjenester</translation>
-<translation id="7088681679121566888">Chrome er opdateret</translation>
+<translation id="7085332316435785646">Vælg, om du vil inkludere Ultimatum-historikken for at få mere personligt tilpassede oplevelser i Googles tjenester</translation>
+<translation id="7088681679121566888">Ultimatum er opdateret</translation>
 <translation id="7098100324909062850"><ph name="TAB_TITLE" />, inkognitofane med multivalg og lyden slået fra</translation>
 <translation id="7106762743910369165">Din browser administreres af din organisation</translation>
-<translation id="7111394291981742152">Chrome giver dig mere kontrol over, hvilke annoncer du får vist, og browseren begrænser, hvilke websites der kan få oplysninger om dig, når de viser dig personligt tilpassede annoncer.</translation>
+<translation id="7111394291981742152">Ultimatum giver dig mere kontrol over, hvilke annoncer du får vist, og browseren begrænser, hvilke websites der kan få oplysninger om dig, når de viser dig personligt tilpassede annoncer.</translation>
 <translation id="7111822978084196600">Navngiv dette vindue</translation>
 <translation id="7115358764509798967">Systemstandard</translation>
 <translation id="7117485132243600300">Administrer indhold, du følger, og forslag til emner og søgninger</translation>
 <translation id="7119984597597798764">Luk <ph name="INSTANCE_TITLE" /></translation>
-<translation id="7121179479711575744">Log ind i Chrome</translation>
+<translation id="7121179479711575744">Log ind i Ultimatum</translation>
 <translation id="7136694880210472378">Gør til standard</translation>
 <translation id="7136902389402789299">{NUM_SITES,plural, =1{Tilladelserne er gennemgået for 1 website}one{Tilladelserne er gennemgået for # website}other{Tilladelserne er gennemgået for # websites}}</translation>
 <translation id="7138678301420049075">Andet</translation>
@@ -1523,8 +1523,8 @@ Nogle websites kan f.eks. reagere på denne anmodning ved at vise dig annoncer, 
 <translation id="7149893636342594995">De seneste 24 timer</translation>
 <translation id="71503698506017927">Kryptering med adgangssætning omfatter ikke betalingsmetoder og adresser fra Google Pay.
 
-Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dataene på din konto<ph name="END_LINK" />.</translation>
-<translation id="7165972437814027679">Få flere oplysninger om, hvorfor Chrome blokerer visse filer</translation>
+Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Ultimatum-dataene på din konto<ph name="END_LINK" />.</translation>
+<translation id="7165972437814027679">Få flere oplysninger om, hvorfor Ultimatum blokerer visse filer</translation>
 <translation id="7168323970702333693">Logget ind som <ph name="USER_NAME" />. Åbner indstillinger.</translation>
 <translation id="7170930892977483182">Alle sikkerhedskoder, der er gemt på din enhed og i Google Wallet, slettes</translation>
 <translation id="7173114856073700355">Åbn Indstillinger</translation>
@@ -1544,7 +1544,7 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="7197682514647286393">Slet hurtigt dine browserdata</translation>
 <translation id="719791532916917144">Tastaturgenvej</translation>
 <translation id="7207760545532569765">Gendan <ph name="TAB_COUNT" /> faner som nye baggrundsfaner.</translation>
-<translation id="7217781228893594884">Inkognitofaner låses, når du lukker Chrome</translation>
+<translation id="7217781228893594884">Inkognitofaner låses, når du lukker Ultimatum</translation>
 <translation id="7221869452894271364">Genindlæs denne side</translation>
 <translation id="722681077040152344">Notifikationer fra <ph name="COUNT" /> websites er frameldt</translation>
 <translation id="7227218174981371415">{FILE_COUNT,plural, =1{1 download afventer}one{# download afventer}other{# downloads afventer}}</translation>
@@ -1554,12 +1554,12 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="724510009481365878">Denne side kan ikke udskrives</translation>
 <translation id="7248671827512403053">Applikation</translation>
 <translation id="7253951228444156601">Tjekker adgangskoder…</translation>
-<translation id="7260367682327802201">Din Android-enhed har muligvis en lignende indstilling. Hvis annoncemåling er aktiveret i Chrome og på din Android-enhed, kan en virksomhed måle effektiviteten af en annonce på de websites, du besøger, og i de apps, du bruger.</translation>
+<translation id="7260367682327802201">Din Android-enhed har muligvis en lignende indstilling. Hvis annoncemåling er aktiveret i Ultimatum og på din Android-enhed, kan en virksomhed måle effektiviteten af en annonce på de websites, du besøger, og i de apps, du bruger.</translation>
 <translation id="727288900855680735">Vil du angive <ph name="ONE_TIME_CODE" /> på <ph name="ORIGIN" />?</translation>
 <translation id="7274013316676448362">Blokeret website</translation>
 <translation id="7276868533747677875">Hvis du tidligere har eksporteret adgangskoder, skal du finde en CSV-fil på din enhed og importere den til din foretrukne adgangskodeadministrator.</translation>
 <translation id="728377807486816582">Tryk på adresselinjen</translation>
-<translation id="7289049772085228972">Du har Chromes stærkeste beskyttelse</translation>
+<translation id="7289049772085228972">Du har Ultimatums stærkeste beskyttelse</translation>
 <translation id="7289303553784750393">Hvis du er online, men problemet fortsætter, kan du prøve at fortsætte på andre måder på <ph name="SITE_ETLD_PLUS_ONE" />.</translation>
 <translation id="7290209999329137901">Elementet kan ikke omdøbes.</translation>
 <translation id="7291910923717764901">Der blev tilføjet billedbeskrivelser for denne side</translation>
@@ -1592,12 +1592,12 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="7400003506822844357">{FILE_COUNT,plural, =1{1 anden fil på listen}one{# anden fil på listen}other{# andre filer på listen}}</translation>
 <translation id="7400418766976504921">Webadresse</translation>
 <translation id="7400424692675800399">Hvis du vil åbne et nyt vindue, skal du reducere det samlede antal vinduer (aktive og inaktive) til <ph name="MAX_WINDOW_COUNT_MINUS_ONE" /> eller færre.</translation>
-<translation id="7403691278183511381">Førstegangsoplevelse af Chrome</translation>
+<translation id="7403691278183511381">Førstegangsoplevelse af Ultimatum</translation>
 <translation id="7411224099004328643">Google-kontoens bruger</translation>
 <translation id="7419565702166471774">Brug altid sikre forbindelser</translation>
 <translation id="7421293530411019405">Vil du forlade fanegruppen?</translation>
 <translation id="7435356471928173109">Deaktiveret af din administrator</translation>
-<translation id="7437998757836447326">Log ud af Chrome</translation>
+<translation id="7437998757836447326">Log ud af Ultimatum</translation>
 <translation id="7439467816829380878">Flyt fane til gruppe</translation>
 <translation id="7439749340204407129">Åbn bogmærkeadministratoren</translation>
 <translation id="7453810262525006706">Minimer til visning fra siden</translation>
@@ -1631,7 +1631,7 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="7525248386620136756"><ph name="TAB_GROUPS_AND_TABS_PART" /> er lukket og gemt</translation>
 <translation id="7545347190366646170">Personer med adgang</translation>
 <translation id="7553482318994371148">Genåbn lukkede faner</translation>
-<translation id="7554643625247105821">Chrome-versionen kan ikke tjekkes</translation>
+<translation id="7554643625247105821">Ultimatum-versionen kan ikke tjekkes</translation>
 <translation id="7557508262441527045">Logget ud</translation>
 <translation id="7573665567024262965">Vælg dine standardapps</translation>
 <translation id="757855969265046257">{FILES,plural, =1{<ph name="FILES_DOWNLOADED_ONE" /> fil blev downloadet}one{<ph name="FILES_DOWNLOADED_MANY" /> fil blev downloadet}other{<ph name="FILES_DOWNLOADED_MANY" /> filer blev downloadet}}</translation>
@@ -1647,7 +1647,7 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="7612619742409846846">Du er logget ind på Google som</translation>
 <translation id="7612989789287281429">Logger dig ind…</translation>
 <translation id="7619072057915878432">Download af <ph name="FILE_NAME" /> mislykkedes på grund af netværksfejl.</translation>
-<translation id="7626032353295482388">Velkommen til Chrome</translation>
+<translation id="7626032353295482388">Velkommen til Ultimatum</translation>
 <translation id="7628417132421583481">Gå til Adgangs­kode­admin­istrator</translation>
 <translation id="7630202231528827509">Udbyderens webadresse</translation>
 <translation id="7638584964844754484">Forkert adgangssætning</translation>
@@ -1662,7 +1662,7 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="7666185984446444960"><ph name="TAB_GROUPS_AND_TABS_PART" /> er lukket</translation>
 <translation id="7682724950699840886">Prøv følgende tips: Sørg for, at der er nok ledig plads på din enhed, og prøv at eksportere igen.</translation>
 <translation id="7686086654630106285">Mere om foreslåede annoncer fra websites</translation>
-<translation id="7690596512217303514">Din enhed kunne ikke åbne Chrome. Du kan løse problemet ved at downloade den nyeste Chrome-opdatering fra din appbutik.</translation>
+<translation id="7690596512217303514">Din enhed kunne ikke åbne Ultimatum. Du kan løse problemet ved at downloade den nyeste Ultimatum-opdatering fra din appbutik.</translation>
 <translation id="7691043218961417207">Gennemse indhold, du vil følge</translation>
 <translation id="7692761875510935111">Åbn hurtigt i browseren. Hold fingeren på denne genvej for at redigere den.</translation>
 <translation id="7697383401610880082">Håndtag</translation>
@@ -1670,7 +1670,7 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="7702420606070050505">Feltet i bunden med den seneste aktivitet er åbnet i fuld højde</translation>
 <translation id="7707922173985738739">Brug mobildata</translation>
 <translation id="7708994397325774423">Få alle dine adgangskoder</translation>
-<translation id="7714077993070342304">Åbn Chrome-menuen</translation>
+<translation id="7714077993070342304">Åbn Ultimatum-menuen</translation>
 <translation id="7733878270780732638">Der er ikke nok plads på enheden.</translation>
 <translation id="7740287852186792672">Søgeresultater</translation>
 <translation id="774403695779169686"><ph name="TAB_TITLE" />, valgt inkognitofane, der deler indhold</translation>
@@ -1697,9 +1697,9 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="7821130663268546430">Du kan finde alle åbne faner i Faneskift</translation>
 <translation id="7822705602465980873">Når du er logget ind, knyttes disse data til din Google-konto for at beskytte dig i Google-tjenester, f.eks. ved at øge beskyttelsen i Gmail efter en sikkerhedshændelse.</translation>
 <translation id="7824665136384946951">Din organisation har deaktiveret Beskyttet browsing</translation>
-<translation id="7826342993930002256">Dit Chrome – overalt</translation>
+<translation id="7826342993930002256">Dit Ultimatum – overalt</translation>
 <translation id="7844171778363018843">Der er ikke valgt nogen data til synkronisering</translation>
-<translation id="784453721355882533">Prøv Gemini i Chrome for at få svar, de vigtigste pointer og meget mere.</translation>
+<translation id="784453721355882533">Prøv Gemini i Ultimatum for at få svar, de vigtigste pointer og meget mere.</translation>
 <translation id="7846161022626028328">Der opstod en fejl. Prøv igen.</translation>
 <translation id="7846296061357476882">Google-tjenester</translation>
 <translation id="784652447248278262">Aktuelt vindue</translation>
@@ -1709,10 +1709,10 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="7853202427316060426">Aktivitet</translation>
 <translation id="7859988229622350291">Oversæt aldrig</translation>
 <translation id="7866213166286285359">Oversæt sider her</translation>
-<translation id="7873610418439765081">Prøv Gemini i Chrome for at få svar, de vigtigste pointer og meget mere via knappen Flere valgmuligheder.</translation>
+<translation id="7873610418439765081">Prøv Gemini i Ultimatum for at få svar, de vigtigste pointer og meget mere via knappen Flere valgmuligheder.</translation>
 <translation id="7875915731392087153">Opret mail</translation>
 <translation id="7876243839304621966">Fjern alt</translation>
-<translation id="7886917304091689118">Kører i Chrome</translation>
+<translation id="7886917304091689118">Kører i Ultimatum</translation>
 <translation id="7887174313503389866">Få en rundvisning i vigtige privatlivs- og sikkerhedsindstillinger. Gå til de individuelle indstillinger for at se flere valgmuligheder.</translation>
 <translation id="7913993612870913335">{FILE_COUNT,plural, =1{1 er blokeret af din organisation}one{# er blokeret af din organisation}other{# er blokeret af din organisation}}</translation>
 <translation id="7914399737746719723">Appen blev installeret</translation>
@@ -1721,7 +1721,7 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="7921782882718083488">Opsummer denne side</translation>
 <translation id="7926975587469166629">Kortets kaldenavn</translation>
 <translation id="7927073875790626822">XR</translation>
-<translation id="7929587383660661825">Chrome fjerner automatisk tilladelser fra websites, der misbruger notifikationer, eller som du ikke har besøgt for nylig</translation>
+<translation id="7929587383660661825">Ultimatum fjerner automatisk tilladelser fra websites, der misbruger notifikationer, eller som du ikke har besøgt for nylig</translation>
 <translation id="7934668619883965330">Filen kan ikke downloades. Filformatet understøttes ikke.</translation>
 <translation id="7942131818088350342"><ph name="PRODUCT_NAME" /> er forældet.</translation>
 <translation id="7944772052836377867">Synkronisering skal verificere din identitet</translation>
@@ -1738,7 +1738,7 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="7971136598759319605">Aktiv for 1 dag siden</translation>
 <translation id="7975379999046275268">Se forhåndsvisning af siden <ph name="BEGIN_NEW" />Ny<ph name="END_NEW" /></translation>
 <translation id="7977451675950311423">Advarer dig, hvis du bruger en adgangskode, der er blevet kompromitteret som følge af et brud på datasikkerheden.</translation>
-<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Chrome har fjernet disse tilladelser, fordi du ikke har besøgt websitet for nylig</translation>
+<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Ultimatum har fjernet disse tilladelser, fordi du ikke har besøgt websitet for nylig</translation>
 <translation id="7995059495660416932">Du får vist indhold, når det bliver tilgængeligt</translation>
 <translation id="799576009106109668">Du får hurtigere browsing, da indholdet indlæses proaktivt på baggrund af den webside, du aktuelt er på</translation>
 <translation id="7998918019931843664">Åbn lukket fane igen</translation>
@@ -1756,17 +1756,17 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="804335162455518893">SD-kortet blev ikke fundet</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> inkognitofane}one{<ph name="TAB_COUNT_NORMAL" /> inkognitofane}other{<ph name="TAB_COUNT_NORMAL" /> inkognitofaner}}</translation>
 <translation id="8051695050440594747"><ph name="MEGABYTES" /> MB er ledig</translation>
-<translation id="8058746566562539958">Åbn på ny fane i Chrome</translation>
+<translation id="8058746566562539958">Åbn på ny fane i Ultimatum</translation>
 <translation id="8062594758852531064">Udvidet forudindlæsning:</translation>
 <translation id="8063895661287329888">Bogmærket kunne ikke tilføjes.</translation>
 <translation id="8066816452984416180">Tilføj hurtigt denne side som bogmærke. Hold fingeren på denne genvej for at redigere den.</translation>
-<translation id="8072436850275034464">Du kan åbne faner, du for nylig har lukket, igen, uanset hvor du bruger Chrome</translation>
+<translation id="8072436850275034464">Du kan åbne faner, du for nylig har lukket, igen, uanset hvor du bruger Ultimatum</translation>
 <translation id="8073388330009372546">Åbn billede på ny fane</translation>
 <translation id="8076492880354921740">Faner</translation>
 <translation id="8078096376109663956">Kun deling af tekst</translation>
 <translation id="8078348702936632821">Fastgør denne genvej</translation>
 <translation id="8084285576995584326">Administrer dine Google-kontodata</translation>
-<translation id="8084864785646838999">Noget af din historik vises muligvis ikke her. Hvis du vil se hele din Chrome-historik, skal du åbne den komplette Chrome-historik. Din Google-konto kan desuden have andre former for browserhistorik på <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
+<translation id="8084864785646838999">Noget af din historik vises muligvis ikke her. Hvis du vil se hele din Ultimatum-historik, skal du åbne den komplette Ultimatum-historik. Din Google-konto kan desuden have andre former for browserhistorik på <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="8088176524274673045">Du kan dele med brugere i nærheden ved at få dem til at scanne denne QR-kode</translation>
 <translation id="8090732854597034573">Spørg din forælder, hvis du har brug for hjælp</translation>
 <translation id="8101414242770404289">Ingen faner fra <ph name="TIME_PERIOD" /></translation>
@@ -1774,10 +1774,10 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="810433609302852">Promovering af funktionen til notifikationer med tips og felt i bunden med brugervejledning</translation>
 <translation id="8105893657415066307"><ph name="DESCRIPTION" /> <ph name="SEPARATOR" /> <ph name="FILE_SIZE" /></translation>
 <translation id="8107530384992929318">Luk sorteringsmuligheder</translation>
-<translation id="8110024788458304985">Vær med til at forbedre funktioner og ydeevne i Chrome</translation>
-<translation id="8110087112193408731">Vil du se din Chrome-aktivitet i Digital balance?</translation>
+<translation id="8110024788458304985">Vær med til at forbedre funktioner og ydeevne i Ultimatum</translation>
+<translation id="8110087112193408731">Vil du se din Ultimatum-aktivitet i Digital balance?</translation>
 <translation id="8118117428362942925">Spørg din forælder (<ph name="PARENT_NAME" />), hvis du har brug for hjælp</translation>
-<translation id="8118151008374483324">Log ind i Chrome for at få adgang til dine faner m.m. på alle dine enheder</translation>
+<translation id="8118151008374483324">Log ind i Ultimatum for at få adgang til dine faner m.m. på alle dine enheder</translation>
 <translation id="8120286190326371840">Ingen kompromitterede adgangskoder på denne enhed</translation>
 <translation id="8122623268651408616">Sorteres efter nyeste</translation>
 <translation id="8127542551745560481">Rediger startside</translation>
@@ -1818,7 +1818,7 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="8260126382462817229">Prøv at logge ind igen</translation>
 <translation id="8261506727792406068">Slet</translation>
 <translation id="82619448491672958">Se andre faner</translation>
-<translation id="8265730590513812063">Åbn Chrome-menuen</translation>
+<translation id="8265730590513812063">Åbn Ultimatum-menuen</translation>
 <translation id="8266753737658117282">Fortsæt via <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8266862848225348053">Downloadplacering</translation>
 <translation id="8271267069224406035">Rapportér spam</translation>
@@ -1832,7 +1832,7 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="8317318757008452355">Åbn valgmulighederne for udskrivning</translation>
 <translation id="8320212361750431956">Seneste aktivitet</translation>
 <translation id="832514020744584629"><ph name="PREF_TITLE" />  <ph name="BEGIN_NEW" />Nyhed<ph name="END_NEW" /></translation>
-<translation id="8342727528718219152">Chrome giver dig besked om websites, der muligvis sender for mange notifikationer</translation>
+<translation id="8342727528718219152">Ultimatum giver dig besked om websites, der muligvis sender for mange notifikationer</translation>
 <translation id="834313815369870491">Oversæt aldrig websites</translation>
 <translation id="8348215005712416247"><ph name="TAB_TITLE" />, fastgjort inkognitofane med multivalg, der optager</translation>
 <translation id="8348430946834215779">Brug HTTPS, når det er muligt, og bliv advaret før indlæsning af websites, der ikke understøtter HTTPS</translation>
@@ -1846,12 +1846,12 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="8398389123831319859">Tryk to gange, og hold fingeren nede for at skifte til Inkognito</translation>
 <translation id="8402673309244746971">Gå til Følger</translation>
 <translation id="8413126021676339697">Vis hele historikken</translation>
-<translation id="8413795581997394485">Beskytter mod websites, downloads og udvidelser, der er registreret som skadelige. Når du besøger et website, sender Chrome en sløret del af webadressen til Google via en privatlivsbeskyttende server, der skjuler din IP-adresse. Hvis et website foretager sig noget mistænkeligt, sendes hele webadresser og uddrag af sideindhold også.</translation>
+<translation id="8413795581997394485">Beskytter mod websites, downloads og udvidelser, der er registreret som skadelige. Når du besøger et website, sender Ultimatum en sløret del af webadressen til Google via en privatlivsbeskyttende server, der skjuler din IP-adresse. Hvis et website foretager sig noget mistænkeligt, sendes hele webadresser og uddrag af sideindhold også.</translation>
 <translation id="8414396119627470038">Log ind på <ph name="SITE_ETLD_PLUS_ONE" /> med <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8419144699778179708">Sletter historikken, herunder fra søgefeltet</translation>
 <translation id="8419244640277402268">Medtag</translation>
 <translation id="8422250855136581222">Der er ingen faner på denne enhed</translation>
-<translation id="842386925677997438">Chromes sikkerhedsværktøjer</translation>
+<translation id="842386925677997438">Ultimatums sikkerhedsværktøjer</translation>
 <translation id="8427875596167638501">Fanen forhåndsvisning er åbnet halvt</translation>
 <translation id="8428213095426709021">Indstillinger</translation>
 <translation id="8430824733382774043">Del kun screenshot</translation>
@@ -1859,7 +1859,7 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="8438566539970814960">Gør søgninger og browsing endnu bedre</translation>
 <translation id="8439974325294139057"><ph name="LANG" /> – Sproget er klar til brug. Genstart <ph name="APP_NAME" />.</translation>
 <translation id="8442258441309440798">Der er ingen tilgængelige historier</translation>
-<translation id="8443209985646068659">Chrome kan ikke opdateres</translation>
+<translation id="8443209985646068659">Ultimatum kan ikke opdateres</translation>
 <translation id="8443600937324357591">Flyt fanen til et andet vindue</translation>
 <translation id="8445448999790540984">Der kan ikke eksporteres adgangskoder</translation>
 <translation id="8446884382197647889">Få flere oplysninger</translation>
@@ -1868,7 +1868,7 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="8455675988389029454">Få adgang til dine bogmærker, adgangskoder og meget mere på alle dine enheder</translation>
 <translation id="8458341576712814616">Genvej</translation>
 <translation id="8458413889418591446">Synkroniser din historik og dine faner for hurtigt at vende tilbage til de websites, du har besøgt</translation>
-<translation id="84594714173170813">Fortsæt med at bruge Chrome-dataene på din Google-konto</translation>
+<translation id="84594714173170813">Fortsæt med at bruge Ultimatum-dataene på din Google-konto</translation>
 <translation id="8460008946585880786">Træk og slip en fane oven på en anden</translation>
 <translation id="8460448946170646641">Gennemgå vigtige privatlivs- og sikkerhedsindstillinger</translation>
 <translation id="8460932807646981183">Administrer søgemaskiner og websitesøgning</translation>
@@ -1890,8 +1890,8 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="8540136935098276800">Angiv en webadresse i korrekt format</translation>
 <translation id="854522910157234410">Åbn denne side</translation>
 <translation id="8547466829003330976">Gennemgå PDF-filen med AI</translation>
-<translation id="8551513938758868521">Lås inkognitofaner, når du lukker Chrome</translation>
-<translation id="8559961053328923750">Chrome begrænser den samlede mængde data, som websites kan dele via browseren for at måle effektiviteten af annoncer</translation>
+<translation id="8551513938758868521">Lås inkognitofaner, når du lukker Ultimatum</translation>
+<translation id="8559961053328923750">Ultimatum begrænser den samlede mængde data, som websites kan dele via browseren for at måle effektiviteten af annoncer</translation>
 <translation id="8559990750235505898">Tilbyd at oversætte sider på andre sprog</translation>
 <translation id="8560602726703398413">Se din læseliste under Bogmærker</translation>
 <translation id="85618473456579127">Tryk på Profil øverst til højre</translation>
@@ -1904,12 +1904,12 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="859046281437143747">Hold øje med prisen ved hjælp af knappen Flere valgmuligheder</translation>
 <translation id="859064343657890103">Fanegruppen <ph name="TAB_GROUP_TITLE" /> er slettet</translation>
 <translation id="860043288473659153">Kortholderens navn</translation>
-<translation id="8602358303461588329">Log ind i Chrome, lukket.</translation>
+<translation id="8602358303461588329">Log ind i Ultimatum, lukket.</translation>
 <translation id="860282621117673749">Underretninger om prisfald</translation>
 <translation id="8611922158252451755">Alle med linket kan redigere alle faner, så del med omtanke. Linket udløber om 48 timer.</translation>
 <translation id="8616006591992756292">Din Google-konto kan have andre former for browserhistorik på <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="8617240290563765734">Vil du åbne den foreslåede webadresse, som er angivet i det downloadede indhold?</translation>
-<translation id="8629093325209491835">Åbn Chrome-menuen &gt; Indstillinger</translation>
+<translation id="8629093325209491835">Åbn Ultimatum-menuen &gt; Indstillinger</translation>
 <translation id="8634050254805484913">Skjult på smalle skærme</translation>
 <translation id="8635399646025169806">Vil du beholde fanegruppen?</translation>
 <translation id="8636825310635137004">Aktivér synkronisering for at få adgang til dine faner på dine andre enheder.</translation>
@@ -1928,15 +1928,15 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="8715300232952757586"><ph name="TAB_TITLE" /> lukkes</translation>
 <translation id="8723453889042591629">Oversæt hurtigt denne side. Hold fingeren nede for at redigere denne genvej.</translation>
 <translation id="8725066075913043281">Forsøg igen</translation>
-<translation id="8727043961453758442">Få mest muligt ud af Chrome</translation>
+<translation id="8727043961453758442">Få mest muligt ud af Ultimatum</translation>
 <translation id="8731268612289859741">Sikkerhedskode</translation>
 <translation id="8738163682604285902">Vil du se i læsetilstand?</translation>
 <translation id="8746155870861185046">Del fremhævet</translation>
 <translation id="8748850008226585750">Indholdet er skjult</translation>
 <translation id="8754448020583829686">Kopiér uden link</translation>
 <translation id="8756969031206844760">Vil du opdatere adgangskoden?</translation>
-<translation id="8765470054473112089">Når du indtaster noget i adresselinjen eller søgefeltet, sender Chrome det, du skriver, til din standardsøgemaskine for at få bedre forslag. Dette er deaktiveret i inkognitotilstand.</translation>
-<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Chrome har fundet en svag adgangskode, som du kan forbedre}one{Chrome har fundet # svag adgangskode, som du kan forbedre}other{Chrome har fundet # svage adgangskoder, som du kan forbedre}}</translation>
+<translation id="8765470054473112089">Når du indtaster noget i adresselinjen eller søgefeltet, sender Ultimatum det, du skriver, til din standardsøgemaskine for at få bedre forslag. Dette er deaktiveret i inkognitotilstand.</translation>
+<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Ultimatum har fundet en svag adgangskode, som du kan forbedre}one{Ultimatum har fundet # svag adgangskode, som du kan forbedre}other{Ultimatum har fundet # svage adgangskoder, som du kan forbedre}}</translation>
 <translation id="8766529642647037772">Vil du oprette et fremhævet link som dette?</translation>
 <translation id="8788265440806329501">Navigationsoversigt er lukket</translation>
 <translation id="8790193082819560975">Tryk for at søge efter købsmuligheder for produktet på en ny fane.</translation>
@@ -1959,7 +1959,7 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="885480114717186641">Du kan anmode om computerwebsitet for <ph name="HOST_NAME" /></translation>
 <translation id="8856607253650333758">Få beskrivelser</translation>
 <translation id="8863714995118816041">Der er igen givet tilladelser for <ph name="SITE_NAME" /></translation>
-<translation id="8865415417596392024">Chrome-data på din konto</translation>
+<translation id="8865415417596392024">Ultimatum-data på din konto</translation>
 <translation id="8872506776304248286">Åbn i app</translation>
 <translation id="8890668505403261809">Søg i dine inkognitofaner</translation>
 <translation id="8892234476517513962">Du er allerede logget ind</translation>
@@ -1971,7 +1971,7 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="8922289737868596582">Download sider via knappen Flere valgmuligheder for at bruge dem, når du er offline</translation>
 <translation id="8924575305646776101"><ph name="BEGIN_LINK" />Få flere oplysninger<ph name="END_LINK" /></translation>
 <translation id="892496902842311796"><ph name="LANG" /> er klar</translation>
-<translation id="8937772741022875483">Vil du fjerne din Chrome-aktivitet fra Digital balance?</translation>
+<translation id="8937772741022875483">Vil du fjerne din Ultimatum-aktivitet fra Digital balance?</translation>
 <translation id="8942627711005830162">Åbn i et andet vindue</translation>
 <translation id="8945143127965743188"><ph name="LANG" /> – Dette sprog kunne ikke downloades. Prøv igen senere.</translation>
 <translation id="8946759102391960088">Bevar adgangen til dine adgangskoder</translation>
@@ -1983,12 +1983,12 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="8970887620466824814">Noget gik galt.</translation>
 <translation id="8972098258593396643">Vil du downloade til standardmappen?</translation>
 <translation id="8987736167266086032">Fortsæt, hvor du slap</translation>
-<translation id="8992769679401294069">Dine data krypteres med din adgangssætning. Angiv adgangssætningen for at bruge og gemme Chrome-data på din Google-konto.</translation>
+<translation id="8992769679401294069">Dine data krypteres med din adgangssætning. Angiv adgangssætningen for at bruge og gemme Ultimatum-data på din Google-konto.</translation>
 <translation id="8993760627012879038">Åbn en ny fane i inkognitotilstand</translation>
 <translation id="8995521496079646922">De apps, du har valgt, bruges som standard. Hvis en app ikke allerede er på denne enhed, downloades den snart.</translation>
 <translation id="8996847606757455498">Vælg en anden udbyder</translation>
 <translation id="8998837250940831980">Fanen kunne ikke minimeres. Prøv igen senere.</translation>
-<translation id="9001604755921395912">Åbn i inkognito i Chrome</translation>
+<translation id="9001604755921395912">Åbn i inkognito i Ultimatum</translation>
 <translation id="9012585441087414258">Beskytter mod websites, downloads og udvidelser, der er registreret som skadelige. Hvis en side udviser mistænkelig adfærd, sendes webadresser og uddrag af sideindhold til Google Beskyttet browsing.</translation>
 <translation id="9019199799064251516">Vil du fortsætte uden en profillås i bilen?</translation>
 <translation id="9022774213089566801">Ofte besøgte</translation>
@@ -1996,7 +1996,7 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="9027728231343310283">Fortryd for <ph name="SITE" /></translation>
 <translation id="9035378196785279980">Flyt til\u2026</translation>
 <translation id="9042893549633094279">Privatliv og sikkerhed</translation>
-<translation id="9047347135558855162">Start hurtigt en søgning i Chrome</translation>
+<translation id="9047347135558855162">Start hurtigt en søgning i Ultimatum</translation>
 <translation id="9050666287014529139">Adgangssætning</translation>
 <translation id="9055497320631373736">Websitet blev føjet til potentielle websites igen</translation>
 <translation id="9057030985451135243">Få flere oplysninger om delte fanegrupper</translation>
@@ -2004,7 +2004,7 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="9063400323119781058">Frameldt</translation>
 <translation id="9063523880881406963">Slå anmodning om computerversionen af websitet fra</translation>
 <translation id="9065203028668620118">Rediger</translation>
-<translation id="9065383040763568503">Gemte data, som Chrome ikke mener er vigtige (f.eks. websites uden gemte indstillinger, eller som du ikke besøger så ofte)</translation>
+<translation id="9065383040763568503">Gemte data, som Ultimatum ikke mener er vigtige (f.eks. websites uden gemte indstillinger, eller som du ikke besøger så ofte)</translation>
 <translation id="9067341854474068781">Feltet "Ingen tilgængelige adgangsnøgler" er åbnet i fuld højde</translation>
 <translation id="906781307897697745">i <ph name="PRODUCT_NAME" /></translation>
 <translation id="9068568736932147490"><ph name="TAB_TITLE" />, fastgjort inkognitofane med multivalg, der afspiller lyd</translation>
@@ -2014,8 +2014,8 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="9074739597929991885">Bluetooth</translation>
 <translation id="9081543426177426948">De websites, du besøger, gemmes ikke i inkognitotilstand</translation>
 <translation id="9086455579313502267">Der kunne ikke opnås adgang til netværket</translation>
-<translation id="9093915805850895575">Åbn i Chrome-vindue</translation>
-<translation id="909756639352028172">Medtag Chrome i Web- og appaktivitet og de tilknyttede Google-tjenester for at få den mest personligt tilpassede brugeroplevelse</translation>
+<translation id="9093915805850895575">Åbn i Ultimatum-vindue</translation>
+<translation id="909756639352028172">Medtag Ultimatum i Web- og appaktivitet og de tilknyttede Google-tjenester for at få den mest personligt tilpassede brugeroplevelse</translation>
 <translation id="9099220545925418560">Baseret på din browserhistorik. Denne indstilling er deaktiveret.</translation>
 <translation id="9100610230175265781">Adgangssætning kræves</translation>
 <translation id="9101137867221042551">Administration</translation>
@@ -2051,9 +2051,9 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="9218430445555521422">Angiv som standard</translation>
 <translation id="9219103736887031265">Billeder</translation>
 <translation id="9222198206152536936">Log ind som <ph name="EMAIL" /> for at få adgang til dine faner m.m. på alle dine enheder</translation>
-<translation id="924447568950697217">Gør Chrome til din standardbrowser</translation>
-<translation id="926205370408745186">Fjern din Chrome-aktivitet fra Digital balance</translation>
-<translation id="927968626442779827">Brug Lite-tilstand i Google Chrome</translation>
+<translation id="924447568950697217">Gør Ultimatum til din standardbrowser</translation>
+<translation id="926205370408745186">Fjern din Ultimatum-aktivitet fra Digital balance</translation>
+<translation id="927968626442779827">Brug Lite-tilstand i Ultimatum</translation>
 <translation id="928550791203542716">Følger <ph name="SITE_NAME" /></translation>
 <translation id="930124987204876019">Slet historik, cookies, websitedata, cache…</translation>
 <translation id="930834144334005936">Nulstil den aktuelle tilstand <ph name="MODE_NAME" /> til Søgning</translation>
@@ -2061,7 +2061,7 @@ Du kan ændre denne indstilling ved at <ph name="BEGIN_LINK" />slette Chrome-dat
 <translation id="939598580284253335">Angiv adgangssætning</translation>
 <translation id="94161319503679839"><ph name="TAB_TITLE" />, fastgjort inkognitofane i tilstanden integreret billede</translation>
 <translation id="945522503751344254">Send feedback</translation>
-<translation id="95817756606698420">Chrome kan bruge <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> til søgninger i Kina. Du kan ændre dette i <ph name="BEGIN_LINK" />Indstillinger<ph name="END_LINK" />.</translation>
+<translation id="95817756606698420">Ultimatum kan bruge <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> til søgninger i Kina. Du kan ændre dette i <ph name="BEGIN_LINK" />Indstillinger<ph name="END_LINK" />.</translation>
 <translation id="961856697154696964">Slet browserdata</translation>
 <translation id="963246339335003378">Åbn Jobliste</translation>
 <translation id="966131775676567255">Sletter kontodata</translation>

@@ -24,9 +24,9 @@
 <translation id="1089606299949659462">ตรวจสอบเรียบร้อยแล้ว</translation>
 <translation id="1094555143448724771">หากต้องการดูแท็บจากอุปกรณ์อื่นๆ ให้ซิงค์แท็บและประวัติการเข้าชม</translation>
 <translation id="1095761715416917775">ตรวจสอบว่าคุณเข้าถึงข้อมูลที่ซิงค์ไว้ได้เสมอ</translation>
-<translation id="1096091316906284742">Bottom Sheet การเลือกรับ Chrome Finds</translation>
+<translation id="1096091316906284742">Bottom Sheet การเลือกรับ Ultimatum Finds</translation>
 <translation id="1100066534610197918">เปิดในแท็บใหม่ในกลุ่ม</translation>
-<translation id="1103142993930332957">หากต้องการช่วยปรับปรุง Chrome</translation>
+<translation id="1103142993930332957">หากต้องการช่วยปรับปรุง Ultimatum</translation>
 <translation id="1105960400813249514">จับภาพหน้าจอ</translation>
 <translation id="1108214977745280468">ดูข้อมูลเชิงลึกของหน้า</translation>
 <translation id="1108938384783527433">ซิงค์ประวัติการเข้าชม</translation>
@@ -34,20 +34,20 @@
 <translation id="1123537484474186311"><ph name="TAB_TITLE" /> แท็บในโหมดการแสดงภาพซ้อนภาพ</translation>
 <translation id="1126696498560056882">จัดการบัญชีในอุปกรณ์เครื่องนี้</translation>
 <translation id="1135018701024399762">โหมดไม่ระบุตัวตนทำให้การท่องเว็บของคุณมีความเป็นส่วนตัวเมื่อมีผู้อื่นใช้อุปกรณ์ของคุณ</translation>
-<translation id="113752097246673894">ลงชื่อเข้าใช้ Chrome ด้วย <ph name="EMAIL" /> เพื่อเข้าถึงบุ๊กมาร์กและข้อมูลอื่นๆ ในอุปกรณ์ทุกเครื่อง</translation>
+<translation id="113752097246673894">ลงชื่อเข้าใช้ Ultimatum ด้วย <ph name="EMAIL" /> เพื่อเข้าถึงบุ๊กมาร์กและข้อมูลอื่นๆ ในอุปกรณ์ทุกเครื่อง</translation>
 <translation id="1138458427267715730">รับการแจ้งเตือนเมื่อราคาต่ำลงในเว็บไซต์ใดก็ตามทั่วทั้งอินเทอร์เน็ต</translation>
 <translation id="1140317858355046628">หากลบกลุ่มนี้ ทุกคนจะเสียสิทธิ์เข้าถึงกลุ่มแท็บ "<ph name="GROUP_NAME" />" ทันที และระบบจะลบกลุ่มนี้ออกจากอุปกรณ์ทุกเครื่อง</translation>
 <translation id="1142732900304639782">ไม่ต้องเสนอการแปลเว็บไซต์เหล่านี้</translation>
 <translation id="1143193470214071120">โปรดปิดหรือจัดการหน้าต่าง</translation>
 <translation id="1149725087019908252">กำลังสแกน <ph name="FILE_NAME" /></translation>
-<translation id="1150263420752757504"><ph name="APP_NAME" /> จะเปิดใน Chrome การดำเนินการต่อหมายความว่า คุณยอมรับ<ph name="BEGIN_LINK1" />ข้อกำหนดในการให้บริการของ Google<ph name="END_LINK1" /> และ<ph name="BEGIN_LINK2" />ข้อกำหนดในการให้บริการเพิ่มเติมของ Google Chrome และ Chrome OS<ph name="END_LINK2" /></translation>
+<translation id="1150263420752757504"><ph name="APP_NAME" /> จะเปิดใน Ultimatum การดำเนินการต่อหมายความว่า คุณยอมรับ<ph name="BEGIN_LINK1" />ข้อกำหนดในการให้บริการของ Google<ph name="END_LINK1" /> และ<ph name="BEGIN_LINK2" />ข้อกำหนดในการให้บริการเพิ่มเติมของ Ultimatum และ Ultimatum OS<ph name="END_LINK2" /></translation>
 <translation id="1154555449933432029">คุณไม่มีรหัสผ่านที่บันทึกไว้ในเครื่องมือจัดการรหัสผ่านบน Google</translation>
 <translation id="115483310321669804">ใช้รหัสผ่าน <ph name="PASSWORD" /></translation>
 <translation id="1161065531352634524">ซิงค์แท็บและประวัติการเข้าชม</translation>
 <translation id="1165109137568919258">ถ่ายรูปหรือเพิ่มรูปภาพจากแกลเลอรีรูปภาพเพื่อค้นหา</translation>
 <translation id="1173894706177603556">เปลี่ยนชื่อ</translation>
-<translation id="1174479719160874822">Chrome จะขอเว็บไซต์เวอร์ชันมือถือเมื่อหน้าจอแคบ</translation>
-<translation id="1175241315203286684">ผู้ดูแลระบบสามารถเปลี่ยนแปลงโปรไฟล์และเบราว์เซอร์จากระยะไกล วิเคราะห์ข้อมูลเกี่ยวกับเบราว์เซอร์ผ่านการรายงาน รวมถึงดำเนินการอื่นๆ ที่จำเป็นได้ กิจกรรมในอุปกรณ์นี้อาจมีการจัดการภายนอก Chrome ได้ด้วย</translation>
+<translation id="1174479719160874822">Ultimatum จะขอเว็บไซต์เวอร์ชันมือถือเมื่อหน้าจอแคบ</translation>
+<translation id="1175241315203286684">ผู้ดูแลระบบสามารถเปลี่ยนแปลงโปรไฟล์และเบราว์เซอร์จากระยะไกล วิเคราะห์ข้อมูลเกี่ยวกับเบราว์เซอร์ผ่านการรายงาน รวมถึงดำเนินการอื่นๆ ที่จำเป็นได้ กิจกรรมในอุปกรณ์นี้อาจมีการจัดการภายนอก Ultimatum ได้ด้วย</translation>
 <translation id="1177863135347784049">ที่กำหนดเอง</translation>
 <translation id="1181037720776840403">นำออก</translation>
 <translation id="1183189057400844278">โปรดยืนยันว่าเป็นคุณเพื่อให้ใช้รหัสผ่านในบัญชี Google ได้เสมอ</translation>
@@ -85,13 +85,13 @@
 <translation id="1318262688555255786">แชร์ลิงก์ไปยังหน้าเว็บ <ph name="PAGE_TITLE" /> แหล่งที่มา: <ph name="PAGE_URL" /></translation>
 <translation id="1320912611264252795">ขั้นตอนการบันทึกบุ๊กมาร์กเปิดอยู่ที่ระดับเต็มความสูง</translation>
 <translation id="1327257854815634930">ประวัติการนำทางเปิดอยู่</translation>
-<translation id="1331212799747679585">อัปเดต Chrome ไม่ได้ ตัวเลือกอื่นๆ</translation>
-<translation id="1332501820983677155">แป้นพิมพ์ลัดสำหรับฟีเจอร์ของ Google Chrome</translation>
+<translation id="1331212799747679585">อัปเดต Ultimatum ไม่ได้ ตัวเลือกอื่นๆ</translation>
+<translation id="1332501820983677155">แป้นพิมพ์ลัดสำหรับฟีเจอร์ของ Ultimatum</translation>
 <translation id="1333491156693005331">ตรวจสอบเมื่อเร็วๆ นี้</translation>
 <translation id="1336996151357442890">เลิกรับการแจ้งเตือนจาก <ph name="SITE_NAME" /> แล้ว ระบบจะถามคุณอีกครั้งเมื่อเข้าชมครั้งถัดไป</translation>
 <translation id="1340839264183302272">ออกจากกลุ่ม</translation>
 <translation id="1342886103232377846">หากต้องการตรวจสอบรหัสผ่านที่ถูกละเมิด ให้ไปที่เครื่องมือจัดการรหัสผ่านบน Google</translation>
-<translation id="1343830902827845050">ลงชื่อเข้าใช้ Chrome</translation>
+<translation id="1343830902827845050">ลงชื่อเข้าใช้ Ultimatum</translation>
 <translation id="1344653310988386453">รวมลิงก์ไปยังไฮไลต์</translation>
 <translation id="1355088659320425659">ประวัติการเข้าชมและแท็บ</translation>
 <translation id="1360432990279830238">ออกจากระบบและปิดการซิงค์ไหม</translation>
@@ -105,12 +105,12 @@
 <translation id="1383876407941801731">ค้นหา</translation>
 <translation id="1384704387250346179">แปลรูปภาพด้วย Google Lens <ph name="BEGIN_NEW" />ใหม่<ph name="END_NEW" /></translation>
 <translation id="1386674309198842382">ใช้งานเมื่อ <ph name="LAST_UPDATED" /> วันที่ผ่านมา</translation>
-<translation id="1390418506739274310">คุณอาจเห็นประวัติการเข้าชมจากแอปอื่นๆ ที่เปิดลิงก์ใน Chrome บัญชี Google อาจมีประวัติการท่องเว็บรูปแบบอื่นๆ ที่ <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /></translation>
+<translation id="1390418506739274310">คุณอาจเห็นประวัติการเข้าชมจากแอปอื่นๆ ที่เปิดลิงก์ใน Ultimatum บัญชี Google อาจมีประวัติการท่องเว็บรูปแบบอื่นๆ ที่ <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /></translation>
 <translation id="139752016751285248">Bottom Sheet ข้อมูลเชิงลึกด้านราคาเปิดอยู่แบบเต็มหน้า</translation>
 <translation id="1397811292916898096">ค้นหาด้วย <ph name="PRODUCT_NAME" /></translation>
-<translation id="1398057416966591719">คุณ<ph name="BEGIN_LINK1" />จัดการว่าจะบันทึกข้อมูล Chrome ใด<ph name="END_LINK1" />ได้ในบัญชี Google
+<translation id="1398057416966591719">คุณ<ph name="BEGIN_LINK1" />จัดการว่าจะบันทึกข้อมูล Ultimatum ใด<ph name="END_LINK1" />ได้ในบัญชี Google
 
-หากต้องการการตั้งค่าเพิ่มเติมที่ใช้ข้อมูลเพื่อปรับปรุงประสบการณ์การใช้งาน Chrome ให้ไปที่<ph name="BEGIN_LINK2" />บริการของ Google<ph name="END_LINK2" /></translation>
+หากต้องการการตั้งค่าเพิ่มเติมที่ใช้ข้อมูลเพื่อปรับปรุงประสบการณ์การใช้งาน Ultimatum ให้ไปที่<ph name="BEGIN_LINK2" />บริการของ Google<ph name="END_LINK2" /></translation>
 <translation id="1407069428457324124">ธีมมืด</translation>
 <translation id="1407135791313364759">เปิดทั้งหมด</translation>
 <translation id="1409879593029778104">ระบบป้องกันการดาวน์โหลด <ph name="FILE_NAME" /> เพราะมีไฟล์นี้อยู่แล้ว</translation>
@@ -124,10 +124,10 @@
 <translation id="1448440926884431741">จัดระเบียบสินค้าที่ติดตามในบุ๊กมาร์ก</translation>
 <translation id="1455845192930279203">คุณต้องการดาวน์โหลด "<ph name="FILE_NAME" />" (<ph name="FILE_SIZE" />) จาก <ph name="DOWNLOAD_DOMAIN" /> ต่อไปไหม</translation>
 <translation id="1460751212339734034">ประหยัดเวลาด้วยการพิมพ์น้อยลง</translation>
-<translation id="1466383950273130737">เลือกภาษาของ Chrome</translation>
+<translation id="1466383950273130737">เลือกภาษาของ Ultimatum</translation>
 <translation id="1477626028522505441">การดาวน์โหลด <ph name="FILE_NAME" /> ล้มเหลวเพราะเซิร์ฟเวอร์มีปัญหา</translation>
 <translation id="147982357559798527">เปลี่ยนแปลงแล้ว</translation>
-<translation id="1480287803138246127">ประวัติการเข้าชมเว็บบางส่วนอาจไม่แสดงที่นี่ หากต้องการดูประวัติการเข้าชมใน Chrome ทั้งหมด ให้เปิดประวัติการเข้าชมใน Chrome แบบเต็ม</translation>
+<translation id="1480287803138246127">ประวัติการเข้าชมเว็บบางส่วนอาจไม่แสดงที่นี่ หากต้องการดูประวัติการเข้าชมใน Ultimatum ทั้งหมด ให้เปิดประวัติการเข้าชมใน Ultimatum แบบเต็ม</translation>
 <translation id="1493287004536771723">คุณกำลังติดตาม <ph name="SITE_NAME" /></translation>
 <translation id="1495677929897281669">กลับไปที่แท็บ</translation>
 <translation id="1496514951988037011">ชื่อผู้ใช้</translation>
@@ -137,14 +137,14 @@
 <translation id="1515901671075971249">แป้นพิมพ์ลัดสำหรับการไปยังส่วนต่างๆ ในแท็บ</translation>
 <translation id="1516966594427080024">เปิดหน้าต่างใหม่ในโหมดไม่ระบุตัวตน</translation>
 <translation id="1521774566618522728">ใช้งานวันนี้</translation>
-<translation id="153446405401665083">Chrome เวอร์ชันใหม่พร้อมให้ใช้งานแล้ว</translation>
+<translation id="153446405401665083">Ultimatum เวอร์ชันใหม่พร้อมให้ใช้งานแล้ว</translation>
 <translation id="1540012742443808215">ปัจจุบันแถบที่อยู่อยู่ด้านบน</translation>
-<translation id="1544084554881119930">จะไม่มีการเข้ารหัสวิธีการชำระเงินและที่อยู่ ประวัติการท่องเว็บจาก Chrome จะไม่ซิงค์
-เฉพาะผู้ที่มีพาสเฟรสของคุณเท่านั้นที่จะอ่านข้อมูลที่เข้ารหัสได้ Google จะไม่ได้รับหรือจัดเก็บพาสเฟรสดังกล่าว หากลืมพาสเฟรสหรือต้องการเปลี่ยนการตั้งค่านี้ ให้<ph name="BEGIN_LINK" />ล้างข้อมูล Chrome ในบัญชี<ph name="END_LINK" /></translation>
+<translation id="1544084554881119930">จะไม่มีการเข้ารหัสวิธีการชำระเงินและที่อยู่ ประวัติการท่องเว็บจาก Ultimatum จะไม่ซิงค์
+เฉพาะผู้ที่มีพาสเฟรสของคุณเท่านั้นที่จะอ่านข้อมูลที่เข้ารหัสได้ Google จะไม่ได้รับหรือจัดเก็บพาสเฟรสดังกล่าว หากลืมพาสเฟรสหรือต้องการเปลี่ยนการตั้งค่านี้ ให้<ph name="BEGIN_LINK" />ล้างข้อมูล Ultimatum ในบัญชี<ph name="END_LINK" /></translation>
 <translation id="1544826120773021464">หากต้องการจัดการบัญชี Google ให้แตะปุ่ม "จัดการบัญชี"</translation>
 <translation id="1549000191223877751">ย้ายไปยังหน้าต่างอื่น</translation>
-<translation id="1553358976309200471">อัปเดต Chrome</translation>
-<translation id="1554532453982918912">ช่วยปรับปรุง Chrome ให้ดีขึ้นสำหรับคนที่ใช้งานในลักษณะเดียวกับคุณ</translation>
+<translation id="1553358976309200471">อัปเดต Ultimatum</translation>
+<translation id="1554532453982918912">ช่วยปรับปรุง Ultimatum ให้ดีขึ้นสำหรับคนที่ใช้งานในลักษณะเดียวกับคุณ</translation>
 <translation id="1568636008098739136">ฟังหน้านี้ หากต้องการแก้ไขแป้นพิมพ์ลัดนี้ ให้แตะค้างไว้</translation>
 <translation id="1571041387761170095">ไม่มีรหัสผ่านที่ไม่รัดกุมหรือรหัสผ่านที่ใช้ซ้ำ</translation>
 <translation id="1578591621182011812">{NUM_PASSWORDS,plural, =1{มีรหัสผ่านที่ถูกละเมิด 1 รายการในอุปกรณ์นี้}other{มีรหัสผ่านที่ถูกละเมิด # รายการในอุปกรณ์นี้}}</translation>
@@ -171,24 +171,24 @@
 <translation id="1702907158640575240">เบราว์เซอร์ที่มีการจัดการ</translation>
 <translation id="170478069042229393"><ph name="TAB_TITLE" />, แท็บที่ไม่ระบุตัวตนที่ปักหมุด</translation>
 <translation id="1718835860248848330">1 ชั่วโมงที่ผ่านมา</translation>
-<translation id="1726477445370128854">คุณจะท่องเว็บและค้นหาได้เร็วขึ้นเมื่อ Chrome โหลดหน้าเว็บที่คิดว่าคุณอาจจะเข้าชมไว้ล่วงหน้า</translation>
+<translation id="1726477445370128854">คุณจะท่องเว็บและค้นหาได้เร็วขึ้นเมื่อ Ultimatum โหลดหน้าเว็บที่คิดว่าคุณอาจจะเข้าชมไว้ล่วงหน้า</translation>
 <translation id="1728803206919861584">บันทึกพาสคีย์นอกโหมดไม่ระบุตัวตนไหม</translation>
 <translation id="1732514748744806741">หากรหัสผ่านถูกละเมิด เราจะแจ้งให้คุณทราบ</translation>
-<translation id="1737694586321018892">รับความปลอดภัยที่เข้มงวดที่สุดของ Chrome</translation>
+<translation id="1737694586321018892">รับความปลอดภัยที่เข้มงวดที่สุดของ Ultimatum</translation>
 <translation id="1747593111377567311">{NUM_SITES,plural, =1{เว็บไซต์ 1 รายการส่งการแจ้งเตือนจำนวนมากเมื่อเร็วๆ นี้}other{เว็บไซต์ # รายการส่งการแจ้งเตือนจำนวนมากเมื่อเร็วๆ นี้}}</translation>
 <translation id="1749561566933687563">ซิงค์บุ๊กมาร์กของคุณ</translation>
 <translation id="1750238553597293878">ใช้รหัสผ่านในบัญชี Google ต่อไป</translation>
 <translation id="17513872634828108">แท็บที่เปิดอยู่</translation>
 <translation id="1753744496844366747">Aa</translation>
 <translation id="1760873718737761808">{FILE_COUNT,plural, =1{หน้า มี 1 หน้าในรายการ}other{หน้า มี # หน้าในรายการ}}</translation>
-<translation id="1771929606532798550">ระบบจะส่งข้อมูลการใช้งาน Chrome ไปยัง Google แต่จะไม่เชื่อมโยงกับคุณ\n\nหาก Chrome ทำงานขัดข้อง รายละเอียดเกี่ยวกับข้อขัดข้องอาจรวมข้อมูลส่วนบุคคลบางอย่าง\n\nหากคุณซิงค์ประวัติการเข้าชมกับบัญชี Google เมตริกก็อาจรวมข้อมูลเกี่ยวกับ URL ที่คุณเข้าชมไว้ด้วย</translation>
+<translation id="1771929606532798550">ระบบจะส่งข้อมูลการใช้งาน Ultimatum ไปยัง Google แต่จะไม่เชื่อมโยงกับคุณ\n\nหาก Ultimatum ทำงานขัดข้อง รายละเอียดเกี่ยวกับข้อขัดข้องอาจรวมข้อมูลส่วนบุคคลบางอย่าง\n\nหากคุณซิงค์ประวัติการเข้าชมกับบัญชี Google เมตริกก็อาจรวมข้อมูลเกี่ยวกับ URL ที่คุณเข้าชมไว้ด้วย</translation>
 <translation id="1778457539567749232">ทำเครื่องหมายว่ายังไม่อ่าน</translation>
 <translation id="1779766957982586368">ปิดหน้าต่าง</translation>
 <translation id="1780023393214832643">บันทึกรหัสผ่านไปยัง <ph name="USERNAME" /> แล้ว</translation>
 <translation id="1791662854739702043">ติดตั้งแล้ว</translation>
 <translation id="1792959175193046959">เปลี่ยนตำแหน่งเริ่มต้นในการดาวน์โหลดได้ทุกเมื่อ</translation>
 <translation id="1796666869097395659">ย่อแท็บเพื่อกลับไปดูในภายหลัง</translation>
-<translation id="1799920918471566157">เคล็ดลับในการใช้ Chrome</translation>
+<translation id="1799920918471566157">เคล็ดลับในการใช้ Ultimatum</translation>
 <translation id="1807246157184219062">สว่าง</translation>
 <translation id="1807709131360304325">เปิดหน้าต่างใหม่</translation>
 <translation id="1810845389119482123">ตั้งค่าการซิงค์เริ่มต้นไม่สำเร็จ</translation>
@@ -197,13 +197,13 @@
 <translation id="1820408774134375111">Bottom Sheet การลงชื่อเข้าใช้</translation>
 <translation id="1823492026305965829">ลงชื่อเข้าใช้ด้วย <ph name="USER_FULL_NAME" /></translation>
 <translation id="1824902652744048041">แตะลบข้อมูลการท่องเว็บ</translation>
-<translation id="1825772852827001597">ที่อยู่และวิธีการชำระเงินจาก Google Pay จะไม่มีการเข้ารหัส ประวัติการท่องเว็บจาก Chrome จะไม่ซิงค์
-เฉพาะผู้ที่มีพาสเฟรสของคุณเท่านั้นที่จะอ่านข้อมูลที่เข้ารหัสได้ Google จะไม่ได้รับหรือจัดเก็บพาสเฟรสดังกล่าว หากลืมพาสเฟรสหรือต้องการเปลี่ยนการตั้งค่านี้ ให้<ph name="BEGIN_LINK" />ลบข้อมูล Chrome ในบัญชี<ph name="END_LINK" /></translation>
+<translation id="1825772852827001597">ที่อยู่และวิธีการชำระเงินจาก Google Pay จะไม่มีการเข้ารหัส ประวัติการท่องเว็บจาก Ultimatum จะไม่ซิงค์
+เฉพาะผู้ที่มีพาสเฟรสของคุณเท่านั้นที่จะอ่านข้อมูลที่เข้ารหัสได้ Google จะไม่ได้รับหรือจัดเก็บพาสเฟรสดังกล่าว หากลืมพาสเฟรสหรือต้องการเปลี่ยนการตั้งค่านี้ ให้<ph name="BEGIN_LINK" />ลบข้อมูล Ultimatum ในบัญชี<ph name="END_LINK" /></translation>
 <translation id="1829244130665387512">ค้นหาในหน้าเว็บ</translation>
 <translation id="1832459821645506983">ได้สิ ตกลง</translation>
-<translation id="1845958458910716240">ให้ Chrome นำสิทธิ์ออกจากเว็บไซต์ที่คุณไม่ได้เข้าชมเมื่อเร็วๆ นี้เพื่อปกป้องข้อมูลของคุณ</translation>
-<translation id="1871098866036088250">เปิดในเบราว์เซอร์ Chrome</translation>
-<translation id="1877026089748256423">Chrome ไม่ใช่เวอร์ชันล่าสุด</translation>
+<translation id="1845958458910716240">ให้ Ultimatum นำสิทธิ์ออกจากเว็บไซต์ที่คุณไม่ได้เข้าชมเมื่อเร็วๆ นี้เพื่อปกป้องข้อมูลของคุณ</translation>
+<translation id="1871098866036088250">เปิดในเบราว์เซอร์ Ultimatum</translation>
+<translation id="1877026089748256423">Ultimatum ไม่ใช่เวอร์ชันล่าสุด</translation>
 <translation id="1877073879466606884">โปรไฟล์ที่คุณลงชื่อเข้าใช้เป็นโปรไฟล์ที่มีการจัดการ ผู้ดูแลระบบสามารถเปลี่ยนแปลงการตั้งค่าโปรไฟล์จากระยะไกล วิเคราะห์ข้อมูลเกี่ยวกับเบราว์เซอร์ผ่านการรายงาน และดำเนินการอื่นๆ ที่จำเป็นได้</translation>
 <translation id="1879904908408734349">Bottom Sheet การลงชื่อเข้าใช้ปิดอยู่</translation>
 <translation id="1883903952484604915">ไฟล์ของฉัน</translation>
@@ -215,7 +215,7 @@
 <translation id="1910950723001426294">ปิดรายการตัวเลือกการแชร์แล้ว</translation>
 <translation id="191726024256261717">ดูสิทธิ์</translation>
 <translation id="1917766536967060661">คุณจะเสียสิทธิ์เข้าถึงกลุ่มแท็บ "<ph name="GROUP_NAME" />" ทันที และ <ph name="BLOCKED_MEMBER_FULL_NAME" /> (<ph name="BLOCKED_MEMBER_EMAIL" />) จะไม่สามารถโต้ตอบกับคุณในบริการของ Google ได้อีกต่อไป</translation>
-<translation id="1919130412786645364">อนุญาตให้ลงชื่อเข้าใช้ Chrome</translation>
+<translation id="1919130412786645364">อนุญาตให้ลงชื่อเข้าใช้ Ultimatum</translation>
 <translation id="1922362554271624559">ภาษาที่แนะนำ</translation>
 <translation id="1924255092154549435">แท็บขยายอยู่</translation>
 <translation id="1925021887439448749">ป้อนที่อยู่เว็บที่กำหนดเอง</translation>
@@ -225,11 +225,11 @@
 <translation id="1944535645109964458">ไม่มีพาสคีย์ที่ใช้งานได้</translation>
 <translation id="1957557050935255529">กำลังโหลด PDF…</translation>
 <translation id="1959679933317802873">กำลังรอเนื้อหา</translation>
-<translation id="1960290143419248813">Android เวอร์ชันนี้ไม่รองรับการอัปเดต Chrome อีกต่อไปแล้ว</translation>
+<translation id="1960290143419248813">Android เวอร์ชันนี้ไม่รองรับการอัปเดต Ultimatum อีกต่อไปแล้ว</translation>
 <translation id="1962061488333185936"><ph name="TAB_TITLE" />, แท็บที่มีเสียงที่เลือกไว้หลายแท็บ</translation>
 <translation id="1963976881984600709">การปกป้องแบบมาตรฐาน</translation>
 <translation id="1966710179511230534">โปรดอัปเดตรายละเอียดการลงชื่อเข้าใช้ของคุณ</translation>
-<translation id="1969037871259811890">การลบข้อมูลการท่องเว็บไม่ได้เป็นการออกจากระบบบัญชี Google หากต้องการออกจากระบบบัญชี Google ให้<ph name="BEGIN_LINK1" />ออกจากระบบ Chrome<ph name="END_LINK1" /></translation>
+<translation id="1969037871259811890">การลบข้อมูลการท่องเว็บไม่ได้เป็นการออกจากระบบบัญชี Google หากต้องการออกจากระบบบัญชี Google ให้<ph name="BEGIN_LINK1" />ออกจากระบบ Ultimatum<ph name="END_LINK1" /></translation>
 <translation id="197288927597451399">เก็บไว้</translation>
 <translation id="1973912524893600642">เก็บข้อมูลไว้</translation>
 <translation id="1974060860693918893">ขั้นสูง</translation>
@@ -242,7 +242,7 @@
 <translation id="2021896219286479412">ส่วนควบคุมเว็บไซต์แบบเต็มหน้าจอ</translation>
 <translation id="2029669011553795746">การเลือกรับการแจ้งเตือนเคล็ดลับเปิดอยู่ครึ่งหน้าจอ</translation>
 <translation id="2038563949887743358">เปิดการขอเว็บไซต์เดสก์ท็อป</translation>
-<translation id="204321170514947529"><ph name="APP_NAME" /> มีข้อมูลอยู่ใน Chrome ด้วย</translation>
+<translation id="204321170514947529"><ph name="APP_NAME" /> มีข้อมูลอยู่ใน Ultimatum ด้วย</translation>
 <translation id="2047378580182589770">แตะค้างไว้เพื่อออกจากโหมดไม่ระบุตัวตน</translation>
 <translation id="2049574241039454490"><ph name="FILE_SIZE_OF_TOTAL" /> <ph name="SEPARATOR" /> <ph name="DESCRIPTION" /></translation>
 <translation id="2051669996101374349">ใช้ HTTPS ทุกครั้งที่ทำได้และรับการแจ้งเตือนก่อนโหลดเว็บไซต์ที่ไม่รองรับ HTTPS คุณเปลี่ยนการตั้งค่านี้ไม่ได้เนื่องจากเปิดใช้การปกป้องขั้นสูงอยู่</translation>
@@ -265,9 +265,9 @@
 <translation id="2138283760993967204">ไอคอนจัดการ</translation>
 <translation id="2138632817776076519"><ph name="TAB_TITLE" />, แท็บการบันทึกเสียงที่เลือก</translation>
 <translation id="2141396931810938595">อิงตามการใช้งานของคุณ</translation>
-<translation id="2145315049852051678">Chrome ดำเนินการตรวจสอบเป็นประจำเพื่อให้มั่นใจว่าเบราว์เซอร์มีการตั้งค่าที่ปลอดภัยที่สุด เราจะแจ้งให้คุณทราบหากมีสิ่งที่ต้องตรวจสอบ</translation>
+<translation id="2145315049852051678">Ultimatum ดำเนินการตรวจสอบเป็นประจำเพื่อให้มั่นใจว่าเบราว์เซอร์มีการตั้งค่าที่ปลอดภัยที่สุด เราจะแจ้งให้คุณทราบหากมีสิ่งที่ต้องตรวจสอบ</translation>
 <translation id="2149973817440762519">แก้ไขบุ๊กมาร์ก</translation>
-<translation id="2163089732491971196">โปรดป้อนพาสเฟรสเพื่อใช้และบันทึกข้อมูล Chrome ในบัญชี Google</translation>
+<translation id="2163089732491971196">โปรดป้อนพาสเฟรสเพื่อใช้และบันทึกข้อมูล Ultimatum ในบัญชี Google</translation>
 <translation id="2166228530126694506">เวอร์ชัน <ph name="VERSION_NUMBER" /></translation>
 <translation id="2172688499998841696">คำอธิบายรูปภาพปิดอยู่</translation>
 <translation id="2172905120685242547">ปิดหน้าต่างใช่ไหม</translation>
@@ -280,7 +280,7 @@
 <translation id="2194856509914051091">สิ่งที่ควรพิจารณา</translation>
 <translation id="2205701497928406883"><ph name="TAB_TITLE" />, แท็บการแชร์ที่ปักหมุด</translation>
 <translation id="22091350895006575">เพิ่มชื่อผู้ใช้</translation>
-<translation id="221494669172414749">การเปิด Chrome โดยไม่ใช้การล็อกโปรไฟล์จะนำรหัสผ่านและวิธีการชำระเงินที่บันทึกไว้ออกจากรถ การใช้การล็อกโปรไฟล์จะช่วยให้ข้อมูลนี้ปลอดภัย</translation>
+<translation id="221494669172414749">การเปิด Ultimatum โดยไม่ใช้การล็อกโปรไฟล์จะนำรหัสผ่านและวิธีการชำระเงินที่บันทึกไว้ออกจากรถ การใช้การล็อกโปรไฟล์จะช่วยให้ข้อมูลนี้ปลอดภัย</translation>
 <translation id="2226826835915474236">ทางลัดที่ไม่ได้ใช้งาน</translation>
 <translation id="2227179592712503583">นำคำแนะนำออก</translation>
 <translation id="2227444325776770048">ดำเนินการต่อในชื่อ <ph name="USER_FULL_NAME" /></translation>
@@ -311,7 +311,7 @@
 <translation id="2332515770639153015">Google Safe Browsing พร้อมการปกป้องที่ดียิ่งขึ้นเปิดอยู่</translation>
 <translation id="233375395665273385">ลบและออกจากระบบ</translation>
 <translation id="2341410551640223969">ติดตั้ง <ph name="WEBAPK_NAME" /> ไม่สำเร็จ</translation>
-<translation id="2349710944427398404">ข้อมูลทั้งหมดที่ Chrome ใช้ รวมถึงบัญชี บุ๊กมาร์ก และการตั้งค่าที่บันทึกไว้</translation>
+<translation id="2349710944427398404">ข้อมูลทั้งหมดที่ Ultimatum ใช้ รวมถึงบัญชี บุ๊กมาร์ก และการตั้งค่าที่บันทึกไว้</translation>
 <translation id="235789365079050412">นโยบายความเป็นส่วนตัวของ Google</translation>
 <translation id="2359808026110333948">ต่อไป</translation>
 <translation id="2362083820973145409">ลงชื่อเข้าใช้ด้วย <ph name="USER_NAME" /> <ph name="USER_EMAIL" /> เปิดการตั้งค่า</translation>
@@ -333,7 +333,7 @@
 <translation id="2427025860753516072">{FILE_COUNT,plural, =1{วิดีโอ มี 1 วิดีโอในรายการ}other{วิดีโอ มี # วิดีโอในรายการ}}</translation>
 <translation id="2433507940547922241">ลักษณะที่ปรากฏ</translation>
 <translation id="2439153523196674349">ตัวอย่าง <ph name="SITE_NAME" /></translation>
-<translation id="2449931042095204989">เมื่อเว็บไซต์หรือแอป Google ขอโหลดลิงก์ล่วงหน้าแบบส่วนตัว Chrome จะเข้ารหัสและโหลดหน้าเว็บล่วงหน้าผ่านเซิร์ฟเวอร์ของ Google โดยไม่มีคุกกี้ การดำเนินการนี้จะซ่อนตัวตนของคุณจากเว็บไซต์ที่โหลดล่วงหน้า</translation>
+<translation id="2449931042095204989">เมื่อเว็บไซต์หรือแอป Google ขอโหลดลิงก์ล่วงหน้าแบบส่วนตัว Ultimatum จะเข้ารหัสและโหลดหน้าเว็บล่วงหน้าผ่านเซิร์ฟเวอร์ของ Google โดยไม่มีคุกกี้ การดำเนินการนี้จะซ่อนตัวตนของคุณจากเว็บไซต์ที่โหลดล่วงหน้า</translation>
 <translation id="2450019289047528273">วิธีการชำระเงินและข้อมูลอื่นๆ จาก Google Wallet</translation>
 <translation id="2450083983707403292">คุณต้องการเริ่มดาวน์โหลด <ph name="FILE_NAME" /> อีกครั้งไหม</translation>
 <translation id="2451607499823206582">การติดตาม</translation>
@@ -342,17 +342,17 @@
 <translation id="2466378451804467735"><ph name="TAB_TITLE" />, แท็บที่ปิดเสียงซึ่งเลือกไว้หลายแท็บ</translation>
 <translation id="2468444275314013497">เบราว์เซอร์ของคุณไม่มีปัญหา</translation>
 <translation id="2471632347767899461">ลองค้นหาในศูนย์ช่วยเหลือ</translation>
-<translation id="2472163211318554013">ลงชื่อเข้าใช้เพื่อรับประโยชน์สูงสุดจาก Chrome</translation>
+<translation id="2472163211318554013">ลงชื่อเข้าใช้เพื่อรับประโยชน์สูงสุดจาก Ultimatum</translation>
 <translation id="247737702124049222">คำอธิบายรูปภาพเปิดอยู่</translation>
 <translation id="2479148705183875116">ไปที่การตั้งค่า</translation>
 <translation id="2482878487686419369">การแจ้งเตือน</translation>
 <translation id="2496180316473517155">ประวัติการท่องเว็บ</translation>
 <translation id="2497852260688568942">ผู้ดูแลระบบปิดใช้การซิงค์</translation>
-<translation id="250020030759455918">คุณจะเห็นสถานะการลงชื่อเข้าใช้ ข้อมูลการท่องเว็บ และข้อมูลเว็บไซต์ของ <ph name="SITE_NAME" /> ใน Chrome</translation>
+<translation id="250020030759455918">คุณจะเห็นสถานะการลงชื่อเข้าใช้ ข้อมูลการท่องเว็บ และข้อมูลเว็บไซต์ของ <ph name="SITE_NAME" /> ใน Ultimatum</translation>
 <translation id="2510106555128151389">กำลังติดตั้ง <ph name="WEBAPK_NAME" />...</translation>
 <translation id="2512234228327349533">ค้นหาตัวเลือกการซื้อ</translation>
 <translation id="2513403576141822879">ดูการตั้งค่าเพิ่มเติมเกี่ยวกับความเป็นส่วนตัว ความปลอดภัย และการรวบรวมข้อมูลได้ที่<ph name="BEGIN_LINK" />การซิงค์และบริการต่างๆ ของ Google<ph name="END_LINK" /></translation>
-<translation id="2515921719039583189">ลบข้อมูล Chrome ออกจากอุปกรณ์นี้ใช่ไหม</translation>
+<translation id="2515921719039583189">ลบข้อมูล Ultimatum ออกจากอุปกรณ์นี้ใช่ไหม</translation>
 <translation id="2517113738956581680">ชีตขนาดเต็ม</translation>
 <translation id="2523184218357549926">ส่ง URL ของหน้าที่คุณเข้าชมไปยัง Google</translation>
 <translation id="2524132927880411790">ไปที่การค้นหาด้วยเสียงของแอป Google</translation>
@@ -374,9 +374,9 @@
 <translation id="2569733278091928697">คุณสามารถจัดการการควบคุมสื่อ เซสชันไม่ระบุตัวตน การดาวน์โหลด และอื่นๆ ได้โดยง่าย</translation>
 <translation id="2571711316400087311">เสนอการส่งหน้าในภาษาอื่นๆ ไปยัง Google แปลภาษา</translation>
 <translation id="2571834852878229351">สร้างของฉันเอง</translation>
-<translation id="2574249610672786438">ลงชื่อเข้าใช้ในอุปกรณ์ทุกเครื่องเพื่อดูแท็บที่เปิดไว้จากอุปกรณ์ที่คุณใช้ Chrome</translation>
+<translation id="2574249610672786438">ลงชื่อเข้าใช้ในอุปกรณ์ทุกเครื่องเพื่อดูแท็บที่เปิดไว้จากอุปกรณ์ที่คุณใช้ Ultimatum</translation>
 <translation id="2577981599306533385"><ph name="MEMBER_FULL_NAME" /> (<ph name="EMAIL" />) จะเสียสิทธิ์เข้าถึงกลุ่มแท็บ "<ph name="GROUP_NAME" />" ทันที และจะไม่สามารถโต้ตอบกับคุณในบริการของ Google ได้อีกต่อไป</translation>
-<translation id="2581165646603367611">การดำเนินการนี้จะล้างคุกกี้ แคช และข้อมูลอื่นๆ ของเว็บไซต์ที่ Chrome คิดว่าไม่สำคัญ</translation>
+<translation id="2581165646603367611">การดำเนินการนี้จะล้างคุกกี้ แคช และข้อมูลอื่นๆ ของเว็บไซต์ที่ Ultimatum คิดว่าไม่สำคัญ</translation>
 <translation id="2587052924345400782">มีเวอร์ชันใหม่กว่าให้ใช้งาน</translation>
 <translation id="2593272815202181319">Monospace</translation>
 <translation id="260403163289591229">กำลังติดตาม</translation>
@@ -415,8 +415,8 @@
 <translation id="2779651927720337254">ล้มเหลว</translation>
 <translation id="2781151931089541271">เหลือ 1 วิ</translation>
 <translation id="2789486458103222910">ตกลง</translation>
-<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Chrome พบรหัสผ่านที่ใช้ซ้ำซึ่งคุณควรเปลี่ยนให้ดีขึ้น}other{Chrome พบรหัสผ่านที่ใช้ซ้ำ # รายการซึ่งคุณควรเปลี่ยนให้ดีขึ้น}}</translation>
-<translation id="2794551654724114396">เปิดการแจ้งเตือนเพื่อรับเคล็ดลับที่เป็นประโยชน์ ซึ่งจะช่วยให้คุณใช้ Chrome ได้อย่างเต็มประสิทธิภาพ</translation>
+<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Ultimatum พบรหัสผ่านที่ใช้ซ้ำซึ่งคุณควรเปลี่ยนให้ดีขึ้น}other{Ultimatum พบรหัสผ่านที่ใช้ซ้ำ # รายการซึ่งคุณควรเปลี่ยนให้ดีขึ้น}}</translation>
+<translation id="2794551654724114396">เปิดการแจ้งเตือนเพื่อรับเคล็ดลับที่เป็นประโยชน์ ซึ่งจะช่วยให้คุณใช้ Ultimatum ได้อย่างเต็มประสิทธิภาพ</translation>
 <translation id="2805210243313393104">รับบุ๊กมาร์กและข้อมูลอื่นๆ ในทุกอุปกรณ์</translation>
 <translation id="2805756323405976993">แอป</translation>
 <translation id="2819849308549746319">เลิกรับการแจ้งเตือนทั้งหมด</translation>
@@ -433,7 +433,7 @@
 <translation id="2842985007712546952">โฟลเดอร์ระดับบนสุด</translation>
 <translation id="2854916915045135148">แตะค้างไว้เพื่อเปลี่ยนไปใช้โหมดไม่ระบุตัวตน</translation>
 <translation id="2860954141821109167">ตรวจสอบว่ามีการเปิดใช้แอปโทรศัพท์ในอุปกรณ์นี้แล้ว</translation>
-<translation id="2861923151411510142">ฟีเจอร์บางอย่างของ Chrome จะใช้ไม่ได้อีกต่อไป</translation>
+<translation id="2861923151411510142">ฟีเจอร์บางอย่างของ Ultimatum จะใช้ไม่ได้อีกต่อไป</translation>
 <translation id="286473047976978798">ใช้ค่ากำหนดลักษณะที่ปรากฏไหม</translation>
 <translation id="2869416538780777323">{OTHER_TAB_COUNT,plural, =1{<ph name="URL" /> และอีก 1 แท็บ}other{<ph name="URL" /> และอีก <ph name="TAB_COUNT_MANY" /> แท็บ}}</translation>
 <translation id="2869430948265924908">หากต้องการปกป้องเนื้อหาที่ละเอียดอ่อนในรถ คุณต้องสร้างการล็อกโปรไฟล์รถยนต์  ซึ่งทำได้โดยใช้ PIN, รหัส หรือรหัสผ่าน</translation>
@@ -441,10 +441,10 @@
 <translation id="2871733351037274014">โหลดหน้าเว็บล่วงหน้า</translation>
 <translation id="2876136027428473467"><ph name="CHILD_NAME" /> อยากให้คุณอนุมัติเว็บไซต์นี้</translation>
 <translation id="2876556152483133018">การค้นหาเว็บไซต์</translation>
-<translation id="2876628302275096482">ดูข้อมูลเพิ่มเติมเกี่ยวกับ<ph name="BEGIN_LINK" />วิธีที่ Chrome ช่วยรักษาข้อมูลของคุณให้เป็นส่วนตัว<ph name="END_LINK" /></translation>
+<translation id="2876628302275096482">ดูข้อมูลเพิ่มเติมเกี่ยวกับ<ph name="BEGIN_LINK" />วิธีที่ Ultimatum ช่วยรักษาข้อมูลของคุณให้เป็นส่วนตัว<ph name="END_LINK" /></translation>
 <translation id="2878607776582720720"><ph name="TAB_TITLE" />, แท็บที่ไม่ระบุตัวตนที่แชร์ซึ่งเลือกไว้หลายแท็บ</translation>
 <translation id="2885355868600171871">ข้ามไปยังแถบที่อยู่</translation>
-<translation id="2888126860611144412">เกี่ยวกับ Chrome</translation>
+<translation id="2888126860611144412">เกี่ยวกับ Ultimatum</translation>
 <translation id="2891154217021530873">หยุดการโหลดหน้า</translation>
 <translation id="2893168226686371498">เบราว์เซอร์เริ่มต้น</translation>
 <translation id="2894821468041866720">ไม่ทำให้เบราว์เซอร์หรืออุปกรณ์ของคุณทำงานช้าลงอย่างเห็นได้ชัด</translation>
@@ -463,14 +463,14 @@
 <translation id="2923908459366352541">ชื่อไม่ถูกต้อง</translation>
 <translation id="2932150158123903946">พื้นที่เก็บข้อมูล Google <ph name="APP_NAME" /></translation>
 <translation id="2932222164150889403">แป้นพิมพ์จะไม่เปลี่ยนแปลง</translation>
-<translation id="2936980480904111527">การแจ้งเตือนของ Chrome ทำให้ทุกอย่างง่ายขึ้น</translation>
+<translation id="2936980480904111527">การแจ้งเตือนของ Ultimatum ทำให้ทุกอย่างง่ายขึ้น</translation>
 <translation id="2940075786175545812">ตัวเลือกในการอนุมัติหรือไม่อนุมัติเว็บไซต์</translation>
 <translation id="2942036813789421260">แท็บแสดงตัวอย่างปิดอยู่</translation>
 <translation id="2951071800649516099">เพิ่มหน้าเว็บลงในเรื่องรออ่านไว้อ่านภายหลัง</translation>
 <translation id="2954586176076923855">ย้ายแถบที่อยู่ไปไว้ด้านบน</translation>
 <translation id="2961208450284224863">{READING_LIST_UNREAD_PAGE_COUNT,plural, =1{ยังไม่อ่าน <ph name="READING_LIST_UNREAD_PAGE_COUNT_ONE" /> หน้า}other{ยังไม่อ่าน <ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> หน้า}}</translation>
 <translation id="2972109037780336501">นําสิทธิ์ออกโดยอัตโนมัติ</translation>
-<translation id="2976550651269220761">ยังไม่ได้บันทึกข้อมูล Chrome ของคุณบางอย่างในบัญชี Google\nโปรดรอสักครู่ก่อนออกจากระบบ หากคุณออกจากระบบตอนนี้ ระบบจะลบข้อมูลนี้</translation>
+<translation id="2976550651269220761">ยังไม่ได้บันทึกข้อมูล Ultimatum ของคุณบางอย่างในบัญชี Google\nโปรดรอสักครู่ก่อนออกจากระบบ หากคุณออกจากระบบตอนนี้ ระบบจะลบข้อมูลนี้</translation>
 <translation id="2977350910003566746">จัดเรียงตามที่เปิดล่าสุด</translation>
 <translation id="297771753501244313">จัดเรียงตามที่เปิดล่าสุด</translation>
 <translation id="2979639724566107830">เปิดในหน้าต่างใหม่</translation>
@@ -493,15 +493,15 @@
 <translation id="3035527385626181784"><ph name="TAB_TITLE" />, แท็บการแชร์ที่เลือก</translation>
 <translation id="3036750288708366620"><ph name="BEGIN_LINK" />ขอความช่วยเหลือ<ph name="END_LINK" /></translation>
 <translation id="3037177537145227281">กำลังติดตามราคา</translation>
-<translation id="3037517125981011456">แสดงข้อความแจ้งให้ลงชื่อเข้าใช้ Chrome</translation>
+<translation id="3037517125981011456">แสดงข้อความแจ้งให้ลงชื่อเข้าใช้ Ultimatum</translation>
 <translation id="3038272154009688107">ดูเว็บไซต์ทั้งหมด</translation>
 <translation id="3057938290530993634">แตะค้างไว้เพื่อปักหมุดเว็บไซต์ที่เข้าชมบ่อยที่สุดเพื่อให้เข้าถึงได้ง่ายในครั้งถัดไป</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{บุ๊กมาร์ก <ph name="BOOKMARKS_COUNT_ONE" /> รายการ}other{บุ๊กมาร์ก <ph name="BOOKMARKS_COUNT_MANY" /> รายการ}}</translation>
-<translation id="3062802207422175757">บทความที่เกี่ยวข้องกับความสนใจของคุณใน Chrome</translation>
+<translation id="3062802207422175757">บทความที่เกี่ยวข้องกับความสนใจของคุณใน Ultimatum</translation>
 <translation id="3066573403916685335">เลื่อนลง</translation>
 <translation id="3067505415088964188">ราคาต่ำ</translation>
 <translation id="3070005020161560471">แปลโดยอัตโนมัติ</translation>
-<translation id="3072980200212375806"><ph name="APP_NAME" /> จะเปิดใน Chrome การดำเนินการต่อหมายความว่า คุณยอมรับ<ph name="BEGIN_LINK1" />ข้อกำหนดในการให้บริการของ Google<ph name="END_LINK1" /> และ<ph name="BEGIN_LINK2" />ข้อกำหนดในการให้บริการเพิ่มเติมของ Google Chrome และ Chrome OS<ph name="END_LINK2" /> <ph name="BEGIN_LINK3" />นโยบายความเป็นส่วนตัว<ph name="END_LINK3" />จะมีผลด้วย</translation>
+<translation id="3072980200212375806"><ph name="APP_NAME" /> จะเปิดใน Ultimatum การดำเนินการต่อหมายความว่า คุณยอมรับ<ph name="BEGIN_LINK1" />ข้อกำหนดในการให้บริการของ Google<ph name="END_LINK1" /> และ<ph name="BEGIN_LINK2" />ข้อกำหนดในการให้บริการเพิ่มเติมของ Ultimatum และ Ultimatum OS<ph name="END_LINK2" /> <ph name="BEGIN_LINK3" />นโยบายความเป็นส่วนตัว<ph name="END_LINK3" />จะมีผลด้วย</translation>
 <translation id="3080525922482950719">คุณบันทึกหน้าเว็บไว้อ่านภายหลังหรืออ่านขณะออฟไลน์ได้</translation>
 <translation id="3087734570205094154">ด้านล่าง</translation>
 <translation id="3091010850649238832">แสดงเนื้อหาในคลิปบอร์ด</translation>
@@ -511,7 +511,7 @@
 <translation id="3123734510202723619">ประกาศ</translation>
 <translation id="3134385238404760368">ไม่มีแท็บล่าสุด</translation>
 <translation id="3135655388926735587">แตะแท็บล่าสุด</translation>
-<translation id="314939179385989105">หน้าแรกของ Chrome</translation>
+<translation id="314939179385989105">หน้าแรกของ Ultimatum</translation>
 <translation id="3158667104057012316">จัดเรียงตามลำดับด้วยตนเอง</translation>
 <translation id="3159335509547415276">ดูข้อมูลเกี่ยวกับบัญชีที่ถูกบล็อก</translation>
 <translation id="3161699713309727585"><ph name="BUTTON_TEXT" /> เปิดในแท็บใหม่</translation>
@@ -531,7 +531,7 @@
 <translation id="3236059992281584593">เหลือ 1 นาที</translation>
 <translation id="3237087289225714896">การโหลดล่วงหน้าแบบมาตรฐาน:</translation>
 <translation id="3244271242291266297">ดด</translation>
-<translation id="3245429137663807393">หากคุณแชร์รายงานการใช้งาน Chrome ด้วย รายงานดังกล่าวจะรวม URL ที่คุณเข้าชม</translation>
+<translation id="3245429137663807393">หากคุณแชร์รายงานการใช้งาน Ultimatum ด้วย รายงานดังกล่าวจะรวม URL ที่คุณเข้าชม</translation>
 <translation id="3250563604907490871">คำอธิบายรูปภาพจะกลับมาแสดงเมื่อคุณเชื่อมต่อ Wi-Fi</translation>
 <translation id="3254409185687681395">บุ๊กมาร์กหน้านี้</translation>
 <translation id="3265093782546847662">ทุกหน้าของ <ph name="DOMAIN" /></translation>
@@ -568,22 +568,22 @@
 <translation id="3435575784518354875">หากต้องการเข้าถึงรหัสผ่านต่อไป ให้ส่งออกรหัสผ่านตอนนี้ อัปเดตบริการ Google Play แล้วนำเข้ากลับไปยังเครื่องมือจัดการรหัสผ่านบน Google <ph name="BEGIN_LINK" />ดูวิธีการโดยละเอียด<ph name="END_LINK" /></translation>
 <translation id="3435738964857648380">ความปลอดภัย</translation>
 <translation id="3435914367318771664">เพิ่มแท็บไปยังกลุ่มใหม่</translation>
-<translation id="3438681572027105609">ลงชื่อเข้าใช้ Chrome เพื่อรับรหัสผ่านและข้อมูลอื่นๆ ในทุกอุปกรณ์</translation>
+<translation id="3438681572027105609">ลงชื่อเข้าใช้ Ultimatum เพื่อรับรหัสผ่านและข้อมูลอื่นๆ ในทุกอุปกรณ์</translation>
 <translation id="3439276997620616816">คุณจะเห็นแท็บล่าสุดที่นี่</translation>
 <translation id="3443221991560634068">โหลดหน้าปัจจุบันอีกครั้ง</translation>
 <translation id="3444179773590444986">ต้องการแชร์ความคิดเห็นเกี่ยวกับธีมมืดสำหรับเว็บไซต์ไหม</translation>
 <translation id="3448874648066942074">สรุปหน้าเว็บด้วย AI</translation>
-<translation id="3452832259067974318">Chrome จะไม่ป้อนรหัสผ่านลงในช่องนี้โดยอัตโนมัติเพื่อปกป้องความเป็นส่วนตัวของคุณ</translation>
+<translation id="3452832259067974318">Ultimatum จะไม่ป้อนรหัสผ่านลงในช่องนี้โดยอัตโนมัติเพื่อปกป้องความเป็นส่วนตัวของคุณ</translation>
 <translation id="3474624961160222204">ดำเนินการต่อในชื่อ <ph name="NAME" /></translation>
 <translation id="3478363558367712427">คุณเลือกเครื่องมือค้นหาได้</translation>
 <translation id="3482805106082349287">ค้นหาโดยใช้แป้นพิมพ์ เสียง โหมดไม่ระบุตัวตน หรือกล้อง</translation>
-<translation id="3487903178221457900">คนอื่นๆ อาจเข้าถึงไฟล์ที่ส่งออกได้ รวมถึงแอปต่างๆ เมื่อส่งออกแล้ว ระบบจะลบรหัสผ่านออกจาก Chrome</translation>
+<translation id="3487903178221457900">คนอื่นๆ อาจเข้าถึงไฟล์ที่ส่งออกได้ รวมถึงแอปต่างๆ เมื่อส่งออกแล้ว ระบบจะลบรหัสผ่านออกจาก Ultimatum</translation>
 <translation id="3488199663160411179">ชื่อ</translation>
 <translation id="3493531032208478708"><ph name="BEGIN_LINK" />ดูข้อมูลเพิ่มเติม<ph name="END_LINK" />เกี่ยวกับเนื้อหาที่แนะนำ</translation>
 <translation id="3499246418971111862">chrome_qrcode_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="350276055892098337">จัดเรียงจากเก่าที่สุด</translation>
 <translation id="3507132249039706973">การปกป้องแบบมาตรฐานเปิดอยู่</translation>
-<translation id="3509330069915219067">ออฟไลน์ Chrome ตรวจหาอัปเดตไม่ได้</translation>
+<translation id="3509330069915219067">ออฟไลน์ Ultimatum ตรวจหาอัปเดตไม่ได้</translation>
 <translation id="3513019849832307207">เข้าร่วมและเปิด</translation>
 <translation id="3513704683820682405">เทคโนโลยีความจริงเสริม (AR)</translation>
 <translation id="3516053221628030540">ไปที่ Google Play</translation>
@@ -615,10 +615,10 @@
 <translation id="3623240789707551553">{DOMAIN_COUNT,plural, =1{และอีก 1 เว็บไซต์}other{และอีก # เว็บไซต์}}</translation>
 <translation id="3625870480639975468">รีเซ็ตการซูม</translation>
 <translation id="3631987586758005671">กำลังแชร์กับ <ph name="DEVICE_NAME" /></translation>
-<translation id="3635073343384702370">Chrome จะตรวจสอบรหัสผ่านได้เมื่อคุณบันทึกรหัสผ่านไว้</translation>
+<translation id="3635073343384702370">Ultimatum จะตรวจสอบรหัสผ่านได้เมื่อคุณบันทึกรหัสผ่านไว้</translation>
 <translation id="3636940436873918441">ภาษาที่ต้องการ</translation>
-<translation id="3637744895182738742">หากลืมพาสเฟรสหรือต้องการเปลี่ยนการตั้งค่านี้ ให้<ph name="BEGIN_LINK" />ลบข้อมูล Chrome ในบัญชี<ph name="END_LINK" /></translation>
-<translation id="3641581193271938629">การเลือกรับ Chrome Finds ปิดอยู่</translation>
+<translation id="3637744895182738742">หากลืมพาสเฟรสหรือต้องการเปลี่ยนการตั้งค่านี้ ให้<ph name="BEGIN_LINK" />ลบข้อมูล Ultimatum ในบัญชี<ph name="END_LINK" /></translation>
+<translation id="3641581193271938629">การเลือกรับ Ultimatum Finds ปิดอยู่</translation>
 <translation id="3647019414263135904">เปิดหรือปิดป๊อปอัปตามบริบท</translation>
 <translation id="3653111872753786013"><ph name="WEBSITE_TITLE" />: <ph name="WEBSITE_URL" /></translation>
 <translation id="3674208116086565128">ไปที่หน้าแรกของแอป Google</translation>
@@ -636,7 +636,7 @@
 <translation id="3710501561113687889">หากต้องการดำเนินการต่อ <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> จะแชร์<ph name="FIELDS_STRING" />ของคุณกับเว็บไซต์นี้</translation>
 <translation id="3710560693796335511">การทำงานร่วมกัน</translation>
 <translation id="3714430408451673233">Bottom Sheet ของแท็บแบบครึ่งหน้า</translation>
-<translation id="3718765429352682176">คุณอาจเห็นประวัติการเข้าชมจากแอปอื่นๆ ที่เปิดลิงก์ใน Chrome</translation>
+<translation id="3718765429352682176">คุณอาจเห็นประวัติการเข้าชมจากแอปอื่นๆ ที่เปิดลิงก์ใน Ultimatum</translation>
 <translation id="3721119614952978349">คุณและ Google</translation>
 <translation id="3727000368239390918">ลงชื่อเข้าใช้เพื่อรับแท็บและอื่นๆ ในอุปกรณ์ทุกเครื่อง</translation>
 <translation id="3737319253362202215">การตั้งค่าการแปล</translation>
@@ -690,8 +690,8 @@
 <translation id="3943322906274039960"><ph name="TAB_TITLE" /> แท็บในโหมดการแสดงภาพซ้อนภาพที่ปักหมุดไว้</translation>
 <translation id="3950820424414687140">ลงชื่อเข้าใช้</translation>
 <translation id="395377504920307820">ใช้โดยไม่มีบัญชี</translation>
-<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Chrome จะโหลดหน้าเว็บเมื่อพร้อม}other{Chrome จะโหลดหน้าเว็บเมื่อพร้อม}}</translation>
-<translation id="3969142555815019568">Chrome ตรวจสอบรหัสผ่านของคุณไม่ได้</translation>
+<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Ultimatum จะโหลดหน้าเว็บเมื่อพร้อม}other{Ultimatum จะโหลดหน้าเว็บเมื่อพร้อม}}</translation>
+<translation id="3969142555815019568">Ultimatum ตรวจสอบรหัสผ่านของคุณไม่ได้</translation>
 <translation id="3969863827134279083">เลื่อนขึ้น</translation>
 <translation id="397105322502079400">กำลังคำนวณ...</translation>
 <translation id="397583555483684758">การซิงค์หยุดทำงานแล้ว</translation>
@@ -702,10 +702,10 @@
 <translation id="3987993985790029246">คัดลอกลิงก์</translation>
 <translation id="3994236846568425219">เปิดธีมมืดเมื่อธีมมืดของอุปกรณ์เปิดอยู่</translation>
 <translation id="4000212216660919741">หน้าแรกออฟไลน์</translation>
-<translation id="4000670338830950598">ปรับแต่งและควบคุม Google Chrome ด้วยรายการที่ไฮไลต์</translation>
+<translation id="4000670338830950598">ปรับแต่งและควบคุม Ultimatum ด้วยรายการที่ไฮไลต์</translation>
 <translation id="4015643064997321279">{NUM_PASSWORDS,plural, =1{มีรหัสผ่านที่ถูกละเมิด 1 รายการในบัญชี Google}other{มีรหัสผ่านที่ถูกละเมิด # รายการในบัญชี Google}}</translation>
 <translation id="4016425174436051808">ติดตามไม่ได้ เกิดข้อผิดพลาด</translation>
-<translation id="4023638601467301498">ลงชื่อเข้าใช้ Chrome เพื่อเข้าถึงบุ๊กมาร์กและข้อมูลอื่นๆ ในอุปกรณ์ทุกเครื่อง</translation>
+<translation id="4023638601467301498">ลงชื่อเข้าใช้ Ultimatum เพื่อเข้าถึงบุ๊กมาร์กและข้อมูลอื่นๆ ในอุปกรณ์ทุกเครื่อง</translation>
 <translation id="4024768890073681126">ผู้ปกครองของคุณเป็นผู้จัดการเบราว์เซอร์</translation>
 <translation id="4027569221211770437">โฟลเดอร์ <ph name="FOLDER_TITLE" /></translation>
 <translation id="4034817413553209278">{HOURS,plural, =1{# ชม.}other{# ชม.}}</translation>
@@ -745,13 +745,13 @@
 <translation id="4180726336228139707">เฉพาะในอุปกรณ์นี้</translation>
 <translation id="4181841719683918333">ภาษา</translation>
 <translation id="4188221736490993796">จัดเรียงจาก ฮ ถึง ก</translation>
-<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{Chrome หยุดไม่ให้เว็บไซต์นี้ส่งการแจ้งเตือนเนื่องจากมีเนื้อหาสแปมหรือเนื้อหาหลอกลวง}other{Chrome หยุดไม่ให้เว็บไซต์เหล่านี้ส่งการแจ้งเตือนเนื่องจากมีเนื้อหาสแปมหรือเนื้อหาหลอกลวง}}</translation>
+<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{Ultimatum หยุดไม่ให้เว็บไซต์นี้ส่งการแจ้งเตือนเนื่องจากมีเนื้อหาสแปมหรือเนื้อหาหลอกลวง}other{Ultimatum หยุดไม่ให้เว็บไซต์เหล่านี้ส่งการแจ้งเตือนเนื่องจากมีเนื้อหาสแปมหรือเนื้อหาหลอกลวง}}</translation>
 <translation id="4195643157523330669">เปิดในแท็บใหม่</translation>
 <translation id="4197828496439691735">{NUM_TABS,plural, =1{1 แท็บในอุปกรณ์นี้}other{# แท็บในอุปกรณ์นี้}}</translation>
 <translation id="4198268995694216131">เว็บไซต์เพิ่มเติม</translation>
 <translation id="4198423547019359126">ไม่มีตำแหน่งการดาวน์โหลดที่ใช้ได้</translation>
 <translation id="4209029522667123437"><ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> • คุณใช้ในเว็บไซต์นี้</translation>
-<translation id="4214315110991671325">Chrome อาจใช้คุกกี้เพื่อโหลดล่วงหน้าหากคุณอนุญาต</translation>
+<translation id="4214315110991671325">Ultimatum อาจใช้คุกกี้เพื่อโหลดล่วงหน้าหากคุณอนุญาต</translation>
 <translation id="421517251707893998">แตะปักหมุดทางลัดนี้</translation>
 <translation id="4216511743389425832">ฟังหน้านี้</translation>
 <translation id="4217657297368492684"><ph name="TAB_TITLE" /> แท็บในโหมดการแสดงภาพซ้อนภาพแบบไม่ระบุตัวตนที่ปักหมุดและเลือกไว้</translation>
@@ -759,7 +759,7 @@
 <translation id="4225895483398857530">ทางลัดแถบเครื่องมือ</translation>
 <translation id="4232376164796433044">รหัสผ่านและป้อนข้อความอัตโนมัติ</translation>
 <translation id="4242533952199664413">เปิดการตั้งค่า</translation>
-<translation id="424864128008805179">ต้องการออกจากระบบ Chrome ไหม</translation>
+<translation id="424864128008805179">ต้องการออกจากระบบ Ultimatum ไหม</translation>
 <translation id="4249955472157341256">จัดเรียงตามล่าสุด</translation>
 <translation id="4255841059940367080">การปกป้องที่ทำงานด้วยระบบ AI แบบเรียลไทม์ช่วยปกป้องคุณจากเว็บไซต์ การดาวน์โหลด และส่วนขยายที่เป็นอันตราย ซึ่งอิงตามข้อมูลการท่องเว็บของคุณที่ส่งไปยัง Google</translation>
 <translation id="4256782883801055595">ใบอนุญาตโอเพนซอร์ส</translation>
@@ -768,7 +768,7 @@
 <translation id="4270730597186910506">ติดตามหรือเลิกติดตามผลิตภัณฑ์</translation>
 <translation id="4277529130885813215">ใช้อุปกรณ์อื่น</translation>
 <translation id="427987768447457592">กลุ่มแท็บใหม่</translation>
-<translation id="4282440837784183472">องค์กร <ph name="MANAGED_DOMAIN" /> ของคุณจะเป็นผู้จัดการบัญชีที่คุณลงชื่อเข้าใช้และวิธีใช้ Chrome ผู้ดูแลระบบจะตั้งค่าหรือจำกัดฟีเจอร์บางอย่างได้</translation>
+<translation id="4282440837784183472">องค์กร <ph name="MANAGED_DOMAIN" /> ของคุณจะเป็นผู้จัดการบัญชีที่คุณลงชื่อเข้าใช้และวิธีใช้ Ultimatum ผู้ดูแลระบบจะตั้งค่าหรือจำกัดฟีเจอร์บางอย่างได้</translation>
 <translation id="4283234489712362947"><ph name="TAB_TITLE" /> แท็บในโหมดการแสดงภาพซ้อนภาพแบบไม่ระบุตัวตน</translation>
 <translation id="4285498937028063278">เลิกปักหมุด</translation>
 <translation id="4285846616383034558">คุกกี้ แคช และข้อมูลเว็บไซต์อื่นๆ</translation>
@@ -784,10 +784,10 @@
 <translation id="4311652497846705514">เปิด PDF ไหม</translation>
 <translation id="4313895677475587452">{NUM_SUSPICIOUS_NOTIFICATIONS,plural, =1{อาจเป็นสแปม}other{อาจเป็นสแปม (#)}}</translation>
 <translation id="4320177379694898372">ไม่มีการเชื่อมต่ออินเทอร์เน็ต</translation>
-<translation id="4326079409704643112">โปรดยืนยันว่าเป็นคุณเพื่อใช้และบันทึกข้อมูล Chrome ในบัญชี Google</translation>
+<translation id="4326079409704643112">โปรดยืนยันว่าเป็นคุณเพื่อใช้และบันทึกข้อมูล Ultimatum ในบัญชี Google</translation>
 <translation id="433213510553688132">กำลังติดตาม...</translation>
 <translation id="4335835283689002019">Google Safe Browsing ปิดอยู่</translation>
-<translation id="4343250402091037179">หากต้องการค้นหาเว็บไซต์ใดโดยเฉพาะหรือบางส่วนของ Chrome ให้พิมพ์ทางลัดของเว็บไซต์นั้นหรือส่วนนั้นในแถบที่อยู่ แล้วตามด้วยแป้นพิมพ์ลัดที่ต้องการ</translation>
+<translation id="4343250402091037179">หากต้องการค้นหาเว็บไซต์ใดโดยเฉพาะหรือบางส่วนของ Ultimatum ให้พิมพ์ทางลัดของเว็บไซต์นั้นหรือส่วนนั้นในแถบที่อยู่ แล้วตามด้วยแป้นพิมพ์ลัดที่ต้องการ</translation>
 <translation id="4351244548802238354">ปิดข้อความโต้ตอบ</translation>
 <translation id="4352287748243729941">ใช้รหัสผ่าน <ph name="PROVIDER" /> ของคุณหรือไม่</translation>
 <translation id="4355272626458588338">คุณกลับไปยังหน้าที่สำคัญสำหรับคุณได้ด้วยการเพิ่มบุ๊กมาร์ก</translation>
@@ -800,7 +800,7 @@
 <translation id="4384468725000734951">กำลังใช้ Sogou ในการค้นหา</translation>
 <translation id="4387647248986092471">สร้างการล็อกโปรไฟล์รถยนต์</translation>
 <translation id="4387817230000841154">เปิดการดาวน์โหลด</translation>
-<translation id="4395046795145457714">การเลือกรับ Chrome Finds เปิดอยู่ที่ระดับความสูงเต็มหน้าจอ</translation>
+<translation id="4395046795145457714">การเลือกรับ Ultimatum Finds เปิดอยู่ที่ระดับความสูงเต็มหน้าจอ</translation>
 <translation id="4398561997852463382"><ph name="TAB_TITLE" />, แท็บการบันทึกเสียงที่ไม่ระบุตัวตนที่ปักหมุดซึ่งเลือกไว้</translation>
 <translation id="4402611456429872546"><ph name="LANG" /> - กำลังดาวน์โหลด…</translation>
 <translation id="4404568932422911380">ไม่มีบุ๊กมาร์ก</translation>
@@ -822,16 +822,16 @@
 <translation id="4460822871039013969"><ph name="TAB_TITLE" />, แท็บการบันทึกเสียงที่ปักหมุดซึ่งเลือกไว้</translation>
 <translation id="4460861538906892109">{ITEMS_COUNT,plural, =1{บุ๊กมาร์ก 1 รายการ}other{บุ๊กมาร์ก # รายการ}}</translation>
 <translation id="4478161224666880173">คุณใช้บัญชี <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> ในเว็บไซต์นี้ได้ หากต้องการดำเนินการต่อ โปรดลงชื่อเข้าใช้ <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
-<translation id="4479972344484327217">กำลังติดตั้ง <ph name="MODULE" /> สำหรับ Chrome…</translation>
+<translation id="4479972344484327217">กำลังติดตั้ง <ph name="MODULE" /> สำหรับ Ultimatum…</translation>
 <translation id="4484496141267039529">ไม่มีการเชื่อมต่อ ลองอีกครั้งในภายหลัง</translation>
-<translation id="4487967297491345095">ระบบจะลบข้อมูลแอปทั้งหมดของ Chrome อย่างถาวร ซึ่งรวมถึงไฟล์ทั้งหมด การตั้งค่า บัญชี ฐานข้อมูล และอื่นๆ</translation>
+<translation id="4487967297491345095">ระบบจะลบข้อมูลแอปทั้งหมดของ Ultimatum อย่างถาวร ซึ่งรวมถึงไฟล์ทั้งหมด การตั้งค่า บัญชี ฐานข้อมูล และอื่นๆ</translation>
 <translation id="4494315997125191493">เลือกจัดการเพื่อดูหน้าต่างทั้งหมด</translation>
 <translation id="4494806687727322324">ผู้ดูแลระบบของคุณเปิดการบันทึกรหัสผ่าน</translation>
 <translation id="4508528996305412043">เมนูของการ์ดฟีดเปิดอยู่</translation>
 <translation id="4509741852167209430">ระบบจะแชร์เฉพาะข้อมูลบางประเภทระหว่างเว็บไซต์เพื่อวัดประสิทธิภาพของโฆษณา เช่น คุณซื้อสินค้าหลังจากเข้าชมเว็บไซต์หรือไม่</translation>
 <translation id="4513387527876475750">{DAYS,plural, =1{# วันที่ผ่านมา}other{# วันที่ผ่านมา}}</translation>
 <translation id="451872707440238414">ค้นหาบุ๊กมาร์ก</translation>
-<translation id="4521489764227272523">ระบบได้นำข้อมูลที่เลือกออกจาก Chrome และอุปกรณ์ที่ซิงค์แล้ว
+<translation id="4521489764227272523">ระบบได้นำข้อมูลที่เลือกออกจาก Ultimatum และอุปกรณ์ที่ซิงค์แล้ว
 
 บัญชี Google ของคุณอาจมีประวัติการท่องเว็บในรูปแบบอื่นๆ เช่น การค้นหาและกิจกรรมจากบริการอื่นๆ ของ Google ที่ <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /></translation>
 <translation id="4523326818319942067">ชั่วโมงที่ผ่านมา</translation>
@@ -853,10 +853,10 @@
 <translation id="4595276580892809760">แนบรูปภาพจากแกลเลอรี</translation>
 <translation id="4595805675102978678">ข้อผิดพลาดของบัญชี Google</translation>
 <translation id="4601095002996233687">การสแกนเชิงลึกสำหรับการดาวน์โหลดที่น่าสงสัย</translation>
-<translation id="4606559747793337066">เมื่อเว็บไซต์หรือแอปขอโหลดลิงก์ล่วงหน้าแบบส่วนตัว Chrome จะเข้ารหัสและโหลดหน้าเว็บล่วงหน้าผ่านเซิร์ฟเวอร์ของ Google โดยไม่มีคุกกี้ การดำเนินการนี้จะซ่อนตัวตนของคุณจากเว็บไซต์ที่โหลดล่วงหน้า</translation>
+<translation id="4606559747793337066">เมื่อเว็บไซต์หรือแอปขอโหลดลิงก์ล่วงหน้าแบบส่วนตัว Ultimatum จะเข้ารหัสและโหลดหน้าเว็บล่วงหน้าผ่านเซิร์ฟเวอร์ของ Google โดยไม่มีคุกกี้ การดำเนินการนี้จะซ่อนตัวตนของคุณจากเว็บไซต์ที่โหลดล่วงหน้า</translation>
 <translation id="4616150815774728855">เปิด <ph name="WEBAPK_NAME" /></translation>
 <translation id="4619564267100705184">ยืนยันว่าเป็นคุณ</translation>
-<translation id="4624065194742029982">โหมดไม่ระบุตัวตนของ Chrome</translation>
+<translation id="4624065194742029982">โหมดไม่ระบุตัวตนของ Ultimatum</translation>
 <translation id="4634124774493850572">ใช้รหัสผ่าน</translation>
 <translation id="463471994228293091">{PASSWORDS_COUNT,plural, =1{ระบบบันทึกรหัสผ่าน 1 รายการและรายการอื่นๆ ไว้ในอุปกรณ์นี้เท่านั้น หากต้องการใช้งานในอุปกรณ์อื่น ให้บันทึกไว้ในบัญชี Google}other{ระบบบันทึกรหัสผ่าน # รายการและรายการอื่นๆ ไว้ในอุปกรณ์นี้เท่านั้น หากต้องการใช้งานในอุปกรณ์อื่น ให้บันทึกไว้ในบัญชี Google}}</translation>
 <translation id="4640331037679501949">{NUM_PASSWORDS,plural, =1{มีรหัสผ่านที่ถูกละเมิด 1 รายการ}other{มีรหัสผ่านที่ถูกละเมิด # รายการ}}</translation>
@@ -871,7 +871,7 @@
 <translation id="4668347365065281350">ข้อมูลทั้งหมดที่เว็บไซต์จัดเก็บไว้ ซึ่งรวมถึงคุกกี้และข้อมูลอื่นๆ ที่จัดเก็บไว้ในเครื่อง</translation>
 <translation id="4673702426794876519">หน้าต่างที่ไม่ระบุตัวตน</translation>
 <translation id="4675298276894277358">เว็บไซต์นี้จะไม่แสดงอีก</translation>
-<translation id="4678082183394354975">ธีมมืดสำหรับเว็บไซต์เปิดอยู่ใน Chrome</translation>
+<translation id="4678082183394354975">ธีมมืดสำหรับเว็บไซต์เปิดอยู่ใน Ultimatum</translation>
 <translation id="4682306524980568490">แสดงได้เพียง <ph name="MAX_INSTANCE_COUNT" /> หน้าต่างเท่านั้น</translation>
 <translation id="4684427112815847243">ซิงค์ทุกอย่าง</translation>
 <translation id="4685741273709472646">เลือกจากรายการแบบเลื่อนลง</translation>
@@ -893,7 +893,7 @@
 <translation id="4738836084190194332">ซิงค์ครั้งล่าสุด: <ph name="WHEN" /></translation>
 <translation id="474121291218385686">กรองตามแอป</translation>
 <translation id="4741753828624614066">คุณจะได้รับคำแนะนำที่ดีขึ้นในแถบที่อยู่</translation>
-<translation id="4742795653798179840">ลบข้อมูลใน Chrome แล้ว</translation>
+<translation id="4742795653798179840">ลบข้อมูลใน Ultimatum แล้ว</translation>
 <translation id="4742970037960872810">นำไฮไลต์ออก</translation>
 <translation id="4749960740855309258">เปิดแท็บใหม่</translation>
 <translation id="4753600213727157212">ลงชื่อเข้าใช้ด้วย <ph name="USER_NAME" /> <ph name="USER_EMAIL" /> ข้อผิดพลาดของบัญชี Google เปิดการตั้งค่า</translation>
@@ -911,21 +911,21 @@
 <translation id="4782929588435725897"><ph name="SEARCH_ENGINE" /> เป็นเครื่องมือค้นหาเริ่มต้นของคุณ</translation>
 <translation id="4784349455504343791"><ph name="WEBSITE_ORIGIN" /> ต้องการใช้ข้อมูลส่วนบุคคลจากกระเป๋าเงินดิจิทัล</translation>
 <translation id="4787736314074622408">คุณต้องการลบ <ph name="ITEM_TITLE" /> ใช่ไหม</translation>
-<translation id="4793679854893018356">ดูวิธีที่ Chrome ช่วยให้คุณปลอดภัย</translation>
+<translation id="4793679854893018356">ดูวิธีที่ Ultimatum ช่วยให้คุณปลอดภัย</translation>
 <translation id="4794291718671962615">(<ph name="MEGABYTES" />) <ph name="URL" /></translation>
 <translation id="4807098396393229769">ชื่อบนบัตร</translation>
 <translation id="480990236307250886">เปิดหน้าแรก</translation>
 <translation id="4822710610088666676">ปิดและบันทึกกลุ่มแท็บ "<ph name="TAB_GROUP_TITLE" />" แล้ว</translation>
 <translation id="482405935591409882">ค้นหาแท็บและกลุ่ม</translation>
 <translation id="4834250788637067901">วิธีการชำระเงิน ข้อเสนอ และที่อยู่จาก Google Pay</translation>
-<translation id="4835385943915508971">Chrome ไม่มีสิทธิ์เข้าถึงทรัพยากรที่ขอ</translation>
+<translation id="4835385943915508971">Ultimatum ไม่มีสิทธิ์เข้าถึงทรัพยากรที่ขอ</translation>
 <translation id="483742037940503070">{TAB_COUNT,plural, =1{คืนค่ากลุ่มแท็บ <ph name="TAB_COUNT_ONE" /> แท็บ สี<ph name="COLOR_NAME" />เป็นกลุ่มแท็บใหม่ในเบื้องหลัง}other{คืนค่ากลุ่มแท็บ <ph name="TAB_COUNT_MANY" /> แท็บ สี<ph name="COLOR_NAME" />เป็นกลุ่มแท็บใหม่ในเบื้องหลัง}}</translation>
 <translation id="4849731766219625109">ใช้บัญชี <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> ของคุณ</translation>
 <translation id="4850886885716139402">ดู</translation>
 <translation id="4852014461738377247">กำลังลงชื่อเข้าใช้\u2026</translation>
 <translation id="4860895144060829044">โทร</translation>
 <translation id="4864369630010738180">กำลังลงชื่อเข้าใช้...</translation>
-<translation id="4866368707455379617">ติดตั้ง <ph name="MODULE" /> สำหรับ Chrome ไม่ได้</translation>
+<translation id="4866368707455379617">ติดตั้ง <ph name="MODULE" /> สำหรับ Ultimatum ไม่ได้</translation>
 <translation id="4871568871368204250">ปิดการซิงค์</translation>
 <translation id="487567923005969537">เปิดใช้โหมด AI</translation>
 <translation id="4875775213178255010">การแนะนำเนื้อหา</translation>
@@ -934,27 +934,27 @@
 <translation id="4880127995492972015">แปลภาษา…</translation>
 <translation id="4881695831933465202">เปิด</translation>
 <translation id="488187801263602086">เปลี่ยนชื่อไฟล์</translation>
-<translation id="4885273946141277891">อินสแตนซ์ของ Chrome เกินจำนวนที่สนับสนุน</translation>
+<translation id="4885273946141277891">อินสแตนซ์ของ Ultimatum เกินจำนวนที่สนับสนุน</translation>
 <translation id="4890973535105146893">ไม่มีรหัสผ่านที่บันทึกไว้ในบัญชี Google</translation>
 <translation id="4905823827770127520">ใส่ลิงก์ลงในหน้า</translation>
 <translation id="4908869848243824489">ฟีเจอร์สำรวจโดย Google</translation>
 <translation id="4910889077668685004">แอปชำระเงิน</translation>
 <translation id="4911042367886397055">ยินดีต้อนรับกลับมา คุณ <ph name="USER_NAME" /></translation>
 <translation id="4913169188695071480">หยุดรีเฟรช</translation>
-<translation id="4921224083091001889">ลงชื่อเข้าใช้ Chrome เพื่อรับรหัสผ่านและข้อมูลอื่นๆ ในทุกอุปกรณ์ด้วย <ph name="EMAIL" /></translation>
+<translation id="4921224083091001889">ลงชื่อเข้าใช้ Ultimatum เพื่อรับรหัสผ่านและข้อมูลอื่นๆ ในทุกอุปกรณ์ด้วย <ph name="EMAIL" /></translation>
 <translation id="4923173329789776645">องค์กรของคุณไม่แนะนำให้ดาวน์โหลด</translation>
 <translation id="4925120120285606924">ภาพหน้าจอ <ph name="CURRENT_DATE_ISO" /></translation>
 <translation id="4926901776383726965">คุณบันทึกรูปภาพและไฟล์เพื่อดูแบบออฟไลน์หรือแชร์ในแอปอื่นๆ ได้</translation>
 <translation id="492699891214363151">{BOOKMARKS_COUNT,plural, =1{ระบบบันทึกบุ๊กมาร์ก 1 รายการและรายการอื่นๆ ไว้ในอุปกรณ์นี้เท่านั้น หากต้องการใช้งานในอุปกรณ์อื่น ให้บันทึกไว้ในบัญชี Google}other{ระบบบันทึกบุ๊กมาร์ก # รายการและรายการอื่นๆ ไว้ในอุปกรณ์นี้เท่านั้น หากต้องการใช้งานในอุปกรณ์อื่น ให้บันทึกไว้ในบัญชี Google}}</translation>
-<translation id="4932247056774066048">เนื่องจากคุณกำลังจะออกจากระบบบัญชีที่จัดการโดย <ph name="DOMAIN_NAME" /> ข้อมูลใน Chrome จะถูกลบออกจากอุปกรณ์นี้ แต่จะยังคงอยู่ในบัญชี Google</translation>
+<translation id="4932247056774066048">เนื่องจากคุณกำลังจะออกจากระบบบัญชีที่จัดการโดย <ph name="DOMAIN_NAME" /> ข้อมูลใน Ultimatum จะถูกลบออกจากอุปกรณ์นี้ แต่จะยังคงอยู่ในบัญชี Google</translation>
 <translation id="4943703118917034429">เทคโนโลยีความจริงเสมือน (VR)</translation>
 <translation id="4943872375798546930">ไม่มีผลการค้นหา</translation>
 <translation id="4957722034734105353">ดูข้อมูลเพิ่มเติม...</translation>
 <translation id="4959115606310463263">Bottom Sheet การลงชื่อเข้าใช้เปิดแบบครึ่งหน้า</translation>
 <translation id="4961107849584082341">แปลหน้านี้เป็นภาษาใดก็ได้</translation>
-<translation id="4964614743143953889">Chrome จะเตือนคุณเกี่ยวกับเว็บไซต์และการดาวน์โหลดที่ไม่ปลอดภัย</translation>
+<translation id="4964614743143953889">Ultimatum จะเตือนคุณเกี่ยวกับเว็บไซต์และการดาวน์โหลดที่ไม่ปลอดภัย</translation>
 <translation id="496607651705915226">หากต้องการบันทึกและใช้รหัสผ่านใหม่ในบัญชี Google โปรดอัปเดตบริการ Google Play</translation>
-<translation id="4971753085054504448">ลองค้นหาอย่างอื่นหรือเปิดประวัติการเข้าชมใน Chrome แบบเต็มเพื่อดูผลการค้นหาเพิ่มเติม</translation>
+<translation id="4971753085054504448">ลองค้นหาอย่างอื่นหรือเปิดประวัติการเข้าชมใน Ultimatum แบบเต็มเพื่อดูผลการค้นหาเพิ่มเติม</translation>
 <translation id="497421865427891073">ไปข้างหน้า</translation>
 <translation id="497983151715419057">ตรวจสอบแท็บและกลุ่มที่ไม่ได้ใช้งานที่นี่</translation>
 <translation id="498624032394115435">ทุกคนที่มีลิงก์จะแก้ไขแท็บทั้งหมดได้</translation>
@@ -981,7 +981,7 @@
 <translation id="506254248375231072">ไม่มีแท็บ</translation>
 <translation id="5075939510584558547">บันทึกโดยไม่เข้ารหัส</translation>
 <translation id="5078638979202084724">บุ๊กมาร์กแท็บทั้งหมด</translation>
-<translation id="5085038751173179818">ลงชื่อเข้าใช้เว็บไซต์นี้และ Chrome เพื่อรับบุ๊กมาร์กและอื่นๆ ในอุปกรณ์ทุกเครื่อง</translation>
+<translation id="5085038751173179818">ลงชื่อเข้าใช้เว็บไซต์นี้และ Ultimatum เพื่อรับบุ๊กมาร์กและอื่นๆ ในอุปกรณ์ทุกเครื่อง</translation>
 <translation id="5088347662971855383">ปักหมุด Gemini</translation>
 <translation id="5091199029769593641">เร็วๆ นี้คุณจะเห็นเรื่องราวจาก <ph name="SITE_NAME" /> เมื่อเปิดแท็บใหม่ ระบบจะบันทึกเว็บไซต์ที่คุณติดตามไว้ในบัญชี Google โดยคุณจัดการเว็บไซต์เหล่านี้ได้ในการตั้งค่าของฟีเจอร์สำรวจ</translation>
 <translation id="509429900233858213">มีข้อผิดพลาดเกิดขึ้น</translation>
@@ -989,7 +989,7 @@
 <translation id="510275257476243843">เหลือ 1 ชั่วโมง</translation>
 <translation id="5114895953710637392">ชีตตัวกรองแอปปิดอยู่</translation>
 <translation id="5115811374190515607">ไปยัง<ph name="PRODUCT_NAME" /></translation>
-<translation id="5116239826668864748">คุณจะใช้ Chrome ได้ทุกครั้งที่แตะลิงก์ในข้อความ เอกสาร และแอปอื่นๆ</translation>
+<translation id="5116239826668864748">คุณจะใช้ Ultimatum ได้ทุกครั้งที่แตะลิงก์ในข้อความ เอกสาร และแอปอื่นๆ</translation>
 <translation id="5118713593561876160">ความสนใจ</translation>
 <translation id="5122378528687922675">โปรดขอความช่วยเหลือจากผู้ปกครอง (<ph name="PARENT_NAME_1" /> หรือ <ph name="PARENT_NAME_2" />) หากต้องการ</translation>
 <translation id="5123685120097942451">แท็บที่ไม่ระบุตัวตน</translation>
@@ -1012,11 +1012,11 @@
 <translation id="5206168361184759344">{FILE_COUNT,plural, =1{กำลังดาวน์โหลดไฟล์…}other{กำลังดาวน์โหลด # ไฟล์…}}</translation>
 <translation id="5210286577605176222">ข้ามไปยังแท็บก่อนหน้า</translation>
 <translation id="5210365745912300556">ปิดแท็บ</translation>
-<translation id="5212800876504289412">รีสตาร์ท Chrome เพื่อทำการเปลี่ยนแปลงนี้ให้เสร็จ แท็บจะเปิดขึ้นอีกครั้งโดยอัตโนมัติเมื่อคุณรีสตาร์ท</translation>
+<translation id="5212800876504289412">รีสตาร์ท Ultimatum เพื่อทำการเปลี่ยนแปลงนี้ให้เสร็จ แท็บจะเปิดขึ้นอีกครั้งโดยอัตโนมัติเมื่อคุณรีสตาร์ท</translation>
 <translation id="5213114823401215820">เปิดกลุ่มที่ปิดไปแล้วอีกครั้ง</translation>
 <translation id="5215957675041756913">ควบคุมข้อมูลและบัญชีของคุณ</translation>
 <translation id="5218324087477576825">ต้องระบุหมายเลขบัตร</translation>
-<translation id="5221437554987713282"><ph name="PERMISSION_1" /> <ph name="PERMISSION_2" /> และอื่นๆ <ph name="SEPARATOR" /> Chrome นำสิทธิ์เหล่านี้ออกเนื่องจากคุณไม่ได้เข้าชมเมื่อเร็วๆ นี้</translation>
+<translation id="5221437554987713282"><ph name="PERMISSION_1" /> <ph name="PERMISSION_2" /> และอื่นๆ <ph name="SEPARATOR" /> Ultimatum นำสิทธิ์เหล่านี้ออกเนื่องจากคุณไม่ได้เข้าชมเมื่อเร็วๆ นี้</translation>
 <translation id="5222676887888702881">ออกจากระบบ</translation>
 <translation id="5226378907213531272">คุณจะต้องปลดล็อกหน้าจอทุกครั้งที่ใช้รถ</translation>
 <translation id="5227554086496586518">แตะเพื่อดูผลการค้นหา</translation>
@@ -1036,7 +1036,7 @@
 <translation id="5313967007315987356">เพิ่มเว็บไซต์</translation>
 <translation id="5316947901395241499">ผู้ดูแลระบบของคุณปิดการบันทึกรหัสผ่าน</translation>
 <translation id="5317780077021120954">บันทึก</translation>
-<translation id="5319359161174645648">Google ขอแนะนำ Chrome</translation>
+<translation id="5319359161174645648">Google ขอแนะนำ Ultimatum</translation>
 <translation id="5326246328175179736">คุณลงชื่อเข้าใช้ด้วยบัญชีนี้ไม่ได้</translation>
 <translation id="5327248766486351172">ชื่อ</translation>
 <translation id="5328542107300944283">ใช้ด้วย <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
@@ -1049,7 +1049,7 @@
 <translation id="5375374982898812658">คุณจะเสียสิทธิ์เข้าถึงกลุ่มแท็บ "<ph name="GROUP_NAME" />" ทันที และระบบจะลบกลุ่มออกจากอุปกรณ์ของคุณทุกเครื่อง</translation>
 <translation id="5375577065097716013">ค้นหาภาพด้วย Google Lens <ph name="BEGIN_NEW" />ใหม่<ph name="END_NEW" /></translation>
 <translation id="5390367025924544771"><ph name="WEBSITE_ORIGIN" /> ต้องการใช้ข้อมูลส่วนบุคคลจากกระเป๋าเงินดิจิทัล ดำเนินการต่อในกรณีที่คุณเชื่อถือเว็บไซต์นี้เท่านั้น เว็บไซต์อันตรายอาจหลอกล่อให้คุณเปิดเผยข้อมูล เช่น ชื่อตามกฎหมายหรือหมายเลขบัตรประจำตัว</translation>
-<translation id="5395376160638294582">ตรวจสอบว่าคุณใช้ข้อมูล Chrome ในบัญชี Google ได้เสมอ</translation>
+<translation id="5395376160638294582">ตรวจสอบว่าคุณใช้ข้อมูล Ultimatum ในบัญชี Google ได้เสมอ</translation>
 <translation id="539881862970320163">แนะนำรหัสผ่านที่รัดกุมแล้ว แป้นพิมพ์ซ่อนอยู่</translation>
 <translation id="5409881200985013443">ส่ง <ph name="ONE_TIME_CODE" /> ใน <ph name="CLIENT_NAME" /> ไหม</translation>
 <translation id="5410300144953132176"><ph name="OWNER_FULL_NAME" /> (<ph name="OWNER_EMAIL" />) ต้องการให้คุณเข้าร่วมกลุ่มแท็บ ทุกคนที่มีลิงก์จะแก้ไขแท็บทั้งหมดได้ ดังนั้นโปรดเข้าร่วมอย่างระมัดระวัง ลิงก์จะหมดอายุใน 48 ชม.</translation>
@@ -1061,7 +1061,7 @@
 <translation id="543271133149552180"><ph name="TAB_TITLE" /> แท็บในโหมดการแสดงภาพซ้อนภาพแบบไม่ระบุตัวตนที่เลือกไว้หลายแท็บ</translation>
 <translation id="5436928407363358055">ซิงค์ประวัติการเข้าชมและแท็บเพื่อให้ดำเนินการต่อจากที่ค้างไว้ได้ง่าย</translation>
 <translation id="5438292632479953702">ดาวน์โหลดอีกครั้ง</translation>
-<translation id="5439191312780166229">เตือนคุณเกี่ยวกับเว็บไซต์ที่เป็นอันตราย แม้แต่เว็บไซต์ที่ Google ไม่เคยรู้จักมาก่อนด้วยการวิเคราะห์ข้อมูลจากเว็บไซต์มากกว่าการปกป้องแบบมาตรฐาน คุณเลือกข้ามคำเตือนของ Chrome ได้</translation>
+<translation id="5439191312780166229">เตือนคุณเกี่ยวกับเว็บไซต์ที่เป็นอันตราย แม้แต่เว็บไซต์ที่ Google ไม่เคยรู้จักมาก่อนด้วยการวิเคราะห์ข้อมูลจากเว็บไซต์มากกว่าการปกป้องแบบมาตรฐาน คุณเลือกข้ามคำเตือนของ Ultimatum ได้</translation>
 <translation id="5441137934526263133">หากเว็บไซต์ไม่ทำงาน แสดงว่ามีการบล็อกคุกกี้ของบุคคลที่สาม</translation>
 <translation id="5441466871879044658">แปลเป็นภาษานี้</translation>
 <translation id="5444999712122199445">กลับไปที่เว็บไซต์</translation>
@@ -1072,7 +1072,7 @@
 <translation id="5469852975082458401">คุณไปยังส่วนต่างๆ ของหน้าได้ด้วยเคอร์เซอร์ข้อความ กด F7 เพื่อปิด</translation>
 <translation id="5471273988133666918">ย้ายแท็บ <ph name="TAB_TITLE" /> ไม่ได้</translation>
 <translation id="548278423535722844">เปิดในแอปแผนที่</translation>
-<translation id="5489222148748465285">ให้ Chrome ค้นหาต่อไหม</translation>
+<translation id="5489222148748465285">ให้ Ultimatum ค้นหาต่อไหม</translation>
 <translation id="5490848366863949315"><ph name="TAB_TITLE" /> แท็บในโหมดการแสดงภาพซ้อนภาพที่เลือกไว้หลายแท็บ</translation>
 <translation id="5494920125229734069">เลือกทั้งหมด</translation>
 <translation id="549660026907543296">เข้าร่วมในชื่อ <ph name="MEMBER_FULL_NAME" /></translation>
@@ -1080,7 +1080,7 @@
 <translation id="5526281268548144413">ปิดในหลายหน้าต่างไม่ได้</translation>
 <translation id="5532536403031755365">เพิ่มการป้องกันภัยคุกคามทางออนไลน์อีกชั้นด้วยการปกป้องที่ดียิ่งขึ้น</translation>
 <translation id="5548606607480005320">การตรวจสอบความปลอดภัย</translation>
-<translation id="5554520618550346933">เมื่อใช้รหัสผ่าน Chrome จะเตือนคุณหากมีการเผยแพร่รหัสผ่านออนไลน์ เราเข้ารหัสชื่อผู้ใช้และรหัสผ่านเมื่อทำการตรวจสอบเพื่อไม่ให้ผู้ใดอ่านข้อมูลดังกล่าวได้ รวมถึง Google</translation>
+<translation id="5554520618550346933">เมื่อใช้รหัสผ่าน Ultimatum จะเตือนคุณหากมีการเผยแพร่รหัสผ่านออนไลน์ เราเข้ารหัสชื่อผู้ใช้และรหัสผ่านเมื่อทำการตรวจสอบเพื่อไม่ให้ผู้ใดอ่านข้อมูลดังกล่าวได้ รวมถึง Google</translation>
 <translation id="5555525474779371165">เลือกระดับการปกป้องด้วย Google Safe Browsing</translation>
 <translation id="5556459405103347317">โหลดใหม่</translation>
 <translation id="555671485580955310">ซิงค์ประวัติการเข้าชมและแท็บ</translation>
@@ -1093,10 +1093,10 @@
 <translation id="5578795271662203820">ค้นหาภาพนี้ใน <ph name="SEARCH_ENGINE" /></translation>
 <translation id="5596627076506792578">ตัวเลือกเพิ่มเติม</translation>
 <translation id="5599455543593328020">โหมดไม่ระบุตัวตน</translation>
-<translation id="5601180634394228718">หากต้องการการตั้งค่าเพิ่มเติมที่ใช้ข้อมูลเพื่อปรับปรุงประสบการณ์การใช้งาน Chrome ให้ไปที่<ph name="BEGIN_LINK" />บริการของ Google<ph name="END_LINK" /></translation>
+<translation id="5601180634394228718">หากต้องการการตั้งค่าเพิ่มเติมที่ใช้ข้อมูลเพื่อปรับปรุงประสบการณ์การใช้งาน Ultimatum ให้ไปที่<ph name="BEGIN_LINK" />บริการของ Google<ph name="END_LINK" /></translation>
 <translation id="5601924940067278327">รับแท็บและข้อมูลอื่นๆ ในอุปกรณ์ทุกเครื่อง</translation>
 <translation id="5611398002774823980">บันทึกในบัญชี</translation>
-<translation id="5613381935190035031">ลงชื่อเข้าใช้ Chrome ด้วย <ph name="EMAIL" /> เพื่อเข้าถึงแท็บและข้อมูลอื่นๆ ในอุปกรณ์ทุกเครื่อง</translation>
+<translation id="5613381935190035031">ลงชื่อเข้าใช้ Ultimatum ด้วย <ph name="EMAIL" /> เพื่อเข้าถึงแท็บและข้อมูลอื่นๆ ในอุปกรณ์ทุกเครื่อง</translation>
 <translation id="5614625640221885312">ลงชื่อเข้าใช้เพื่อรับบุ๊กมาร์ก รหัสผ่าน และอื่นๆ ในอุปกรณ์ทุกเครื่อง</translation>
 <translation id="5619633276517849615">องค์กรเปิด Google Safe Browsing ไว้</translation>
 <translation id="5620163320393916465">ไม่มีรหัสผ่านที่บันทึกไว้</translation>
@@ -1112,21 +1112,21 @@
 <translation id="5657871969392618475">ข้อมูลของคุณได้รับการปกป้องด้วยการล็อกโปรไฟล์</translation>
 <translation id="5659593005791499971">อีเมล</translation>
 <translation id="5665379678064389456">สร้างกิจกรรมใน <ph name="APP_NAME" /></translation>
-<translation id="5683547024293500885">Chrome ตรวจหาอัปเดตไม่ได้</translation>
+<translation id="5683547024293500885">Ultimatum ตรวจหาอัปเดตไม่ได้</translation>
 <translation id="5683916195767086779">กลุ่มแท็บ</translation>
 <translation id="5686790454216892815">ชื่อไฟล์ยาวเกินไป</translation>
 <translation id="569536719314091526">แปลหน้านี้เป็นภาษาใดก็ได้จากปุ่มตัวเลือกเพิ่มเติม</translation>
-<translation id="5696597120588531049">Chrome ช่วยให้คุณปลอดภัยจากการละเมิดข้อมูล เว็บไซต์ที่ไม่ปลอดภัย และอื่นๆ ได้</translation>
+<translation id="5696597120588531049">Ultimatum ช่วยให้คุณปลอดภัยจากการละเมิดข้อมูล เว็บไซต์ที่ไม่ปลอดภัย และอื่นๆ ได้</translation>
 <translation id="5698878456427040674">ตรวจสอบว่าระบบรองรับบัญชีที่เลือกหรือไม่</translation>
 <translation id="5709213329446699338"><ph name="SITE" /> ต้องการเชื่อมต่อกับพอร์ตอนุกรม</translation>
 <translation id="5715150588940290235">ลบรหัสความปลอดภัยที่บันทึกไว้ใช่ไหม</translation>
-<translation id="571930967925877633">บุ๊กมาร์ก ประวัติการเข้าชม และข้อมูลอื่นๆ ใน Chrome จะไม่ซิงค์กับบัญชี Google อีกต่อไป</translation>
+<translation id="571930967925877633">บุ๊กมาร์ก ประวัติการเข้าชม และข้อมูลอื่นๆ ใน Ultimatum จะไม่ซิงค์กับบัญชี Google อีกต่อไป</translation>
 <translation id="572328651809341494">แท็บล่าสุด</translation>
 <translation id="5728072125198221967">บริการของ Google ที่ลิงก์ไว้</translation>
 <translation id="5734658507307260911"><ph name="TAB_TITLE" />, แท็บที่ไม่ระบุตัวตนที่ปักหมุดซึ่งมีเสียง</translation>
 <translation id="5744751019568455640">นี่คือเสียงที่คุณเลือกใช้ในการอ่านหน้าเว็บได้ หากชอบเสียงนี้และต้องการใช้ต่อ ก็เพียงแตะที่ชื่อของเสียง</translation>
 <translation id="574845902699630049">แชร์ในชื่อ <ph name="OWNER_FULL_NAME" /></translation>
-<translation id="5749068826913805084">Chrome ต้องมีสิทธิ์เข้าถึงพื้นที่เก็บข้อมูลเพื่อดาวน์โหลดไฟล์</translation>
+<translation id="5749068826913805084">Ultimatum ต้องมีสิทธิ์เข้าถึงพื้นที่เก็บข้อมูลเพื่อดาวน์โหลดไฟล์</translation>
 <translation id="5749237766298580851">ปิด <ph name="SEPARATOR" /> ไม่แนะนำ</translation>
 <translation id="5752232708629533680">แชร์ GIF เท่านั้น</translation>
 <translation id="5753570386948603678">ลบจากประวัติ</translation>
@@ -1145,14 +1145,14 @@
 <translation id="5811144606237321538"><ph name="TAB_TITLE" />, แท็บที่ปักหมุดซึ่งเลือกไว้หลายแท็บและปิดเสียงอยู่</translation>
 <translation id="5814749351757353073">ติดตามเว็บไซต์ที่คุณชื่นชอบ</translation>
 <translation id="5823093032261493462">คุณต้องการดาวน์โหลด "<ph name="FILE_NAME" />" จาก <ph name="DOWNLOAD_DOMAIN" /> ต่อไปไหม</translation>
-<translation id="5825135637446025843">หลังจากรีสตาร์ท Chrome ระบบจะใช้ข้อมูลที่บันทึกไว้จากผู้ให้บริการรายใหม่เพื่อป้อนรหัสผ่าน พาสคีย์ ที่อยู่ วิธีการชำระเงิน และข้อมูลอื่นๆ โดยอัตโนมัติ</translation>
-<translation id="5828921839638612740">คุณลบข้อมูลได้ในการตั้งค่า Chrome</translation>
+<translation id="5825135637446025843">หลังจากรีสตาร์ท Ultimatum ระบบจะใช้ข้อมูลที่บันทึกไว้จากผู้ให้บริการรายใหม่เพื่อป้อนรหัสผ่าน พาสคีย์ ที่อยู่ วิธีการชำระเงิน และข้อมูลอื่นๆ โดยอัตโนมัติ</translation>
+<translation id="5828921839638612740">คุณลบข้อมูลได้ในการตั้งค่า Ultimatum</translation>
 <translation id="5829586821381540080">บันทึกใน "<ph name="FOLDER_NAME" />" แล้ว</translation>
 <translation id="583281660410589416">ไม่รู้จัก</translation>
 <translation id="5833984609253377421">แชร์ลิงก์</translation>
-<translation id="5839058148541733625">ไดโนเสาร์ Chrome</translation>
+<translation id="5839058148541733625">ไดโนเสาร์ Ultimatum</translation>
 <translation id="5841444063256914865">คุณต้องการดาวน์โหลด "<ph name="FILE_NAME" />" ต่อไปไหม</translation>
-<translation id="5847265694842662173">Chrome หยุดเว็บไซต์ที่ละเมิดและไม่ได้ใช้งานไม่ให้ส่งการแจ้งเตือน</translation>
+<translation id="5847265694842662173">Ultimatum หยุดเว็บไซต์ที่ละเมิดและไม่ได้ใช้งานไม่ให้ส่งการแจ้งเตือน</translation>
 <translation id="5848257610304005265">เปิด PDF ด้วย "<ph name="APP_NAME" />" ใช่ไหม</translation>
 <translation id="5849288995120328556">หยุดการแชร์ใช่ไหม</translation>
 <translation id="5853623416121554550">หยุดชั่วคราว</translation>
@@ -1166,8 +1166,8 @@
 <translation id="5865733239029070421">ส่งสถิติการใช้งานและรายงานข้อขัดข้องให้กับ Google โดยอัตโนมัติ</translation>
 <translation id="5869522115854928033">รหัสผ่านที่บันทึกไว้</translation>
 <translation id="5870416898561279542">แท็บและกลุ่มที่ซ้ำกันหรือไม่ได้ใช้งานเป็นเวลา <ph name="DAYS_INACTIVE" /> วันจะย้ายมาที่นี่<ph name="AUTODELETE_SECTION" /> คุณเปลี่ยนตัวเลือกนี้ได้ทุกเมื่อใน<ph name="DECLUTTER_SETTINGS_TITLE" /></translation>
-<translation id="587735546353481577">หากต้องการติดตามเว็บไซต์ ให้ไปที่เว็บไซต์นั้น เปิดเมนู Chrome แล้วแตะ "ติดตาม"</translation>
-<translation id="5885378508678660271">การแจ้งเตือน <ph name="SEPARATOR" /> Chrome นำสิทธิ์เหล่านี้ออกเนื่องจากเว็บไซต์นี้อันตราย</translation>
+<translation id="587735546353481577">หากต้องการติดตามเว็บไซต์ ให้ไปที่เว็บไซต์นั้น เปิดเมนู Ultimatum แล้วแตะ "ติดตาม"</translation>
+<translation id="5885378508678660271">การแจ้งเตือน <ph name="SEPARATOR" /> Ultimatum นำสิทธิ์เหล่านี้ออกเนื่องจากเว็บไซต์นี้อันตราย</translation>
 <translation id="5899667542927581604">ไม่ได้ปิดชีตพาสคีย์ใดๆ</translation>
 <translation id="5907542076239273525">บันทึกบุ๊กมาร์กไปยัง <ph name="FOLDER_NAME" /> แล้ว</translation>
 <translation id="5911301511366365629"><ph name="TAB_TITLE" />, แท็บที่ไม่ระบุตัวตนที่เลือกซึ่งมีเสียง</translation>
@@ -1178,23 +1178,23 @@
 <translation id="5942872142862698679">กำลังใช้ Google ในการค้นหา</translation>
 <translation id="5945035219773565305">คำแนะนำปัจจุบัน: <ph name="RECOMMENDATION" /></translation>
 <translation id="5951119116059277034">กำลังดูหน้าเว็บที่เผยแพร่</translation>
-<translation id="5956665950594638604">เปิดศูนย์ช่วยเหลือของ Chrome ในแท็บใหม่</translation>
+<translation id="5956665950594638604">เปิดศูนย์ช่วยเหลือของ Ultimatum ในแท็บใหม่</translation>
 <translation id="59577092665511740">เลือกบัญชี</translation>
 <translation id="5958275228015807058">หาไฟล์และหน้าในโฟลเดอร์ดาวน์โหลด</translation>
-<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{Chrome หยุดไม่ให้เว็บไซต์ที่คุณไม่ได้เข้าชมเมื่อเร็วๆ นี้ส่งการแจ้งเตือนถึงคุณ}other{Chrome หยุดไม่ให้เว็บไซต์ที่คุณไม่ได้เข้าชมเมื่อเร็วๆ นี้ส่งการแจ้งเตือนถึงคุณ}}</translation>
+<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{Ultimatum หยุดไม่ให้เว็บไซต์ที่คุณไม่ได้เข้าชมเมื่อเร็วๆ นี้ส่งการแจ้งเตือนถึงคุณ}other{Ultimatum หยุดไม่ให้เว็บไซต์ที่คุณไม่ได้เข้าชมเมื่อเร็วๆ นี้ส่งการแจ้งเตือนถึงคุณ}}</translation>
 <translation id="5962718611393537961">แตะเพื่อยุบ</translation>
 <translation id="5964869237734432770">หยุดรับคำอธิบายรูปภาพ</translation>
 <translation id="5972844218283131174">ยกเลิกการเลือกทั้งหมด</translation>
 <translation id="5975083100439434680">ย่อ</translation>
 <translation id="5977976211062815271">ในอุปกรณ์นี้</translation>
 <translation id="5978661847409534366">{ITEMS_COUNT,plural, =1{1 หน้าในเรื่องรออ่านของคุณ}other{# หน้าในเรื่องรออ่านของคุณ}}</translation>
-<translation id="5992182727984874868"><ph name="PERMISSION_1" /> <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Chrome นำสิทธิ์เหล่านี้ออกเนื่องจากคุณไม่ได้เข้าชมเมื่อเร็วๆ นี้</translation>
+<translation id="5992182727984874868"><ph name="PERMISSION_1" /> <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Ultimatum นำสิทธิ์เหล่านี้ออกเนื่องจากคุณไม่ได้เข้าชมเมื่อเร็วๆ นี้</translation>
 <translation id="5995726099713306770">ดาวน์โหลดหน้าเว็บอีกครั้งใช่ไหม</translation>
 <translation id="6000066717592683814">ใช้ Google ต่อ</translation>
 <translation id="6000203700195075278">ติดตามอีกครั้ง</translation>
 <translation id="6011308810877101166">ปรับปรุงการแนะนำการค้นหา</translation>
 <translation id="6013305291643746595">จัดเรียงตามรายการที่เก่าที่สุด</translation>
-<translation id="6022659036123304283">ปรับเปลี่ยน Chrome ในแบบของคุณ</translation>
+<translation id="6022659036123304283">ปรับเปลี่ยน Ultimatum ในแบบของคุณ</translation>
 <translation id="6026538407078977628">ขยายเต็มหน้าจอ</translation>
 <translation id="6030719887161080597">จัดการข้อมูลที่เว็บไซต์ต่างๆ ใช้เพื่อวัดประสิทธิภาพโฆษณา</translation>
 <translation id="6039379616847168523">ข้ามไปยังแท็บถัดไป</translation>
@@ -1223,7 +1223,7 @@
 <translation id="6125864963080902918"><ph name="BEGIN_LINK" />รายละเอียดเพิ่มเติม<ph name="END_LINK" /></translation>
 <translation id="6127860394906721547">เปิดกลุ่มแท็บ <ph name="TITLE_OF_GROUP" /> สี<ph name="COLOR_NAME" /> ที่มีเว็บไซต์ <ph name="URL_LIST" /></translation>
 <translation id="6130303040046284160">ย่อแท็บ</translation>
-<translation id="6132075343662013154">Chrome จะเสนอให้บันทึกรหัสผ่าน</translation>
+<translation id="6132075343662013154">Ultimatum จะเสนอให้บันทึกรหัสผ่าน</translation>
 <translation id="6134168885321518274">เปิดแถบค้นหา</translation>
 <translation id="6135608400322377268">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> แท็บ}other{<ph name="TAB_COUNT_MANY" /> แท็บ}}</translation>
 <translation id="6137022273846704445">ภาษาของ <ph name="APP_NAME" /></translation>
@@ -1234,10 +1234,10 @@
 <translation id="6146563240635539929">วิดีโอ</translation>
 <translation id="614890671148262506">อนุญาตการแจ้งเตือนจากเว็บไซต์นี้เสมอ</translation>
 <translation id="6150320133806434356">บันทึกบุ๊กมาร์กแล้ว</translation>
-<translation id="6150706324143004339">โปรดอัปเดต Chrome เพื่อใช้และบันทึกข้อมูล Chrome ในบัญชี Google</translation>
+<translation id="6150706324143004339">โปรดอัปเดต Ultimatum เพื่อใช้และบันทึกข้อมูล Ultimatum ในบัญชี Google</translation>
 <translation id="6154478581116148741">เปิดล็อกหน้าจอใน "การตั้งค่า" เพื่อส่งออกรหัสผ่านจากอุปกรณ์นี้</translation>
 <translation id="6156323911414505561">แสดงแถบบุ๊กมาร์ก</translation>
-<translation id="6162892189396105610">โหลดหน้าที่ Chrome คิดว่าคุณอาจจะเข้าชมไว้ล่วงหน้า</translation>
+<translation id="6162892189396105610">โหลดหน้าที่ Ultimatum คิดว่าคุณอาจจะเข้าชมไว้ล่วงหน้า</translation>
 <translation id="6165508094623778733">ดูข้อมูลเพิ่มเติม</translation>
 <translation id="6170675927290506430">ไปที่การตั้งค่าการแจ้งเตือน</translation>
 <translation id="6184972259157699660"><ph name="TAB_TITLE" />, แท็บที่ไม่ระบุตัวตนที่ปิดเสียง</translation>
@@ -1246,7 +1246,7 @@
 <translation id="6193448654517602979">เลือกแท็บ</translation>
 <translation id="6196315980958524839">รหัสผ่านจะบันทึกอยู่ในเครื่องมือจัดการรหัสผ่านบน Google ในอุปกรณ์นี้</translation>
 <translation id="6202812185118613467">ลงชื่อเข้าใช้อีกครั้งเพื่อเริ่มซิงค์</translation>
-<translation id="6204781143409202534">Chrome ตรวจพบสิ่งที่อาจเป็นสแปมจาก <ph name="DOMAIN" /></translation>
+<translation id="6204781143409202534">Ultimatum ตรวจพบสิ่งที่อาจเป็นสแปมจาก <ph name="DOMAIN" /></translation>
 <translation id="6205314730813004066">ความเป็นส่วนตัวเกี่ยวกับโฆษณา</translation>
 <translation id="6210282067670792090">ในแถบที่อยู่ ให้ใช้แป้นพิมพ์ลัดนี้พร้อมด้วยทางลัดสำหรับเครื่องมือค้นหาและ Site Search</translation>
 <translation id="6210748933810148297"><ph name="EMAIL" /> ไม่ใช่บัญชีที่ฉันจะใช้</translation>
@@ -1260,12 +1260,12 @@
 <translation id="6247557882553405851">เครื่องมือจัดการรหัสผ่านบน Google</translation>
 <translation id="6248988683584659830">ค้นหาการตั้งค่า</translation>
 <translation id="6250847299079540062"><ph name="TAB_TITLE" />, แท็บที่ไม่ระบุตัวตนที่ปักหมุดซึ่งเลือกไว้หลายแท็บ</translation>
-<translation id="6251449557817521191">ดูประวัติการเข้าชมใน Chrome ที่นี่</translation>
+<translation id="6251449557817521191">ดูประวัติการเข้าชมใน Ultimatum ที่นี่</translation>
 <translation id="6254139308321626268">คุณกำลังดูไฟล์ PDF</translation>
-<translation id="6255809143828972562">เครื่องมือจาก Chrome ช่วยให้คุณท่องเว็บได้อย่างปลอดภัยและควบคุมได้ตามต้องการ</translation>
+<translation id="6255809143828972562">เครื่องมือจาก Ultimatum ช่วยให้คุณท่องเว็บได้อย่างปลอดภัยและควบคุมได้ตามต้องการ</translation>
 <translation id="6264376385120300461">ดาวน์โหลดต่อไป</translation>
 <translation id="6264485186158353794">กลับสู่ความปลอดภัย</translation>
-<translation id="6267106249090587268">การแจ้งเตือน <ph name="SEPARATOR" /> Chrome นำสิทธิ์เหล่านี้ออกเนื่องจากมีเนื้อหาสแปมหรือเนื้อหาหลอกลวง</translation>
+<translation id="6267106249090587268">การแจ้งเตือน <ph name="SEPARATOR" /> Ultimatum นำสิทธิ์เหล่านี้ออกเนื่องจากมีเนื้อหาสแปมหรือเนื้อหาหลอกลวง</translation>
 <translation id="6276708887952587684">ดูซอร์สโค้ดของหน้าเว็บ</translation>
 <translation id="6277522088822131679">เกิดปัญหาในการพิมพ์หน้านี้ โปรดลองอีกครั้ง</translation>
 <translation id="6278428485366576908">ธีม</translation>
@@ -1281,7 +1281,7 @@
 <translation id="6312687380483398334">เว็บแอป (ไม่ส่งเสียงหรือแสดงให้เห็น)</translation>
 <translation id="6315386555979018699">ลบและดำเนินการต่อ</translation>
 <translation id="6316139424528454185">ไม่รองรับ Android เวอร์ชันนี้</translation>
-<translation id="631839948975905034">ล็อกหน้าต่างที่ไม่ระบุตัวตนเมื่อออกจาก Chrome</translation>
+<translation id="631839948975905034">ล็อกหน้าต่างที่ไม่ระบุตัวตนเมื่อออกจาก Ultimatum</translation>
 <translation id="6324916366299863871">แก้ไขทางลัด</translation>
 <translation id="6324977638108296054">สร้างลิงก์ไปยังไฮไลต์ไม่ได้</translation>
 <translation id="6333140779060797560">แชร์ผ่าน <ph name="APPLICATION" /></translation>
@@ -1297,13 +1297,13 @@
 <translation id="6356893102071098867">ตรวจสอบว่าเลือกบัญชีที่ถูกต้อง</translation>
 <translation id="6363990818884053551">หากต้องการเริ่มต้นการซิงค์ โปรดยืนยันว่าเป็นคุณ</translation>
 <translation id="6364438453358674297">ต้องการนำคำแนะนำออกจากประวัติการเข้าชมใช่ไหม</translation>
-<translation id="6380100320871303656">โหลดหน้าที่ Chrome คิดว่าคุณอาจจะเข้าชมไว้ล่วงหน้าบ่อยขึ้น การตั้งค่านี้อาจทำให้ใช้อินเทอร์เน็ตมากขึ้น</translation>
+<translation id="6380100320871303656">โหลดหน้าที่ Ultimatum คิดว่าคุณอาจจะเข้าชมไว้ล่วงหน้าบ่อยขึ้น การตั้งค่านี้อาจทำให้ใช้อินเทอร์เน็ตมากขึ้น</translation>
 <translation id="6382848304055775421">กำลังส่งออก</translation>
 <translation id="6388152137132427505">โปรดแชร์อย่างรอบคอบเสมอ ลิงก์จะหมดอายุใน 48 ชั่วโมง</translation>
 <translation id="6394791151443660613">ค้นหา: <ph name="SEARCH_QUERY" /></translation>
 <translation id="6397616442223433927">กลับมาออนไลน์แล้ว</translation>
 <translation id="6399363707848566877">ตอนนี้คุณสามารถเพิ่มแท็บไปยังกลุ่มได้อย่างง่ายดายที่นี่</translation>
-<translation id="6401458660421980302">หากต้องการส่งแท็บนี้ไปยังอุปกรณ์อื่น ให้ลงชื่อเข้าใช้ Chrome ในอุปกรณ์นั้น</translation>
+<translation id="6401458660421980302">หากต้องการส่งแท็บนี้ไปยังอุปกรณ์อื่น ให้ลงชื่อเข้าใช้ Ultimatum ในอุปกรณ์นั้น</translation>
 <translation id="6404511346730675251">แก้ไขบุ๊กมาร์ก</translation>
 <translation id="6406506848690869874">การซิงค์ข้อมูล</translation>
 <translation id="6408370409308816490"><ph name="TAB_TITLE" />, แท็บการแชร์ที่ไม่ระบุตัวตนและปักหมุดซึ่งเลือกไว้</translation>
@@ -1323,24 +1323,24 @@
 <translation id="6452534462676960500">กิจกรรมใหม่</translation>
 <translation id="6459045781120991510">แบบสำรวจ</translation>
 <translation id="6461962085415701688">เปิดไฟล์ไม่ได้</translation>
-<translation id="6464977750820128603">คุณดูเว็บไซต์ที่เข้าชมใน Chrome และตั้งตัวจับเวลาการใช้เว็บไซต์เหล่านั้นได้\n\nGoogle จะได้รับข้อมูลเกี่ยวกับเว็บไซต์ที่คุณตั้งตัวจับเวลาไว้และระยะเวลาที่คุณเข้าชมเว็บไซต์เหล่านั้น เราจะใช้ข้อมูลนี้เพื่อปรับปรุงไลฟ์สไตล์ดิจิทัลให้ดียิ่งขึ้น</translation>
+<translation id="6464977750820128603">คุณดูเว็บไซต์ที่เข้าชมใน Ultimatum และตั้งตัวจับเวลาการใช้เว็บไซต์เหล่านั้นได้\n\nGoogle จะได้รับข้อมูลเกี่ยวกับเว็บไซต์ที่คุณตั้งตัวจับเวลาไว้และระยะเวลาที่คุณเข้าชมเว็บไซต์เหล่านั้น เราจะใช้ข้อมูลนี้เพื่อปรับปรุงไลฟ์สไตล์ดิจิทัลให้ดียิ่งขึ้น</translation>
 <translation id="6468703991511753953">ปัจจุบันแถบที่อยู่อยู่ด้านล่าง</translation>
-<translation id="6470181189905173055">หน้าเว็บที่คุณเปิดใน Chrome ระหว่างใช้ <ph name="APP_LABEL" /> จะปรากฏขึ้นที่นี่</translation>
+<translation id="6470181189905173055">หน้าเว็บที่คุณเปิดใน Ultimatum ระหว่างใช้ <ph name="APP_LABEL" /> จะปรากฏขึ้นที่นี่</translation>
 <translation id="6473086018775716761">เปิดรายการตัวเลือกการแชร์ที่ระดับความสูงครึ่งหนึ่งของหน้าจอ</translation>
 <translation id="6475951671322991020">ดาวน์โหลดวิดีโอ</translation>
 <translation id="6477928892249167417">ดูเหมือนว่าเว็บไซต์ต่อไปนี้จะสำคัญกับคุณ</translation>
-<translation id="6479881432656947268">ไปที่ Chrome เว็บสโตร์</translation>
-<translation id="6481963882741794338">ลิงก์ Chrome กับบริการอื่นๆ ของ Google เพื่อการปรับเปลี่ยนในแบบของคุณและวัตถุประสงค์อื่นๆ</translation>
+<translation id="6479881432656947268">ไปที่ Ultimatum เว็บสโตร์</translation>
+<translation id="6481963882741794338">ลิงก์ Ultimatum กับบริการอื่นๆ ของ Google เพื่อการปรับเปลี่ยนในแบบของคุณและวัตถุประสงค์อื่นๆ</translation>
 <translation id="6482749332252372425">การดาวน์โหลด <ph name="FILE_NAME" /> ล้มเหลวเพราะพื้นที่เก็บข้อมูลไม่เพียงพอ</translation>
 <translation id="6486420406192123355">ไฟล์ PDF นี้มาจากเว็บไซต์ที่ใช้การเชื่อมต่อที่ไม่ปลอดภัย</translation>
 <translation id="650224091954855786">{FILE_COUNT,plural, =1{ดาวน์โหลดไฟล์แล้ว}other{การดาวน์โหลด # รายการเสร็จสมบูรณ์}}</translation>
-<translation id="6508722015517270189">รีสตาร์ท Chrome</translation>
+<translation id="6508722015517270189">รีสตาร์ท Ultimatum</translation>
 <translation id="6513924416597632811">คัดลอกลิงก์ไปยังหน้าผลการค้นหาสำหรับ: <ph name="SEARCH_QUERY" /> แหล่งที่มา: <ph name="PAGE_URL" /></translation>
 <translation id="6518133107902771759">ยืนยัน</translation>
 <translation id="6521218807522232085">สร้าง บันทึก และจัดการรหัสผ่านเพื่อให้ลงชื่อเข้าใช้ได้โดยง่าย</translation>
 <translation id="6527303717912515753">แชร์</translation>
-<translation id="652948702951888897">ประวัติการเข้าชมใน Chrome</translation>
-<translation id="6532866250404780454">ระบบจะไม่แสดงเว็บไซต์ที่คุณเข้าชมใน Chrome และจะลบตัวจับเวลาการใช้เว็บไซต์ทั้งหมด</translation>
+<translation id="652948702951888897">ประวัติการเข้าชมใน Ultimatum</translation>
+<translation id="6532866250404780454">ระบบจะไม่แสดงเว็บไซต์ที่คุณเข้าชมใน Ultimatum และจะลบตัวจับเวลาการใช้เว็บไซต์ทั้งหมด</translation>
 <translation id="6539092367496845964">เกิดข้อผิดพลาด ลองอีกครั้งภายหลัง</translation>
 <translation id="6541983376925655882">{NUM_HOURS,plural, =1{ตรวจสอบเมื่อ 1 ชั่วโมงที่ผ่านมา}other{ตรวจสอบเมื่อ # ชั่วโมงที่ผ่านมา}}</translation>
 <translation id="6545017243486555795">ล้างข้อมูลทั้งหมด</translation>
@@ -1355,7 +1355,7 @@
 <translation id="6569373978618239158">ตอนนี้คุณจะเห็นเรื่องราวจาก <ph name="SITE_NAME" /> เมื่อเปิดแท็บใหม่ ระบบจะบันทึกเว็บไซต์ที่คุณติดตามไว้ในบัญชี Google โดยคุณจัดการเว็บไซต์เหล่านี้ได้ในการตั้งค่าของฟีเจอร์สำรวจ</translation>
 <translation id="657177046675873214">หากต้องการรับบุ๊กมาร์กในอุปกรณ์ทุกเครื่อง ให้เปิด "บุ๊กมาร์ก" ในการตั้งค่า</translation>
 <translation id="6573096386450695060">อนุญาตเสมอ</translation>
-<translation id="6573431926118603307">แท็บที่คุณเปิดไว้ใน Chrome ในอุปกรณ์เครื่องอื่นๆ จะปรากฏที่นี่</translation>
+<translation id="6573431926118603307">แท็บที่คุณเปิดไว้ใน Ultimatum ในอุปกรณ์เครื่องอื่นๆ จะปรากฏที่นี่</translation>
 <translation id="6583199322650523874">บุ๊กมาร์กหน้าปัจจุบัน</translation>
 <translation id="6588043302623806746">ใช้ DNS ที่ปลอดภัย</translation>
 <translation id="6590471736817333463">ประหยัดอินเทอร์เน็ตได้ถึง 60%</translation>
@@ -1363,28 +1363,28 @@
 <translation id="6594347733515723558">ตัวเลือกการจัดเรียงและดู</translation>
 <translation id="6595046016124923392">ระบบจะส่งรูปภาพมายัง Google เพื่อปรับปรุงคำอธิบายสำหรับคุณ</translation>
 <translation id="661266467055912436">ปรับปรุงความปลอดภัยให้คุณและทุกคนที่ใช้อินเทอร์เน็ต</translation>
-<translation id="6621391692573306628">หากต้องการส่งแท็บนี้ไปยังอุปกรณ์อื่น ให้ลงชื่อเข้าใช้ Chrome ในอุปกรณ์ทั้ง 2 เครื่อง</translation>
+<translation id="6621391692573306628">หากต้องการส่งแท็บนี้ไปยังอุปกรณ์อื่น ให้ลงชื่อเข้าใช้ Ultimatum ในอุปกรณ์ทั้ง 2 เครื่อง</translation>
 <translation id="6627583120233659107">แก้ไขโฟลเดอร์</translation>
 <translation id="6633067410344541938">ปลดล็อกเซสชันที่ไม่ระบุตัวตน</translation>
 <translation id="6636623428211296678">สำรวจดูการตั้งค่าเพิ่มเติมด้านล่างหรือสิ้นสุดการตรวจสอบเลย</translation>
-<translation id="6637100877383020115">Chrome จะส่งข้อมูลการใช้งานและข้อขัดข้องไปยัง Google เพื่อช่วยปรับปรุงแอป <ph name="BEGIN_UMA_LINK" />จัดการ<ph name="END_UMA_LINK" /></translation>
+<translation id="6637100877383020115">Ultimatum จะส่งข้อมูลการใช้งานและข้อขัดข้องไปยัง Google เพื่อช่วยปรับปรุงแอป <ph name="BEGIN_UMA_LINK" />จัดการ<ph name="END_UMA_LINK" /></translation>
 <translation id="6641780377503683465">นำ<ph name="INTEREST" />ออก</translation>
 <translation id="6642299196749785472">แนบแท็บ</translation>
 <translation id="6647441008198474441">ระบบจะส่ง URL ที่คุณเข้าชมไปยัง Google เพื่อคาดคะเนเว็บไซต์ต่อไปที่คุณอาจเข้าชม</translation>
 <translation id="6648977384226967773">{CONTACT,plural, =1{<ph name="CONTACT_PREVIEW" />\u2026 และอีก <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" /> รายการ}other{<ph name="CONTACT_PREVIEW" />\u2026 และอีก <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" /> รายการ}}</translation>
 <translation id="6649642165559792194">พรีวิวรูปภาพ <ph name="BEGIN_NEW" />ใหม่<ph name="END_NEW" /></translation>
 <translation id="6659594942844771486">แท็บ</translation>
-<translation id="6661521899577697780">การเลือกรับ Chrome Finds เปิดอยู่ที่ระดับความสูงครึ่งหนึ่งของหน้าจอ</translation>
+<translation id="6661521899577697780">การเลือกรับ Ultimatum Finds เปิดอยู่ที่ระดับความสูงครึ่งหนึ่งของหน้าจอ</translation>
 <translation id="666731172850799929">เปิดใน <ph name="APP_NAME" /></translation>
 <translation id="6669390930482049506">แจ้งเตือนฉัน</translation>
-<translation id="6670767097276846646">ส่วนขยายบางอย่างจะเพิ่มเครื่องมือค้นหาลงใน Chrome ได้</translation>
+<translation id="6670767097276846646">ส่วนขยายบางอย่างจะเพิ่มเครื่องมือค้นหาลงใน Ultimatum ได้</translation>
 <translation id="6671495933530132209">คัดลอกรูปภาพ</translation>
 <translation id="6672697278890207089">ป้อนพาสเฟรสของคุณ</translation>
 <translation id="6672917148207387131">เพิ่ม <ph name="DOMAIN" /></translation>
 <translation id="6674571176963658787">หากต้องการเริ่มต้นการซิงค์ ให้ป้อนพาสเฟรสของคุณ</translation>
-<translation id="6676927815633975364">ลงชื่อเข้าใช้เว็บไซต์นี้และ Chrome</translation>
+<translation id="6676927815633975364">ลงชื่อเข้าใช้เว็บไซต์นี้และ Ultimatum</translation>
 <translation id="6684262542644248484">ลงชื่อเข้าใช้เว็บไซต์</translation>
-<translation id="6684809838922667136">ปรับปรุง Chrome ให้ดีขึ้น</translation>
+<translation id="6684809838922667136">ปรับปรุง Ultimatum ให้ดีขึ้น</translation>
 <translation id="6689436252814043643">โหมดการอ่านไม่พร้อมใช้งาน</translation>
 <translation id="669971068476817798">แตะบันทึก</translation>
 <translation id="6700279777779583398">บันทึกตัวเลือกแล้ว</translation>
@@ -1408,18 +1408,18 @@
 <translation id="6764137532716892442">กลุ่มแท็บ <ph name="GROUP_TITLE" /> ที่แชร์พร้อมกิจกรรมใหม่</translation>
 <translation id="6767294960381293877">รายการอุปกรณ์ที่จะแชร์แท็บด้วยเปิดอยู่ที่ระดับความสูงครึ่งหนึ่งของหน้าจอ</translation>
 <translation id="6783664456110886353">{TAB_COUNT,plural, =1{ระบบจะปิดแท็บที่ไม่ระบุตัวตน <ph name="INCOGNITO_TAB_COUNT" /> แท็บและแท็บอื่นอีก <ph name="TAB_COUNT_ONE" /> แท็บ}other{ระบบจะปิดแท็บที่ไม่ระบุตัวตน <ph name="INCOGNITO_TAB_COUNT" /> แท็บและแท็บอื่นอีก <ph name="TAB_COUNT_MANY" /> แท็บ}}</translation>
-<translation id="6785476624617658922">ข้อกำหนดในการให้บริการเพิ่มเติมของ Chrome และ Chrome OS</translation>
+<translation id="6785476624617658922">ข้อกำหนดในการให้บริการเพิ่มเติมของ Ultimatum และ Ultimatum OS</translation>
 <translation id="6786747875388722282">ส่วนขยาย</translation>
 <translation id="6787600234697426339">เปิดครบ <ph name="MAX_INSTANCE_COUNT" /> หน้าต่างตามจำนวนสูงสุดที่อนุญาตแล้ว</translation>
 <translation id="6795633245022906657">เปิดแท็บใหม่อย่างรวดเร็ว ไปที่การตั้งค่าเพื่อแก้ไขทางลัดนี้</translation>
-<translation id="679588508577699489">กำหนดให้ Chrome เป็นเบราว์เซอร์เริ่มต้น</translation>
+<translation id="679588508577699489">กำหนดให้ Ultimatum เป็นเบราว์เซอร์เริ่มต้น</translation>
 <translation id="679956319013005046">หากต้องการตั้งค่าบริการที่ต้องการสำหรับการป้อนข้อความอัตโนมัติ ให้เพิ่มบริการนั้นใน<ph name="BEGIN_LINK" />การตั้งค่า Android<ph name="END_LINK" /> ก่อน</translation>
 <translation id="6802555630140434547">ระบบจะปิดหน้าต่างดังกล่าว</translation>
 <translation id="6803791793483522764">ตรวจสอบการแจ้งเตือน</translation>
 <translation id="6809470175540814047">เปิดในหน้าต่างที่ไม่ระบุตัวตน</translation>
 <translation id="6811034713472274749">พร้อมดูหน้าเว็บแล้ว</translation>
 <translation id="6813359536773993594">{FILE_COUNT,plural, =1{รูปภาพ มี 1 รูปภาพในรายการ}other{รูปภาพ มี # รูปในรายการ}}</translation>
-<translation id="6813446258015311409">ลงชื่อเข้าใช้ Chrome เปิดอยู่</translation>
+<translation id="6813446258015311409">ลงชื่อเข้าใช้ Ultimatum เปิดอยู่</translation>
 <translation id="6815692190508268848">ใช้ค่ากำหนดลักษณะที่ปรากฏแล้ว</translation>
 <translation id="6817747507826986771">แชร์หน้านี้อย่างรวดเร็ว หากต้องการแก้ไขทางลัดนี้ ให้แตะค้างไว้</translation>
 <translation id="6820686453637990663">CVC</translation>
@@ -1428,7 +1428,7 @@
 <translation id="6828070228333235514">หยุดติดตามราคา</translation>
 <translation id="6830728435402077660">ไม่ปลอดภัย</translation>
 <translation id="6831043979455480757">แปลภาษา</translation>
-<translation id="6835182496791325827">รับการแจ้งเตือนเมื่อ Chrome พบผลการค้นหาที่ดีที่สุดสำหรับการค้นหาของคุณขณะที่คุณไม่อยู่</translation>
+<translation id="6835182496791325827">รับการแจ้งเตือนเมื่อ Ultimatum พบผลการค้นหาที่ดีที่สุดสำหรับการค้นหาของคุณขณะที่คุณไม่อยู่</translation>
 <translation id="6846298663435243399">กำลังโหลด…</translation>
 <translation id="6850409657436465440">ระบบยังดาวน์โหลดอยู่</translation>
 <translation id="6850830437481525139">ปิดแล้ว <ph name="TAB_COUNT" /> แท็บ</translation>
@@ -1451,7 +1451,7 @@
 <translation id="6886500155621657325">{ITEMS_COUNT,plural, =1{รหัสผ่าน 1 รายการ}other{รหัสผ่าน # รายการ}}</translation>
 <translation id="688730033107341407">หลังจากที่คุณออกจากระบบ บุ๊กมาร์ก รหัสผ่าน และข้อมูลอื่นๆ ในบัญชี Google จะถูกนำออกจากอุปกรณ์นี้</translation>
 <translation id="6896758677409633944">คัดลอก</translation>
-<translation id="6898797562238201317">ใช้พาสเฟรสของคุณเองในการเข้ารหัสข้อมูล Chrome ทั้งหมดในบัญชี Google</translation>
+<translation id="6898797562238201317">ใช้พาสเฟรสของคุณเองในการเข้ารหัสข้อมูล Ultimatum ทั้งหมดในบัญชี Google</translation>
 <translation id="6900532703269623216">การปกป้องที่ดียิ่งขึ้น</translation>
 <translation id="6903907808598579934">เปิดการซิงค์</translation>
 <translation id="6906448540340261898">ตรวจสอบว่าคุณใช้รหัสผ่านในบัญชี Google ได้เสมอ</translation>
@@ -1461,7 +1461,7 @@
 <translation id="6910211073230771657">ลบแล้ว</translation>
 <translation id="6916590542764765824">จัดการส่วนขยาย</translation>
 <translation id="6918398787259831832">หากปัญหานี้ยังเกิดขึ้นอยู่ โปรด<ph name="BEGIN_LINK" />ดูข้อมูลเพิ่มเติม<ph name="END_LINK" />จาก <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
-<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Chrome นำสิทธิ์เหล่านี้ออกเนื่องจากคุณไม่ได้เข้าชมเมื่อเร็วๆ นี้</translation>
+<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Ultimatum นำสิทธิ์เหล่านี้ออกเนื่องจากคุณไม่ได้เข้าชมเมื่อเร็วๆ นี้</translation>
 <translation id="6927821422725196292">{TABS_COUNT,plural, =1{1 แท็บ}other{<ph name="NUMBER_OF_TABS" /> แท็บ}}</translation>
 <translation id="6929224077895306814">จะมีการลบรหัสความปลอดภัยทั้งหมดที่บันทึกไว้ในอุปกรณ์และในบัญชี Google ของคุณ</translation>
 <translation id="6933180670536678127"><ph name="TAB_TITLE" />, แท็บที่เลือกที่ปักหมุดซึ่งมีเสียง</translation>
@@ -1490,30 +1490,30 @@
 <translation id="7020741890149022655">เพิ่มลงในเรื่องรออ่าน <ph name="BEGIN_NEW" />ใหม่<ph name="END_NEW" /></translation>
 <translation id="7022756207310403729">เปิดในเบราว์เซอร์</translation>
 <translation id="7029809446516969842">รหัสผ่าน</translation>
-<translation id="7037994709569287156">กำหนดให้ Chrome เป็นเบราว์เซอร์เริ่มต้น</translation>
+<translation id="7037994709569287156">กำหนดให้ Ultimatum เป็นเบราว์เซอร์เริ่มต้น</translation>
 <translation id="7053256416619638731">เสริมความรัดกุมให้รหัสผ่านในอุปกรณ์นี้</translation>
 <translation id="7053983685419859001">บล็อก</translation>
 <translation id="7054588988317389591">รับคำอธิบายรูปภาพใช่ไหม</translation>
-<translation id="7057969023583258980">เปิดประวัติการเข้าชมใน Chrome ทั้งหมด</translation>
+<translation id="7057969023583258980">เปิดประวัติการเข้าชมใน Ultimatum ทั้งหมด</translation>
 <translation id="7063006564040364415">ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์การซิงค์</translation>
 <translation id="7063106218165698546">ปรับแต่งกลุ่มแท็บแล้วกดเสร็จสิ้น</translation>
 <translation id="7071521146534760487">จัดการบัญชี</translation>
 <translation id="707155805709242880">เลือกข้อมูลที่จะซิงค์ด้านล่าง</translation>
 <translation id="7072949719501323344"><ph name="TAB_TITLE" /> แท็บในโหมดการแสดงภาพซ้อนภาพแบบไม่ระบุตัวตนที่ปักหมุดและเลือกไว้หลายแท็บ</translation>
 <translation id="7077143737582773186">การ์ด SD</translation>
-<translation id="7078916049958741685">ลบข้อมูล Chrome ของคุณออกจากอุปกรณ์นี้ด้วย</translation>
+<translation id="7078916049958741685">ลบข้อมูล Ultimatum ของคุณออกจากอุปกรณ์นี้ด้วย</translation>
 <translation id="7080145768121641840"><ph name="TAB_TITLE" />, แท็บที่ปักหมุดซึ่งเลือกไว้และปิดเสียงอยู่</translation>
 <translation id="7084115944294706056">เลือกตำแหน่งของแถบที่อยู่</translation>
-<translation id="7085332316435785646">เลือกว่าจะรวมประวัติการเข้าชมใน Chrome เพื่อรับประสบการณ์ที่ปรับเปลี่ยนในแบบของคุณมากขึ้นในบริการของ Google หรือไม่</translation>
-<translation id="7088681679121566888">Chrome เป็นเวอร์ชันล่าสุดแล้ว</translation>
+<translation id="7085332316435785646">เลือกว่าจะรวมประวัติการเข้าชมใน Ultimatum เพื่อรับประสบการณ์ที่ปรับเปลี่ยนในแบบของคุณมากขึ้นในบริการของ Google หรือไม่</translation>
+<translation id="7088681679121566888">Ultimatum เป็นเวอร์ชันล่าสุดแล้ว</translation>
 <translation id="7098100324909062850"><ph name="TAB_TITLE" />, แท็บที่ไม่ระบุตัวตนที่ปิดเสียงซึ่งเลือกไว้หลายแท็บ</translation>
 <translation id="7106762743910369165">เบราว์เซอร์ได้รับการจัดการโดยองค์กรของคุณ</translation>
-<translation id="7111394291981742152">Chrome ให้คุณควบคุมโฆษณาที่เห็นได้มากขึ้น และจำกัดว่าเว็บไซต์จะรู้อะไรเกี่ยวกับคุณได้บ้างเมื่อแสดงโฆษณาที่ปรับตามโปรไฟล์ของผู้ใช้</translation>
+<translation id="7111394291981742152">Ultimatum ให้คุณควบคุมโฆษณาที่เห็นได้มากขึ้น และจำกัดว่าเว็บไซต์จะรู้อะไรเกี่ยวกับคุณได้บ้างเมื่อแสดงโฆษณาที่ปรับตามโปรไฟล์ของผู้ใช้</translation>
 <translation id="7111822978084196600">ตั้งชื่อหน้าต่างนี้</translation>
 <translation id="7115358764509798967">ค่าเริ่มต้นของระบบ</translation>
 <translation id="7117485132243600300">จัดการเนื้อหาที่คุณติดตาม รวมถึงหัวข้อและการค้นหาที่แนะนำ</translation>
 <translation id="7119984597597798764">ปิด <ph name="INSTANCE_TITLE" /></translation>
-<translation id="7121179479711575744">ลงชื่อเข้าใช้ Chrome</translation>
+<translation id="7121179479711575744">ลงชื่อเข้าใช้ Ultimatum</translation>
 <translation id="7136694880210472378">ทำให้เป็นค่าเริ่มต้น</translation>
 <translation id="7136902389402789299">{NUM_SITES,plural, =1{ตรวจสอบสิทธิ์สำหรับ 1 เว็บไซต์แล้ว}other{ตรวจสอบสิทธิ์สำหรับ # เว็บไซต์แล้ว}}</translation>
 <translation id="7138678301420049075">อื่นๆ</translation>
@@ -1523,8 +1523,8 @@
 <translation id="7149893636342594995">24 ชั่วโมงที่ผ่านมา</translation>
 <translation id="71503698506017927">การเข้ารหัสด้วยพาสเฟรสไม่รวมถึงวิธีการชำระเงินและที่อยู่จาก Google Pay
 
-หากต้องการเปลี่ยนการตั้งค่านี้ ให้<ph name="BEGIN_LINK" />ลบข้อมูล Chrome ในบัญชี<ph name="END_LINK" /></translation>
-<translation id="7165972437814027679">ดูข้อมูลเพิ่มเติมเกี่ยวกับสาเหตุที่ Chrome บล็อกบางไฟล์</translation>
+หากต้องการเปลี่ยนการตั้งค่านี้ ให้<ph name="BEGIN_LINK" />ลบข้อมูล Ultimatum ในบัญชี<ph name="END_LINK" /></translation>
+<translation id="7165972437814027679">ดูข้อมูลเพิ่มเติมเกี่ยวกับสาเหตุที่ Ultimatum บล็อกบางไฟล์</translation>
 <translation id="7168323970702333693">ลงชื่อเข้าใช้ด้วย <ph name="USER_NAME" /> เปิดการตั้งค่า</translation>
 <translation id="7170930892977483182">ระบบจะลบรหัสความปลอดภัยทั้งหมดที่บันทึกไว้ในอุปกรณ์และใน Google Wallet ของคุณ</translation>
 <translation id="7173114856073700355">เปิดการตั้งค่า</translation>
@@ -1544,7 +1544,7 @@
 <translation id="7197682514647286393">ลบข้อมูลการท่องเว็บอย่างรวดเร็ว</translation>
 <translation id="719791532916917144">แป้นพิมพ์ลัด</translation>
 <translation id="7207760545532569765">คืนค่า <ph name="TAB_COUNT" /> แท็บเป็นแท็บใหม่ในเบื้องหลัง</translation>
-<translation id="7217781228893594884">แท็บที่ไม่ระบุตัวตนจะล็อกเมื่อคุณออกจาก Chrome</translation>
+<translation id="7217781228893594884">แท็บที่ไม่ระบุตัวตนจะล็อกเมื่อคุณออกจาก Ultimatum</translation>
 <translation id="7221869452894271364">โหลดหน้านี้ใหม่</translation>
 <translation id="722681077040152344">ยกเลิกการสมัครรับข้อมูลจากเว็บไซต์ <ph name="COUNT" /> แห่ง</translation>
 <translation id="7227218174981371415">{FILE_COUNT,plural, =1{ดาวน์โหลดรอดำเนินการ 1 รายการ}other{ดาวน์โหลดรอดำเนินการ # รายการ}}</translation>
@@ -1554,12 +1554,12 @@
 <translation id="724510009481365878">พิมพ์หน้านี้ไม่ได้</translation>
 <translation id="7248671827512403053">แอปพลิเคชัน</translation>
 <translation id="7253951228444156601">กำลังตรวจสอบรหัสผ่าน…</translation>
-<translation id="7260367682327802201">อุปกรณ์ Android อาจมีการตั้งค่าที่คล้ายกัน หากเปิดใช้การวัดผลโฆษณาใน Chrome และบนอุปกรณ์ Android บริษัทอาจสามารถวัดประสิทธิภาพของโฆษณาในเว็บไซต์ต่างๆ ที่คุณเข้าชมและแอปที่คุณใช้</translation>
+<translation id="7260367682327802201">อุปกรณ์ Android อาจมีการตั้งค่าที่คล้ายกัน หากเปิดใช้การวัดผลโฆษณาใน Ultimatum และบนอุปกรณ์ Android บริษัทอาจสามารถวัดประสิทธิภาพของโฆษณาในเว็บไซต์ต่างๆ ที่คุณเข้าชมและแอปที่คุณใช้</translation>
 <translation id="727288900855680735">ส่ง <ph name="ONE_TIME_CODE" /> ไปยัง <ph name="ORIGIN" /> ไหม</translation>
 <translation id="7274013316676448362">บล็อกเว็บไซต์แล้ว</translation>
 <translation id="7276868533747677875">หากเคยส่งออกรหัสผ่านแล้ว ให้ค้นหาไฟล์ CSV ในอุปกรณ์แล้วนำเข้าไปยังเครื่องมือจัดการรหัสผ่านที่ต้องการ</translation>
 <translation id="728377807486816582">แตะแถบที่อยู่</translation>
-<translation id="7289049772085228972">คุณได้รับการรักษาความปลอดภัยที่เข้มงวดที่สุดจาก Chrome แล้ว</translation>
+<translation id="7289049772085228972">คุณได้รับการรักษาความปลอดภัยที่เข้มงวดที่สุดจาก Ultimatum แล้ว</translation>
 <translation id="7289303553784750393">หากคุณออนไลน์แล้วแต่ปัญหานี้ยังเกิดขึ้นอยู่ คุณสามารถลองดำเนินการต่อใน <ph name="SITE_ETLD_PLUS_ONE" /> ด้วยวิธีอื่นๆ ได้</translation>
 <translation id="7290209999329137901">เปลี่ยนชื่อไม่ได้</translation>
 <translation id="7291910923717764901">เพิ่มคำอธิบายรูปภาพสำหรับหน้านี้แล้ว</translation>
@@ -1592,12 +1592,12 @@
 <translation id="7400003506822844357">{FILE_COUNT,plural, =1{อีก 1 ไฟล์ในรายการ}other{อีก # ไฟล์ในรายการ}}</translation>
 <translation id="7400418766976504921">URL</translation>
 <translation id="7400424692675800399">หากต้องการเปิดหน้าต่างใหม่ ให้ลดจำนวนหน้าต่างทั้งหมด ทั้งหน้าต่างที่ใช้งานอยู่และหน้าต่างที่ไม่ได้ใช้งาน ให้เหลือไม่เกิน <ph name="MAX_WINDOW_COUNT_MINUS_ONE" /> รายการ</translation>
-<translation id="7403691278183511381">ประสบการณ์กับ First Run บน Chrome</translation>
+<translation id="7403691278183511381">ประสบการณ์กับ First Run บน Ultimatum</translation>
 <translation id="7411224099004328643">ผู้ใช้บัญชี Google</translation>
 <translation id="7419565702166471774">ใช้การเชื่อมต่อที่ปลอดภัยทุกครั้ง</translation>
 <translation id="7421293530411019405">ออกจากกลุ่มแท็บใช่ไหม</translation>
 <translation id="7435356471928173109">ปิดโดยผู้ดูแลระบบ</translation>
-<translation id="7437998757836447326">ออกจากระบบ Chrome</translation>
+<translation id="7437998757836447326">ออกจากระบบ Ultimatum</translation>
 <translation id="7439467816829380878">ย้ายแท็บไปยังกลุ่ม</translation>
 <translation id="7439749340204407129">เปิดการจัดการบุ๊กมาร์ก</translation>
 <translation id="7453810262525006706">ยุบเป็นมุมมองด้านข้าง</translation>
@@ -1631,7 +1631,7 @@
 <translation id="7525248386620136756">ปิดและบันทึก <ph name="TAB_GROUPS_AND_TABS_PART" />แล้ว</translation>
 <translation id="7545347190366646170">บุคคลที่มีสิทธิ์เข้าถึง</translation>
 <translation id="7553482318994371148">เปิดแท็บที่ปิดไปแล้วขึ้นมาใหม่</translation>
-<translation id="7554643625247105821">ตรวจสอบเวอร์ชัน Chrome ไม่ได้</translation>
+<translation id="7554643625247105821">ตรวจสอบเวอร์ชัน Ultimatum ไม่ได้</translation>
 <translation id="7557508262441527045">ออกจากระบบแล้ว</translation>
 <translation id="7573665567024262965">เลือกแอปเริ่มต้น</translation>
 <translation id="757855969265046257">{FILES,plural, =1{ดาวน์โหลดแล้ว <ph name="FILES_DOWNLOADED_ONE" /> ไฟล์}other{ดาวน์โหลดแล้ว <ph name="FILES_DOWNLOADED_MANY" /> ไฟล์}}</translation>
@@ -1647,7 +1647,7 @@
 <translation id="7612619742409846846">ลงชื่อเข้าใช้ Google ด้วย</translation>
 <translation id="7612989789287281429">กำลังลงชื่อเข้าใช้…</translation>
 <translation id="7619072057915878432">การดาวน์โหลด <ph name="FILE_NAME" /> ล้มเหลวเพราะเครือข่ายขัดข้อง</translation>
-<translation id="7626032353295482388">ยินดีต้อนรับสู่ Chrome</translation>
+<translation id="7626032353295482388">ยินดีต้อนรับสู่ Ultimatum</translation>
 <translation id="7628417132421583481">ไปที่เครื่องมือจัดการรหัสผ่าน</translation>
 <translation id="7630202231528827509">URL ผู้ให้บริการ</translation>
 <translation id="7638584964844754484">พาสเฟรสไม่ถูกต้อง</translation>
@@ -1662,7 +1662,7 @@
 <translation id="7666185984446444960">ปิด <ph name="TAB_GROUPS_AND_TABS_PART" />แล้ว</translation>
 <translation id="7682724950699840886">ลองทำตามเคล็ดลับต่อไปนี้ ตรวจสอบว่าอุปกรณ์มีพื้นที่ว่างเพียงพอ จากนั้นพยายามส่งออกอีกครั้ง</translation>
 <translation id="7686086654630106285">ข้อมูลเพิ่มเติมเกี่ยวกับโฆษณาที่เว็บไซต์แนะนำ</translation>
-<translation id="7690596512217303514">อุปกรณ์เปิด Chrome ไม่ได้ ดาวน์โหลดการอัปเดต Chrome เวอร์ชันล่าสุดจาก App Store เพื่อแก้ปัญหา</translation>
+<translation id="7690596512217303514">อุปกรณ์เปิด Ultimatum ไม่ได้ ดาวน์โหลดการอัปเดต Ultimatum เวอร์ชันล่าสุดจาก App Store เพื่อแก้ปัญหา</translation>
 <translation id="7691043218961417207">สำรวจเนื้อหาที่น่าติดตาม</translation>
 <translation id="7692761875510935111">เปิดในเบราว์เซอร์ได้อย่างรวดเร็ว หากต้องการแก้ไขทางลัดนี้ ให้แตะค้างไว้</translation>
 <translation id="7697383401610880082">แฮนเดิลการลาก</translation>
@@ -1670,7 +1670,7 @@
 <translation id="7702420606070050505">Bottom Sheet กิจกรรมล่าสุดเปิดอยู่แบบเต็มความสูง</translation>
 <translation id="7707922173985738739">ใช้เน็ตมือถือ</translation>
 <translation id="7708994397325774423">รับรหัสผ่านทั้งหมด</translation>
-<translation id="7714077993070342304">เปิดเมนู Chrome</translation>
+<translation id="7714077993070342304">เปิดเมนู Ultimatum</translation>
 <translation id="7733878270780732638">มีพื้นที่ในอุปกรณ์ไม่เพียงพอ</translation>
 <translation id="7740287852186792672">ผลการค้นหา</translation>
 <translation id="774403695779169686"><ph name="TAB_TITLE" />, แท็บการแชร์ที่ไม่ระบุตัวตนที่เลือก</translation>
@@ -1697,9 +1697,9 @@
 <translation id="7821130663268546430">คุณค้นหาแท็บที่เปิดอยู่ทั้งหมดในตัวสลับแท็บได้</translation>
 <translation id="7822705602465980873">เมื่อลงชื่อเข้าใช้ ข้อมูลนี้จะลิงก์กับบัญชี Google ของคุณเพื่อปกป้องคุณในบริการต่างๆ ของ Google เช่น เพิ่มการปกป้องใน Gmail หลังจากเกิดเหตุการณ์ด้านความปลอดภัย</translation>
 <translation id="7824665136384946951">องค์กรปิด Google Safe Browsing ไว้</translation>
-<translation id="7826342993930002256">Chrome ของคุณในทุกๆ ที่</translation>
+<translation id="7826342993930002256">Ultimatum ของคุณในทุกๆ ที่</translation>
 <translation id="7844171778363018843">ไม่ได้เลือกข้อมูลที่จะซิงค์</translation>
-<translation id="784453721355882533">ลองใช้ Gemini ใน Chrome เพื่อรับคำตอบ ประเด็นสำคัญ และอื่นๆ</translation>
+<translation id="784453721355882533">ลองใช้ Gemini ใน Ultimatum เพื่อรับคำตอบ ประเด็นสำคัญ และอื่นๆ</translation>
 <translation id="7846161022626028328">เกิดข้อผิดพลาด โปรดลองอีกครั้ง</translation>
 <translation id="7846296061357476882">บริการของ Google</translation>
 <translation id="784652447248278262">หน้าต่างปัจจุบัน</translation>
@@ -1709,10 +1709,10 @@
 <translation id="7853202427316060426">กิจกรรม</translation>
 <translation id="7859988229622350291">ไม่ต้องแปล</translation>
 <translation id="7866213166286285359">ดูข้อความแจ้งเกี่ยวกับการแปลหน้าเว็บที่นี่</translation>
-<translation id="7873610418439765081">ลองใช้ Gemini ใน Chrome เพื่อรับคำตอบ ประเด็นสำคัญ และอื่นๆ จากปุ่มตัวเลือกเพิ่มเติม</translation>
+<translation id="7873610418439765081">ลองใช้ Gemini ใน Ultimatum เพื่อรับคำตอบ ประเด็นสำคัญ และอื่นๆ จากปุ่มตัวเลือกเพิ่มเติม</translation>
 <translation id="7875915731392087153">สร้างอีเมล</translation>
 <translation id="7876243839304621966">ลบทั้งหมด</translation>
-<translation id="7886917304091689118">กำลังทำงานใน Chrome</translation>
+<translation id="7886917304091689118">กำลังทำงานใน Ultimatum</translation>
 <translation id="7887174313503389866">ดูทัวร์ชมพร้อมคำแนะนำเกี่ยวกับการควบคุมที่สำคัญด้านความเป็นส่วนตัวและความปลอดภัย หากต้องการดูตัวเลือกเพิ่มเติม ให้ไปที่การตั้งค่าแต่ละรายการ</translation>
 <translation id="7913993612870913335">{FILE_COUNT,plural, =1{1 รายการถูกบล็อกโดยองค์กรของคุณ}other{# รายการถูกบล็อกโดยองค์กรของคุณ}}</translation>
 <translation id="7914399737746719723">ติดตั้งแอปแล้ว</translation>
@@ -1721,7 +1721,7 @@
 <translation id="7921782882718083488">สรุปหน้านี้</translation>
 <translation id="7926975587469166629">ชื่อเล่นของบัตร</translation>
 <translation id="7927073875790626822">XR</translation>
-<translation id="7929587383660661825">Chrome จะนำสิทธิ์ออกจากเว็บไซต์ที่ส่งการแจ้งเตือนมากเกินไปหรือที่คุณไม่ได้เข้าชมเมื่อเร็วๆ นี้โดยอัตโนมัติ</translation>
+<translation id="7929587383660661825">Ultimatum จะนำสิทธิ์ออกจากเว็บไซต์ที่ส่งการแจ้งเตือนมากเกินไปหรือที่คุณไม่ได้เข้าชมเมื่อเร็วๆ นี้โดยอัตโนมัติ</translation>
 <translation id="7934668619883965330">ดาวน์โหลดไฟล์ไม่ได้ ไม่รองรับรูปแบบไฟล์</translation>
 <translation id="7942131818088350342"><ph name="PRODUCT_NAME" /> ล้าสมัย</translation>
 <translation id="7944772052836377867">การซิงค์จะต้องยืนยันว่าเป็นคุณ</translation>
@@ -1738,7 +1738,7 @@
 <translation id="7971136598759319605">ใช้งานเมื่อ 1 วันที่ผ่านมา</translation>
 <translation id="7975379999046275268">พรีวิวหน้า <ph name="BEGIN_NEW" />ใหม่<ph name="END_NEW" /></translation>
 <translation id="7977451675950311423">เตือนคุณหากใช้รหัสผ่านที่ถูกละเมิดในการละเมิดข้อมูล</translation>
-<translation id="7987499071758862048"><ph name="PERMISSION_1" /> <ph name="PERMISSION_2" /> <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Chrome นำสิทธิ์เหล่านี้ออกเนื่องจากคุณไม่ได้เข้าชมเมื่อเร็วๆ นี้</translation>
+<translation id="7987499071758862048"><ph name="PERMISSION_1" /> <ph name="PERMISSION_2" /> <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Ultimatum นำสิทธิ์เหล่านี้ออกเนื่องจากคุณไม่ได้เข้าชมเมื่อเร็วๆ นี้</translation>
 <translation id="7995059495660416932">คุณจะเห็นเนื้อหาเมื่อพร้อมให้บริการ</translation>
 <translation id="799576009106109668">คุณจะท่องเว็บได้เร็วขึ้นเนื่องจากมีการโหลดเนื้อหาโดยอิงจากหน้าเว็บที่กำลังเข้าชมโดยที่คุณไม่ต้องขอ</translation>
 <translation id="7998918019931843664">เปิดแท็บที่ปิดไปแล้วขึ้นใหม่</translation>
@@ -1756,17 +1756,17 @@
 <translation id="804335162455518893">ไม่พบการ์ด SD</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> แท็บที่ไม่ระบุตัวตน}other{<ph name="TAB_COUNT_NORMAL" /> แท็บที่ไม่ระบุตัวตน}}</translation>
 <translation id="8051695050440594747">สามารถใช้งานได้ <ph name="MEGABYTES" /> MB</translation>
-<translation id="8058746566562539958">เปิดในแท็บใหม่ของ Chrome</translation>
+<translation id="8058746566562539958">เปิดในแท็บใหม่ของ Ultimatum</translation>
 <translation id="8062594758852531064">การโหลดล่วงหน้าที่เพิ่มขึ้น:</translation>
 <translation id="8063895661287329888">เพิ่มบุ๊กมาร์กไม่สำเร็จ</translation>
 <translation id="8066816452984416180">บุ๊กมาร์กหน้านี้อย่างรวดเร็ว หากต้องการแก้ไขทางลัดนี้ ให้แตะค้างไว้</translation>
-<translation id="8072436850275034464">คุณสามารถเปิดแท็บที่เพิ่งปิดไปอีกครั้งได้จากทุกที่ที่คุณใช้ Chrome</translation>
+<translation id="8072436850275034464">คุณสามารถเปิดแท็บที่เพิ่งปิดไปอีกครั้งได้จากทุกที่ที่คุณใช้ Ultimatum</translation>
 <translation id="8073388330009372546">เปิดภาพในแท็บใหม่</translation>
 <translation id="8076492880354921740">แท็บ</translation>
 <translation id="8078096376109663956">แชร์ข้อความเท่านั้น</translation>
 <translation id="8078348702936632821">ปักหมุดทางลัดนี้</translation>
 <translation id="8084285576995584326">ควบคุมข้อมูลในบัญชี Google ของคุณ</translation>
-<translation id="8084864785646838999">ประวัติการเข้าชมบางส่วนอาจไม่แสดงที่นี่ หากต้องการดูประวัติการเข้าชมใน Chrome ทั้งหมด ให้เปิดประวัติการเข้าชมใน Chrome แบบเต็ม นอกจากนี้ บัญชี Google อาจมีประวัติการท่องเว็บรูปแบบอื่นๆ ที่ <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /></translation>
+<translation id="8084864785646838999">ประวัติการเข้าชมบางส่วนอาจไม่แสดงที่นี่ หากต้องการดูประวัติการเข้าชมใน Ultimatum ทั้งหมด ให้เปิดประวัติการเข้าชมใน Ultimatum แบบเต็ม นอกจากนี้ บัญชี Google อาจมีประวัติการท่องเว็บรูปแบบอื่นๆ ที่ <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /></translation>
 <translation id="8088176524274673045">หากต้องการแชร์กับผู้คนที่อยู่ใกล้ๆ ให้สแกนคิวอาร์โค้ดนี้</translation>
 <translation id="8090732854597034573">โปรดขอความช่วยเหลือจากผู้ปกครองหากต้องการ</translation>
 <translation id="8101414242770404289">ไม่มีแท็บจาก <ph name="TIME_PERIOD" /></translation>
@@ -1774,10 +1774,10 @@
 <translation id="810433609302852">Bottom Sheet การโปรโมตและขั้นตอนการใช้งานฟีเจอร์แจ้งเตือนเคล็ดลับ</translation>
 <translation id="8105893657415066307"><ph name="DESCRIPTION" /> <ph name="SEPARATOR" /> <ph name="FILE_SIZE" /></translation>
 <translation id="8107530384992929318">ปิดตัวเลือกการจัดเรียง</translation>
-<translation id="8110024788458304985">ช่วยปรับปรุงฟีเจอร์และประสิทธิภาพของ Chrome</translation>
-<translation id="8110087112193408731">ต้องการแสดงกิจกรรม Chrome ในไลฟ์สไตล์ดิจิทัลไหม</translation>
+<translation id="8110024788458304985">ช่วยปรับปรุงฟีเจอร์และประสิทธิภาพของ Ultimatum</translation>
+<translation id="8110087112193408731">ต้องการแสดงกิจกรรม Ultimatum ในไลฟ์สไตล์ดิจิทัลไหม</translation>
 <translation id="8118117428362942925">โปรดขอความช่วยเหลือจากผู้ปกครอง (<ph name="PARENT_NAME" />) หากต้องการ</translation>
-<translation id="8118151008374483324">ลงชื่อเข้าใช้ Chrome เพื่อเข้าถึงแท็บและข้อมูลอื่นๆ ในอุปกรณ์ทุกเครื่อง</translation>
+<translation id="8118151008374483324">ลงชื่อเข้าใช้ Ultimatum เพื่อเข้าถึงแท็บและข้อมูลอื่นๆ ในอุปกรณ์ทุกเครื่อง</translation>
 <translation id="8120286190326371840">ไม่มีรหัสผ่านที่ถูกละเมิดในอุปกรณ์นี้</translation>
 <translation id="8122623268651408616">จัดเรียงตามรายการที่ใหม่ที่สุด</translation>
 <translation id="8127542551745560481">แก้ไขหน้าแรก</translation>
@@ -1818,7 +1818,7 @@
 <translation id="8260126382462817229">ลองลงชื่อเข้าใช้อีกครั้ง</translation>
 <translation id="8261506727792406068">ลบ</translation>
 <translation id="82619448491672958">ดูแท็บอื่นๆ</translation>
-<translation id="8265730590513812063">เปิดเมนู Chrome</translation>
+<translation id="8265730590513812063">เปิดเมนู Ultimatum</translation>
 <translation id="8266753737658117282">ดำเนินการต่อด้วย <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8266862848225348053">ตำแหน่งที่ดาวน์โหลด</translation>
 <translation id="8271267069224406035">รายงานสแปม</translation>
@@ -1832,7 +1832,7 @@
 <translation id="8317318757008452355">เปิดตัวเลือกในการพิมพ์</translation>
 <translation id="8320212361750431956">กิจกรรมล่าสุด</translation>
 <translation id="832514020744584629"><ph name="PREF_TITLE" />  <ph name="BEGIN_NEW" />ใหม่<ph name="END_NEW" /></translation>
-<translation id="8342727528718219152">Chrome จะแจ้งให้คุณทราบเกี่ยวกับเว็บไซต์ที่อาจส่งการแจ้งเตือนมากเกินไป</translation>
+<translation id="8342727528718219152">Ultimatum จะแจ้งให้คุณทราบเกี่ยวกับเว็บไซต์ที่อาจส่งการแจ้งเตือนมากเกินไป</translation>
 <translation id="834313815369870491">ไม่ต้องแปลเว็บไซต์</translation>
 <translation id="8348215005712416247"><ph name="TAB_TITLE" />, แท็บการบันทึกเสียงที่ไม่ระบุตัวตนที่ปักหมุดซึ่งเลือกไว้หลายแท็บ</translation>
 <translation id="8348430946834215779">ใช้ HTTPS ทุกครั้งที่ทำได้และรับการแจ้งเตือนก่อนโหลดเว็บไซต์ที่ไม่รองรับ HTTPS</translation>
@@ -1846,12 +1846,12 @@
 <translation id="8398389123831319859">แตะสองครั้งค้างไว้เพื่อเปลี่ยนไปใช้โหมดไม่ระบุตัวตน</translation>
 <translation id="8402673309244746971">ไปยังฟีด "กำลังติดตาม"</translation>
 <translation id="8413126021676339697">แสดงประวัติการเข้าชมทั้งหมด</translation>
-<translation id="8413795581997394485">ปกป้องจากเว็บไซต์ การดาวน์โหลด และส่วนขยายที่ทราบแล้วว่าเป็นอันตราย เมื่อคุณเข้าชมเว็บไซต์ Chrome จะนำเฉพาะบางส่วนของ URL มาปรับให้ยากต่อการอ่าน (Obfuscate) แล้วส่งไปยัง Google ผ่านเซิร์ฟเวอร์ส่วนตัวที่ซ่อนที่อยู่ IP ของคุณ หากเว็บไซต์ทำสิ่งที่น่าสงสัย ระบบจะส่ง URL แบบเต็มและเนื้อหาของหน้าเว็บบางส่วนด้วย</translation>
+<translation id="8413795581997394485">ปกป้องจากเว็บไซต์ การดาวน์โหลด และส่วนขยายที่ทราบแล้วว่าเป็นอันตราย เมื่อคุณเข้าชมเว็บไซต์ Ultimatum จะนำเฉพาะบางส่วนของ URL มาปรับให้ยากต่อการอ่าน (Obfuscate) แล้วส่งไปยัง Google ผ่านเซิร์ฟเวอร์ส่วนตัวที่ซ่อนที่อยู่ IP ของคุณ หากเว็บไซต์ทำสิ่งที่น่าสงสัย ระบบจะส่ง URL แบบเต็มและเนื้อหาของหน้าเว็บบางส่วนด้วย</translation>
 <translation id="8414396119627470038">ลงชื่อเข้าใช้ <ph name="SITE_ETLD_PLUS_ONE" /> ด้วย <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8419144699778179708">ลบประวัติการเข้าชม รวมถึงสิ่งที่อยู่ในช่องค้นหา</translation>
 <translation id="8419244640277402268">รวม</translation>
 <translation id="8422250855136581222">ไม่มีแท็บในอุปกรณ์นี้</translation>
-<translation id="842386925677997438">เครื่องมือด้านความปลอดภัยของ Chrome</translation>
+<translation id="842386925677997438">เครื่องมือด้านความปลอดภัยของ Ultimatum</translation>
 <translation id="8427875596167638501">แท็บแสดงตัวอย่างเปิดอยู่ครึ่งเดียว</translation>
 <translation id="8428213095426709021">การตั้งค่า</translation>
 <translation id="8430824733382774043">แชร์ภาพหน้าจอเท่านั้น</translation>
@@ -1859,7 +1859,7 @@
 <translation id="8438566539970814960">ปรับปรุงการค้นหาและการท่องเว็บให้ดียิ่งขึ้น</translation>
 <translation id="8439974325294139057"><ph name="LANG" /> - ภาษาพร้อมใช้งานแล้ว โปรดรีสตาร์ท <ph name="APP_NAME" /></translation>
 <translation id="8442258441309440798">ไม่มีเรื่องราว</translation>
-<translation id="8443209985646068659">อัปเดต Chrome ไม่ได้</translation>
+<translation id="8443209985646068659">อัปเดต Ultimatum ไม่ได้</translation>
 <translation id="8443600937324357591">ย้ายแท็บไปที่หน้าต่างอื่น</translation>
 <translation id="8445448999790540984">ส่งออกรหัสผ่านไม่ได้</translation>
 <translation id="8446884382197647889">ดูข้อมูลเพิ่มเติม</translation>
@@ -1868,7 +1868,7 @@
 <translation id="8455675988389029454">รับบุ๊กมาร์ก รหัสผ่าน และอื่นๆ ในทุกอุปกรณ์</translation>
 <translation id="8458341576712814616">ทางลัด</translation>
 <translation id="8458413889418591446">ซิงค์ประวัติการเข้าชมและแท็บเพื่อกลับไปยังเว็บไซต์ที่เคยเข้าชมอีกครั้งได้อย่างรวดเร็ว</translation>
-<translation id="84594714173170813">ใช้ข้อมูล Chrome ในบัญชี Google ต่อไป</translation>
+<translation id="84594714173170813">ใช้ข้อมูล Ultimatum ในบัญชี Google ต่อไป</translation>
 <translation id="8460008946585880786">ลากและวางแท็บหนึ่งทับอีกแท็บ</translation>
 <translation id="8460448946170646641">ตรวจสอบการควบคุมที่สำคัญด้านความเป็นส่วนตัวและความปลอดภัย</translation>
 <translation id="8460932807646981183">จัดการเครื่องมือค้นหาและการค้นหาเว็บไซต์</translation>
@@ -1890,8 +1890,8 @@
 <translation id="8540136935098276800">ป้อน URL ที่มีรูปแบบที่ถูกต้อง</translation>
 <translation id="854522910157234410">เปิดหน้านี้</translation>
 <translation id="8547466829003330976">ตรวจสอบ PDF ด้วย AI</translation>
-<translation id="8551513938758868521">ล็อกแท็บที่ไม่ระบุตัวตนเมื่อออกจาก Chrome</translation>
-<translation id="8559961053328923750">Chrome จำกัดปริมาณข้อมูลทั้งหมดที่เว็บไซต์สามารถแชร์ผ่านเบราว์เซอร์เพื่อวัดประสิทธิภาพโฆษณา</translation>
+<translation id="8551513938758868521">ล็อกแท็บที่ไม่ระบุตัวตนเมื่อออกจาก Ultimatum</translation>
+<translation id="8559961053328923750">Ultimatum จำกัดปริมาณข้อมูลทั้งหมดที่เว็บไซต์สามารถแชร์ผ่านเบราว์เซอร์เพื่อวัดประสิทธิภาพโฆษณา</translation>
 <translation id="8559990750235505898">เสนอที่จะแปลหน้าในภาษาอื่นๆ</translation>
 <translation id="8560602726703398413">หาเรื่องรออ่านในบุ๊กมาร์ก</translation>
 <translation id="85618473456579127">แตะโปรไฟล์ที่ด้านขวาบน</translation>
@@ -1904,12 +1904,12 @@
 <translation id="859046281437143747">ติดตามราคาโดยใช้ปุ่ม "ตัวเลือกเพิ่มเติม"</translation>
 <translation id="859064343657890103">ลบกลุ่มแท็บ "<ph name="TAB_GROUP_TITLE" />" แล้ว</translation>
 <translation id="860043288473659153">ชื่อผู้ถือบัตร</translation>
-<translation id="8602358303461588329">ลงชื่อเข้าใช้ Chrome ปิดอยู่</translation>
+<translation id="8602358303461588329">ลงชื่อเข้าใช้ Ultimatum ปิดอยู่</translation>
 <translation id="860282621117673749">การแจ้งเตือนการลดราคา</translation>
 <translation id="8611922158252451755">ทุกคนที่มีลิงก์จะแก้ไขแท็บทั้งหมดได้ ดังนั้นโปรดแชร์อย่างระมัดระวัง ลิงก์จะหมดอายุใน 48 ชั่วโมง</translation>
 <translation id="8616006591992756292">บัญชี Google อาจมีประวัติการท่องเว็บรูปแบบอื่นๆ ที่ <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /></translation>
 <translation id="8617240290563765734">ต้องการเปิด URL แนะนำซึ่งระบุอยู่ในเนื้อหาที่ดาวน์โหลดไหม</translation>
-<translation id="8629093325209491835">เปิดเมนู Chrome &gt; การตั้งค่า</translation>
+<translation id="8629093325209491835">เปิดเมนู Ultimatum &gt; การตั้งค่า</translation>
 <translation id="8634050254805484913">ซ่อนในหน้าจอแคบ</translation>
 <translation id="8635399646025169806">เก็บกลุ่มแท็บไว้ใช่ไหม</translation>
 <translation id="8636825310635137004">เปิดการซิงค์เพื่อรับแท็บจากอุปกรณ์เครื่องอื่นๆ ของคุณ</translation>
@@ -1928,15 +1928,15 @@
 <translation id="8715300232952757586">ระบบจะปิด <ph name="TAB_TITLE" /></translation>
 <translation id="8723453889042591629">แปลหน้านี้อย่างรวดเร็ว หากต้องการแก้ไขทางลัดนี้ ให้แตะค้างไว้</translation>
 <translation id="8725066075913043281">ลองอีกครั้ง</translation>
-<translation id="8727043961453758442">ใช้ประโยชน์สูงสุดจาก Chrome</translation>
+<translation id="8727043961453758442">ใช้ประโยชน์สูงสุดจาก Ultimatum</translation>
 <translation id="8731268612289859741">รหัสความปลอดภัย</translation>
 <translation id="8738163682604285902">ดูโหมดการอ่านไหม</translation>
 <translation id="8746155870861185046">แชร์ไฮไลต์</translation>
 <translation id="8748850008226585750">เนื้อหาถูกซ่อนไว้</translation>
 <translation id="8754448020583829686">คัดลอกโดยไม่มีลิงก์</translation>
 <translation id="8756969031206844760">อัปเดตรหัสผ่านไหม</translation>
-<translation id="8765470054473112089">เมื่อคุณพิมพ์ในแถบที่อยู่หรือช่องค้นหา Chrome จะส่งสิ่งที่คุณพิมพ์ไปยังเครื่องมือค้นหาเริ่มต้นเพื่อให้ได้รับการแนะนำที่ดียิ่งขึ้น ตัวเลือกนี้จะปิดไว้ในโหมดไม่ระบุตัวตน</translation>
-<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Chrome พบรหัสผ่านที่ไม่รัดกุมซึ่งคุณควรเปลี่ยนให้ดีขึ้น}other{Chrome พบรหัสผ่านที่ไม่รัดกุม # รายการซึ่งคุณควรเปลี่ยนให้ดีขึ้น}}</translation>
+<translation id="8765470054473112089">เมื่อคุณพิมพ์ในแถบที่อยู่หรือช่องค้นหา Ultimatum จะส่งสิ่งที่คุณพิมพ์ไปยังเครื่องมือค้นหาเริ่มต้นเพื่อให้ได้รับการแนะนำที่ดียิ่งขึ้น ตัวเลือกนี้จะปิดไว้ในโหมดไม่ระบุตัวตน</translation>
+<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Ultimatum พบรหัสผ่านที่ไม่รัดกุมซึ่งคุณควรเปลี่ยนให้ดีขึ้น}other{Ultimatum พบรหัสผ่านที่ไม่รัดกุม # รายการซึ่งคุณควรเปลี่ยนให้ดีขึ้น}}</translation>
 <translation id="8766529642647037772">สร้างลิงก์ที่ไฮไลต์แบบลิงก์นี้ไหม</translation>
 <translation id="8788265440806329501">ประวัติการนำทางปิดอยู่</translation>
 <translation id="8790193082819560975">แตะเพื่อค้นหาตัวเลือกการซื้อสำหรับผลิตภัณฑ์ในแท็บใหม่</translation>
@@ -1959,7 +1959,7 @@
 <translation id="885480114717186641">คุณขอเว็บไซต์เวอร์ชันเดสก์ท็อปสำหรับ <ph name="HOST_NAME" /> ได้</translation>
 <translation id="8856607253650333758">รับคำอธิบาย</translation>
 <translation id="8863714995118816041">อนุญาตสิทธิ์อีกครั้งแล้วสำหรับ <ph name="SITE_NAME" /></translation>
-<translation id="8865415417596392024">ข้อมูล Chrome ในบัญชี</translation>
+<translation id="8865415417596392024">ข้อมูล Ultimatum ในบัญชี</translation>
 <translation id="8872506776304248286">เปิดในแอป</translation>
 <translation id="8890668505403261809">ค้นหาแท็บที่ไม่ระบุตัวตน</translation>
 <translation id="8892234476517513962">คุณลงชื่อเข้าใช้แล้ว</translation>
@@ -1971,7 +1971,7 @@
 <translation id="8922289737868596582">ดาวน์โหลดหน้าจากปุ่มตัวเลือกเพิ่มเติมเพื่อใช้งานแบบออฟไลน์</translation>
 <translation id="8924575305646776101"><ph name="BEGIN_LINK" />ดูข้อมูลเพิ่มเติม<ph name="END_LINK" /></translation>
 <translation id="892496902842311796">ภาษา<ph name="LANG" />พร้อมใช้งานแล้ว</translation>
-<translation id="8937772741022875483">ต้องการนำกิจกรรม Chrome ออกจากไลฟ์สไตล์ดิจิทัลไหม</translation>
+<translation id="8937772741022875483">ต้องการนำกิจกรรม Ultimatum ออกจากไลฟ์สไตล์ดิจิทัลไหม</translation>
 <translation id="8942627711005830162">เปิดในหน้าต่างอื่น</translation>
 <translation id="8945143127965743188"><ph name="LANG" /> - ดาวน์โหลดภาษานี้ไม่ได้ ลองอีกครั้งในภายหลัง</translation>
 <translation id="8946759102391960088">เข้าถึงรหัสผ่านต่อไป</translation>
@@ -1983,12 +1983,12 @@
 <translation id="8970887620466824814">เกิดข้อผิดพลาด</translation>
 <translation id="8972098258593396643">ดาวน์โหลดลงโฟลเดอร์เริ่มต้นไหม</translation>
 <translation id="8987736167266086032">ทำสิ่งที่ค้างไว้ต่อจากคราวที่แล้ว</translation>
-<translation id="8992769679401294069">ข้อมูลของคุณมีการเข้ารหัสด้วยพาสเฟรส ป้อนพาสเฟรสเพื่อใช้และบันทึกข้อมูล Chrome ในบัญชี Google</translation>
+<translation id="8992769679401294069">ข้อมูลของคุณมีการเข้ารหัสด้วยพาสเฟรส ป้อนพาสเฟรสเพื่อใช้และบันทึกข้อมูล Ultimatum ในบัญชี Google</translation>
 <translation id="8993760627012879038">เปิดแท็บใหม่ในโหมดไม่ระบุตัวตน</translation>
 <translation id="8995521496079646922">ระบบจะใช้แอปที่คุณเลือกเป็นค่าเริ่มต้น หากยังไม่มีแอปในอุปกรณ์นี้ ระบบจะดาวน์โหลดแอปนั้นในไม่ช้า</translation>
 <translation id="8996847606757455498">เลือกผู้ให้บริการอื่น</translation>
 <translation id="8998837250940831980">ย่อแท็บไม่ได้ โปรดลองอีกครั้งในภายหลัง</translation>
-<translation id="9001604755921395912">เปิดในแท็บที่ไม่ระบุตัวตนของ Chrome</translation>
+<translation id="9001604755921395912">เปิดในแท็บที่ไม่ระบุตัวตนของ Ultimatum</translation>
 <translation id="9012585441087414258">ปกป้องจากเว็บไซต์ การดาวน์โหลด และส่วนขยายที่ทราบแล้วว่าเป็นอันตราย หากหน้าเว็บทำสิ่งที่น่าสงสัย ระบบจะส่ง URL และเนื้อหาของหน้าเว็บบางส่วนไปยัง Google Safe Browsing</translation>
 <translation id="9019199799064251516">ดำเนินการต่อโดยไม่ล็อกโปรไฟล์รถยนต์ใช่ไหม</translation>
 <translation id="9022774213089566801">เข้าชมบ่อย</translation>
@@ -1996,7 +1996,7 @@
 <translation id="9027728231343310283">เลิกทำ <ph name="SITE" /></translation>
 <translation id="9035378196785279980">ย้ายไปที่\u2026</translation>
 <translation id="9042893549633094279">ความเป็นส่วนตัวและความปลอดภัย</translation>
-<translation id="9047347135558855162">เริ่มการค้นหาใน Chrome ได้อย่างรวดเร็ว</translation>
+<translation id="9047347135558855162">เริ่มการค้นหาใน Ultimatum ได้อย่างรวดเร็ว</translation>
 <translation id="9050666287014529139">พาสเฟรส</translation>
 <translation id="9055497320631373736">เว็บไซต์กลับไปมีสิทธิ์แนะนำโฆษณาได้อีกครั้งแล้ว</translation>
 <translation id="9057030985451135243">ดูข้อมูลเกี่ยวกับกลุ่มแท็บที่ใช้ร่วมกัน</translation>
@@ -2004,7 +2004,7 @@
 <translation id="9063400323119781058">ยกเลิกการสมัครรับแล้ว</translation>
 <translation id="9063523880881406963">ปิดการขอเว็บไซต์เดสก์ท็อป</translation>
 <translation id="9065203028668620118">แก้ไข</translation>
-<translation id="9065383040763568503">ข้อมูลที่จัดเก็บไว้ซึ่ง Chrome คิดว่าไม่สำคัญ (เช่น เว็บไซต์ที่ไม่มีการตั้งค่าที่บันทึกไว้หรือที่คุณไม่ค่อยได้เข้าชม)</translation>
+<translation id="9065383040763568503">ข้อมูลที่จัดเก็บไว้ซึ่ง Ultimatum คิดว่าไม่สำคัญ (เช่น เว็บไซต์ที่ไม่มีการตั้งค่าที่บันทึกไว้หรือที่คุณไม่ค่อยได้เข้าชม)</translation>
 <translation id="9067341854474068781">ไม่มีชีตพาสคีย์ที่เปิดอยู่แบบเต็มความสูง</translation>
 <translation id="906781307897697745">ใน <ph name="PRODUCT_NAME" /></translation>
 <translation id="9068568736932147490"><ph name="TAB_TITLE" />, แท็บที่ไม่ระบุตัวตนที่ปักหมุดซึ่งเลือกไว้หลายแท็บและมีเสียง</translation>
@@ -2014,8 +2014,8 @@
 <translation id="9074739597929991885">บลูทูธ</translation>
 <translation id="9081543426177426948">ระบบจะไม่บันทึกเว็บไซต์ที่คุณเข้าชมในโหมดไม่ระบุตัวตน</translation>
 <translation id="9086455579313502267">ไม่สามารถเข้าถึงเครือข่าย</translation>
-<translation id="9093915805850895575">เปิดในหน้าต่าง Chrome</translation>
-<translation id="909756639352028172">รวม Chrome ไว้ในกิจกรรมบนเว็บและแอป ตลอดจนบริการของ Google ที่ลิงก์ไว้เพื่อรับประสบการณ์การใช้งานที่ปรับเปลี่ยนในแบบของคุณมากที่สุด</translation>
+<translation id="9093915805850895575">เปิดในหน้าต่าง Ultimatum</translation>
+<translation id="909756639352028172">รวม Ultimatum ไว้ในกิจกรรมบนเว็บและแอป ตลอดจนบริการของ Google ที่ลิงก์ไว้เพื่อรับประสบการณ์การใช้งานที่ปรับเปลี่ยนในแบบของคุณมากที่สุด</translation>
 <translation id="9099220545925418560">อิงจากประวัติการท่องเว็บของคุณ การตั้งค่านี้ปิดอยู่</translation>
 <translation id="9100610230175265781">ต้องระบุพาสเฟรส</translation>
 <translation id="9101137867221042551">การจัดการ</translation>
@@ -2051,9 +2051,9 @@
 <translation id="9218430445555521422">ตั้งเป็นค่าเริ่มต้น</translation>
 <translation id="9219103736887031265">ภาพ</translation>
 <translation id="9222198206152536936">ลงชื่อเข้าใช้ด้วย <ph name="EMAIL" /> เพื่อเข้าถึงแท็บและข้อมูลอื่นๆ ในอุปกรณ์ทุกเครื่อง</translation>
-<translation id="924447568950697217">กำหนดให้ Chrome เป็นเบราว์เซอร์เริ่มต้น</translation>
-<translation id="926205370408745186">นำกิจกรรม Chrome ออกจากไลฟ์สไตล์ดิจิทัล</translation>
-<translation id="927968626442779827">ใช้โหมด Lite ใน Google Chrome</translation>
+<translation id="924447568950697217">กำหนดให้ Ultimatum เป็นเบราว์เซอร์เริ่มต้น</translation>
+<translation id="926205370408745186">นำกิจกรรม Ultimatum ออกจากไลฟ์สไตล์ดิจิทัล</translation>
+<translation id="927968626442779827">ใช้โหมด Lite ใน Ultimatum</translation>
 <translation id="928550791203542716">กำลังติดตาม <ph name="SITE_NAME" /></translation>
 <translation id="930124987204876019">ลบประวัติการเข้าชม คุกกี้ ข้อมูลเว็บไซต์ แคช…</translation>
 <translation id="930834144334005936">รีเซ็ตโหมดปัจจุบัน "<ph name="MODE_NAME" />" เป็น "ค้นหา"</translation>
@@ -2061,7 +2061,7 @@
 <translation id="939598580284253335">ป้อนพาสเฟรส</translation>
 <translation id="94161319503679839"><ph name="TAB_TITLE" /> แท็บในโหมดการแสดงภาพซ้อนภาพแบบไม่ระบุตัวตนที่ปักหมุดไว้</translation>
 <translation id="945522503751344254">ส่งความคิดเห็น</translation>
-<translation id="95817756606698420">Chrome สามารถใช้ <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> สำหรับการค้นหาในประเทศจีน คุณสามารถเปลี่ยนเครื่องมือค้นหาเริ่มต้นนี้ได้ใน<ph name="BEGIN_LINK" />การตั้งค่า<ph name="END_LINK" /></translation>
+<translation id="95817756606698420">Ultimatum สามารถใช้ <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> สำหรับการค้นหาในประเทศจีน คุณสามารถเปลี่ยนเครื่องมือค้นหาเริ่มต้นนี้ได้ใน<ph name="BEGIN_LINK" />การตั้งค่า<ph name="END_LINK" /></translation>
 <translation id="961856697154696964">ลบข้อมูลการท่องเว็บ</translation>
 <translation id="963246339335003378">เปิดตัวจัดการงาน</translation>
 <translation id="966131775676567255">กำลังลบข้อมูลบัญชี</translation>

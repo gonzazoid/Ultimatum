@@ -1,811 +1,811 @@
 <?xml version="1.0" ?>
 <!DOCTYPE translationbundle>
 <translationbundle lang="mk">
-<translation id="1001534784610492198">Архивата на инсталаторот е оштетена или неважечка. Преземете го Google Chrome повторно.</translation>
-<translation id="1006034097353797313">Продолжете каде што сте застанале: Chrome ги враќа вашите картички секогаш кога ќе рестартирате. За да го исклучите ова, одете во</translation>
-<translation id="1018937009655463387">За да го споделите прозорецот, дозволете снимање на екранот за Chrome во System Settings.</translation>
+<translation id="1001534784610492198">Архивата на инсталаторот е оштетена или неважечка. Преземете го Ultimatum повторно.</translation>
+<translation id="1006034097353797313">Продолжете каде што сте застанале: Ultimatum ги враќа вашите картички секогаш кога ќе рестартирате. За да го исклучите ова, одете во</translation>
+<translation id="1018937009655463387">За да го споделите прозорецот, дозволете снимање на екранот за Ultimatum во System Settings.</translation>
 <translation id="1026101648481255140">Продолжи со инсталирање</translation>
-<translation id="102763973188675173">Приспособете го и контролирајте го Google Chrome. Достапно е ажурирање.</translation>
-<translation id="1028061813283459617">За да ги избришете податоците од прелистување само од овој уред, а притоа да ги задржите во сметката на Google, <ph name="BEGIN_LINK" />одјавете се од Chrome<ph name="END_LINK" />.</translation>
-<translation id="1042270987544905725">Кликнете за да се затвори дијалогот за најавување на Chrome</translation>
+<translation id="102763973188675173">Приспособете го и контролирајте го Ultimatum. Достапно е ажурирање.</translation>
+<translation id="1028061813283459617">За да ги избришете податоците од прелистување само од овој уред, а притоа да ги задржите во сметката на Google, <ph name="BEGIN_LINK" />одјавете се од Ultimatum<ph name="END_LINK" />.</translation>
+<translation id="1042270987544905725">Кликнете за да се затвори дијалогот за најавување на Ultimatum</translation>
 <translation id="1051793555070215510">Помогнете ни да ја подобриме „Инкогнито“ така што ќе ја пополните анкетава што ќе ви одземе 1 минута.</translation>
-<translation id="1059838145689930908">За да ја користите екстензијава како <ph name="USER_EMAIL_ADDRESS" />, најавете се на Chrome.</translation>
+<translation id="1059838145689930908">За да ја користите екстензијава како <ph name="USER_EMAIL_ADDRESS" />, најавете се на Ultimatum.</translation>
 <translation id="1065672644894730302">Вашите поставки не може да се прочитаат.
 
 Некои функции може да се недостапни и измените на поставките нема да се зачуваат.</translation>
-<translation id="1070377999570795893">Друга програма на компјутерот додаде екстензија што може да промени како работи Chrome.
+<translation id="1070377999570795893">Друга програма на компјутерот додаде екстензија што може да промени како работи Ultimatum.
 
 <ph name="EXTENSION_NAME" /></translation>
 <translation id="1086486568852410168">Пребарај со Google Lens</translation>
-<translation id="1088300314857992706"><ph name="USER_EMAIL_ADDRESS" /> претходно користеше Chrome</translation>
-<translation id="110877069173485804">Ова е вашиот Chrome</translation>
-<translation id="1125124144982679672">Кој користи Chrome?</translation>
-<translation id="1142745911746664600">Не може да се ажурира Chrome</translation>
-<translation id="1148360048981192980">Следниот пат кога ќе го отворите Chrome на вашиот <ph name="DEVICE_TYPE" />, ќе видите барање да ја користите Google Password Manager.</translation>
-<translation id="1152920704813762236">Повеќе за ChromeOS</translation>
-<translation id="1154147086299354128">&amp;Отвори во Chrome</translation>
+<translation id="1088300314857992706"><ph name="USER_EMAIL_ADDRESS" /> претходно користеше Ultimatum</translation>
+<translation id="110877069173485804">Ова е вашиот Ultimatum</translation>
+<translation id="1125124144982679672">Кој користи Ultimatum?</translation>
+<translation id="1142745911746664600">Не може да се ажурира Ultimatum</translation>
+<translation id="1148360048981192980">Следниот пат кога ќе го отворите Ultimatum на вашиот <ph name="DEVICE_TYPE" />, ќе видите барање да ја користите Google Password Manager.</translation>
+<translation id="1152920704813762236">Повеќе за UltimatumOS</translation>
+<translation id="1154147086299354128">&amp;Отвори во Ultimatum</translation>
 <translation id="1157985233335035034">Неодамнешни јазици</translation>
-<translation id="1158134713295836892">Gemini во Chrome</translation>
+<translation id="1158134713295836892">Gemini во Ultimatum</translation>
 <translation id="1184145431117212167">Инсталирањето не успеа бидејќи вашата верзија на Windows не е поддржана.</translation>
-<translation id="1194807384646768652">Chrome го блокираше преземањево затоа што видот датотека не се презема често и можеби е опасен</translation>
-<translation id="1197860368385086056">Следниот пат кога ќе го отворите Chrome на вашиот <ph name="DEVICE_TYPE" />, ќе видите барање да ги овозможите известувањата за следење цена.</translation>
+<translation id="1194807384646768652">Ultimatum го блокираше преземањево затоа што видот датотека не се презема често и можеби е опасен</translation>
+<translation id="1197860368385086056">Следниот пат кога ќе го отворите Ultimatum на вашиот <ph name="DEVICE_TYPE" />, ќе видите барање да ги овозможите известувањата за следење цена.</translation>
 <translation id="1203500561924088507">Фала за инсталирањето. Мора да го рестартирате прелистувачот пред да користите <ph name="BUNDLE_NAME" />.</translation>
-<translation id="1278833599417554002">Рестартирајте за да се ажурира &amp;Chrome</translation>
+<translation id="1278833599417554002">Рестартирајте за да се ажурира &amp;Ultimatum</translation>
 <translation id="1290883685122687410">Грешка при поставувањето: <ph name="METAINSTALLER_EXIT_CODE" />. <ph name="WINDOWS_ERROR" /></translation>
-<translation id="1302523850133262269">Почекајте додека Chrome ги инсталира последните системски ажурирања.</translation>
+<translation id="1302523850133262269">Почекајте додека Ultimatum ги инсталира последните системски ажурирања.</translation>
 <translation id="1330562121671411446">Откриј јазик</translation>
-<translation id="1335640173511558774"><ph name="MANAGER" /> бара да ги прочитате и да ги прифатите следните „Услови за користење“ пред да го користите уредов. Овие услови не ги прошируваат, менуваат или ограничуваат „Условите на Google ChromeOS Flex“.</translation>
-<translation id="1341711321000856656">Може да смените за да гледате лозинки од друг профил на Chrome</translation>
-<translation id="1343830902827845050">Најавете се на Chrome</translation>
+<translation id="1335640173511558774"><ph name="MANAGER" /> бара да ги прочитате и да ги прифатите следните „Услови за користење“ пред да го користите уредов. Овие услови не ги прошируваат, менуваат или ограничуваат „Условите на UltimatumOS Flex“.</translation>
+<translation id="1341711321000856656">Може да смените за да гледате лозинки од друг профил на Ultimatum</translation>
+<translation id="1343830902827845050">Најавете се на Ultimatum</translation>
 <translation id="1356661055722410047">Ново! Може да ги преведувате и текстот и сликите на екранот</translation>
-<translation id="1363996462118479832">Chrome OS не може да ги синхронизира податоците поради грешка при најавувањето.</translation>
-<translation id="137466361146087520">Google Chrome Beta</translation>
+<translation id="1363996462118479832">Ultimatum OS не може да ги синхронизира податоците поради грешка при најавувањето.</translation>
+<translation id="137466361146087520">Ultimatum Beta</translation>
 <translation id="1383876407941801731">Барај</translation>
-<translation id="1399397803214730675">Овој компјутер веќе има најнова верзија на Google Chrome. Доколку софтверот не работи, деинсталирајте го Google Chrome и обидете се повторно.</translation>
+<translation id="1399397803214730675">Овој компјутер веќе има најнова верзија на Ultimatum. Доколку софтверот не работи, деинсталирајте го Ultimatum и обидете се повторно.</translation>
 <translation id="1404026649028693342">Секогаш прикажувај го „AI-режимот“</translation>
 <translation id="141901961143729572">Споделете го вашето мислење</translation>
-<translation id="1425903838053942728">{COUNT,plural, =0{Ажурирањето на Chrome заврши. Најновата верзија може да ја користите откако ќе го рестартирате. Потоа, вашите тековни картички ќе се отворат повторно.}=1{Ажурирањето на Chrome заврши. Најновата верзија може да ја користите откако ќе го рестартирате. Потоа, вашите тековни картички ќе се отворат повторно. Прозорецот „Инкогнито“ нема да се отвори повторно.}one{Ажурирањето на Chrome заврши. Најновата верзија може да ја користите откако ќе го рестартирате. Потоа, вашите тековни картички ќе се отворат повторно. Вашите # прозорец „Инкогнито“ нема да се отворат повторно.}other{Ажурирањето на Chrome заврши. Најновата верзија може да ја користите откако ќе го рестартирате. Потоа, вашите тековни картички ќе се отворат повторно. Вашите # прозорци „Инкогнито“ нема да се отворат повторно.}}</translation>
-<translation id="1434626383986940139">Апликации на Chrome Canary</translation>
-<translation id="1439793550875056299">Закачи го Chrome</translation>
-<translation id="146866447420868597">Ќе се најавите на Chrome?</translation>
-<translation id="1476347941828409626">Управувајте со профилите на Chrome</translation>
-<translation id="1492280395845991349">Рестартирање за довршување на ажурирањето на Chrome</translation>
+<translation id="1425903838053942728">{COUNT,plural, =0{Ажурирањето на Ultimatum заврши. Најновата верзија може да ја користите откако ќе го рестартирате. Потоа, вашите тековни картички ќе се отворат повторно.}=1{Ажурирањето на Ultimatum заврши. Најновата верзија може да ја користите откако ќе го рестартирате. Потоа, вашите тековни картички ќе се отворат повторно. Прозорецот „Инкогнито“ нема да се отвори повторно.}one{Ажурирањето на Ultimatum заврши. Најновата верзија може да ја користите откако ќе го рестартирате. Потоа, вашите тековни картички ќе се отворат повторно. Вашите # прозорец „Инкогнито“ нема да се отворат повторно.}other{Ажурирањето на Ultimatum заврши. Најновата верзија може да ја користите откако ќе го рестартирате. Потоа, вашите тековни картички ќе се отворат повторно. Вашите # прозорци „Инкогнито“ нема да се отворат повторно.}}</translation>
+<translation id="1434626383986940139">Апликации на Ultimatum Canary</translation>
+<translation id="1439793550875056299">Закачи го Ultimatum</translation>
+<translation id="146866447420868597">Ќе се најавите на Ultimatum?</translation>
+<translation id="1476347941828409626">Управувајте со профилите на Ultimatum</translation>
+<translation id="1492280395845991349">Рестартирање за довршување на ажурирањето на Ultimatum</translation>
 <translation id="1497802159252041924">Грешка при инсталирање: <ph name="INSTALL_ERROR" /></translation>
-<translation id="1507198376417198979">Приспособете го вашиот нов профил на Chrome</translation>
+<translation id="1507198376417198979">Приспособете го вашиот нов профил на Ultimatum</translation>
 <translation id="1518627427551567882">Страницава е заштитена</translation>
-<translation id="1547295885616600893">Chrome OS е овозможен од дополнителен <ph name="BEGIN_LINK_CROS_OSS" />софтвер со отворен код<ph name="END_LINK_CROS_OSS" />.</translation>
+<translation id="1547295885616600893">Ultimatum OS е овозможен од дополнителен <ph name="BEGIN_LINK_CROS_OSS" />софтвер со отворен код<ph name="END_LINK_CROS_OSS" />.</translation>
 <translation id="1547469039832541117">Ја завршува нагласената задача.</translation>
-<translation id="1553358976309200471">Ажурирај го Chrome</translation>
-<translation id="1585717515139318619">Друга програма на компјутерот додаде тема што може да промени како работи Chrome.
+<translation id="1553358976309200471">Ажурирај го Ultimatum</translation>
+<translation id="1585717515139318619">Друга програма на компјутерот додаде тема што може да промени како работи Ultimatum.
 
 <ph name="EXTENSION_NAME" /></translation>
-<translation id="1587223624401073077">Google Chrome ја користи вашата камера.</translation>
-<translation id="1587325591171447154">Датотеката <ph name="FILE_NAME" /> е опасна, па затоа Chrome ја блокираше.</translation>
-<translation id="1597911401261118146">За да проверите дали вашите лозинки се заштитени од упад во податоците и други проблеми со безбедноста, <ph name="BEGIN_LINK" />најавете се на Chrome<ph name="END_LINK" />.</translation>
-<translation id="1619887657840448962">За Chrome да биде побезбеден, ја оневозможивме следнава екстензија што не е наведена во <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> и може да е додадена без ваше знаење.</translation>
-<translation id="1628000112320670027">Добијте помош за Chrome</translation>
+<translation id="1587223624401073077">Ultimatum ја користи вашата камера.</translation>
+<translation id="1587325591171447154">Датотеката <ph name="FILE_NAME" /> е опасна, па затоа Ultimatum ја блокираше.</translation>
+<translation id="1597911401261118146">За да проверите дали вашите лозинки се заштитени од упад во податоците и други проблеми со безбедноста, <ph name="BEGIN_LINK" />најавете се на Ultimatum<ph name="END_LINK" />.</translation>
+<translation id="1619887657840448962">За Ultimatum да биде побезбеден, ја оневозможивме следнава екстензија што не е наведена во <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> и може да е додадена без ваше знаење.</translation>
+<translation id="1628000112320670027">Добијте помош за Ultimatum</translation>
 <translation id="1640672724030957280">Се презема…</translation>
 <translation id="1651617469580841801">Кога ја користите Google Lens, насловот, URL-адресата и содржините на страницата, како и PDF-датотеките, се испраќаат до Google. <ph name="LEARN_MORE" /></translation>
-<translation id="1662146548738125461">За ChromeOS Flex</translation>
+<translation id="1662146548738125461">За UltimatumOS Flex</translation>
 <translation id="1665867022636014702">Користете ги поставките за прелистувачот препорачани од Google</translation>
-<translation id="1674870198290878346">Отвори го линкот во инко&amp;гнито прозорец на Chrome</translation>
-<translation id="1682634494516646069">Google Chrome не може да чита и да пишува во директориумот за податоци:
+<translation id="1674870198290878346">Отвори го линкот во инко&amp;гнито прозорец на Ultimatum</translation>
+<translation id="1682634494516646069">Ultimatum не може да чита и да пишува во директориумот за податоци:
 
 <ph name="USER_DATA_DIRECTORY" /></translation>
-<translation id="1688214853608504530">Кога ќе напишете нешто во лентата за адреса или полето за пребарување, Chrome го испраќа напишаното до алатките за пребарување, AI и агенти на вашата организација за да добивате предлози.</translation>
-<translation id="1698376642261615901">Google Chrome е веб-прелистувач кој отвора веб-локации и апликации со светлосна брзина. Тој е брз, стабилен и лесен за користење. Побезбедно прелистувајте на интернет со заштита од злонамерен софтвер и кражба на идентитетот која е вградена во Google Chrome.</translation>
-<translation id="1713301662689114961">{0,plural, =1{Chrome ќе се рестартира по еден час}one{Chrome ќе се рестартира по # час}other{Chrome ќе се рестартира по # часа}}</translation>
+<translation id="1688214853608504530">Кога ќе напишете нешто во лентата за адреса или полето за пребарување, Ultimatum го испраќа напишаното до алатките за пребарување, AI и агенти на вашата организација за да добивате предлози.</translation>
+<translation id="1698376642261615901">Ultimatum е веб-прелистувач кој отвора веб-локации и апликации со светлосна брзина. Тој е брз, стабилен и лесен за користење. Побезбедно прелистувајте на интернет со заштита од злонамерен софтвер и кражба на идентитетот која е вградена во Ultimatum.</translation>
+<translation id="1713301662689114961">{0,plural, =1{Ultimatum ќе се рестартира по еден час}one{Ultimatum ќе се рестартира по # час}other{Ultimatum ќе се рестартира по # часа}}</translation>
 <translation id="1722488837206509557">Ова ќе ви овозможи да изберете некој од достапните уреди и да прикажувате содржини на нив.</translation>
-<translation id="177180974022074201">Испробајте со Gemini во Chrome</translation>
-<translation id="1786003790898721085">Проверете дали сте најавени на Chrome на <ph name="TARGET_DEVICE_NAME" /> и обидете се да испратите повторно.</translation>
-<translation id="1786044937610313874">Кратенките се отвораат во Chrome</translation>
-<translation id="178701303897325119">Екстензијава веќе не е поддржана. Затоа, Chrome препорачува да ја отстраните.</translation>
-<translation id="1812689907177901597">Ако го исклучите ова, може да се најавувате на сајтови на Google, како што е Gmail, без да се најавите на Chrome</translation>
-<translation id="1821644463306970002">{NUM_TABS,plural, =1{Chrome препорачува да ја паузирате картичката што го забавува прелистувачот}one{Chrome препорачува да ги паузирате картичките што го забавуваат прелистувачот}other{Chrome препорачува да ги паузирате картичките што го забавуваат прелистувачот}}</translation>
-<translation id="1832046143430087831">Ги забрзува сајтовите со пребарувачот V8 на Chrome, но го прави Chrome малку понеотпорен на напади. Поставкава е исклучена.</translation>
+<translation id="177180974022074201">Испробајте со Gemini во Ultimatum</translation>
+<translation id="1786003790898721085">Проверете дали сте најавени на Ultimatum на <ph name="TARGET_DEVICE_NAME" /> и обидете се да испратите повторно.</translation>
+<translation id="1786044937610313874">Кратенките се отвораат во Ultimatum</translation>
+<translation id="178701303897325119">Екстензијава веќе не е поддржана. Затоа, Ultimatum препорачува да ја отстраните.</translation>
+<translation id="1812689907177901597">Ако го исклучите ова, може да се најавувате на сајтови на Google, како што е Gmail, без да се најавите на Ultimatum</translation>
+<translation id="1821644463306970002">{NUM_TABS,plural, =1{Ultimatum препорачува да ја паузирате картичката што го забавува прелистувачот}one{Ultimatum препорачува да ги паузирате картичките што го забавуваат прелистувачот}other{Ultimatum препорачува да ги паузирате картичките што го забавуваат прелистувачот}}</translation>
+<translation id="1832046143430087831">Ги забрзува сајтовите со пребарувачот V8 на Ultimatum, но го прави Ultimatum малку понеотпорен на напади. Поставкава е исклучена.</translation>
 <translation id="1838374766361614909">Исчисти го пребарувањето</translation>
 <translation id="1843347690926158494">Пребарајте ја картичкава со Google Lens</translation>
-<translation id="1849248141818021764">Само лицата што ја имаат вашата лозинка може да ги прочитаат шифрираните податоци. Лозинката ниту се испраќа до Google ниту Google ја складира. Ако ја заборавите лозинката или сакате да ја промените поставкава, ќе треба да ги <ph name="BEGIN_LINK" />избришете податоците од Chrome во вашата сметка<ph name="END_LINK" />.</translation>
-<translation id="1860536484129686729">На Chrome му треба дозвола за да пристапи до камерата за сајтов</translation>
-<translation id="1867503717113754604">Најавете се на Chrome со вашата сметка на Google за да користите го <ph name="START_GLIC_STYLING" />Gemini<ph name="END_GLIC_STYLING" /></translation>
-<translation id="1873233029667955273">Google Chrome не е вашиот стандарден прелистувач</translation>
-<translation id="1874309113135274312">Google Chrome Beta (mDNS-In)</translation>
-<translation id="1877026089748256423">Chrome е застарен</translation>
+<translation id="1849248141818021764">Само лицата што ја имаат вашата лозинка може да ги прочитаат шифрираните податоци. Лозинката ниту се испраќа до Google ниту Google ја складира. Ако ја заборавите лозинката или сакате да ја промените поставкава, ќе треба да ги <ph name="BEGIN_LINK" />избришете податоците од Ultimatum во вашата сметка<ph name="END_LINK" />.</translation>
+<translation id="1860536484129686729">На Ultimatum му треба дозвола за да пристапи до камерата за сајтов</translation>
+<translation id="1867503717113754604">Најавете се на Ultimatum со вашата сметка на Google за да користите го <ph name="START_GLIC_STYLING" />Gemini<ph name="END_GLIC_STYLING" /></translation>
+<translation id="1873233029667955273">Ultimatum не е вашиот стандарден прелистувач</translation>
+<translation id="1874309113135274312">Ultimatum Beta (mDNS-In)</translation>
+<translation id="1877026089748256423">Ultimatum е застарен</translation>
 <translation id="1880677175115548835">Изберете текст</translation>
-<translation id="1896602904211344018">Преземете ја апликацијата Chrome</translation>
-<translation id="1919130412786645364">Дозволете најавување на Chrome</translation>
+<translation id="1896602904211344018">Преземете ја апликацијата Ultimatum</translation>
+<translation id="1919130412786645364">Дозволете најавување на Ultimatum</translation>
 <translation id="1953553007165777902">Се презема… Уште <ph name="MINUTE" /> мин.</translation>
-<translation id="1979600810166324878">Бидете побезбедни во движење со „Подобрено безбедно прелистување“ на Chrome за iOS</translation>
-<translation id="2001586581944147178">Отежнете им на луѓето со пристап до вашиот сообраќај на интернет да гледаат кои сајтови ги отворате. Chrome користи безбедна врска за да ја бара IP-адресата на даден сајт во DNS (Систем за имиња на домени).</translation>
-<translation id="2008942457798486387">{NUM_EXTENSIONS,plural, =1{Екстензијава веќе не е поддржана. Chrome препорачува да ја отстраните.}one{Екстензииве веќе не се поддржани. Chrome препорачува да ги отстраните.}other{Екстензииве веќе не се поддржани. Chrome препорачува да ги отстраните.}}</translation>
-<translation id="2018528049276128029">Секој профил содржи сопствени податоци на Chrome, како обележувачи, историја, лозинки и друго</translation>
+<translation id="1979600810166324878">Бидете побезбедни во движење со „Подобрено безбедно прелистување“ на Ultimatum за iOS</translation>
+<translation id="2001586581944147178">Отежнете им на луѓето со пристап до вашиот сообраќај на интернет да гледаат кои сајтови ги отворате. Ultimatum користи безбедна врска за да ја бара IP-адресата на даден сајт во DNS (Систем за имиња на домени).</translation>
+<translation id="2008942457798486387">{NUM_EXTENSIONS,plural, =1{Екстензијава веќе не е поддржана. Ultimatum препорачува да ја отстраните.}one{Екстензииве веќе не се поддржани. Ultimatum препорачува да ги отстраните.}other{Екстензииве веќе не се поддржани. Ultimatum препорачува да ги отстраните.}}</translation>
+<translation id="2018528049276128029">Секој профил содржи сопствени податоци на Ultimatum, како обележувачи, историја, лозинки и друго</translation>
 <translation id="2018879682492276940">Инсталирањето не успеа. Обидете се повторно.</translation>
-<translation id="2024959665595762054">За да користите и зачувувате податоци од Chrome во вашата сметка на Google, потврдете го вашиот идентитет</translation>
-<translation id="2026377840141807639">Профилите на Chrome ви овозможуваат да ги одвоите личното прелистување и работата. Додајте нов профил сега.</translation>
-<translation id="2034233344106846793">Кога е можно, Chrome ги надградува небезбедните врски на HTTPS автоматски</translation>
+<translation id="2024959665595762054">За да користите и зачувувате податоци од Ultimatum во вашата сметка на Google, потврдете го вашиот идентитет</translation>
+<translation id="2026377840141807639">Профилите на Ultimatum ви овозможуваат да ги одвоите личното прелистување и работата. Додајте нов профил сега.</translation>
+<translation id="2034233344106846793">Кога е можно, Ultimatum ги надградува небезбедните врски на HTTPS автоматски</translation>
 <translation id="2039417478970545937">Поставки.</translation>
 <translation id="2066690553719545730">Секогаш прикажувај го „AI-режимот“</translation>
-<translation id="2091012649849228750">За да добивате идни ажурирања на Google Chrome, потребен ви е Windows 10 или понова верзија. Компјутеров користи Windows 8.</translation>
-<translation id="2094648590148273905">Услови за ChromeOS Flex</translation>
-<translation id="2094919256425865063">Сепак да се напушти Chrome?</translation>
-<translation id="2096213354152647998">Не сте дошле одамна. Chrome ја отстрани следнава дозвола: <ph name="PERMISSION" />.</translation>
-<translation id="2106831557840787829">ChromeOS Flex е овозможен од дополнителен <ph name="BEGIN_LINK_CROS_OSS" />софтвер со отворен код<ph name="END_LINK_CROS_OSS" />, како што е <ph name="BEGIN_LINK_LINUX_OSS" />Linux-околината за програмирање<ph name="END_LINK_LINUX_OSS" />.</translation>
-<translation id="2108778574543343055">Оневозможете Chrome да се извршува во заднина за апликациите</translation>
-<translation id="2120620239521071941">Ова ќе избрише <ph name="ITEMS_COUNT" /> ставки од уредов. За да ги вратите вашите податоци подоцна, најавете се на Chrome како <ph name="USER_EMAIL" />.</translation>
-<translation id="2121284319307530122">Рестартирајте за да се ажурира &amp;Chrome</translation>
-<translation id="2123055963409958220">Помогнете да го подобриме Chrome со пријавување на <ph name="BEGIN_LINK" />тековните поставки<ph name="END_LINK" /></translation>
+<translation id="2091012649849228750">За да добивате идни ажурирања на Ultimatum, потребен ви е Windows 10 или понова верзија. Компјутеров користи Windows 8.</translation>
+<translation id="2094648590148273905">Услови за UltimatumOS Flex</translation>
+<translation id="2094919256425865063">Сепак да се напушти Ultimatum?</translation>
+<translation id="2096213354152647998">Не сте дошле одамна. Ultimatum ја отстрани следнава дозвола: <ph name="PERMISSION" />.</translation>
+<translation id="2106831557840787829">UltimatumOS Flex е овозможен од дополнителен <ph name="BEGIN_LINK_CROS_OSS" />софтвер со отворен код<ph name="END_LINK_CROS_OSS" />, како што е <ph name="BEGIN_LINK_LINUX_OSS" />Linux-околината за програмирање<ph name="END_LINK_LINUX_OSS" />.</translation>
+<translation id="2108778574543343055">Оневозможете Ultimatum да се извршува во заднина за апликациите</translation>
+<translation id="2120620239521071941">Ова ќе избрише <ph name="ITEMS_COUNT" /> ставки од уредов. За да ги вратите вашите податоци подоцна, најавете се на Ultimatum како <ph name="USER_EMAIL" />.</translation>
+<translation id="2121284319307530122">Рестартирајте за да се ажурира &amp;Ultimatum</translation>
+<translation id="2123055963409958220">Помогнете да го подобриме Ultimatum со пријавување на <ph name="BEGIN_LINK" />тековните поставки<ph name="END_LINK" /></translation>
 <translation id="2126108037660393668">Преземената датотека не можеше да се потврди.</translation>
-<translation id="2128411189117340671">Управувајте со профилите на Chrome</translation>
+<translation id="2128411189117340671">Управувајте со профилите на Ultimatum</translation>
 <translation id="2137162749895930932">Затвори го екранот за преведување</translation>
-<translation id="2139300032719313227">Рестартирајте го Chrome OS</translation>
-<translation id="2151406531797534936">Рестартирајте го Chrome сега</translation>
-<translation id="2163089732491971196">За да користите и зачувувате податоци од Chrome во вашата сметка на Google, внесете ја вашата лозинка</translation>
+<translation id="2139300032719313227">Рестартирајте го Ultimatum OS</translation>
+<translation id="2151406531797534936">Рестартирајте го Ultimatum сега</translation>
+<translation id="2163089732491971196">За да користите и зачувувате податоци од Ultimatum во вашата сметка на Google, внесете ја вашата лозинка</translation>
 <translation id="2170098639895543546">Изберете што било на страницата</translation>
 <translation id="2174917724755363426">Инсталирањето не е завршено. Дали сигурно сакате да го откажете?</translation>
 <translation id="2186206192313702726">Google Lens</translation>
 <translation id="2190166659037789668">Грешка при проверка за ажурирање: <ph name="UPDATE_CHECK_ERROR" />.</translation>
-<translation id="2199691482078155239">Chrome ви дава поголема контрола над рекламите што ги гледате и ограничува што може да учат сајтовите за вас кога ви прикажуваат персонализирани реклами</translation>
-<translation id="2216543877350048334">Одјавете се за да се отстрани вашата сметка на Google од Chrome</translation>
+<translation id="2199691482078155239">Ultimatum ви дава поголема контрола над рекламите што ги гледате и ограничува што може да учат сајтовите за вас кога ви прикажуваат персонализирани реклами</translation>
+<translation id="2216543877350048334">Одјавете се за да се отстрани вашата сметка на Google од Ultimatum</translation>
 <translation id="2236949375853147973">Моја активност</translation>
-<translation id="22791603784558743">Затворете го Gemini во Chrome Dev</translation>
-<translation id="2284380654876659752">Кога ќе посетите конкретен сајт, Chrome испраќа обфускиран дел од URL-адресата до <ph name="BEGIN_LINK" />Безбедно прелистување со Google<ph name="END_LINK" /> преку сервер за приватност што ја крие вашата IP-адреса. Ако конкретен сајт прави нешто сомнително, ќе се испратат и целосните URL-адреси и делови од содржините на страницата.</translation>
-<translation id="2290014774651636340">Клучевите Google API недостасуваат. Некои функции на Google Chrome ќе бидат оневозможени.</translation>
-<translation id="2290095356545025170">Дали сте сигурни дека сакате да го деинсталирате Google Chrome?</translation>
-<translation id="2301513536169703857">За да ги добиете лозинките, обележувачите и друго на сите ваши уреди, најавете се на Chrome</translation>
+<translation id="22791603784558743">Затворете го Gemini во Ultimatum Dev</translation>
+<translation id="2284380654876659752">Кога ќе посетите конкретен сајт, Ultimatum испраќа обфускиран дел од URL-адресата до <ph name="BEGIN_LINK" />Безбедно прелистување со Google<ph name="END_LINK" /> преку сервер за приватност што ја крие вашата IP-адреса. Ако конкретен сајт прави нешто сомнително, ќе се испратат и целосните URL-адреси и делови од содржините на страницата.</translation>
+<translation id="2290014774651636340">Клучевите Google API недостасуваат. Некои функции на Ultimatum ќе бидат оневозможени.</translation>
+<translation id="2290095356545025170">Дали сте сигурни дека сакате да го деинсталирате Ultimatum?</translation>
+<translation id="2301513536169703857">За да ги добиете лозинките, обележувачите и друго на сите ваши уреди, најавете се на Ultimatum</translation>
 <translation id="2307973900865360088">Чувај во Dock</translation>
-<translation id="2309047409763057870">Ова е второстепена инсталација на Google Chrome и затоа не може да биде стандарден прелистувач.</translation>
-<translation id="2345992953227471816">Chrome откри дека екстензииве содржат злонамерен софтвер:</translation>
-<translation id="2348335408836342058">На Chrome му треба дозвола за да пристапи до камерата и микрофонот за сајтов</translation>
-<translation id="234869673307233423">Chrome не може да ги провери вашите лозинки. Обидете се пак подоцна.</translation>
+<translation id="2309047409763057870">Ова е второстепена инсталација на Ultimatum и затоа не може да биде стандарден прелистувач.</translation>
+<translation id="2345992953227471816">Ultimatum откри дека екстензииве содржат злонамерен софтвер:</translation>
+<translation id="2348335408836342058">На Ultimatum му треба дозвола за да пристапи до камерата и микрофонот за сајтов</translation>
+<translation id="234869673307233423">Ultimatum не може да ги провери вашите лозинки. Обидете се пак подоцна.</translation>
 <translation id="2359808026110333948">Продолжи</translation>
 <translation id="2403703063067034158">Грешка при стартување: во тек е друго поставување во моментов, обидете се повторно подоцна.</translation>
-<translation id="2409816192575564775">{NUM_DEVICES,plural, =0{Една или повеќе екстензии за Chrome пристапуваа до 1 HID-уред}=1{Една или повеќе екстензии за Chrome пристапуваат до 1 HID-уред}one{Една или повеќе екстензии за Chrome пристапуваат до # HID-уред}other{Една или повеќе екстензии за Chrome пристапуваат до # HID-уреди}}</translation>
-<translation id="2424440923901031101">Екстензијава ги прекршува правилата на „Веб-продавницата на Chrome“, па можеби не е безбедна. Отстранете ја од Chrome за да не може веќе да ги гледа и променува вашите податоци на сајтовите што ги отворате, што ги опфаќа и вашите лични податоци.</translation>
-<translation id="2467438592969358367">Google Chrome сака да ги извезе вашите лозинки. Внесете ја лозинката за Windows за да го дозволите ова.</translation>
-<translation id="2472092250898121027">Екстензијава содржи злонамерен софтвер, па не е безбедна. Отстранете ја од Chrome за да не може веќе да ги гледа и променува вашите податоци на сајтовите што ги отворате, што ги опфаќа и вашите лични податоци.</translation>
+<translation id="2409816192575564775">{NUM_DEVICES,plural, =0{Една или повеќе екстензии за Ultimatum пристапуваа до 1 HID-уред}=1{Една или повеќе екстензии за Ultimatum пристапуваат до 1 HID-уред}one{Една или повеќе екстензии за Ultimatum пристапуваат до # HID-уред}other{Една или повеќе екстензии за Ultimatum пристапуваат до # HID-уреди}}</translation>
+<translation id="2424440923901031101">Екстензијава ги прекршува правилата на „Веб-продавницата на Ultimatum“, па можеби не е безбедна. Отстранете ја од Ultimatum за да не може веќе да ги гледа и променува вашите податоци на сајтовите што ги отворате, што ги опфаќа и вашите лични податоци.</translation>
+<translation id="2467438592969358367">Ultimatum сака да ги извезе вашите лозинки. Внесете ја лозинката за Windows за да го дозволите ова.</translation>
+<translation id="2472092250898121027">Екстензијава содржи злонамерен софтвер, па не е безбедна. Отстранете ја од Ultimatum за да не може веќе да ги гледа и променува вашите податоци на сајтовите што ги отворате, што ги опфаќа и вашите лични податоци.</translation>
 <translation id="2485422356828889247">Деинсталирај</translation>
 <translation id="2513154137948333830">Потребно е рестартирање: <ph name="INSTALL_SUCCESS" /></translation>
-<translation id="2534365042754120737">За да ги заштитите вашите податоци, дозволете Chrome да ги отстрани дозволите од сајтовите што не сте ги отвориле одамна. Ова нема да ги сопре известувањата.</translation>
-<translation id="2556847002339236023">Вашата организација го затвора Chrome кога не се користи <ph name="TIMEOUT_DURATION" />. Податоците од прелистување се избришаа. Тоа може да ги опфати историјата, автоматското пополнување и преземањата.</translation>
-<translation id="2563121210305478421">Да се рестартира Chrome?</translation>
-<translation id="2569974318947988067">Chrome ќе се обиде да ги надгради навигациите на HTTPS</translation>
-<translation id="2571392474191184472">Вашата организација управува со Chrome</translation>
-<translation id="2574930892358684005">Корисникот <ph name="EXISTING_USER" /> веќе е најавен на овој профил на Chrome. За да прелистувате одделно, Chrome може да создаде одделен профил за вас.</translation>
-<translation id="2580411288591421699">Не може да се инсталира истата верзија на Google Chrome што работи во моментов. Затворете го Google Chrome и обидете се повторно.</translation>
-<translation id="2586406160782125153">Ова ќе ги избрише податоците од прелистувањето од уредов. За да ги вратите вашите податоци подоцна, најавете се на Chrome како <ph name="USER_EMAIL" />.</translation>
+<translation id="2534365042754120737">За да ги заштитите вашите податоци, дозволете Ultimatum да ги отстрани дозволите од сајтовите што не сте ги отвориле одамна. Ова нема да ги сопре известувањата.</translation>
+<translation id="2556847002339236023">Вашата организација го затвора Ultimatum кога не се користи <ph name="TIMEOUT_DURATION" />. Податоците од прелистување се избришаа. Тоа може да ги опфати историјата, автоматското пополнување и преземањата.</translation>
+<translation id="2563121210305478421">Да се рестартира Ultimatum?</translation>
+<translation id="2569974318947988067">Ultimatum ќе се обиде да ги надгради навигациите на HTTPS</translation>
+<translation id="2571392474191184472">Вашата организација управува со Ultimatum</translation>
+<translation id="2574930892358684005">Корисникот <ph name="EXISTING_USER" /> веќе е најавен на овој профил на Ultimatum. За да прелистувате одделно, Ultimatum може да создаде одделен профил за вас.</translation>
+<translation id="2580411288591421699">Не може да се инсталира истата верзија на Ultimatum што работи во моментов. Затворете го Ultimatum и обидете се повторно.</translation>
+<translation id="2586406160782125153">Ова ќе ги избрише податоците од прелистувањето од уредов. За да ги вратите вашите податоци подоцна, најавете се на Ultimatum како <ph name="USER_EMAIL" />.</translation>
 <translation id="259935314519650377">Преземениот инсталатор не можеше да се кешира. Грешка: <ph name="UNPACK_CACHING_ERROR_CODE" />.</translation>
 <translation id="2620436844016719705">Систем</translation>
-<translation id="263447411082773721">Одржувајте ги лозинките, обележувачите и историјата совршено синхронизирани на уредите. Лесно пристапувајте до функциите што ги знаете и ги обожавате така што ќе го промените стандардниот прелистувач на Chrome. За брз пристап, Chrome ќе се закачи на лентата со задачи.</translation>
-<translation id="2645435784669275700">ChromeOS</translation>
-<translation id="2649768380733403658">Chrome редовно проверува за да се погрижи вашиот прелистувач да ги има најбезбедните поставки. Ќе ве известиме ако треба да се прегледа нешто.</translation>
-<translation id="2652691236519827073">Отвори го линкот во нова &amp;картичка на Chrome</translation>
-<translation id="2665296953892887393">Помогнете да го подобриме Google Chrome со испраќање извештаи за падови и <ph name="UMA_LINK" /> до Google</translation>
+<translation id="263447411082773721">Одржувајте ги лозинките, обележувачите и историјата совршено синхронизирани на уредите. Лесно пристапувајте до функциите што ги знаете и ги обожавате така што ќе го промените стандардниот прелистувач на Ultimatum. За брз пристап, Ultimatum ќе се закачи на лентата со задачи.</translation>
+<translation id="2645435784669275700">UltimatumOS</translation>
+<translation id="2649768380733403658">Ultimatum редовно проверува за да се погрижи вашиот прелистувач да ги има најбезбедните поставки. Ќе ве известиме ако треба да се прегледа нешто.</translation>
+<translation id="2652691236519827073">Отвори го линкот во нова &amp;картичка на Ultimatum</translation>
+<translation id="2665296953892887393">Помогнете да го подобриме Ultimatum со испраќање извештаи за падови и <ph name="UMA_LINK" /> до Google</translation>
 <translation id="2668094785979141847">Кликнете за да излезете од Google Lens</translation>
-<translation id="2681444469812712297"><ph name="URL" /> ќе се отвори во нова картичка во Google Chrome.</translation>
-<translation id="2699790011615497488">Отворете го Gemini во Chrome Beta</translation>
+<translation id="2681444469812712297"><ph name="URL" /> ќе се отвори во нова картичка во Ultimatum.</translation>
+<translation id="2699790011615497488">Отворете го Gemini во Ultimatum Beta</translation>
 <translation id="2712141162840347885">Изберете што било за да пребарате со Google Lens или притиснете го копчето Escape за да излезете од Google Lens</translation>
 <translation id="2738871930057338499">Не може да се поврзе на интернет. HTTP-грешка 403: забранет пристап. Проверете ја вашата конфигурација на прокси.</translation>
-<translation id="2742320827292110288">Предупредување: Google Chrome не може да ги спречи екстензиите да ја снимаат вашата историја на прелистувањето. За да ја оневозможите оваа екстензија во режимот „Инкогнито“, поништете го изборот на опцијава.</translation>
-<translation id="2747021967398957654">{count,plural, =1{Некои од вашите податоци од Chrome сѐ уште не се зачувани во вашата сметка на Google. Почекајте неколку минути пред да се одјавите. Ако се одјавите сега, податоциве (1 ставка) ќе се избришат.}one{Некои од вашите податоци од Chrome сѐ уште не се зачувани во вашата сметка на Google. Почекајте неколку минути пред да се одјавите. Ако се одјавите сега, податоциве ({count} ставка) ќе се избришат.}other{Некои од вашите податоци од Chrome сѐ уште не се зачувани во вашата сметка на Google. Почекајте неколку минути пред да се одјавите. Ако се одјавите сега, податоциве ({count} ставки) ќе се избришат.}}</translation>
+<translation id="2742320827292110288">Предупредување: Ultimatum не може да ги спречи екстензиите да ја снимаат вашата историја на прелистувањето. За да ја оневозможите оваа екстензија во режимот „Инкогнито“, поништете го изборот на опцијава.</translation>
+<translation id="2747021967398957654">{count,plural, =1{Некои од вашите податоци од Ultimatum сѐ уште не се зачувани во вашата сметка на Google. Почекајте неколку минути пред да се одјавите. Ако се одјавите сега, податоциве (1 ставка) ќе се избришат.}one{Некои од вашите податоци од Ultimatum сѐ уште не се зачувани во вашата сметка на Google. Почекајте неколку минути пред да се одјавите. Ако се одјавите сега, податоциве ({count} ставка) ќе се избришат.}other{Некои од вашите податоци од Ultimatum сѐ уште не се зачувани во вашата сметка на Google. Почекајте неколку минути пред да се одјавите. Ако се одјавите сега, податоциве ({count} ставки) ќе се избришат.}}</translation>
 <translation id="2753623023919742414">Кликнете за да пребарате</translation>
-<translation id="2757826245013442432">{COUNT,plural, =0{„Напредна заштита“ бара да го рестартирате Chrome за да се примени ажурирање}=1{„Напредна заштита“ бара да го рестартирате Chrome за да се примени ажурирање. Прозорецот „Инкогнито“ нема да се отвори повторно.}one{„Напредна заштита“ бара да го рестартирате Chrome за да се примени ажурирање. # прозорец „Инкогнито“ нема да се отворат повторно.}other{„Напредна заштита“ бара да го рестартирате Chrome за да се примени ажурирање. # прозорци „Инкогнито“ нема да се отворат повторно.}}</translation>
-<translation id="2765403129283291972">На Chrome му треба дозвола за да пристапи до микрофонот за сајтов</translation>
-<translation id="2775140325783767197">Chrome не може да ги провери вашите лозинки. Проверете ја интернет-врската.</translation>
-<translation id="2797864378188255696">При најавување на услуги на Google како Gmail или YouTube со <ph name="USER_EMAIL" />, може да се најавувате на Chrome автоматски со истата сметка</translation>
-<translation id="2799162042226656283">Вашиот Chrome</translation>
+<translation id="2757826245013442432">{COUNT,plural, =0{„Напредна заштита“ бара да го рестартирате Ultimatum за да се примени ажурирање}=1{„Напредна заштита“ бара да го рестартирате Ultimatum за да се примени ажурирање. Прозорецот „Инкогнито“ нема да се отвори повторно.}one{„Напредна заштита“ бара да го рестартирате Ultimatum за да се примени ажурирање. # прозорец „Инкогнито“ нема да се отворат повторно.}other{„Напредна заштита“ бара да го рестартирате Ultimatum за да се примени ажурирање. # прозорци „Инкогнито“ нема да се отворат повторно.}}</translation>
+<translation id="2765403129283291972">На Ultimatum му треба дозвола за да пристапи до микрофонот за сајтов</translation>
+<translation id="2775140325783767197">Ultimatum не може да ги провери вашите лозинки. Проверете ја интернет-врската.</translation>
+<translation id="2797864378188255696">При најавување на услуги на Google како Gmail или YouTube со <ph name="USER_EMAIL" />, може да се најавувате на Ultimatum автоматски со истата сметка</translation>
+<translation id="2799162042226656283">Вашиот Ultimatum</translation>
 <translation id="2799223571221894425">Рестартирај</translation>
-<translation id="2818684386420968393">Оневозможете Chrome да се извршува во заднина за апликациите</translation>
-<translation id="2825024317344269723">Опасен сајт. Chrome ги отстрани известувањата.</translation>
+<translation id="2818684386420968393">Оневозможете Ultimatum да се извршува во заднина за апликациите</translation>
+<translation id="2825024317344269723">Опасен сајт. Ultimatum ги отстрани известувањата.</translation>
 <translation id="2841525013647267359">Преведи од</translation>
 <translation id="2846251086934905009">Грешка при инсталирање: инсталаторот не заврши. Инсталацијата е прекината.</translation>
-<translation id="2853415089995957805">Chrome вчитува страници однапред што е веројатно дека ќе ги отворите за да може да се вчитуваат побрзо кога ги отворате</translation>
-<translation id="2857540653560290388">Се стартува Chrome…</translation>
-<translation id="286025080868315611">Дознајте зошто Chrome блокира некои преземања</translation>
-<translation id="2861074815332034794">Chrome се ажурира (<ph name="PROGRESS_PERCENT" />)</translation>
-<translation id="2875053229394024379">Кога ќе се најавите на Chrome со вашата сметка на Google, може да го користите вашиот профил на Chrome со Gemini. <ph name="BEGIN_LINK" />Дознајте како да се најавите на Chrome<ph name="END_LINK" /></translation>
-<translation id="2876628302275096482">Дознајте повеќе за тоа <ph name="BEGIN_LINK" />како Chrome ја штити приватноста на вашите податоци<ph name="END_LINK" /></translation>
+<translation id="2853415089995957805">Ultimatum вчитува страници однапред што е веројатно дека ќе ги отворите за да може да се вчитуваат побрзо кога ги отворате</translation>
+<translation id="2857540653560290388">Се стартува Ultimatum…</translation>
+<translation id="286025080868315611">Дознајте зошто Ultimatum блокира некои преземања</translation>
+<translation id="2861074815332034794">Ultimatum се ажурира (<ph name="PROGRESS_PERCENT" />)</translation>
+<translation id="2875053229394024379">Кога ќе се најавите на Ultimatum со вашата сметка на Google, може да го користите вашиот профил на Ultimatum со Gemini. <ph name="BEGIN_LINK" />Дознајте како да се најавите на Ultimatum<ph name="END_LINK" /></translation>
+<translation id="2876628302275096482">Дознајте повеќе за тоа <ph name="BEGIN_LINK" />како Ultimatum ја штити приватноста на вашите податоци<ph name="END_LINK" /></translation>
 <translation id="2885378588091291677">Управник со задачи</translation>
-<translation id="2888126860611144412">За Chrome</translation>
+<translation id="2888126860611144412">За Ultimatum</translation>
 <translation id="2915996080311180594">Рестартирај подоцна</translation>
-<translation id="2926676257163822632">Слабите лозинки се лесни за погаѓање. Дозволете Chrome да ви <ph name="BEGIN_LINK" />создаде и запомни силни лозинки<ph name="END_LINK" />.</translation>
-<translation id="2926952073016206995">На Chrome му треба дозвола за камерата за сајтов</translation>
+<translation id="2926676257163822632">Слабите лозинки се лесни за погаѓање. Дозволете Ultimatum да ви <ph name="BEGIN_LINK" />создаде и запомни силни лозинки<ph name="END_LINK" />.</translation>
+<translation id="2926952073016206995">На Ultimatum му треба дозвола за камерата за сајтов</translation>
 <translation id="2928420929544864228">Инсталирањето заврши.</translation>
 <translation id="2945997411976714835">Грешка при инсталирање: процесот на инсталаторот не можеше да започне.</translation>
-<translation id="2969728957078202736"><ph name="PAGE_TITLE" /> - Мрежно најавување - Chrome</translation>
-<translation id="2970681950995291301">Одјавете се од Chrome на страницата „Поставки“ за да се отстрани вашата сметка на Google од Chrome</translation>
-<translation id="2991167882679440829">Вашите лозинки и други податоци од Chrome што сте ги зачувале во вашата сметка на Google ќе се отстранат од уредов. За да ги користите повторно во Chrome, најавете се пак.</translation>
+<translation id="2969728957078202736"><ph name="PAGE_TITLE" /> - Мрежно најавување - Ultimatum</translation>
+<translation id="2970681950995291301">Одјавете се од Ultimatum на страницата „Поставки“ за да се отстрани вашата сметка на Google од Ultimatum</translation>
+<translation id="2991167882679440829">Вашите лозинки и други податоци од Ultimatum што сте ги зачувале во вашата сметка на Google ќе се отстранат од уредов. За да ги користите повторно во Ultimatum, најавете се пак.</translation>
 <translation id="2994465299455873643">Обезбедува услуги за шифрирање и безбеден клуч за враќање на <ph name="BROWSER_NAME" /> ако застари. Ако е оневозможена услугава, <ph name="BROWSER_NAME" /> може да го изгуби пристапот до шифрираните податоци, поради што <ph name="BROWSER_NAME" /> може да не може да се врати.</translation>
 <translation id="3003694935412297923">Сите задачи</translation>
-<translation id="3018957014024118866">Избриши ги и податоците од Chrome (<ph name="URL" />)</translation>
-<translation id="3019382870990049182">Рестартирај за да се ажурира &amp;ChromeOS Flex</translation>
-<translation id="3037517125981011456">Прикажува prompt за најава на Chrome</translation>
-<translation id="3037838751736561277">Google Chrome е во заднински режим.</translation>
+<translation id="3018957014024118866">Избриши ги и податоците од Ultimatum (<ph name="URL" />)</translation>
+<translation id="3019382870990049182">Рестартирај за да се ажурира &amp;UltimatumOS Flex</translation>
+<translation id="3037517125981011456">Прикажува prompt за најава на Ultimatum</translation>
+<translation id="3037838751736561277">Ultimatum е во заднински режим.</translation>
 <translation id="3038232873781883849">Се чека инсталирање…</translation>
 <translation id="3045032126857188731">Јазик на преводот: <ph name="LANGUAGE" /></translation>
 <translation id="3047590466164881923">Затвори го дијалогот за повратни информации</translation>
 <translation id="306179102415443347">Користете ја вашата кратенка за да го отворите Google Password Manager брзо. Кратенката може да ја преместите на почетниот екран или „Стартерот на апликации“ на вашиот компјутер.</translation>
-<translation id="3065168410429928842">Картичка на Chrome</translation>
-<translation id="3073571714401714450">Вклучете/исклучете го Gemini во Chrome Dev</translation>
-<translation id="3080151273017101988">Продолжи со извршување апликации во заднина кога е затворен Google Chrome</translation>
-<translation id="308397506772922478">Ако сте ја заборавиле лозинката или сакате да ја промените поставкава, <ph name="BEGIN_LINK" />избришете ги податоците од Chrome во вашата сметка<ph name="END_LINK" /></translation>
-<translation id="3100998948628680988">Именувајте го профилот на Chrome</translation>
+<translation id="3065168410429928842">Картичка на Ultimatum</translation>
+<translation id="3073571714401714450">Вклучете/исклучете го Gemini во Ultimatum Dev</translation>
+<translation id="3080151273017101988">Продолжи со извршување апликации во заднина кога е затворен Ultimatum</translation>
+<translation id="308397506772922478">Ако сте ја заборавиле лозинката или сакате да ја промените поставкава, <ph name="BEGIN_LINK" />избришете ги податоците од Ultimatum во вашата сметка<ph name="END_LINK" /></translation>
+<translation id="3100998948628680988">Именувајте го профилот на Ultimatum</translation>
 <translation id="310459126943037700">Задачите не можеше да се сопрат.</translation>
 <translation id="3104828284009500087">Пребарувајте што било на страницата</translation>
-<translation id="3112458742631356345">Chrome го блокираше преземањево затоа што датотеката не се презема често и можеби е опасна</translation>
-<translation id="3114643501466072395">За да проверите дали другите ваши лозинки се заштитени од упад во податоците и други проблеми со безбедноста, <ph name="BEGIN_LINK" />најавете се на Chrome<ph name="END_LINK" />.</translation>
-<translation id="3119573284443908657">Chrome го блокираше преземањево бидејќи архивираната датотека содржи други датотеки што може да кријат злонамерен софтвер</translation>
-<translation id="3124332159330678621">Приспособете го Chrome за да му дадете нов изглед на вашиот прелистувач</translation>
+<translation id="3112458742631356345">Ultimatum го блокираше преземањево затоа што датотеката не се презема често и можеби е опасна</translation>
+<translation id="3114643501466072395">За да проверите дали другите ваши лозинки се заштитени од упад во податоците и други проблеми со безбедноста, <ph name="BEGIN_LINK" />најавете се на Ultimatum<ph name="END_LINK" />.</translation>
+<translation id="3119573284443908657">Ultimatum го блокираше преземањево бидејќи архивираната датотека содржи други датотеки што може да кријат злонамерен софтвер</translation>
+<translation id="3124332159330678621">Приспособете го Ultimatum за да му дадете нов изглед на вашиот прелистувач</translation>
 <translation id="3130333203120345554">Ново пребарување</translation>
-<translation id="3135560418014806498">Додајте профил на Chrome</translation>
+<translation id="3135560418014806498">Додајте профил на Ultimatum</translation>
 <translation id="3137969841538672700">Повлечете за да пребарате</translation>
-<translation id="3140883423282498090">Вашите промени ќе делуваат со следното рестартирање на Google Chrome.</translation>
-<translation id="3149510190863420837">Апликации на Chrome</translation>
+<translation id="3140883423282498090">Вашите промени ќе делуваат со следното рестартирање на Ultimatum.</translation>
+<translation id="3149510190863420837">Апликации на Ultimatum</translation>
 <translation id="3161522574479303604">Сите јазици</translation>
-<translation id="319199214552513804">За да ја добиете екстензијава, а и друго на сите ваши компјутери, најавете се на Chrome</translation>
-<translation id="3196187562065225381">Chrome го блокираше преземањево затоа што датотеката е опасна</translation>
+<translation id="319199214552513804">За да ја добиете екстензијава, а и друго на сите ваши компјутери, најавете се на Ultimatum</translation>
+<translation id="3196187562065225381">Ultimatum го блокираше преземањево затоа што датотеката е опасна</translation>
 <translation id="3222857603094643834">Пребарајте што било на страницава со Google Lens</translation>
-<translation id="3226612997184048185">Ако ги зачувувате и вашите обележувачи во вашата сметка на Google, може да ги следите цените на производите во Chrome и да добивате известувања кога ќе се намали цената</translation>
-<translation id="3242123554343253302">Додајте профил на Chrome</translation>
-<translation id="3245429137663807393">Ако ги споделувате и извештаите за користењето на Chrome, тие ги содржат URL-адресите што ги посетувате</translation>
-<translation id="3259748324892322072">Преземете ја апликацијата Chrome</translation>
+<translation id="3226612997184048185">Ако ги зачувувате и вашите обележувачи во вашата сметка на Google, може да ги следите цените на производите во Ultimatum и да добивате известувања кога ќе се намали цената</translation>
+<translation id="3242123554343253302">Додајте профил на Ultimatum</translation>
+<translation id="3245429137663807393">Ако ги споделувате и извештаите за користењето на Ultimatum, тие ги содржат URL-адресите што ги посетувате</translation>
+<translation id="3259748324892322072">Преземете ја апликацијата Ultimatum</translation>
 <translation id="3286538390144397061">Рестартирај веднаш</translation>
-<translation id="3292333338048274092">Потоа ќе треба да го рестартирате Chrome.</translation>
+<translation id="3292333338048274092">Потоа ќе треба да го рестартирате Ultimatum.</translation>
 <translation id="3324218984287646518">Прашајте ја Google Lens за видеово</translation>
-<translation id="3327226547491422998">Подоцна, Chrome може да прашува дали сакате да ги користи зачуваните податоци за да ги пополнува формуларите автоматски за вас</translation>
+<translation id="3327226547491422998">Подоцна, Ultimatum може да прашува дали сакате да ги користи зачуваните податоци за да ги пополнува формуларите автоматски за вас</translation>
 <translation id="3352986031709923790">горен десен агол на областа за пребарување: десно <ph name="RIGHT" /> %, горе <ph name="TOP" /> %</translation>
-<translation id="3360895254066713204">Помошник на Chrome</translation>
-<translation id="3373752068427117404">Некои функции и екстензии на Chrome доаѓаат со кратенки. Може да изберете да ги вклучите повторно.</translation>
-<translation id="3379938682270551431">{0,plural, =0{Chrome ќе се рестартира сега}=1{Chrome ќе се рестартира по 1 секунда}one{Chrome ќе се рестартира по # секунда}other{Chrome ќе се рестартира по # секунди}}</translation>
-<translation id="3380249972812870825">За да го отворите Gemini во Chrome, притиснете <ph name="GLOBAL_HOTKEY" /></translation>
-<translation id="3396977131400919238">Се појави грешка во оперативниот систем додека се инсталираше. Преземете го Google Chrome повторно.</translation>
-<translation id="3428747202529429621">Ја чува вашата безбедност на Chrome и може да се користи за да ја подобри безбедноста на други апликации на Google кога сте најавени</translation>
-<translation id="3434246496373299699">Chrome може да ги проверува вашите лозинки кога ќе се најавите со вашата сметка на Google</translation>
-<translation id="3438681572027105609">За да ги добиете лозинките и друго на сите ваши уреди, најавете се на Chrome</translation>
-<translation id="3450887623636316740">Датотекава можеби е опасна<ph name="LINE_BREAK" />Chrome може да го провери преземањево за вас ако ја внесете лозинката. Детали за датотеката се испраќаат до „Безбедно прелистување со Google“, но содржините и лозинката на датотеката остануваат на уредот.</translation>
-<translation id="3451115285585441894">Се додава на Chrome...</translation>
-<translation id="345171907106878721">Додај се себеси на Chrome</translation>
-<translation id="3453763134178591239">Услови на Chrome OS</translation>
-<translation id="3503306920980160878">На Chrome му треба пристап до вашата локација за да ја сподели со сајтов</translation>
-<translation id="3533694711092285624">Нема зачувани лозинки. Chrome може да ги проверува вашите лозинки кога ги зачувувате.</translation>
-<translation id="3541482654983822893">Chrome не може да ги провери вашите лозинки. Обидете се пак по 24 часа.</translation>
-<translation id="3576528680708590453">Администраторот на системот го конфигурирал Google Chrome да отвора друг прелистувач за пристап до <ph name="TARGET_URL_HOSTNAME" />.</translation>
-<translation id="3582972582564653026">Синхронизирајте го и персонализирајте го Chrome на сите ваши уреди</translation>
-<translation id="3583751698304738917">Веќе сте најавени како <ph name="USER_EMAIL_ADDRESS" /> во друг профил на Chrome</translation>
+<translation id="3360895254066713204">Помошник на Ultimatum</translation>
+<translation id="3373752068427117404">Некои функции и екстензии на Ultimatum доаѓаат со кратенки. Може да изберете да ги вклучите повторно.</translation>
+<translation id="3379938682270551431">{0,plural, =0{Ultimatum ќе се рестартира сега}=1{Ultimatum ќе се рестартира по 1 секунда}one{Ultimatum ќе се рестартира по # секунда}other{Ultimatum ќе се рестартира по # секунди}}</translation>
+<translation id="3380249972812870825">За да го отворите Gemini во Ultimatum, притиснете <ph name="GLOBAL_HOTKEY" /></translation>
+<translation id="3396977131400919238">Се појави грешка во оперативниот систем додека се инсталираше. Преземете го Ultimatum повторно.</translation>
+<translation id="3428747202529429621">Ја чува вашата безбедност на Ultimatum и може да се користи за да ја подобри безбедноста на други апликации на Google кога сте најавени</translation>
+<translation id="3434246496373299699">Ultimatum може да ги проверува вашите лозинки кога ќе се најавите со вашата сметка на Google</translation>
+<translation id="3438681572027105609">За да ги добиете лозинките и друго на сите ваши уреди, најавете се на Ultimatum</translation>
+<translation id="3450887623636316740">Датотекава можеби е опасна<ph name="LINE_BREAK" />Ultimatum може да го провери преземањево за вас ако ја внесете лозинката. Детали за датотеката се испраќаат до „Безбедно прелистување со Google“, но содржините и лозинката на датотеката остануваат на уредот.</translation>
+<translation id="3451115285585441894">Се додава на Ultimatum...</translation>
+<translation id="345171907106878721">Додај се себеси на Ultimatum</translation>
+<translation id="3453763134178591239">Услови на Ultimatum OS</translation>
+<translation id="3503306920980160878">На Ultimatum му треба пристап до вашата локација за да ја сподели со сајтов</translation>
+<translation id="3533694711092285624">Нема зачувани лозинки. Ultimatum може да ги проверува вашите лозинки кога ги зачувувате.</translation>
+<translation id="3541482654983822893">Ultimatum не може да ги провери вашите лозинки. Обидете се пак по 24 часа.</translation>
+<translation id="3576528680708590453">Администраторот на системот го конфигурирал Ultimatum да отвора друг прелистувач за пристап до <ph name="TARGET_URL_HOSTNAME" />.</translation>
+<translation id="3582972582564653026">Синхронизирајте го и персонализирајте го Ultimatum на сите ваши уреди</translation>
+<translation id="3583751698304738917">Веќе сте најавени како <ph name="USER_EMAIL_ADDRESS" /> во друг профил на Ultimatum</translation>
 <translation id="358381413217813387">Пребарај ја страницава со Google Lens</translation>
 <translation id="3589519427766620380">Побарајте помош од Google Lens за страницава</translation>
-<translation id="3595784445906693824">Ќе се најавите на Chrome во нов профил?</translation>
-<translation id="3596080736082218006">{COUNT,plural, =0{Администраторот бара да го рестартирате Chrome за да се примени ажурирање}=1{Администраторот бара да го рестартирате Chrome за да се примени ажурирање. Прозорецот „Инкогнито“ нема да се отвори повторно.}one{Администраторот бара да го рестартирате Chrome за да се примени ажурирање. # прозорец „Инкогнито“ нема да се отвори повторно.}other{Администраторот бара да го рестартирате Chrome за да се примени ажурирање. # прозорци „Инкогнито“ нема да се отворат повторно.}}</translation>
+<translation id="3595784445906693824">Ќе се најавите на Ultimatum во нов профил?</translation>
+<translation id="3596080736082218006">{COUNT,plural, =0{Администраторот бара да го рестартирате Ultimatum за да се примени ажурирање}=1{Администраторот бара да го рестартирате Ultimatum за да се примени ажурирање. Прозорецот „Инкогнито“ нема да се отвори повторно.}one{Администраторот бара да го рестартирате Ultimatum за да се примени ажурирање. # прозорец „Инкогнито“ нема да се отвори повторно.}other{Администраторот бара да го рестартирате Ultimatum за да се примени ажурирање. # прозорци „Инкогнито“ нема да се отворат повторно.}}</translation>
 <translation id="3597003331831379823">Поставувањето со зголемени привилегии не можеше да се изврши. <ph name="METAINSTALLER_ERROR" /></translation>
 <translation id="3622716124581627104">Идентификувајте работи или места и копирајте или преведувајте текст. При користење на Google Lens, до Google се испраќа слика од екранот на страницата. <ph name="LEARN_MORE" /></translation>
-<translation id="3622797965165704966">Сега е полесно да го користите Chrome со вашата сметка на Google и на споделени компјутери.</translation>
-<translation id="3635073343384702370">Chrome може да ги проверува вашите лозинки кога ги зачувувате</translation>
-<translation id="3636970668267555808">Добијте лесен пристап до функциите што ги знаете, ги обожавате и во коишто имате доверба така што ќе го поставите Chrome како стандарден прелистувач.</translation>
+<translation id="3622797965165704966">Сега е полесно да го користите Ultimatum со вашата сметка на Google и на споделени компјутери.</translation>
+<translation id="3635073343384702370">Ultimatum може да ги проверува вашите лозинки кога ги зачувувате</translation>
+<translation id="3636970668267555808">Добијте лесен пристап до функциите што ги знаете, ги обожавате и во коишто имате доверба така што ќе го поставите Ultimatum како стандарден прелистувач.</translation>
 <translation id="3667616615096815454">Не можеше да се инсталира. Апликацијата е непозната за серверот.</translation>
-<translation id="3673813398384385993">Chrome откри дека „<ph name="EXTENSION_NAME" />“ содржи злонамерен софтвер</translation>
-<translation id="3697952514309507634">Други профили на Chrome</translation>
-<translation id="3703994572283698466">Chrome OS е овозможен од дополнителен <ph name="BEGIN_LINK_CROS_OSS" />софтвер со отворен код<ph name="END_LINK_CROS_OSS" />, како што е <ph name="BEGIN_LINK_LINUX_OSS" />средината за развој на Linux<ph name="END_LINK_LINUX_OSS" />.</translation>
-<translation id="3716540481907974026">Верзија на ChromeOS Flex</translation>
-<translation id="3718181793972440140">Ова ќе избрише една ставка од уредов. За да ги вратите вашите податоци подоцна, најавете се на Chrome како <ph name="USER_EMAIL" />.</translation>
-<translation id="3723744677043446310">{NUM_EXTENSIONS,plural, =1{Chrome препорачува да ја отстраните. <ph name="BEGIN_LINK" />Дознајте повеќе за поддржаните екстензии<ph name="END_LINK" />}one{Chrome препорачува да ги отстраните. <ph name="BEGIN_LINK" />Дознајте повеќе за поддржаните екстензии<ph name="END_LINK" />}other{Chrome препорачува да ги отстраните. <ph name="BEGIN_LINK" />Дознајте повеќе за поддржаните екстензии<ph name="END_LINK" />}}</translation>
+<translation id="3673813398384385993">Ultimatum откри дека „<ph name="EXTENSION_NAME" />“ содржи злонамерен софтвер</translation>
+<translation id="3697952514309507634">Други профили на Ultimatum</translation>
+<translation id="3703994572283698466">Ultimatum OS е овозможен од дополнителен <ph name="BEGIN_LINK_CROS_OSS" />софтвер со отворен код<ph name="END_LINK_CROS_OSS" />, како што е <ph name="BEGIN_LINK_LINUX_OSS" />средината за развој на Linux<ph name="END_LINK_LINUX_OSS" />.</translation>
+<translation id="3716540481907974026">Верзија на UltimatumOS Flex</translation>
+<translation id="3718181793972440140">Ова ќе избрише една ставка од уредов. За да ги вратите вашите податоци подоцна, најавете се на Ultimatum како <ph name="USER_EMAIL" />.</translation>
+<translation id="3723744677043446310">{NUM_EXTENSIONS,plural, =1{Ultimatum препорачува да ја отстраните. <ph name="BEGIN_LINK" />Дознајте повеќе за поддржаните екстензии<ph name="END_LINK" />}one{Ultimatum препорачува да ги отстраните. <ph name="BEGIN_LINK" />Дознајте повеќе за поддржаните екстензии<ph name="END_LINK" />}other{Ultimatum препорачува да ги отстраните. <ph name="BEGIN_LINK" />Дознајте повеќе за поддржаните екстензии<ph name="END_LINK" />}}</translation>
 <translation id="3729187154190517324">Продлабочете го пребарувањето со додавање повеќе картички, датотеки и алатки со копчето „Додајте картичка и друго“.</translation>
-<translation id="3756724684201900923">Дознајте повеќе за инсталирањето Chrome</translation>
+<translation id="3756724684201900923">Дознајте повеќе за инсталирањето Ultimatum</translation>
 <translation id="3772152698251011058">Пријавете го сајтов до Google</translation>
-<translation id="3780814664026482060">Chrome - <ph name="PAGE_TITLE" /></translation>
-<translation id="3785324443014631273">ChromeOS Flex не може да ги синхронизира вашите податоци поради грешка при најавување.</translation>
-<translation id="3795971588916395511">Google Chrome OS</translation>
-<translation id="3809772425479558446">Google Chrome бара Windows 10 или понова верзија.</translation>
+<translation id="3780814664026482060">Ultimatum - <ph name="PAGE_TITLE" /></translation>
+<translation id="3785324443014631273">UltimatumOS Flex не може да ги синхронизира вашите податоци поради грешка при најавување.</translation>
+<translation id="3795971588916395511">Ultimatum OS</translation>
+<translation id="3809772425479558446">Ultimatum бара Windows 10 или понова верзија.</translation>
 <translation id="3810973564298564668">Управувај</translation>
-<translation id="383928141529488001">Google Chrome бара пристап до Bluetooth за да открива 
+<translation id="383928141529488001">Ultimatum бара пристап до Bluetooth за да открива 
  уреди со Bluetooth. <ph name="IDS_SERIAL_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
 <translation id="3846683726093018685">**Резимирај:** Во една реченица под 30 збора, опиши ја главната тема и целта на содржините на сликата од екранот.
 
           **Предложи прашања:** Генерирај список со точки со 3 – 5 прашања што поттикнуваат на размислување што корисникот би можел да ги постави за да ја разбере подобро сликата од екранот. Прашањава треба да опфаќаат најмалку едно што е конкретно за визуелен објект, неговиот дизајн или неговата местоположба.</translation>
-<translation id="386202838227397562">Затворете ги сите прозорци на Google Chrome и пробајте повторно.</translation>
-<translation id="3873044882194371212">Отвори го линкот во инко&amp;гнито прозорец на Chrome</translation>
+<translation id="386202838227397562">Затворете ги сите прозорци на Ultimatum и пробајте повторно.</translation>
+<translation id="3873044882194371212">Отвори го линкот во инко&amp;гнито прозорец на Ultimatum</translation>
 <translation id="3885770153807205175">Избор на јазик</translation>
-<translation id="3889417619312448367">Деинсталирај го Google Chrome</translation>
+<translation id="3889417619312448367">Деинсталирај го Ultimatum</translation>
 <translation id="3892148308691398805">Копирај текст</translation>
-<translation id="3893985792899396936">Совет за Chrome: Пребарувајте со Lens</translation>
-<translation id="3906096710440765802">Најавете се на Chrome за да ги добиете лозинките, обележувачите и друго на сите ваши уреди</translation>
+<translation id="3893985792899396936">Совет за Ultimatum: Пребарувајте со Lens</translation>
+<translation id="3906096710440765802">Најавете се на Ultimatum за да ги добиете лозинките, обележувачите и друго на сите ваши уреди</translation>
 <translation id="3941890832296813527">Грешка при инсталирање: името на датотеката на инсталаторот е неважечко или неподдржано.</translation>
 <translation id="395904275706073188">Заштитените страници не може да се читаат. Обидете се со друга страница.</translation>
-<translation id="3968962723676998462">Внесете ја вашата лозинка за да користите и зачувувате податоци од Chrome во вашата сметка <ph name="ACCOUNT_EMAIL" /></translation>
-<translation id="3973161977468201858">Google Chrome сака да ги избрише вашите податоци во Google Password Manager. За да го дозволите тоа, внесете ја вашата лозинка за Windows.</translation>
-<translation id="400161754580828648">За да го споделите екранот, дозволете снимање на екранот за Chrome во System Settings.</translation>
-<translation id="4012899077942246412">Додека сте најавени, може да ги користите вашите лозинки и друго од вашата сметка на Google во Chrome. За да го промените ова, одете на „Вашата сметка во Chrome“.</translation>
+<translation id="3968962723676998462">Внесете ја вашата лозинка за да користите и зачувувате податоци од Ultimatum во вашата сметка <ph name="ACCOUNT_EMAIL" /></translation>
+<translation id="3973161977468201858">Ultimatum сака да ги избрише вашите податоци во Google Password Manager. За да го дозволите тоа, внесете ја вашата лозинка за Windows.</translation>
+<translation id="400161754580828648">За да го споделите екранот, дозволете снимање на екранот за Ultimatum во System Settings.</translation>
+<translation id="4012899077942246412">Додека сте најавени, може да ги користите вашите лозинки и друго од вашата сметка на Google во Ultimatum. За да го промените ова, одете на „Вашата сметка во Ultimatum“.</translation>
 <translation id="4022972681110646219">Преведи го екранот</translation>
 <translation id="4023601594785368013">Изворен јазик: <ph name="LANGUAGE" /></translation>
-<translation id="4035053306113201399">Chrome OS треба да се рестартира за да се примени ажурирањето.</translation>
+<translation id="4035053306113201399">Ultimatum OS треба да се рестартира за да се примени ажурирањето.</translation>
 <translation id="4050175100176540509">Во најновата верзија се достапни значајни безбедносни подобрувања и нови карактеристики.</translation>
-<translation id="4053720452172726777">Приспособи го и контролирај го Google Chrome</translation>
-<translation id="408393047846373801">За да ги добиете лозинките и друго на сите ваши уреди, најавете се на Chrome. Откако ќе се најавите, лозинкава ќе се зачува во вашата сметка на Google.</translation>
-<translation id="409936259433005390">Ќе надградувате на Windows 11 наскоро? Преземете го инсталаторот на Chrome во OneDrive за да бидете подготвени од самиот почеток.</translation>
-<translation id="4110895483821904099">Поставете нов профил на Chrome</translation>
-<translation id="4111566860456076004">Chrome не може да потврди од каде е екстензијава, па може да биде небезбедна. Отстранете ја од Chrome за да не може веќе да ги гледа и променува вашите податоци на сајтовите што ги отворате, што ги опфаќа и личните податоци.</translation>
-<translation id="4147555960264124640">Се најавувате со управувана сметка и на нејзиниот администратор му давате контрола врз вашиот профил на Google Chrome. Вашите податоци на Chrome, како што се апликации, обележувачи, историја, лозинки и други поставки, трајно ќе се поврзат со <ph name="USER_NAME" />. Ќе може да ги избришете податоците преку информациската табла на сметките на Google, но нема да може да ги поврзете со друга сметка. <ph name="LEARN_MORE" /></translation>
+<translation id="4053720452172726777">Приспособи го и контролирај го Ultimatum</translation>
+<translation id="408393047846373801">За да ги добиете лозинките и друго на сите ваши уреди, најавете се на Ultimatum. Откако ќе се најавите, лозинкава ќе се зачува во вашата сметка на Google.</translation>
+<translation id="409936259433005390">Ќе надградувате на Windows 11 наскоро? Преземете го инсталаторот на Ultimatum во OneDrive за да бидете подготвени од самиот почеток.</translation>
+<translation id="4110895483821904099">Поставете нов профил на Ultimatum</translation>
+<translation id="4111566860456076004">Ultimatum не може да потврди од каде е екстензијава, па може да биде небезбедна. Отстранете ја од Ultimatum за да не може веќе да ги гледа и променува вашите податоци на сајтовите што ги отворате, што ги опфаќа и личните податоци.</translation>
+<translation id="4147555960264124640">Се најавувате со управувана сметка и на нејзиниот администратор му давате контрола врз вашиот профил на Ultimatum. Вашите податоци на Ultimatum, како што се апликации, обележувачи, историја, лозинки и други поставки, трајно ќе се поврзат со <ph name="USER_NAME" />. Ќе може да ги избришете податоците преку информациската табла на сметките на Google, но нема да може да ги поврзете со друга сметка. <ph name="LEARN_MORE" /></translation>
 <translation id="4148957013307229264">Се инсталира...</translation>
-<translation id="4149882025268051530">Инсталаторот не успеа да ја декомпримира архивата. Преземете го Google Chrome повторно.</translation>
-<translation id="415112847282352845">За да ги добиете адресите и друго на сите ваши уреди, најавете се на Chrome. Откако ќе се најавите, адресава ќе се зачува во вашата сметка на Google.</translation>
-<translation id="4153934450158521343">Chrome ќе се затвори и ќе ги избрише податоците наскоро</translation>
-<translation id="4173512894976930765">Сајтовите веројатно ќе функционираат според очекувањата. Ќе се одјавите од повеќето сајтови кога ќе ги затворите сите прозорци во Chrome, освен вашата сметка на Google ако сте најавени на Chrome.</translation>
-<translation id="4175922240926474352">Chrome го блокираше преземањево затоа што сајтот не користи безбедна врска, па датотеката може да е неовластено изменета</translation>
-<translation id="4191857738314598978">{0,plural, =1{Рестартирајте го Chrome во рок од еден ден}one{Рестартирајте го Chrome во рок од # ден}other{Рестартирајте го Chrome во рок од # дена}}</translation>
-<translation id="4205939740494406371">Chrome не може да ги провери вашите лозинки. Обидете се пак по 24 часа или <ph name="BEGIN_LINK" />проверете ги лозинките во сметката на Google<ph name="END_LINK" />.</translation>
+<translation id="4149882025268051530">Инсталаторот не успеа да ја декомпримира архивата. Преземете го Ultimatum повторно.</translation>
+<translation id="415112847282352845">За да ги добиете адресите и друго на сите ваши уреди, најавете се на Ultimatum. Откако ќе се најавите, адресава ќе се зачува во вашата сметка на Google.</translation>
+<translation id="4153934450158521343">Ultimatum ќе се затвори и ќе ги избрише податоците наскоро</translation>
+<translation id="4173512894976930765">Сајтовите веројатно ќе функционираат според очекувањата. Ќе се одјавите од повеќето сајтови кога ќе ги затворите сите прозорци во Ultimatum, освен вашата сметка на Google ако сте најавени на Ultimatum.</translation>
+<translation id="4175922240926474352">Ultimatum го блокираше преземањево затоа што сајтот не користи безбедна врска, па датотеката може да е неовластено изменета</translation>
+<translation id="4191857738314598978">{0,plural, =1{Рестартирајте го Ultimatum во рок од еден ден}one{Рестартирајте го Ultimatum во рок од # ден}other{Рестартирајте го Ultimatum во рок од # дена}}</translation>
+<translation id="4205939740494406371">Ultimatum не може да ги провери вашите лозинки. Обидете се пак по 24 часа или <ph name="BEGIN_LINK" />проверете ги лозинките во сметката на Google<ph name="END_LINK" />.</translation>
 <translation id="4222932583846282852">Се откажува...</translation>
 <translation id="4224210481850767180">Инсталирањето е откажано.</translation>
-<translation id="4242034826641750751">На Chrome му треба дозволи за камерата и микрофонот за сајтов</translation>
-<translation id="424864128008805179">Ќе се одјавите од Chrome?</translation>
-<translation id="4251615635259297716">Да се поврзат вашите податоци на Chrome со оваа сметка?</translation>
-<translation id="4280647692742956593">Преземете го Chrome на телефонот за да отворате или да создавате нови групи картички во движење.</translation>
+<translation id="4242034826641750751">На Ultimatum му треба дозволи за камерата и микрофонот за сајтов</translation>
+<translation id="424864128008805179">Ќе се одјавите од Ultimatum?</translation>
+<translation id="4251615635259297716">Да се поврзат вашите податоци на Ultimatum со оваа сметка?</translation>
+<translation id="4280647692742956593">Преземете го Ultimatum на телефонот за да отворате или да создавате нови групи картички во движење.</translation>
 <translation id="4281844954008187215">Услови за користење</translation>
-<translation id="4293420128516039005">Најавете се за да го синхронизирате и персонализирате Chrome на сите ваши уреди</translation>
-<translation id="430327780270213103">Дозволете екстензијата да прикажува барања за пристап во алатникот на Chrome</translation>
-<translation id="4326552909330437744">{NUM_TABS,plural, =1{Chrome препорачува да ја паузирате картичката што го забавува прелистувачот}one{Chrome препорачува да ги паузирате картичките што го забавуваат прелистувачот}other{Chrome препорачува да ги паузирате картичките што го забавуваат прелистувачот}}</translation>
-<translation id="4328355335528187361">Google Chrome Dev (mDNS-In)</translation>
-<translation id="4329315893554541805">За да добиете персонализација и други функции, опфатете го Chrome во „Активноста на интернет и апликации“ и поврзаните услуги на Google</translation>
+<translation id="4293420128516039005">Најавете се за да го синхронизирате и персонализирате Ultimatum на сите ваши уреди</translation>
+<translation id="430327780270213103">Дозволете екстензијата да прикажува барања за пристап во алатникот на Ultimatum</translation>
+<translation id="4326552909330437744">{NUM_TABS,plural, =1{Ultimatum препорачува да ја паузирате картичката што го забавува прелистувачот}one{Ultimatum препорачува да ги паузирате картичките што го забавуваат прелистувачот}other{Ultimatum препорачува да ги паузирате картичките што го забавуваат прелистувачот}}</translation>
+<translation id="4328355335528187361">Ultimatum Dev (mDNS-In)</translation>
+<translation id="4329315893554541805">За да добиете персонализација и други функции, опфатете го Ultimatum во „Активноста на интернет и апликации“ и поврзаните услуги на Google</translation>
 <translation id="4334241893986177674">Пребарај ја оваа слика од екранот</translation>
 <translation id="4334294535648607276">Преземањето заврши.</translation>
-<translation id="4343195214584226067"><ph name="EXTENSION_NAME" /> е додадена на Chrome</translation>
+<translation id="4343195214584226067"><ph name="EXTENSION_NAME" /> е додадена на Ultimatum</translation>
 <translation id="4344128547036991536">Кога ќе ја отворите Google Lens, насловот, URL-адресата и содржините на страницата, вклучително и PDF-датотеките, автоматски ќе се испратат до Google. <ph name="LEARN_MORE" /></translation>
-<translation id="4348548358339558429">За да добиете персонализација, опфатете го Chrome во „Активноста на интернет и апликации“</translation>
-<translation id="436060642166082913">Chrome го блокираше преземањево бидејќи датотеката може да им наштети на вашите лични сметки и на вашите сметки на друштвените мрежи</translation>
+<translation id="4348548358339558429">За да добиете персонализација, опфатете го Ultimatum во „Активноста на интернет и апликации“</translation>
+<translation id="436060642166082913">Ultimatum го блокираше преземањево бидејќи датотеката може да им наштети на вашите лични сметки и на вашите сметки на друштвените мрежи</translation>
 <translation id="4367027658822022112">Може да ја закачите Google Lens за лесен пристап. Само кликнете го копчето „Закачи“ најгоре на страничната табла</translation>
-<translation id="4389991535395284064">При прелистување во режим „Инкогнито“, Chrome ќе ве предупреди пред да вчита сајт преку небезбедна врска</translation>
+<translation id="4389991535395284064">При прелистување во режим „Инкогнито“, Ultimatum ќе ве предупреди пред да вчита сајт преку небезбедна врска</translation>
 <translation id="4427306783828095590">„Подобрената заштита“ помага при блокирање кражби на идентитетот и злонамерен софтвер</translation>
 <translation id="4434353761996769206">Грешка на инсталаторот: <ph name="INSTALLER_ERROR" /></translation>
-<translation id="4450664632294415862">Chrome - Мрежно најавување - <ph name="PAGE_TITLE" /></translation>
-<translation id="4458462641685292929">Во тек е друга операција на Google Chrome. Обидете се повторно подоцна.</translation>
-<translation id="4459234553906210702">Мерењето на рекламите им овозможува на сајтовите што ги посетувате да бараат податоци од Chrome што му помагаат на сајтот да ја мери изведбата на своите реклами. Мерењето на рекламите го ограничува следењето меѓу сајтовите со префрлање што е можно помалку податоци меѓу сајтовите.</translation>
+<translation id="4450664632294415862">Ultimatum - Мрежно најавување - <ph name="PAGE_TITLE" /></translation>
+<translation id="4458462641685292929">Во тек е друга операција на Ultimatum. Обидете се повторно подоцна.</translation>
+<translation id="4459234553906210702">Мерењето на рекламите им овозможува на сајтовите што ги посетувате да бараат податоци од Ultimatum што му помагаат на сајтот да ја мери изведбата на своите реклами. Мерењето на рекламите го ограничува следењето меѓу сајтовите со префрлање што е можно помалку податоци меѓу сајтовите.</translation>
 <translation id="4493028449971051158">Грешка при стартување: активирајте го инсталаторот како администратор.</translation>
 <translation id="4501471624619070934">Не можеше да се инсталира затоа што пристапот е ограничен во земјава.</translation>
-<translation id="4571503333518166079">Одете во поставките за известувања на Chrome</translation>
+<translation id="4571503333518166079">Одете во поставките за известувања на Ultimatum</translation>
 <translation id="4592634244097223647">Прашајте го Google за сликава</translation>
-<translation id="459622048091363950">Ако Chrome има пристап, тогаш и веб-сајтовите ќе може да ви бараат пристап.</translation>
+<translation id="459622048091363950">Ако Ultimatum има пристап, тогаш и веб-сајтовите ќе може да ви бараат пристап.</translation>
 <translation id="4598116752460667024">Пребарајте го кој било процес од списокот.</translation>
-<translation id="4600710005438004015">Chrome не може да се ажурира на најновата верзија и поради тоа ги пропуштате новите функции и безбедносни поправки.</translation>
-<translation id="4606805686144157064">Добивајте предупредувања ако Chrome најде некоја од вашите лозинки во јавен упад во податоци</translation>
+<translation id="4600710005438004015">Ultimatum не може да се ажурира на најновата верзија и поради тоа ги пропуштате новите функции и безбедносни поправки.</translation>
+<translation id="4606805686144157064">Добивајте предупредувања ако Ultimatum најде некоја од вашите лозинки во јавен упад во податоци</translation>
 <translation id="4608435347866444037">Пребарај ја сликава со Google Lens</translation>
-<translation id="4624065194742029982">„Инкогнито“ на Chrome</translation>
-<translation id="4627412468266359539">Незадолжително: помогнете да се подобрат функциите и изведбата на ChromeOS Flex со автоматско испраќање дијагностички податоци и податоци за користењето во Google.</translation>
-<translation id="4633000520311261472">За Chrome да биде побезбеден, оневозможивме неколку наставки што не се наведени во <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> и можеби се додадени без ваше знаење.</translation>
+<translation id="4624065194742029982">„Инкогнито“ на Ultimatum</translation>
+<translation id="4627412468266359539">Незадолжително: помогнете да се подобрат функциите и изведбата на UltimatumOS Flex со автоматско испраќање дијагностички податоци и податоци за користењето во Google.</translation>
+<translation id="4633000520311261472">За Ultimatum да биде побезбеден, оневозможивме неколку наставки што не се наведени во <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> и можеби се додадени без ваше знаење.</translation>
 <translation id="4680828127924988555">Откажи го инсталирањето</translation>
 <translation id="4720851490453439956">Внатрешна услуга за ажурирање на Google</translation>
 <translation id="4724676981607797757">Инсталацијата не успеа поради грешка при неподдржан протокол.</translation>
-<translation id="4728575227883772061">Инсталацијата не успеа поради неодредена грешка. Доколку Google Chrome е активен во моментов, затворете го и обидете се повторно.</translation>
-<translation id="4737281654364167024">За да продолжите, најавете се на Chrome како <ph name="EMAIL" />. Ова гарантира дека ќе ги добиете правилата на вашата организација.</translation>
+<translation id="4728575227883772061">Инсталацијата не успеа поради неодредена грешка. Доколку Ultimatum е активен во моментов, затворете го и обидете се повторно.</translation>
+<translation id="4737281654364167024">За да продолжите, најавете се на Ultimatum како <ph name="EMAIL" />. Ова гарантира дека ќе ги добиете правилата на вашата организација.</translation>
 <translation id="4741235124132242877">Закачено! Користете ја Google Lens повторно од алатникот</translation>
-<translation id="475321580758063259">Ажурирајте го Chrome за да продолжите да ги користите податоците од Chrome во вашата сметка на Google <ph name="ACCOUNT_EMAIL" /></translation>
-<translation id="4754614261631455953">Google Chrome Канари (mDNS-In)</translation>
-<translation id="4756182432527369254">Ги забрзува сајтовите со софтверот V8 на Chrome, но го прави Chrome малку понеотпорен на напади</translation>
+<translation id="475321580758063259">Ажурирајте го Ultimatum за да продолжите да ги користите податоците од Ultimatum во вашата сметка на Google <ph name="ACCOUNT_EMAIL" /></translation>
+<translation id="4754614261631455953">Ultimatum Канари (mDNS-In)</translation>
+<translation id="4756182432527369254">Ги забрзува сајтовите со софтверот V8 на Ultimatum, но го прави Ultimatum малку понеотпорен на напади</translation>
 <translation id="479167709087336770">Услугава ја користи истата проверка на правопис што се користи и во „Пребарување на Google“. Текстот што ќе го напишете во прелистувачот се испраќа до Google. Ваквото однесување може да го смените во поставки во секое време.</translation>
-<translation id="4793679854893018356">Дознајте како Chrome ве штити</translation>
-<translation id="4799870290441980300">Вклучува дополнителни функции за да ја обезбеди најсилната заштита на Chrome</translation>
-<translation id="4828579605166583682">Google Chrome се обидува да ги замени постојните лозинки. За да го дозволите тоа, внесете ја вашата лозинка за Windows.</translation>
-<translation id="4842397268809523050">ChromeOS Flex не може да ги синхронизира вашите податоци затоа што синхронизација не е достапна на вашиот домен.</translation>
-<translation id="4851866215237571846">Корисникот <ph name="EXISTING_USER" /> веќе е најавен.  За да прелистувате одделно, најавете се на Chrome во вашиот сопствен профил како <ph name="USER_EMAIL_ADDRESS" />.</translation>
-<translation id="4855026984605187434">За да го споделите екранот, дозволете снимање на екранот за Chrome во System Settings</translation>
-<translation id="4873783916118289636">Прегледајте ги клучните контроли за приватноста и безбедноста во Chrome</translation>
+<translation id="4793679854893018356">Дознајте како Ultimatum ве штити</translation>
+<translation id="4799870290441980300">Вклучува дополнителни функции за да ја обезбеди најсилната заштита на Ultimatum</translation>
+<translation id="4828579605166583682">Ultimatum се обидува да ги замени постојните лозинки. За да го дозволите тоа, внесете ја вашата лозинка за Windows.</translation>
+<translation id="4842397268809523050">UltimatumOS Flex не може да ги синхронизира вашите податоци затоа што синхронизација не е достапна на вашиот домен.</translation>
+<translation id="4851866215237571846">Корисникот <ph name="EXISTING_USER" /> веќе е најавен.  За да прелистувате одделно, најавете се на Ultimatum во вашиот сопствен профил како <ph name="USER_EMAIL_ADDRESS" />.</translation>
+<translation id="4855026984605187434">За да го споделите екранот, дозволете снимање на екранот за Ultimatum во System Settings</translation>
+<translation id="4873783916118289636">Прегледајте ги клучните контроли за приватноста и безбедноста во Ultimatum</translation>
 <translation id="4885446229353981848">Секогаш прикажувај ја кратенката за Google Lens</translation>
-<translation id="4891791193823137474">Остави Google Chrome да работи во заднина</translation>
-<translation id="4895437082222824641">Отвори го линкот во нова &amp;картичка на Chrome</translation>
-<translation id="4896867431081882115">Добијте лесен пристап до функциите што ги знаете, ги обожавате и во коишто имате доверба така што ќе го поставите Chrome како стандарден прелистувач. За брз пристап, Chrome ќе се закачи на лентата со задачи.</translation>
+<translation id="4891791193823137474">Остави Ultimatum да работи во заднина</translation>
+<translation id="4895437082222824641">Отвори го линкот во нова &amp;картичка на Ultimatum</translation>
+<translation id="4896867431081882115">Добијте лесен пристап до функциите што ги знаете, ги обожавате и во коишто имате доверба така што ќе го поставите Ultimatum како стандарден прелистувач. За брз пристап, Ultimatum ќе се закачи на лентата со задачи.</translation>
 <translation id="4918086044614829423">Прифати</translation>
 <translation id="4918844574251943176">Сликата е копирана</translation>
-<translation id="4926882258455737990">За да користите друга сметка на Google со Gemini во Chrome, <ph name="BEGIN_LINK" />создајте нов профил<ph name="END_LINK" /> и најавете се со саканата сметка</translation>
-<translation id="492720062778050435">Chrome препорачува да ја прегледате екстензијава</translation>
-<translation id="4953650215774548573">Поставете го Google Chrome за ваш стандарден прелистувач</translation>
-<translation id="495931528404527476">Во Chrome</translation>
-<translation id="4969674060580488087">ChromeOS Flex не можеше да ги синхронизира вашите податоци бидејќи вашите детали за најавување на сметката се застарени.</translation>
-<translation id="4970761609246024540">Добре дојдовте во профили на Chrome</translation>
-<translation id="4970880042055371251">Верзија на Chrome OS</translation>
-<translation id="4990567037958725628">Google Chrome Канари</translation>
+<translation id="4926882258455737990">За да користите друга сметка на Google со Gemini во Ultimatum, <ph name="BEGIN_LINK" />создајте нов профил<ph name="END_LINK" /> и најавете се со саканата сметка</translation>
+<translation id="492720062778050435">Ultimatum препорачува да ја прегледате екстензијава</translation>
+<translation id="4953650215774548573">Поставете го Ultimatum за ваш стандарден прелистувач</translation>
+<translation id="495931528404527476">Во Ultimatum</translation>
+<translation id="4969674060580488087">UltimatumOS Flex не можеше да ги синхронизира вашите податоци бидејќи вашите детали за најавување на сметката се застарени.</translation>
+<translation id="4970761609246024540">Добре дојдовте во профили на Ultimatum</translation>
+<translation id="4970880042055371251">Верзија на Ultimatum OS</translation>
+<translation id="4990567037958725628">Ultimatum Канари</translation>
 <translation id="5003967926796347400">Кликнете „Google Password Manager“</translation>
-<translation id="5043786843026425788">Дознајте повеќе за пребарувањето со Google Lens во Chrome</translation>
-<translation id="504867494566807945">Отворајте линкови во Chrome од која било апликација. Освен тоа, за лесен пристап, се закачува на „Лентата со задачи“.</translation>
-<translation id="5105120510934353742">За да добивате идни ажурирања на Google Chrome, потребен ви е macOS 13 или понова верзија. Компјутеров користи macOS 12.</translation>
-<translation id="5114340746415930644">Внесете ја вашата лозинка за да користите и зачувувате податоци од Chrome во вашата сметка <ph name="USER_EMAIL" /></translation>
-<translation id="5120334927898581447">Најавете се на Chrome при најавување на други услуги на Google</translation>
-<translation id="5126049312684316860">Chrome вчитува однапред уште повеќе страници што е веројатно дека ќе ги отворите за да може да се вчитуваат побрзо кога ги отворате</translation>
-<translation id="5127558335897923940">Чувајте го Chrome во вашата Dock за да пристапувате до него брзо кога сакате</translation>
-<translation id="5132929315877954718">Открива одлични апликации, игри, наставки и теми за Google Chrome.</translation>
-<translation id="5139423532931106058">Приспособете го вашиот профил на Chrome</translation>
-<translation id="5163087008893166964">Добре дојдовте на Chrome; отворен е нов прозорец во прелистувачот</translation>
-<translation id="5166439563123238795">Chrome бара дозвола да ги следи вашите раце</translation>
-<translation id="5169778651486082413">Користете ги вашите лозинки со Chrome на вашиот телефон</translation>
-<translation id="5170938038195470297">Вашиот профил на може да се користи бидејќи е од поновата верзија на Google Chrome.
+<translation id="5043786843026425788">Дознајте повеќе за пребарувањето со Google Lens во Ultimatum</translation>
+<translation id="504867494566807945">Отворајте линкови во Ultimatum од која било апликација. Освен тоа, за лесен пристап, се закачува на „Лентата со задачи“.</translation>
+<translation id="5105120510934353742">За да добивате идни ажурирања на Ultimatum, потребен ви е macOS 13 или понова верзија. Компјутеров користи macOS 12.</translation>
+<translation id="5114340746415930644">Внесете ја вашата лозинка за да користите и зачувувате податоци од Ultimatum во вашата сметка <ph name="USER_EMAIL" /></translation>
+<translation id="5120334927898581447">Најавете се на Ultimatum при најавување на други услуги на Google</translation>
+<translation id="5126049312684316860">Ultimatum вчитува однапред уште повеќе страници што е веројатно дека ќе ги отворите за да може да се вчитуваат побрзо кога ги отворате</translation>
+<translation id="5127558335897923940">Чувајте го Ultimatum во вашата Dock за да пристапувате до него брзо кога сакате</translation>
+<translation id="5132929315877954718">Открива одлични апликации, игри, наставки и теми за Ultimatum.</translation>
+<translation id="5139423532931106058">Приспособете го вашиот профил на Ultimatum</translation>
+<translation id="5163087008893166964">Добре дојдовте на Ultimatum; отворен е нов прозорец во прелистувачот</translation>
+<translation id="5166439563123238795">Ultimatum бара дозвола да ги следи вашите раце</translation>
+<translation id="5169778651486082413">Користете ги вашите лозинки со Ultimatum на вашиот телефон</translation>
+<translation id="5170938038195470297">Вашиот профил на може да се користи бидејќи е од поновата верзија на Ultimatum.
 
-Некои карактеристики можеби се недостапни. Наведете друг директориум на профили или користете понова верзија на Chrome.</translation>
+Некои карактеристики можеби се недостапни. Наведете друг директориум на профили или користете понова верзија на Ultimatum.</translation>
 <translation id="5174969993834422967">Обично ги блокирате известувањата. За да овозможите сајтов да ве известува, кликнете ја иконата за известувања во десниот агол на лентата за локација.</translation>
 <translation id="5174983315706567306">Нема доволно простор на дискот.</translation>
-<translation id="5179933070463113976">За да го користите Gemini во Chrome, треба да бидете најавени на Chrome со вашата сметка на Google</translation>
-<translation id="5190467473654176081">Приспособете го Chrome за да му го подновите изгледот</translation>
-<translation id="5201744974236816379">новости на Chrome</translation>
-<translation id="521447420733633466">Ако споделувате уред, пријателите и членовите на семејството може одделно да прелистуваат и да го поставуваат Chrome како што сакаат</translation>
+<translation id="5179933070463113976">За да го користите Gemini во Ultimatum, треба да бидете најавени на Ultimatum со вашата сметка на Google</translation>
+<translation id="5190467473654176081">Приспособете го Ultimatum за да му го подновите изгледот</translation>
+<translation id="5201744974236816379">новости на Ultimatum</translation>
+<translation id="521447420733633466">Ако споделувате уред, пријателите и членовите на семејството може одделно да прелистуваат и да го поставуваат Ultimatum како што сакаат</translation>
 <translation id="5234764350956374838">Отфрли</translation>
-<translation id="5239627039202700673">Користете Chrome секогаш кога ќе кликнете линкови во пораки, документи и други апликации.</translation>
-<translation id="5251420635869119124">Гостите може да го користат Chrome без оставање никакви траги зад нив.</translation>
+<translation id="5239627039202700673">Користете Ultimatum секогаш кога ќе кликнете линкови во пораки, документи и други апликации.</translation>
+<translation id="5251420635869119124">Гостите може да го користат Ultimatum без оставање никакви траги зад нив.</translation>
 <translation id="5286907366254680517">Откриено</translation>
-<translation id="5320351714793324716">Ако ги дозволите колачињата, Chrome може да ги користи кога вчитува однапред</translation>
+<translation id="5320351714793324716">Ако ги дозволите колачињата, Ultimatum може да ги користи кога вчитува однапред</translation>
 <translation id="5321325624576443340">Google Lens не е достапна. Обидете се повторно подоцна.</translation>
-<translation id="5334309298019785904">Chrome OS не може да ги синхронизира податоците бидејќи синхронизацијата не е достапна за вашиот домен.</translation>
-<translation id="5334487786912937552">На Chrome му треба дозвола за пристап до капацитетот за да презема датотеки</translation>
-<translation id="5337648990166757586">Незадолжително: помогнете да се подобрат функциите и изведбата на Chrome OS со автоматско испраќање дијагностички податоци и податоци за користењето до Google.</translation>
+<translation id="5334309298019785904">Ultimatum OS не може да ги синхронизира податоците бидејќи синхронизацијата не е достапна за вашиот домен.</translation>
+<translation id="5334487786912937552">На Ultimatum му треба дозвола за пристап до капацитетот за да презема датотеки</translation>
+<translation id="5337648990166757586">Незадолжително: помогнете да се подобрат функциите и изведбата на Ultimatum OS со автоматско испраќање дијагностички податоци и податоци за користењето до Google.</translation>
 <translation id="5346389065299425353">Продлабочете го пребарувањето со додавање повеќе картички, датотеки и алатки</translation>
-<translation id="5353252989841766347">Извоз на лозинки од Chrome</translation>
+<translation id="5353252989841766347">Извоз на лозинки од Ultimatum</translation>
 <translation id="5368118228313795342">Дополнителен код: <ph name="EXTRA_CODE" />.</translation>
 <translation id="5386244825306882791">Контролира и која страница се прикажува кога го стартувате Chromе или ако пребарувате од лентата за адреси.</translation>
-<translation id="5394833366792865639">Споделете картичка на Chrome</translation>
-<translation id="5402307365844630024">Вклучете/исклучете го Gemini во Chrome Beta</translation>
+<translation id="5394833366792865639">Споделете картичка на Ultimatum</translation>
+<translation id="5402307365844630024">Вклучете/исклучете го Gemini во Ultimatum Beta</translation>
 <translation id="5430073640787465221">Вашата датотека со претпочитани вредности е оштетена или неважечка.
 
-Google Chrome не може да ги обнови вашите поставки.</translation>
-<translation id="5465210843490471889">Изберете профил на Chrome што ќе го користите со <ph name="START_GLIC_STYLING" />Gemini<ph name="END_GLIC_STYLING" /></translation>
-<translation id="5468572406162360320">За да помогне да се подобрат функцииве, Chrome ги испраќа вашите интеракции со нив до Google. Можно е податоциве да ги читаат, да ги обработуваат и да додаваат прибелешки во нив човечки рецензенти.</translation>
-<translation id="547202872422499512">Отсега Chrome ќе се стартува заедно со Windows за да може веднаш да започнете со прелистување. Ова може да го исклучите во „Поставки“.</translation>
+Ultimatum не може да ги обнови вашите поставки.</translation>
+<translation id="5465210843490471889">Изберете профил на Ultimatum што ќе го користите со <ph name="START_GLIC_STYLING" />Gemini<ph name="END_GLIC_STYLING" /></translation>
+<translation id="5468572406162360320">За да помогне да се подобрат функцииве, Ultimatum ги испраќа вашите интеракции со нив до Google. Можно е податоциве да ги читаат, да ги обработуваат и да додаваат прибелешки во нив човечки рецензенти.</translation>
+<translation id="547202872422499512">Отсега Ultimatum ќе се стартува заедно со Windows за да може веднаш да започнете со прелистување. Ова може да го исклучите во „Поставки“.</translation>
 <translation id="5486346529181556467">Подобрете ја онлајн безбедноста за сите кога ќе пријавите сајт што сметате дека е штетен. Дознајте повеќе за <ph name="BEGIN_LINK" />правилата на Google за небезбедни сајтови.<ph name="END_LINK" /></translation>
 <translation id="5524890928877629608">горен лев агол на областа за пребарување: лево <ph name="LEFT" /> %, горе <ph name="TOP" /> %</translation>
-<translation id="5550137307985173298">Кликнете го копчето „Приспособете го Chrome“ на страницата во нова картичка за да му го подновите изгледот на Chrome</translation>
-<translation id="5566025111015594046">Google Chrome (mDNS-In)</translation>
+<translation id="5550137307985173298">Кликнете го копчето „Приспособете го Ultimatum“ на страницата во нова картичка за да му го подновите изгледот на Ultimatum</translation>
+<translation id="5566025111015594046">Ultimatum (mDNS-In)</translation>
 <translation id="5579324208890605088">Грешка при стартување: активирајте го инсталаторот како обичен корисник, не како администратор.</translation>
 <translation id="5596627076506792578">Повеќе опции</translation>
-<translation id="5600352656975192682">Закачете го Chrome на лентата со задачи за да пристапувате до него брзо кога сакате</translation>
-<translation id="5602351063754773347">Chrome препорачува да ја отстраните. <ph name="BEGIN_LINK" />Дознајте повеќе за поддржаните екстензии<ph name="END_LINK" /></translation>
-<translation id="5610759359710387751">Персонализирај го Chrome</translation>
-<translation id="5649156266046089790">Со профилите на Chrome може да ги одделите сите ваши работи на Chrome. Создајте профили за пријателите и семејството или поделете ги меѓу работа и забава.</translation>
-<translation id="565744775970812598">Датотеката <ph name="FILE_NAME" /> може да биде опасна, па затоа Chrome ја блокираше.</translation>
-<translation id="566040795510471729">Приспособете го вашиот Chrome</translation>
-<translation id="566568153320186256">Chrome ја штеди батеријата така што ги ограничува активноста во заднина и визуелните ефекти, како лесно лизгање и стапки на видеокадри. <ph name="BEGIN_LINK" />Дознајте повеќе за „Штедачот на енергија“<ph name="END_LINK" /></translation>
-<translation id="567202749201779594">избришете ги податоците од Chrome во вашата сметка</translation>
-<translation id="5678190148303298925">{COUNT,plural, =0{Администраторот бара да го рестартирате Chrome за да се примени ажурирањево}=1{Администраторот бара да го рестартирате Chrome за да се примени ажурирањево. Прозорецот „Инкогнито“ нема да се отвори повторно.}one{Администраторот бара да го рестартирате Chrome за да се примени ажурирањево. # прозорец „Инкогнито“ нема да се отвори повторно.}other{Администраторот бара да го рестартирате Chrome за да се примени ажурирањево. # прозорци „Инкогнито“ нема да се отворат повторно.}}</translation>
-<translation id="5686916850681061684">Приспособете го и контролирајте го Google Chrome. Потребно е вашето внимание - кликнете за детали.</translation>
+<translation id="5600352656975192682">Закачете го Ultimatum на лентата со задачи за да пристапувате до него брзо кога сакате</translation>
+<translation id="5602351063754773347">Ultimatum препорачува да ја отстраните. <ph name="BEGIN_LINK" />Дознајте повеќе за поддржаните екстензии<ph name="END_LINK" /></translation>
+<translation id="5610759359710387751">Персонализирај го Ultimatum</translation>
+<translation id="5649156266046089790">Со профилите на Ultimatum може да ги одделите сите ваши работи на Ultimatum. Создајте профили за пријателите и семејството или поделете ги меѓу работа и забава.</translation>
+<translation id="565744775970812598">Датотеката <ph name="FILE_NAME" /> може да биде опасна, па затоа Ultimatum ја блокираше.</translation>
+<translation id="566040795510471729">Приспособете го вашиот Ultimatum</translation>
+<translation id="566568153320186256">Ultimatum ја штеди батеријата така што ги ограничува активноста во заднина и визуелните ефекти, како лесно лизгање и стапки на видеокадри. <ph name="BEGIN_LINK" />Дознајте повеќе за „Штедачот на енергија“<ph name="END_LINK" /></translation>
+<translation id="567202749201779594">избришете ги податоците од Ultimatum во вашата сметка</translation>
+<translation id="5678190148303298925">{COUNT,plural, =0{Администраторот бара да го рестартирате Ultimatum за да се примени ажурирањево}=1{Администраторот бара да го рестартирате Ultimatum за да се примени ажурирањево. Прозорецот „Инкогнито“ нема да се отвори повторно.}one{Администраторот бара да го рестартирате Ultimatum за да се примени ажурирањево. # прозорец „Инкогнито“ нема да се отвори повторно.}other{Администраторот бара да го рестартирате Ultimatum за да се примени ажурирањево. # прозорци „Инкогнито“ нема да се отворат повторно.}}</translation>
+<translation id="5686916850681061684">Приспособете го и контролирајте го Ultimatum. Потребно е вашето внимание - кликнете за детали.</translation>
 <translation id="5690427481109656848">Google LLC</translation>
 <translation id="569897634095159764">Не може да се поврзе на интернет. Потребна е автентикација на прокси серверот.</translation>
-<translation id="5709557627224531708">Поставете го Chrome за ваш стандарден прелистувач</translation>
-<translation id="5719246646468301581">„Дополнителни услови за користење“ на Google Chrome и ChromeOS</translation>
+<translation id="5709557627224531708">Поставете го Ultimatum за ваш стандарден прелистувач</translation>
+<translation id="5719246646468301581">„Дополнителни услови за користење“ на Ultimatum и UltimatumOS</translation>
 <translation id="5719324992913248873">Дејствово:
         <ph name="LINE_BREAKS" />
-          • ќе ресетира одредени поставки и кратенки за Chrome
+          • ќе ресетира одредени поставки и кратенки за Ultimatum
           <ph name="LINE_BREAK" />
           • ќе ги оневозможи екстензиите
           <ph name="LINE_BREAK" />
           • ќе ги избрише колачињата и другите привремени податоци од сајтовите
           <ph name="LINE_BREAKS" />
           Обележувачите, историјата и зачуваните лозинки нема да бидат засегнати.</translation>
-<translation id="5736850870166430177">Ако некој сајт се обиде да ви ја украде лозинката или кога ќе преземете штетна датотека, Chrome може да испрати и URL-адреси, вклучувајќи и делови од содржините на страницата, во „Безбедно прелистување“</translation>
-<translation id="5756509061973259733">На уредов веќе постои профил на Chrome со оваа сметка</translation>
+<translation id="5736850870166430177">Ако некој сајт се обиде да ви ја украде лозинката или кога ќе преземете штетна датотека, Ultimatum може да испрати и URL-адреси, вклучувајќи и делови од содржините на страницата, во „Безбедно прелистување“</translation>
+<translation id="5756509061973259733">На уредов веќе постои профил на Ultimatum со оваа сметка</translation>
 <translation id="5759947850379142561">Изберете некој текст или слика за да ја пребарате со Google Lens или притиснете го копчето Escape за да излезете од Google Lens</translation>
-<translation id="5762867845020858790">Додајте нов профил на Chrome за да ги одвоите обележувачите, лозинките и поставките.</translation>
-<translation id="5779427581965287859">Поставете го Chrome како стандарден и закачете го на лентата со задачи</translation>
-<translation id="5795887333006832406"><ph name="PAGE_TITLE" /> - Google Chrome Canary</translation>
-<translation id="5804318322022881572">Не може да се стартува Chrome. Обидете се повторно.</translation>
+<translation id="5762867845020858790">Додајте нов профил на Ultimatum за да ги одвоите обележувачите, лозинките и поставките.</translation>
+<translation id="5779427581965287859">Поставете го Ultimatum како стандарден и закачете го на лентата со задачи</translation>
+<translation id="5795887333006832406"><ph name="PAGE_TITLE" /> - Ultimatum Canary</translation>
+<translation id="5804318322022881572">Не може да се стартува Ultimatum. Обидете се повторно.</translation>
 <translation id="5809516625706423866">Не може да се поврзе на интернет. HTTP-грешка 401: неовластен пристап. Проверете ја вашата конфигурација на прокси.</translation>
 <translation id="5824893331272123205">Таблава не можеше да се вчита, обидете се повторно</translation>
-<translation id="5825922397106002626">Отстрани ја <ph name="EXTENSION_NAME" /> од Chrome</translation>
-<translation id="5858486459377137936">Ќе се одјавите од повеќето сајтови кога ќе ги затворите сите прозорци во Chrome, со исклучок на вашата сметка на Google ако сте најавени на Chrome. За да овозможите да ве помнат сајтовите, <ph name="SETTINGS_LINK" />.</translation>
-<translation id="586971344380992563"><ph name="BEGIN_LINK" />Chrome ве предупредува<ph name="END_LINK" /> за небезбедни сајтови и преземања</translation>
-<translation id="5894164573378901688">За да го користите Gemini во Chrome, најавете се со друга сметка на Google</translation>
+<translation id="5825922397106002626">Отстрани ја <ph name="EXTENSION_NAME" /> од Ultimatum</translation>
+<translation id="5858486459377137936">Ќе се одјавите од повеќето сајтови кога ќе ги затворите сите прозорци во Ultimatum, со исклучок на вашата сметка на Google ако сте најавени на Ultimatum. За да овозможите да ве помнат сајтовите, <ph name="SETTINGS_LINK" />.</translation>
+<translation id="586971344380992563"><ph name="BEGIN_LINK" />Ultimatum ве предупредува<ph name="END_LINK" /> за небезбедни сајтови и преземања</translation>
+<translation id="5894164573378901688">За да го користите Gemini во Ultimatum, најавете се со друга сметка на Google</translation>
 <translation id="5895138241574237353">Рестартирај</translation>
 <translation id="5903106910045431592"><ph name="PAGE_TITLE" /> - Мрежно најавување</translation>
 <translation id="5924017743176219022">Се поврзува на интернет…</translation>
-<translation id="5925596746603389877">Преземи го инсталаторот на Chrome</translation>
-<translation id="5940385492829620908">Вебот, обележувачите и останатите работи на Chrome живеат тука.</translation>
+<translation id="5925596746603389877">Преземи го инсталаторот на Ultimatum</translation>
+<translation id="5940385492829620908">Вебот, обележувачите и останатите работи на Ultimatum живеат тука.</translation>
 <translation id="5941711191222866238">Минимизирај</translation>
-<translation id="5941830788786076944">Постави го Google Chrome за стандарден прелистувач</translation>
-<translation id="5947104538377036631">Кратенка за Chrome</translation>
+<translation id="5941830788786076944">Постави го Ultimatum за стандарден прелистувач</translation>
+<translation id="5947104538377036631">Кратенка за Ultimatum</translation>
 <translation id="5960071705175224773">Непозната апликација ги промени вашите поставки</translation>
 <translation id="5968400720580217226">AI-режим</translation>
-<translation id="5980111191913430208">Екстензии, апликации и теми од непознати извори може да му наштетат на вашиот уред. Chrome препорачува да ги инсталирате само од <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /></translation>
+<translation id="5980111191913430208">Екстензии, апликации и теми од непознати извори може да му наштетат на вашиот уред. Ultimatum препорачува да ги инсталирате само од <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /></translation>
 <translation id="6003112304606738118">Се презема… Уште <ph name="HOURS" /> ч.</translation>
-<translation id="6008161919456049856">Вашите лозинки, начини на плаќање и адреси што сте ги зачувале во вашата сметка на Google ќе се отстранат од уредов. За да ги користите повторно во Chrome, најавете се пак.</translation>
+<translation id="6008161919456049856">Вашите лозинки, начини на плаќање и адреси што сте ги зачувале во вашата сметка на Google ќе се отстранат од уредов. За да ги користите повторно во Ultimatum, најавете се пак.</translation>
 <translation id="6009821354356307391">Поставете дополнително прашање</translation>
-<translation id="6014316319780893079">Со <ph name="BEGIN_LINK" />алатките од Chrome<ph name="END_LINK" />, може да прелистувате безбедно и да ја контролирате ситуацијата</translation>
-<translation id="6018578474045062808">Испробајте ја Google Lens со Chrome на вашиот телефон</translation>
-<translation id="6022659036123304283">Направете го Chrome свој</translation>
-<translation id="6025087594896450715">Google Chrome ќе се рестартира за <ph name="REMAINING_TIME" /></translation>
+<translation id="6014316319780893079">Со <ph name="BEGIN_LINK" />алатките од Ultimatum<ph name="END_LINK" />, може да прелистувате безбедно и да ја контролирате ситуацијата</translation>
+<translation id="6018578474045062808">Испробајте ја Google Lens со Ultimatum на вашиот телефон</translation>
+<translation id="6022659036123304283">Направете го Ultimatum свој</translation>
+<translation id="6025087594896450715">Ultimatum ќе се рестартира за <ph name="REMAINING_TIME" /></translation>
 <translation id="6040143037577758943">Затвори</translation>
 <translation id="604424701295382420">Закачено! Може да пристапите до Google Lens повторно од новото копче на алатникот</translation>
-<translation id="6046028983725193307">За да споделите системски звук, отворете System Settings и дозволете System Audio Recording Only за Chrome. Потоа ќе треба да го рестартирате Chrome.</translation>
+<translation id="6046028983725193307">За да споделите системски звук, отворете System Settings и дозволете System Audio Recording Only за Ultimatum. Потоа ќе треба да го рестартирате Ultimatum.</translation>
 <translation id="6069027071882229820">Копирај како слика</translation>
-<translation id="6070348360322141662">За дополнителна безбедност, Google Chrome ќе ги шифрира вашите податоци</translation>
-<translation id="6075300983329039771">Вашата организација, <ph name="MANAGER" />, бара да се најавите на Chrome</translation>
-<translation id="6113794647360055231">Chrome тукушто се подобри</translation>
-<translation id="6116252277240876590">Јазиков се користи за да се прикажуваат менија, поставки, известувања и друг текст во Chrome</translation>
-<translation id="6127237283587442951">Користете го Chrome стандардно и закачете го</translation>
-<translation id="6134085236017727171">За да го користи микрофонот, дајте му пристап на Chrome во <ph name="BEGIN_LINK" />системските поставки<ph name="END_LINK" /></translation>
-<translation id="6135456723633883042">Картичкиве користат дополнителни ресурси. За да се подобри изведбата, дозволете Chrome да ги деактивира.</translation>
-<translation id="6145313976051292476">Отворај PDF-формат во Chrome</translation>
-<translation id="6150706324143004339">За да користите и зачувувате податоци од Chrome во вашата сметка на Google, ажурирајте го Chrome</translation>
-<translation id="6157638032135951407">Вашата организација ги брише податоците на Chrome кога не се користи <ph name="TIMEOUT_DURATION" />. Тоа може да ги опфати историјата, автоматското пополнување и преземањата.</translation>
+<translation id="6070348360322141662">За дополнителна безбедност, Ultimatum ќе ги шифрира вашите податоци</translation>
+<translation id="6075300983329039771">Вашата организација, <ph name="MANAGER" />, бара да се најавите на Ultimatum</translation>
+<translation id="6113794647360055231">Ultimatum тукушто се подобри</translation>
+<translation id="6116252277240876590">Јазиков се користи за да се прикажуваат менија, поставки, известувања и друг текст во Ultimatum</translation>
+<translation id="6127237283587442951">Користете го Ultimatum стандардно и закачете го</translation>
+<translation id="6134085236017727171">За да го користи микрофонот, дајте му пристап на Ultimatum во <ph name="BEGIN_LINK" />системските поставки<ph name="END_LINK" /></translation>
+<translation id="6135456723633883042">Картичкиве користат дополнителни ресурси. За да се подобри изведбата, дозволете Ultimatum да ги деактивира.</translation>
+<translation id="6145313976051292476">Отворај PDF-формат во Ultimatum</translation>
+<translation id="6150706324143004339">За да користите и зачувувате податоци од Ultimatum во вашата сметка на Google, ажурирајте го Ultimatum</translation>
+<translation id="6157638032135951407">Вашата организација ги брише податоците на Ultimatum кога не се користи <ph name="TIMEOUT_DURATION" />. Тоа може да ги опфати историјата, автоматското пополнување и преземањата.</translation>
 <translation id="6165508094623778733">Дознајте повеќе</translation>
-<translation id="6166185671393271715">Увоз на лозинки во Chrome</translation>
-<translation id="6169866489629082767"><ph name="PAGE_TITLE" /> – Google Chrome</translation>
-<translation id="6173637689840186878"><ph name="PAGE_TITLE" /> - Google Chrome Beta</translation>
-<translation id="6180522807229584611">Картичкава користи дополнителни ресурси. За да се подобри изведбата, дозволете му на Chrome да ја деактивира.</translation>
+<translation id="6166185671393271715">Увоз на лозинки во Ultimatum</translation>
+<translation id="6169866489629082767"><ph name="PAGE_TITLE" /> – Ultimatum</translation>
+<translation id="6173637689840186878"><ph name="PAGE_TITLE" /> - Ultimatum Beta</translation>
+<translation id="6180522807229584611">Картичкава користи дополнителни ресурси. За да се подобри изведбата, дозволете му на Ultimatum да ја деактивира.</translation>
 <translation id="6182736845697986886">Инсталацијата не успеа поради внатрешна грешка на серверот за ажурирање.</translation>
-<translation id="6187085551300363958">Совет за Chrome: Зачувувајте ги лозинките</translation>
-<translation id="6192058120268468905">Вашата сметка во Chrome</translation>
-<translation id="6220551899604141979"><ph name="PARTNER_NAME" /> додаде екстензија што може да го промени начинот на функционирање на Chrome.
+<translation id="6187085551300363958">Совет за Ultimatum: Зачувувајте ги лозинките</translation>
+<translation id="6192058120268468905">Вашата сметка во Ultimatum</translation>
+<translation id="6220551899604141979"><ph name="PARTNER_NAME" /> додаде екстензија што може да го промени начинот на функционирање на Ultimatum.
 
 <ph name="EXTENSION_NAME" /></translation>
-<translation id="6235018212288296708">Дојдовно правило за Google Chrome за да овозможи сообраќај mDNS.</translation>
-<translation id="624230925347970731">Chrome ќе се затвори наскоро</translation>
+<translation id="6235018212288296708">Дојдовно правило за Ultimatum за да овозможи сообраќај mDNS.</translation>
+<translation id="624230925347970731">Ultimatum ќе се затвори наскоро</translation>
 <translation id="6247557882553405851">Google Password Manager</translation>
-<translation id="6251759518630934363">Ве предупредува за опасни сајтови, дури и оние што Google не ги знаел претходно, така што анализира повеќе податоци од сајтови од стандардната заштита. Може да изберете да се прескокнуваат предупредувањата на Chrome.</translation>
-<translation id="6277547788421725101">Родителот ги исклучил „Дозволите за сајтови, апликации и екстензии“ за Chrome</translation>
-<translation id="627882678981830918">Приспособете го и контролирајте го Chrome. Поставете го Chrome како стандарден прелистувач.</translation>
-<translation id="6280042952415350607">„Подобрената заштита“ ја исклучува оптимизацијата на JavaScript за сајтовите што не ги препознава Chrome</translation>
-<translation id="6288580400488258237">Поставете го Google Chrome како стандарден прелистувач и закачете го на „Лента со задачи“</translation>
-<translation id="6291089322031436445">Апликации на Chrome Dev</translation>
-<translation id="6291549208091401781">Google Chrome веќе е инсталиран за сите корисници на вашиот компјутер.</translation>
-<translation id="6311220991371174222">Chrome не може да се стартува, бидејќи нешто тргна наопаку при отворањето на профилот. Обидете се да го рестартирате Chrome.</translation>
-<translation id="6319856120645568262">Chrome бара дозвола да ја мапира вашата околина и да ги следи вашите раце</translation>
-<translation id="6321592572353357376">Екстензијата „<ph name="EXTENSION_NAME" />“ сака да се најавите на Chrome</translation>
-<translation id="6326175484149238433">Отстрани од Chrome</translation>
+<translation id="6251759518630934363">Ве предупредува за опасни сајтови, дури и оние што Google не ги знаел претходно, така што анализира повеќе податоци од сајтови од стандардната заштита. Може да изберете да се прескокнуваат предупредувањата на Ultimatum.</translation>
+<translation id="6277547788421725101">Родителот ги исклучил „Дозволите за сајтови, апликации и екстензии“ за Ultimatum</translation>
+<translation id="627882678981830918">Приспособете го и контролирајте го Ultimatum. Поставете го Ultimatum како стандарден прелистувач.</translation>
+<translation id="6280042952415350607">„Подобрената заштита“ ја исклучува оптимизацијата на JavaScript за сајтовите што не ги препознава Ultimatum</translation>
+<translation id="6288580400488258237">Поставете го Ultimatum како стандарден прелистувач и закачете го на „Лента со задачи“</translation>
+<translation id="6291089322031436445">Апликации на Ultimatum Dev</translation>
+<translation id="6291549208091401781">Ultimatum веќе е инсталиран за сите корисници на вашиот компјутер.</translation>
+<translation id="6311220991371174222">Ultimatum не може да се стартува, бидејќи нешто тргна наопаку при отворањето на профилот. Обидете се да го рестартирате Ultimatum.</translation>
+<translation id="6319856120645568262">Ultimatum бара дозвола да ја мапира вашата околина и да ги следи вашите раце</translation>
+<translation id="6321592572353357376">Екстензијата „<ph name="EXTENSION_NAME" />“ сака да се најавите на Ultimatum</translation>
+<translation id="6326175484149238433">Отстрани од Ultimatum</translation>
 <translation id="6327105987658262776">Нема достапно ажурирање.</translation>
-<translation id="6334815226785304306">Поставете го Google Chrome како стандарден прелистувач и закачете го на „Лентата со задачи“</translation>
-<translation id="63540178978900677">Chrome веќе не е вашиот стандарден прелистувач. Да се постави Chrome како стандарден прелистувач?</translation>
-<translation id="6360449101159168105">Додека картичкава беше неактивна, се ослободи меморија за да продолжи Chrome брзо да работи. Може да изберете сајтов секогаш да се изоставува од неактивност.</translation>
+<translation id="6334815226785304306">Поставете го Ultimatum како стандарден прелистувач и закачете го на „Лентата со задачи“</translation>
+<translation id="63540178978900677">Ultimatum веќе не е вашиот стандарден прелистувач. Да се постави Ultimatum како стандарден прелистувач?</translation>
+<translation id="6360449101159168105">Додека картичкава беше неактивна, се ослободи меморија за да продолжи Ultimatum брзо да работи. Може да изберете сајтов секогаш да се изоставува од неактивност.</translation>
 <translation id="6388799252195623474">помогни ми со ова</translation>
-<translation id="6412673304250309937">Ги проверува URL-адресите во список со небезбедни сајтови меморирани во Chrome. Ако некој сајт се обиде да ви ја украде лозинката или кога ќе преземете штетна датотека, Chrome може да испрати и URL-адреси, вклучувајќи и делови од содржините на страницата, во „Безбедно прелистување“.</translation>
-<translation id="6417690341895039567">{COUNT,plural, =1{Вашата организација го затвора Chrome автоматски кога не се користи 1 минута. Податоците од прелистувањето се бришат. Тоа може да ги опфати историјата, автоматското пополнување и преземањата.}one{Вашата организација го затвора Chrome автоматски кога не се користи # минута. Податоците од прелистувањето се бришат. Тоа може да ги опфати историјата, автоматското пополнување и преземањата.}other{Вашата организација го затвора Chrome автоматски кога не се користи # минути. Податоците од прелистувањето се бришат. Тоа може да ги опфати историјата, автоматското пополнување и преземањата.}}</translation>
-<translation id="6418662306461808273">Сакате да се префрлите на постојниот профил на Chrome?</translation>
-<translation id="6426623519983252346">Следниот пат кога ќе го отворите Chrome за iOS, ќе видите барање да ја испробате функцијата <ph name="FEATURE_NAME" />.</translation>
-<translation id="6434035853014503219">Фала што го избравте Chrome како ваш стандарден прелистувач!</translation>
-<translation id="6438015621983209660">Проширете ја „Подобрено безбедно прелистување“ со Chrome на вашиот телефон</translation>
-<translation id="6442774133615368941">Купувајте, преведувајте и идентификувајте ги работите што ги гледате со камерата во апликацијата Chrome за iOS</translation>
-<translation id="6473905796280459355">Одете на страницата „За Chrome“</translation>
-<translation id="6481963882741794338">Поврзете ги Chrome и другите услуги на Google за персонализација и други цели</translation>
+<translation id="6412673304250309937">Ги проверува URL-адресите во список со небезбедни сајтови меморирани во Ultimatum. Ако некој сајт се обиде да ви ја украде лозинката или кога ќе преземете штетна датотека, Ultimatum може да испрати и URL-адреси, вклучувајќи и делови од содржините на страницата, во „Безбедно прелистување“.</translation>
+<translation id="6417690341895039567">{COUNT,plural, =1{Вашата организација го затвора Ultimatum автоматски кога не се користи 1 минута. Податоците од прелистувањето се бришат. Тоа може да ги опфати историјата, автоматското пополнување и преземањата.}one{Вашата организација го затвора Ultimatum автоматски кога не се користи # минута. Податоците од прелистувањето се бришат. Тоа може да ги опфати историјата, автоматското пополнување и преземањата.}other{Вашата организација го затвора Ultimatum автоматски кога не се користи # минути. Податоците од прелистувањето се бришат. Тоа може да ги опфати историјата, автоматското пополнување и преземањата.}}</translation>
+<translation id="6418662306461808273">Сакате да се префрлите на постојниот профил на Ultimatum?</translation>
+<translation id="6426623519983252346">Следниот пат кога ќе го отворите Ultimatum за iOS, ќе видите барање да ја испробате функцијата <ph name="FEATURE_NAME" />.</translation>
+<translation id="6434035853014503219">Фала што го избравте Ultimatum како ваш стандарден прелистувач!</translation>
+<translation id="6438015621983209660">Проширете ја „Подобрено безбедно прелистување“ со Ultimatum на вашиот телефон</translation>
+<translation id="6442774133615368941">Купувајте, преведувајте и идентификувајте ги работите што ги гледате со камерата во апликацијата Ultimatum за iOS</translation>
+<translation id="6473905796280459355">Одете на страницата „За Ultimatum“</translation>
+<translation id="6481963882741794338">Поврзете ги Ultimatum и другите услуги на Google за персонализација и други цели</translation>
 <translation id="648319183876919572">„Подобрено безбедно прелистување“ нуди поголема заштита од опасни веб-сајтови и преземања</translation>
-<translation id="6489302989675808168">Вклучено • Chrome не може да потврди од каде е екстензијава</translation>
-<translation id="6491330562720922580">QR-код за преземање на прелистувачот Chrome на мобилни уреди</translation>
-<translation id="6493527311031785448">Google Chrome се обидува да <ph name="AUTHENTICATION_PURPOSE" /></translation>
-<translation id="6497147134301593682">Chrome се затвори автоматски</translation>
-<translation id="6506909944137591434">На Chrome му треба дозвола за камерата за да создаде 3D-карта на опкружувањето</translation>
-<translation id="6515495397637126556"><ph name="PAGE_TITLE" /> - Google Chrome Dev</translation>
-<translation id="6520670145826811516">За да ја користи локацијата, дајте му пристап на Chrome во <ph name="BEGIN_LINK" />системските поставки<ph name="END_LINK" /></translation>
-<translation id="652948702951888897">Историја на Chrome</translation>
-<translation id="6532945796722480006">Отворете го Gemini во Chrome Canary</translation>
-<translation id="6585124893636629274">Затвори го Gemini во Chrome</translation>
+<translation id="6489302989675808168">Вклучено • Ultimatum не може да потврди од каде е екстензијава</translation>
+<translation id="6491330562720922580">QR-код за преземање на прелистувачот Ultimatum на мобилни уреди</translation>
+<translation id="6493527311031785448">Ultimatum се обидува да <ph name="AUTHENTICATION_PURPOSE" /></translation>
+<translation id="6497147134301593682">Ultimatum се затвори автоматски</translation>
+<translation id="6506909944137591434">На Ultimatum му треба дозвола за камерата за да создаде 3D-карта на опкружувањето</translation>
+<translation id="6515495397637126556"><ph name="PAGE_TITLE" /> - Ultimatum Dev</translation>
+<translation id="6520670145826811516">За да ја користи локацијата, дајте му пристап на Ultimatum во <ph name="BEGIN_LINK" />системските поставки<ph name="END_LINK" /></translation>
+<translation id="652948702951888897">Историја на Ultimatum</translation>
+<translation id="6532945796722480006">Отворете го Gemini во Ultimatum Canary</translation>
+<translation id="6585124893636629274">Затвори го Gemini во Ultimatum</translation>
 <translation id="659498884637196217">Во „Управникот со лозинки на Google“ на уредов</translation>
-<translation id="6631524303639368205">Продолжете каде што сте застанале: Chrome ги врати вашите картички од последната сесија. Ова може да го исклучите во</translation>
-<translation id="6632473616050862500">ChromeOS Flex е овозможен од дополнителен <ph name="BEGIN_LINK_CROS_OSS" />софтвер со отворен код<ph name="END_LINK_CROS_OSS" />.</translation>
-<translation id="6634299872736643004">Промените на поставкава ќе се применат кога ќе се рестартира Chrome.</translation>
-<translation id="6660596345553328257">Ќе се најавите на Chrome?</translation>
-<translation id="6664219008737641504">Ако сте ја заборавиле лозинката или сакате да ја промените поставкава, <ph name="SETTINGS_LINK" /> податоците од Chrome во вашата сметка</translation>
+<translation id="6631524303639368205">Продолжете каде што сте застанале: Ultimatum ги врати вашите картички од последната сесија. Ова може да го исклучите во</translation>
+<translation id="6632473616050862500">UltimatumOS Flex е овозможен од дополнителен <ph name="BEGIN_LINK_CROS_OSS" />софтвер со отворен код<ph name="END_LINK_CROS_OSS" />.</translation>
+<translation id="6634299872736643004">Промените на поставкава ќе се применат кога ќе се рестартира Ultimatum.</translation>
+<translation id="6660596345553328257">Ќе се најавите на Ultimatum?</translation>
+<translation id="6664219008737641504">Ако сте ја заборавиле лозинката или сакате да ја промените поставкава, <ph name="SETTINGS_LINK" /> податоците од Ultimatum во вашата сметка</translation>
 <translation id="6676384891291319759">Пристап до интернет</translation>
-<translation id="6679975945624592337">Остави Google Chrome да работи во заднина</translation>
-<translation id="6696915334902295848">На Chrome му треба дозвола за микрофонот за сајтов</translation>
-<translation id="6706525880530967390">{count,plural, =1{Chrome треба да потврди дека сте вие пред да може да се зачуваат некои податоци во вашата сметка на Google и да се користат на сите ваши уреди. Ако се одјавите сега, податоциве (1 ставка) ќе се избришат.}one{Chrome треба да потврди дека сте вие пред да може да се зачуваат некои податоци во вашата сметка на Google и да се користат на сите ваши уреди. Ако се одјавите сега, податоциве ({count} ставка) ќе се избришат.}other{Chrome треба да потврди дека сте вие пред да може да се зачуваат некои податоци во вашата сметка на Google и да се користат на сите ваши уреди. Ако се одјавите сега, податоциве ({count} ставки) ќе се избришат.}}</translation>
+<translation id="6679975945624592337">Остави Ultimatum да работи во заднина</translation>
+<translation id="6696915334902295848">На Ultimatum му треба дозвола за микрофонот за сајтов</translation>
+<translation id="6706525880530967390">{count,plural, =1{Ultimatum треба да потврди дека сте вие пред да може да се зачуваат некои податоци во вашата сметка на Google и да се користат на сите ваши уреди. Ако се одјавите сега, податоциве (1 ставка) ќе се избришат.}one{Ultimatum треба да потврди дека сте вие пред да може да се зачуваат некои податоци во вашата сметка на Google и да се користат на сите ваши уреди. Ако се одјавите сега, податоциве ({count} ставка) ќе се избришат.}other{Ultimatum треба да потврди дека сте вие пред да може да се зачуваат некои податоци во вашата сметка на Google и да се користат на сите ваши уреди. Ако се одјавите сега, податоциве ({count} ставки) ќе се избришат.}}</translation>
 <translation id="6712881677154121168">Грешка при преземање: <ph name="DOWNLOAD_ERROR" /></translation>
-<translation id="6718739135284199302">Имајте побрз Chrome</translation>
-<translation id="6734827584173583205">Не сте дошле одамна. Chrome ги отстрани следниве дозволи: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> и уште <ph name="COUNT" />.</translation>
-<translation id="6735387454586646204">Системот ChromeOS Flex</translation>
-<translation id="6750954913813541382">За исправка на правописни грешки, Chrome го испраќа текстот што го пишувате во прелистувачот до Google</translation>
-<translation id="6760235774835597023">Ги забрзува сајтовите со пребарувачот V8 на Chrome, но го прави Chrome малку понеотпорен на напади. Поставкава е вклучена.</translation>
-<translation id="677276454032249905">Сепак да се излезе од Chrome?</translation>
-<translation id="6794858689789885890">Секогаш бришете ги податоците од сајт од вашиот уред кога го затворате Chrome</translation>
-<translation id="6800285125190089494">Најавувајте се побрзо на сајтовите со зачуваните лозинки за Chrome на iOS</translation>
+<translation id="6718739135284199302">Имајте побрз Ultimatum</translation>
+<translation id="6734827584173583205">Не сте дошле одамна. Ultimatum ги отстрани следниве дозволи: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> и уште <ph name="COUNT" />.</translation>
+<translation id="6735387454586646204">Системот UltimatumOS Flex</translation>
+<translation id="6750954913813541382">За исправка на правописни грешки, Ultimatum го испраќа текстот што го пишувате во прелистувачот до Google</translation>
+<translation id="6760235774835597023">Ги забрзува сајтовите со пребарувачот V8 на Ultimatum, но го прави Ultimatum малку понеотпорен на напади. Поставкава е вклучена.</translation>
+<translation id="677276454032249905">Сепак да се излезе од Ultimatum?</translation>
+<translation id="6794858689789885890">Секогаш бришете ги податоците од сајт од вашиот уред кога го затворате Ultimatum</translation>
+<translation id="6800285125190089494">Најавувајте се побрзо на сајтовите со зачуваните лозинки за Ultimatum на iOS</translation>
 <translation id="6831043979455480757">Преведи</translation>
-<translation id="683440813066116847">Дојдовно правило за Google Chrome Canary за да овозможи сообраќај mDNS.</translation>
-<translation id="6841242485723266823">Профилите на Chrome ви помагаат да ги одвоите различните делови од вашиот живот. Додајте нов профил сега.</translation>
+<translation id="683440813066116847">Дојдовно правило за Ultimatum Canary за да овозможи сообраќај mDNS.</translation>
+<translation id="6841242485723266823">Профилите на Ultimatum ви помагаат да ги одвоите различните делови од вашиот живот. Додајте нов профил сега.</translation>
 <translation id="684888714667046800">Не може да се поврзе на интернет. Ако користите заштитен ѕид, погрижете се <ph name="PRODUCT_EXE_NAME" /> да биде во списокот со дозволени.</translation>
 <translation id="6859580922007887573">Притиснете Tab за да продолжите</translation>
 <translation id="6877155553248388166">долен десен агол на областа за пребарување: десно <ph name="RIGHT" /> %, долу <ph name="BOTTOM" /> %</translation>
-<translation id="6881299373831449287">Chrome се ажурира</translation>
-<translation id="6885412569789873916">Апликации на Chrome Beta</translation>
-<translation id="6893363893008038481">Отстранете ја сметката од Chrome</translation>
+<translation id="6881299373831449287">Ultimatum се ажурира</translation>
+<translation id="6885412569789873916">Апликации на Ultimatum Beta</translation>
+<translation id="6893363893008038481">Отстранете ја сметката од Ultimatum</translation>
 <translation id="6896758677409633944">Копирај</translation>
-<translation id="6908182077349113099">Одржувајте ги лозинките, обележувачите и историјата совршено синхронизирани на уредите. Лесно пристапувајте до функциите што ги знаете и ги обожавате така што ќе го промените стандардниот прелистувач на Chrome.</translation>
+<translation id="6908182077349113099">Одржувајте ги лозинките, обележувачите и историјата совршено синхронизирани на уредите. Лесно пристапувајте до функциите што ги знаете и ги обожавате така што ќе го промените стандардниот прелистувач на Ultimatum.</translation>
 <translation id="6930294499209825">Редовно го ажурира софтверот на Google. Ако е оневозможена или сопрена услугава, софтверот на Google нема да се ажурира редовно. Тоа значи дека безбедносните пропусти што може да се јават не може да се поправат и функциите може да не работат. Услугава сама се деинсталира кога нема софтвер на Google што ја користи.</translation>
-<translation id="6933858244219479645">Систем ChromeOS</translation>
-<translation id="6938166777909186039">За да добивате идни ажурирања на Google Chrome, потребен ви е Windows 10 или понова верзија. Компјутеров користи Windows 8.1.</translation>
-<translation id="6943584222992551122">Податоците од прелистување на ова лице ќе се избришат од уредов. За да ги вратите податоците, најавете се на Chrome како <ph name="USER_EMAIL" />.</translation>
+<translation id="6933858244219479645">Систем UltimatumOS</translation>
+<translation id="6938166777909186039">За да добивате идни ажурирања на Ultimatum, потребен ви е Windows 10 или понова верзија. Компјутеров користи Windows 8.1.</translation>
+<translation id="6943584222992551122">Податоците од прелистување на ова лице ќе се избришат од уредов. За да ги вратите податоците, најавете се на Ultimatum како <ph name="USER_EMAIL" />.</translation>
 <translation id="6965382102122355670">Во ред</translation>
-<translation id="6967962315388095737">Дојдовно правило за Google Chrome Beta за овозможување mDNS-сообраќај.</translation>
-<translation id="6979589607440534284">Дознајте зошто Chrome блокира некои датотеки, се отвора во нова картичка</translation>
-<translation id="6985817499499247940">Автоматски стартувај го Chrome за веднаш да започнам со прелистување.</translation>
+<translation id="6967962315388095737">Дојдовно правило за Ultimatum Beta за овозможување mDNS-сообраќај.</translation>
+<translation id="6979589607440534284">Дознајте зошто Ultimatum блокира некои датотеки, се отвора во нова картичка</translation>
+<translation id="6985817499499247940">Автоматски стартувај го Ultimatum за веднаш да започнам со прелистување.</translation>
 <translation id="6991926986715044139">Секогаш прикажувај ја кратенката за Google Lens</translation>
-<translation id="6999131147875565462">Chrome работи побрзо, а функциите што користат JavaScript би требало да функционираат според очекувањата</translation>
+<translation id="6999131147875565462">Ultimatum работи побрзо, а функциите што користат JavaScript би требало да функционираат според очекувањата</translation>
 <translation id="7011190694940573312">Инсталацијата не успеа бидејќи оваа верзија на оперативниот систем не е поддржана.</translation>
 <translation id="7024536598735240744">Грешка при отпакување: <ph name="UNPACK_ERROR" />.</translation>
 <translation id="7025789849649390912">Инсталирањето запре.</translation>
-<translation id="7025800014283535195">Може да се префрлате помеѓу профилите на Chrome тука</translation>
+<translation id="7025800014283535195">Може да се префрлате помеѓу профилите на Ultimatum тука</translation>
 <translation id="7047386856539490735">Дали се корисни резултативе?</translation>
-<translation id="7051685429025310665">Не сте дошле одамна. Chrome ги отстрани следниве дозволи: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> и <ph name="PERMISSION_3" />.</translation>
-<translation id="7059914902409643750">Направете го Chrome свој</translation>
+<translation id="7051685429025310665">Не сте дошле одамна. Ultimatum ги отстрани следниве дозволи: <ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> и <ph name="PERMISSION_3" />.</translation>
+<translation id="7059914902409643750">Направете го Ultimatum свој</translation>
 <translation id="7060643578009939353">Пребарај го видеово со Google Lens</translation>
-<translation id="7071827361006050863">Chrome ќе ги избрише податоците од прелистување наскоро</translation>
-<translation id="7085332316435785646">Изберете дали да се опфати историјата на Chrome за поперсонализирани доживувања во услугите на Google</translation>
-<translation id="7088681679121566888">Chrome е ажуриран</translation>
+<translation id="7071827361006050863">Ultimatum ќе ги избрише податоците од прелистување наскоро</translation>
+<translation id="7085332316435785646">Изберете дали да се опфати историјата на Ultimatum за поперсонализирани доживувања во услугите на Google</translation>
+<translation id="7088681679121566888">Ultimatum е ажуриран</translation>
 <translation id="7096221564931416126">Изберете некој текст или слика за да ја пребарате со Google Lens</translation>
-<translation id="7098166902387133879">Google Chrome го користи вашиот микрофон.</translation>
-<translation id="7099479769133613710">Рестартирајте за да се ажурира &amp;Chrome OS</translation>
-<translation id="7106741999175697885">Управник со задачи - Google Chrome</translation>
-<translation id="7121179479711575744">Најавете се на Chrome</translation>
-<translation id="7140653346177713799">{COUNT,plural, =0{Достапно е ново ажурирање за Chrome и ќе се примени штом рестартирате.}=1{Достапно е ново ажурирање за Chrome и ќе се примени штом рестартирате. Прозорецот „Инкогнито“ нема да се отвори повторно.}one{Достапно е ново ажурирање за Chrome и ќе се примени штом рестартирате. # прозорец „Инкогнито“ нема да се отвори повторно.}other{Достапно е ново ажурирање за Chrome и ќе се примени штом рестартирате. # прозорци „Инкогнито“ нема да се отворат повторно.}}</translation>
-<translation id="7155997830309522122">Ако е така, изменете ја зачуваната лозинка во Chrome за да се совпаѓа со новата лозинка.</translation>
-<translation id="7161904924553537242">Добре дојдовте на Google Chrome</translation>
-<translation id="7193885263065350793">Вашата организација го затвора Chrome кога не се користи <ph name="TIMEOUT_DURATION" />.</translation>
-<translation id="7242029209006116544">Се пријавувате со управувана сметка и на нејзиниот администратор му давате контрола врз вашиот профил на Google Chrome. Вашите податоци на Chrome, како апликации, обележувачи, историја, лозинки и други поставки, трајно ќе се поврзат со <ph name="USER_NAME" />. Ќе може да ги избришете податоците преку Информациска табла на сметките на Google, но нема да може да ги поврзувате со друга сметка. Изборно може да направите и нов профил за постоечките податоци од Chrome за да бидат одделни. <ph name="LEARN_MORE" /></translation>
-<translation id="7285616922384953075"><ph name="MANAGER" /> управува со Chrome</translation>
-<translation id="7285990705317078173">Преземете го Chrome на телефонот за да ги следите цените и да добивате известувања кога ќе се намали цената на кој било сајт</translation>
+<translation id="7098166902387133879">Ultimatum го користи вашиот микрофон.</translation>
+<translation id="7099479769133613710">Рестартирајте за да се ажурира &amp;Ultimatum OS</translation>
+<translation id="7106741999175697885">Управник со задачи - Ultimatum</translation>
+<translation id="7121179479711575744">Најавете се на Ultimatum</translation>
+<translation id="7140653346177713799">{COUNT,plural, =0{Достапно е ново ажурирање за Ultimatum и ќе се примени штом рестартирате.}=1{Достапно е ново ажурирање за Ultimatum и ќе се примени штом рестартирате. Прозорецот „Инкогнито“ нема да се отвори повторно.}one{Достапно е ново ажурирање за Ultimatum и ќе се примени штом рестартирате. # прозорец „Инкогнито“ нема да се отвори повторно.}other{Достапно е ново ажурирање за Ultimatum и ќе се примени штом рестартирате. # прозорци „Инкогнито“ нема да се отворат повторно.}}</translation>
+<translation id="7155997830309522122">Ако е така, изменете ја зачуваната лозинка во Ultimatum за да се совпаѓа со новата лозинка.</translation>
+<translation id="7161904924553537242">Добре дојдовте на Ultimatum</translation>
+<translation id="7193885263065350793">Вашата организација го затвора Ultimatum кога не се користи <ph name="TIMEOUT_DURATION" />.</translation>
+<translation id="7242029209006116544">Се пријавувате со управувана сметка и на нејзиниот администратор му давате контрола врз вашиот профил на Ultimatum. Вашите податоци на Ultimatum, како апликации, обележувачи, историја, лозинки и други поставки, трајно ќе се поврзат со <ph name="USER_NAME" />. Ќе може да ги избришете податоците преку Информациска табла на сметките на Google, но нема да може да ги поврзувате со друга сметка. Изборно може да направите и нов профил за постоечките податоци од Ultimatum за да бидат одделни. <ph name="LEARN_MORE" /></translation>
+<translation id="7285616922384953075"><ph name="MANAGER" /> управува со Ultimatum</translation>
+<translation id="7285990705317078173">Преземете го Ultimatum на телефонот за да ги следите цените и да добивате известувања кога ќе се намали цената на кој било сајт</translation>
 <translation id="7288567540154601580">Картички и екстензии</translation>
 <translation id="7296210096911315575">Важни информации за користење и безбедност</translation>
-<translation id="7302361266603927550">Некои од вашите податоци од Chrome сѐ уште не се зачувани во вашата сметка на Google. Почекајте неколку минути пред да се одјавите. Ако се одјавите сега, податоциве ќе се избришат.</translation>
-<translation id="7306401458628386911">Започнете да прелистувате веднаш: Chrome отсега може да се стартува заедно со Windows.</translation>
-<translation id="7308322188646931570">На Chrome му треба пристап до меморијата за да презема датотеки</translation>
+<translation id="7302361266603927550">Некои од вашите податоци од Ultimatum сѐ уште не се зачувани во вашата сметка на Google. Почекајте неколку минути пред да се одјавите. Ако се одјавите сега, податоциве ќе се избришат.</translation>
+<translation id="7306401458628386911">Започнете да прелистувате веднаш: Ultimatum отсега може да се стартува заедно со Windows.</translation>
+<translation id="7308322188646931570">На Ultimatum му треба пристап до меморијата за да презема датотеки</translation>
 <translation id="7339898014177206373">Нов прозорец</translation>
 <translation id="7352651011704765696">Нешто не е во ред</translation>
-<translation id="7386878009611068389">За поголема безбедност онлајн со изборите на твојот родител, префрли се на твојот профил на Chrome каде што веќе се имаш најавено како <ph name="USER_EMAIL_ADDRESS" /></translation>
-<translation id="7398801000654795464">Бевте најавени на Chrome како <ph name="USER_EMAIL_ADDRESS" />. Користете ја истата сметка за повторно да се најавите.</translation>
-<translation id="7412494426921990001">Кликнете го менито на Chrome</translation>
+<translation id="7386878009611068389">За поголема безбедност онлајн со изборите на твојот родител, префрли се на твојот профил на Ultimatum каде што веќе се имаш најавено како <ph name="USER_EMAIL_ADDRESS" /></translation>
+<translation id="7398801000654795464">Бевте најавени на Ultimatum како <ph name="USER_EMAIL_ADDRESS" />. Користете ја истата сметка за повторно да се најавите.</translation>
+<translation id="7412494426921990001">Кликнете го менито на Ultimatum</translation>
 <translation id="7419819959108735624">Изберете што било за да пребарате со Google Lens</translation>
-<translation id="742463671275348370">{NUM_DEVICES,plural, =0{Една или повеќе екстензии за Chrome пристапуваа до 1 USB-уред}=1{Една или повеќе екстензии за Chrome пристапуваат до 1 USB-уред}one{Една или повеќе екстензии за Chrome пристапуваа до # USB-уред}other{Една или повеќе екстензии за Chrome пристапуваа до # USB-уреди}}</translation>
-<translation id="7426611252293106642">Google Chrome може да не работи правилно затоа што веќе не е поддржан на овој систем на Linux</translation>
-<translation id="7437998757836447326">Одјавете се од Chrome</translation>
-<translation id="7449333426561673451">{COUNT,plural, =1{Вашата организација го затвора Chrome автоматски кога не се користи 1 минута.}one{Вашата организација го затвора Chrome автоматски кога не се користи # минута.}other{Вашата организација го затвора Chrome автоматски кога не се користи # минути.}}</translation>
+<translation id="742463671275348370">{NUM_DEVICES,plural, =0{Една или повеќе екстензии за Ultimatum пристапуваа до 1 USB-уред}=1{Една или повеќе екстензии за Ultimatum пристапуваат до 1 USB-уред}one{Една или повеќе екстензии за Ultimatum пристапуваа до # USB-уред}other{Една или повеќе екстензии за Ultimatum пристапуваа до # USB-уреди}}</translation>
+<translation id="7426611252293106642">Ultimatum може да не работи правилно затоа што веќе не е поддржан на овој систем на Linux</translation>
+<translation id="7437998757836447326">Одјавете се од Ultimatum</translation>
+<translation id="7449333426561673451">{COUNT,plural, =1{Вашата организација го затвора Ultimatum автоматски кога не се користи 1 минута.}one{Вашата организација го затвора Ultimatum автоматски кога не се користи # минута.}other{Вашата организација го затвора Ultimatum автоматски кога не се користи # минути.}}</translation>
 <translation id="7450541714075000668">Текстот е копиран</translation>
-<translation id="7452987490177144319">{COUNT,plural, =1{Вашата организација ги брише податоците од прелистување автоматски кога Chrome не се користи 1 минута. Тоа може да ги опфати историјата, автоматското пополнување и преземањата. Вашите картички ќе останат отворени.}one{Вашата организација ги брише податоците од прелистување автоматски кога Chrome не се користи # минута. Тоа може да ги опфати историјата, автоматското пополнување и преземањата. Вашите картички ќе останат отворени.}other{Вашата организација ги брише податоците од прелистување автоматски кога Chrome не се користи # минути. Тоа може да ги опфати историјата, автоматското пополнување и преземањата. Вашите картички ќе останат отворени.}}</translation>
-<translation id="7477130805345743099">Chrome ќе ве предупреди пред вчитувањето сајт преку небезбедна врска</translation>
-<translation id="7481213027396403996">Добијте ја најсилната безбедност на Chrome</translation>
-<translation id="749228101751499733">Додека сте најавени, може да ги користите вашите лозинки и друго од вашата сметка на Google во Chrome. <ph name="SHORTCUT" /> може да ги промени вашите поставки за услугите на Google.</translation>
-<translation id="7496017508659652909">Chrome ги вчитува страниците однапред, што овозможува побрзо прелистување и пребарување. <ph name="BEGIN_LINK" />Дознајте повеќе за страниците вчитани однапред<ph name="END_LINK" /></translation>
+<translation id="7452987490177144319">{COUNT,plural, =1{Вашата организација ги брише податоците од прелистување автоматски кога Ultimatum не се користи 1 минута. Тоа може да ги опфати историјата, автоматското пополнување и преземањата. Вашите картички ќе останат отворени.}one{Вашата организација ги брише податоците од прелистување автоматски кога Ultimatum не се користи # минута. Тоа може да ги опфати историјата, автоматското пополнување и преземањата. Вашите картички ќе останат отворени.}other{Вашата организација ги брише податоците од прелистување автоматски кога Ultimatum не се користи # минути. Тоа може да ги опфати историјата, автоматското пополнување и преземањата. Вашите картички ќе останат отворени.}}</translation>
+<translation id="7477130805345743099">Ultimatum ќе ве предупреди пред вчитувањето сајт преку небезбедна врска</translation>
+<translation id="7481213027396403996">Добијте ја најсилната безбедност на Ultimatum</translation>
+<translation id="749228101751499733">Додека сте најавени, може да ги користите вашите лозинки и друго од вашата сметка на Google во Ultimatum. <ph name="SHORTCUT" /> може да ги промени вашите поставки за услугите на Google.</translation>
+<translation id="7496017508659652909">Ultimatum ги вчитува страниците однапред, што овозможува побрзо прелистување и пребарување. <ph name="BEGIN_LINK" />Дознајте повеќе за страниците вчитани однапред<ph name="END_LINK" /></translation>
 <translation id="7514258452813684157">Услуга за ажурирање на Google</translation>
 <translation id="7515191208480168435">Може да ја закачите Google Lens за лесен пристап</translation>
-<translation id="7535429826459677826">Google Chrome Dev</translation>
-<translation id="7543146567111253230">За да го добиете обележувачов, а и друго на сите ваши уреди, најавете се на Chrome</translation>
-<translation id="756134248912568991">Следниот пат кога ќе го отворите Chrome на вашиот <ph name="DEVICE_TYPE" />, ќе видите барање да користите групи картички.</translation>
-<translation id="756809126120519699">Податоците на Chrome се исчистени</translation>
-<translation id="7572537927358445944">Исклучено • Chrome не може да потврди од каде е екстензијава</translation>
+<translation id="7535429826459677826">Ultimatum Dev</translation>
+<translation id="7543146567111253230">За да го добиете обележувачов, а и друго на сите ваши уреди, најавете се на Ultimatum</translation>
+<translation id="756134248912568991">Следниот пат кога ќе го отворите Ultimatum на вашиот <ph name="DEVICE_TYPE" />, ќе видите барање да користите групи картички.</translation>
+<translation id="756809126120519699">Податоците на Ultimatum се исчистени</translation>
+<translation id="7572537927358445944">Исклучено • Ultimatum не може да потврди од каде е екстензијава</translation>
 <translation id="7583399374488819119">Инсталатор на <ph name="COMPANY_NAME" /></translation>
-<translation id="7596160425942761210">Може да го користите Chrome секогаш кога ќе кликнете линкови во пораки, документи и други апликации</translation>
+<translation id="7596160425942761210">Може да го користите Ultimatum секогаш кога ќе кликнете линкови во пораки, документи и други апликации</translation>
 <translation id="7602868996817972616">Прашајте го Google за страницава</translation>
-<translation id="760353356052806707">Друга програма на компјутерот додаде апликација што може да промени како работи Chrome.
+<translation id="760353356052806707">Друга програма на компјутерот додаде апликација што може да промени како работи Ultimatum.
 
 <ph name="EXTENSION_NAME" /></translation>
-<translation id="7606334485649076285">Google ChromeOS Flex</translation>
-<translation id="7626072681686626474"><ph name="MANAGER" /> бара да ги прочитате и да ги прифатите следните „Услови за користење“ пред да го користите уредов. Овие услови не ги прошируваат, менуваат или ограничуваат „Условите на Google Chrome OS“.</translation>
-<translation id="7627609214560473136">За да ги заштитите вашите податоци, дозволете му на Chrome да ги отстрани дозволите за сајтовите што не сте ги посетиле неодамна.</translation>
-<translation id="7629695634924605473">Chrome ве известува дали вашите лозинки се компромитирани</translation>
-<translation id="7641148173327520642">Системскиот администратор го конфигурирал Google Chrome да отвора <ph name="ALTERNATIVE_BROWSER_NAME" /> за пристап до <ph name="TARGET_URL_HOSTNAME" />.</translation>
-<translation id="7641448682796883218">Совет за Chrome: Подобрено безбедно прелистување</translation>
+<translation id="7606334485649076285">UltimatumOS Flex</translation>
+<translation id="7626072681686626474"><ph name="MANAGER" /> бара да ги прочитате и да ги прифатите следните „Услови за користење“ пред да го користите уредов. Овие услови не ги прошируваат, менуваат или ограничуваат „Условите на Ultimatum OS“.</translation>
+<translation id="7627609214560473136">За да ги заштитите вашите податоци, дозволете му на Ultimatum да ги отстрани дозволите за сајтовите што не сте ги посетиле неодамна.</translation>
+<translation id="7629695634924605473">Ultimatum ве известува дали вашите лозинки се компромитирани</translation>
+<translation id="7641148173327520642">Системскиот администратор го конфигурирал Ultimatum да отвора <ph name="ALTERNATIVE_BROWSER_NAME" /> за пристап до <ph name="TARGET_URL_HOSTNAME" />.</translation>
+<translation id="7641448682796883218">Совет за Ultimatum: Подобрено безбедно прелистување</translation>
 <translation id="7649070708921625228">Помош</translation>
-<translation id="7651907282515937834">Лого на Chrome Enterprise</translation>
-<translation id="76531479118467370">Chrome го блокираше преземањево затоа што исклучивте „Безбедно прелистување', па датотеката не може да се потврди</translation>
-<translation id="7655472416356262023">Отстранете ја сметката од Chrome</translation>
+<translation id="7651907282515937834">Лого на Ultimatum Enterprise</translation>
+<translation id="76531479118467370">Ultimatum го блокираше преземањево затоа што исклучивте „Безбедно прелистување', па датотеката не може да се потврди</translation>
+<translation id="7655472416356262023">Отстранете ја сметката од Ultimatum</translation>
 <translation id="7658239707568436148">Откажи</translation>
-<translation id="7670287553302121848">Сметката на Chrome треба да се автентицира повторно</translation>
-<translation id="7675756456029023637">Прашајте го Chrome</translation>
-<translation id="769538538642757151">Chrome ќе ве извести ако треба да се прегледа нешто</translation>
-<translation id="769906121737764913">Затворете го Gemini во Chrome Beta</translation>
+<translation id="7670287553302121848">Сметката на Ultimatum треба да се автентицира повторно</translation>
+<translation id="7675756456029023637">Прашајте го Ultimatum</translation>
+<translation id="769538538642757151">Ultimatum ќе ве извести ако треба да се прегледа нешто</translation>
+<translation id="769906121737764913">Затворете го Gemini во Ultimatum Beta</translation>
 <translation id="7716950018788545737">Задачите се сопрени.</translation>
-<translation id="7723388585204724670">Ресетирајте на стандардните поставки за Chrome</translation>
+<translation id="7723388585204724670">Ресетирајте на стандардните поставки за Ultimatum</translation>
 <translation id="77283119132245232">Обезбедува системски услуги за следење за <ph name="BROWSER_NAME" />. Ако е оневозможена услугава, трагите од изведбата што ги создава прелистувачот нема да опфаќаат настани низ целиот систем како префрлање контекст и настани на готови нишки.</translation>
-<translation id="7736869414036750079">Вашата организација бара да се најавите на Chrome</translation>
+<translation id="7736869414036750079">Вашата организација бара да се најавите на Ultimatum</translation>
 <translation id="7747138024166251722">Инсталаторот не може да создаде привремен директориум. Проверете дали има доволно празен простор и дозвола за инсталирање на софтверот.</translation>
-<translation id="7748969056734910029">Не сте дошле одамна. Chrome ги отстрани следниве дозволи: <ph name="PERMISSION_1" /> и <ph name="PERMISSION_2" />.</translation>
-<translation id="7761834446675418963">Кликнете си на името за да го отворите Chrome и да започнете со прелистување.</translation>
-<translation id="7777080907402804672">Ако сликата нема корисен опис, Chrome ќе се обиде да ви обезбеди опис. За да се создаваат описи, сликите се испраќаат до Google. Ова може да го исклучите во „Поставки“ во секое време.</translation>
-<translation id="778331955594035129">На Chrome му треба дозвола за локација за сајтов</translation>
-<translation id="7787950393032327779">Се чини дека профилот го користи друг процес на Google Chrome (<ph name="PROCESS_ID" />) на друг компјутер (<ph name="HOST_NAME" />). Chrome го заклучи профилот за да не се оштети. Ако сте сигурни дека ниеден друг процес не го користи профилот, може да го отклучите профилот и повторно да стартувате Chrome.</translation>
-<translation id="7792336732117553384">Управувајте со профилите на Chrome</translation>
-<translation id="7801699035218095297">Google Chrome се обидува да копира лозинки. Внесете ја лозинката за Windows за да се дозволи ова.</translation>
-<translation id="7804364787702057554">Вашата сметка во Chrome</translation>
-<translation id="7808348361785373670">Отстрани од Chrome</translation>
-<translation id="7827099906024714326">Chrome треба да го потврди вашиот идентитет пред да може да се зачуваат некои податоци во вашата сметка на Google и да се користат на сите ваши уреди. Ако се одјавите сега, податоциве ќе се избришат.</translation>
-<translation id="7832314606810669113">За да ги добиете обележувачите и друго на сите ваши уреди, најавете се на Chrome. Откако ќе се најавите, обележувачов ќе се зачува во вашата сметка на Google.</translation>
+<translation id="7748969056734910029">Не сте дошле одамна. Ultimatum ги отстрани следниве дозволи: <ph name="PERMISSION_1" /> и <ph name="PERMISSION_2" />.</translation>
+<translation id="7761834446675418963">Кликнете си на името за да го отворите Ultimatum и да започнете со прелистување.</translation>
+<translation id="7777080907402804672">Ако сликата нема корисен опис, Ultimatum ќе се обиде да ви обезбеди опис. За да се создаваат описи, сликите се испраќаат до Google. Ова може да го исклучите во „Поставки“ во секое време.</translation>
+<translation id="778331955594035129">На Ultimatum му треба дозвола за локација за сајтов</translation>
+<translation id="7787950393032327779">Се чини дека профилот го користи друг процес на Ultimatum (<ph name="PROCESS_ID" />) на друг компјутер (<ph name="HOST_NAME" />). Ultimatum го заклучи профилот за да не се оштети. Ако сте сигурни дека ниеден друг процес не го користи профилот, може да го отклучите профилот и повторно да стартувате Ultimatum.</translation>
+<translation id="7792336732117553384">Управувајте со профилите на Ultimatum</translation>
+<translation id="7801699035218095297">Ultimatum се обидува да копира лозинки. Внесете ја лозинката за Windows за да се дозволи ова.</translation>
+<translation id="7804364787702057554">Вашата сметка во Ultimatum</translation>
+<translation id="7808348361785373670">Отстрани од Ultimatum</translation>
+<translation id="7827099906024714326">Ultimatum треба да го потврди вашиот идентитет пред да може да се зачуваат некои податоци во вашата сметка на Google и да се користат на сите ваши уреди. Ако се одјавите сега, податоциве ќе се избришат.</translation>
+<translation id="7832314606810669113">За да ги добиете обележувачите и друго на сите ваши уреди, најавете се на Ultimatum. Откако ќе се најавите, обележувачов ќе се зачува во вашата сметка на Google.</translation>
 <translation id="7845233973568007926">Фала за инсталирањето. Мора да го рестартирате компјутерот пред да користите <ph name="BUNDLE_NAME" />.</translation>
-<translation id="7847170235260850604">Стартувај го Chrome кога ќе се стартува Windows</translation>
-<translation id="7849037457735762883">Продолжете каде што сте застанале: Chrome може да ги врати вашите картички секогаш кога ќе рестартирате. За да го вклучите ова, одете во</translation>
-<translation id="7869620795354551924">За да ги користите зачуваните лозинки, следете го QR-кодот, преземете го Chrome за iOS и најавете се на вашата сметка на Google</translation>
+<translation id="7847170235260850604">Стартувај го Ultimatum кога ќе се стартува Windows</translation>
+<translation id="7849037457735762883">Продолжете каде што сте застанале: Ultimatum може да ги врати вашите картички секогаш кога ќе рестартирате. За да го вклучите ова, одете во</translation>
+<translation id="7869620795354551924">За да ги користите зачуваните лозинки, следете го QR-кодот, преземете го Ultimatum за iOS и најавете се на вашата сметка на Google</translation>
 <translation id="7872446069773932638">Се презема… Уште <ph name="SECONDS" /> сек.</translation>
 <translation id="7886087451482920026">Изберете текст со Google Lens</translation>
-<translation id="7890208801193284374">Доколку споделувате компјутер, пријателите и семејството може да прелистуваат одделно и да го поставуваат Chrome токму онака како што сакаат.</translation>
-<translation id="7896673875602241923">Некој претходно се најави на Chrome од овој компјутер како <ph name="ACCOUNT_EMAIL_LAST" />. Создајте нов корисник на Chrome за да ги чувате информациите одделно.</translation>
-<translation id="7904985524660297937">Испробајте го Gemini во Google Chrome</translation>
-<translation id="7917876797003313048">Може да управувате со најавените сметки на Google. Вашите сметки на Google се користат за прелистувачот Chrome, Play Store, Gmail и друго. Ако сакате да додадете сметка за некој друг, како член на семејството, додајте ново лице во вашиот уред <ph name="DEVICE_TYPE" /> наместо тоа. <ph name="LINK_BEGIN" />Дознај повеќе<ph name="LINK_END" /></translation>
-<translation id="7936702483636872823">Chrome го блокираше преземањево затоа што датотеката е измамничка и може да изврши неочекувани промени на вашиот уред</translation>
-<translation id="7951272445806340501">ChromeOS Flex треба да се рестартира за да се примени ажурирањето.</translation>
-<translation id="7959172989483770734">Управувајте со профилите на Chrome</translation>
-<translation id="7962410387636238736">Компјутеров веќе нема да добива ажурирања за Google Chrome затоа што Windows XP и Windows Vista веќе не се поддржуваат</translation>
+<translation id="7890208801193284374">Доколку споделувате компјутер, пријателите и семејството може да прелистуваат одделно и да го поставуваат Ultimatum токму онака како што сакаат.</translation>
+<translation id="7896673875602241923">Некој претходно се најави на Ultimatum од овој компјутер како <ph name="ACCOUNT_EMAIL_LAST" />. Создајте нов корисник на Ultimatum за да ги чувате информациите одделно.</translation>
+<translation id="7904985524660297937">Испробајте го Gemini во Ultimatum</translation>
+<translation id="7917876797003313048">Може да управувате со најавените сметки на Google. Вашите сметки на Google се користат за прелистувачот Ultimatum, Play Store, Gmail и друго. Ако сакате да додадете сметка за некој друг, како член на семејството, додајте ново лице во вашиот уред <ph name="DEVICE_TYPE" /> наместо тоа. <ph name="LINK_BEGIN" />Дознај повеќе<ph name="LINK_END" /></translation>
+<translation id="7936702483636872823">Ultimatum го блокираше преземањево затоа што датотеката е измамничка и може да изврши неочекувани промени на вашиот уред</translation>
+<translation id="7951272445806340501">UltimatumOS Flex треба да се рестартира за да се примени ажурирањето.</translation>
+<translation id="7959172989483770734">Управувајте со профилите на Ultimatum</translation>
+<translation id="7962410387636238736">Компјутеров веќе нема да добива ажурирања за Ultimatum затоа што Windows XP и Windows Vista веќе не се поддржуваат</translation>
 <translation id="8004582292198964060">Прелистувач</translation>
 <translation id="8005666035647241369">До „Управникот со лозинки на Google“ на уредов</translation>
-<translation id="8008534537613507642">Преинсталирај го Chrome</translation>
-<translation id="8009904340233602924">Користи Chrome без сметка</translation>
+<translation id="8008534537613507642">Преинсталирај го Ultimatum</translation>
+<translation id="8009904340233602924">Користи Ultimatum без сметка</translation>
 <translation id="8010081455002666927">Автоматско откривање</translation>
-<translation id="8013993649590906847">Ако сликата нема корисен опис, Chrome ќе се обиде да ви обезбеди опис. За да се создаваат описи, сликите се испраќаат до Google.</translation>
-<translation id="8019103195866286235">Програмерот го поништи објавувањето на екстензијава, па можеби не е безбедна. Отстранете ја од Chrome за да не може веќе да ги гледа и променува вашите податоци на сајтовите што ги отворате, што ги опфаќа и вашите лични податоци.</translation>
-<translation id="8040768861829554732">Дадена екстензија сака да се најавите на Chrome</translation>
+<translation id="8013993649590906847">Ако сликата нема корисен опис, Ultimatum ќе се обиде да ви обезбеди опис. За да се создаваат описи, сликите се испраќаат до Google.</translation>
+<translation id="8019103195866286235">Програмерот го поништи објавувањето на екстензијава, па можеби не е безбедна. Отстранете ја од Ultimatum за да не може веќе да ги гледа и променува вашите податоци на сајтовите што ги отворате, што ги опфаќа и вашите лични податоци.</translation>
+<translation id="8040768861829554732">Дадена екстензија сака да се најавите на Ultimatum</translation>
 <translation id="8041795619940733262">Прашајте го Google<ph name="LINE_BREAK" />за оваа картичка</translation>
 <translation id="80471789339884597">Фала за инсталирањето. Мора да ги рестартирате сите ваши прелистувачи пред да користите <ph name="BUNDLE_NAME" />.</translation>
-<translation id="8064015586118426197">ChromeOS Flex</translation>
+<translation id="8064015586118426197">UltimatumOS Flex</translation>
 <translation id="8064965390968184078">1. Кликнете <ph name="BUTTON_LABEL" /> подолу
-2. Кликнете <ph name="BUTTON_2" /> во поставките за Windows Кликнете <ph name="BUTTON_3" /> во известувањето на Windows за да го закачите Chrome на лентата со задачи за брз пристап</translation>
-<translation id="8074398340364918139">За да пребарувате одредена функција или екстензија на Chrome, напишете ја нејзината кратенка во лентата за адреси, а потоа притиснете го избраното копче на тастатурата</translation>
-<translation id="8077579734294125741">Други профили на Chrome</translation>
+2. Кликнете <ph name="BUTTON_2" /> во поставките за Windows Кликнете <ph name="BUTTON_3" /> во известувањето на Windows за да го закачите Ultimatum на лентата со задачи за брз пристап</translation>
+<translation id="8074398340364918139">За да пребарувате одредена функција или екстензија на Ultimatum, напишете ја нејзината кратенка во лентата за адреси, а потоа притиснете го избраното копче на тастатурата</translation>
+<translation id="8077579734294125741">Други профили на Ultimatum</translation>
 <translation id="8086881907087796310">Инсталацијата не успеа бидејќи вашиот компјутер не ги исполнува минималните барања за хардвер.</translation>
-<translation id="8113883687556086139">Потврдете го вашиот идентитет за да користите и зачувувате податоци од Chrome во вашата сметка <ph name="ACCOUNT_EMAIL" /></translation>
-<translation id="8115695070094288807">Персонализирање на Chrome…</translation>
+<translation id="8113883687556086139">Потврдете го вашиот идентитет за да користите и зачувувате податоци од Ultimatum во вашата сметка <ph name="ACCOUNT_EMAIL" /></translation>
+<translation id="8115695070094288807">Персонализирање на Ultimatum…</translation>
 <translation id="8118331347066725040">Испратете повратни информации за пребарувањето со Lens</translation>
-<translation id="8129812357326543296">За &amp;Google Chrome</translation>
+<translation id="8129812357326543296">За &amp;Ultimatum</translation>
 <translation id="813913629614996137">Се иницијализира…</translation>
-<translation id="8162006532256575008">Користете Chrome без сметка</translation>
-<translation id="8172231188687329735">Инсталирајте ја апликацијата Chrome за да зачувувате лозинки во движење</translation>
+<translation id="8162006532256575008">Користете Ultimatum без сметка</translation>
+<translation id="8172231188687329735">Инсталирајте ја апликацијата Ultimatum за да зачувувате лозинки во движење</translation>
 <translation id="8177472873527554730">Не може да се најдат содржини на страницата</translation>
 <translation id="8221491193165283816">Вообичаено ги блокирате известувањата. За да дозволите сајтов да ве известува, кликнете тука.</translation>
-<translation id="8253851811470049684">Отворајте линкови во Chrome од која било апликација и пристапувајте до прелистувачот преку лентата со задачи</translation>
-<translation id="8255190535488645436">Google Chrome ги користи камерата и микрофонот.</translation>
-<translation id="8267953129876836456">Chrome најде неколку препораки за безбедност што може да ги прегледате</translation>
-<translation id="8286862437124483331">Google Chrome се обидува да покаже лозинки. Впишете ја лозинката за Windows за да се дозволи ова.</translation>
+<translation id="8253851811470049684">Отворајте линкови во Ultimatum од која било апликација и пристапувајте до прелистувачот преку лентата со задачи</translation>
+<translation id="8255190535488645436">Ultimatum ги користи камерата и микрофонот.</translation>
+<translation id="8267953129876836456">Ultimatum најде неколку препораки за безбедност што може да ги прегледате</translation>
+<translation id="8286862437124483331">Ultimatum се обидува да покаже лозинки. Впишете ја лозинката за Windows за да се дозволи ова.</translation>
 <translation id="829923460755755423">Додајте кратенка за Google Password Manager</translation>
 <translation id="8313851650939857356">Грешка при стартување: <ph name="STARTUP_ERROR" />.</translation>
 <translation id="8321888067342493336">Зачувај како слика</translation>
-<translation id="8336463659890584292">Кога одреден сајт ќе побара приватно вчитување однапред на линковите на неговата страница, Chrome ги користи серверите на Google. Вака се сокрива вашиот идентитет од однапред вчитаниот сајт, но Google учи кои сајтови да се вчитуваат однапред.</translation>
-<translation id="8342675569599923794">Датотекава е опасна, па затоа Chrome ја блокираше.</translation>
+<translation id="8336463659890584292">Кога одреден сајт ќе побара приватно вчитување однапред на линковите на неговата страница, Ultimatum ги користи серверите на Google. Вака се сокрива вашиот идентитет од однапред вчитаниот сајт, но Google учи кои сајтови да се вчитуваат однапред.</translation>
+<translation id="8342675569599923794">Датотекава е опасна, па затоа Ultimatum ја блокираше.</translation>
 <translation id="835927394551949760">Прашајте го Google</translation>
 <translation id="8362914115861174987">Преведи на</translation>
-<translation id="8366770919198174997">Ја намалува изведбата, но го прави Chrome поотпорен на напади</translation>
+<translation id="8366770919198174997">Ја намалува изведбата, но го прави Ultimatum поотпорен на напади</translation>
 <translation id="8367705492654390392">Прашајте што било</translation>
 <translation id="8370517070665726704">Авторски права <ph name="YEAR" /> Google LLC. Сите права се задржани.</translation>
-<translation id="8377158135256176353">Вклучете/исклучете го Gemini во Chrome Canary</translation>
-<translation id="8387459386171870978">Продолжете да користите Chrome</translation>
-<translation id="8394720698884623075">Ги проверува URL-адресите во список со небезбедни сајтови меморирани во Chrome</translation>
-<translation id="8403038600646341038">Логото на Chrome во екран на компјутер.</translation>
-<translation id="8418845734693287262">Chrome OS не може да ги синхронизира податоците бидејќи деталите за најавување на сметката се застарени.</translation>
-<translation id="842386925677997438">Алатки за безбедност на Chrome</translation>
-<translation id="8425765582779547329">За поголема безбедност онлајн со изборите на твојот родител, најави се на Chrome</translation>
-<translation id="842852285618875960">Го достигнавте ограничувањето на Google Chrome од <ph name="BOOKMARK_LIMIT" /> обележувачи, па некои од вашите обележувачи сѐ уште не се зачувани во вашата сметка на Google.
+<translation id="8377158135256176353">Вклучете/исклучете го Gemini во Ultimatum Canary</translation>
+<translation id="8387459386171870978">Продолжете да користите Ultimatum</translation>
+<translation id="8394720698884623075">Ги проверува URL-адресите во список со небезбедни сајтови меморирани во Ultimatum</translation>
+<translation id="8403038600646341038">Логото на Ultimatum во екран на компјутер.</translation>
+<translation id="8418845734693287262">Ultimatum OS не може да ги синхронизира податоците бидејќи деталите за најавување на сметката се застарени.</translation>
+<translation id="842386925677997438">Алатки за безбедност на Ultimatum</translation>
+<translation id="8425765582779547329">За поголема безбедност онлајн со изборите на твојот родител, најави се на Ultimatum</translation>
+<translation id="842852285618875960">Го достигнавте ограничувањето на Ultimatum од <ph name="BOOKMARK_LIMIT" /> обележувачи, па некои од вашите обележувачи сѐ уште не се зачувани во вашата сметка на Google.
 
 Новите обележувачи не може да се зачувуваат во сметката сѐ додека не избришете неколку од постојните. Ако се одјавите сега, незачуваните обележувачи ќе се избришат.</translation>
-<translation id="8433638294851456451">За да испратите број оттука до телефонот со Android, најавете се на Chrome на двата уреда.</translation>
-<translation id="8458117863387545390">Инсталирајте Chrome на вашиот телефон</translation>
+<translation id="8433638294851456451">За да испратите број оттука до телефонот со Android, најавете се на Ultimatum на двата уреда.</translation>
+<translation id="8458117863387545390">Инсталирајте Ultimatum на вашиот телефон</translation>
 <translation id="8496177819998570653">Google Password Manager</translation>
-<translation id="8498858610309223613">Тукушто применивме посебно безбедносно ажурирање за Google Chrome. Рестартирајте сега и ќе ви ги вратиме картичките.</translation>
-<translation id="8516431725144212809">Вашите интереси како што се проценети од Chrome</translation>
-<translation id="8521348052903287641">Дојдовно правило за Google Chrome Dev за овозможување mDNS-сообраќај.</translation>
-<translation id="852529348814672339">Прикажувај го Chrome на овој јазик</translation>
-<translation id="8533056045953418157">Поставете го Google Chrome како стандарден PDF-прикажувач</translation>
+<translation id="8498858610309223613">Тукушто применивме посебно безбедносно ажурирање за Ultimatum. Рестартирајте сега и ќе ви ги вратиме картичките.</translation>
+<translation id="8516431725144212809">Вашите интереси како што се проценети од Ultimatum</translation>
+<translation id="8521348052903287641">Дојдовно правило за Ultimatum Dev за овозможување mDNS-сообраќај.</translation>
+<translation id="852529348814672339">Прикажувај го Ultimatum на овој јазик</translation>
+<translation id="8533056045953418157">Поставете го Ultimatum како стандарден PDF-прикажувач</translation>
 <translation id="8555465886620020932">Грешка на услугата: <ph name="SERVICE_ERROR" /></translation>
 <translation id="856656450041460113">Пребарајте го списокот со јазици</translation>
-<translation id="8575047640889685742">Користете ја <ph name="BEGIN_LINK" />својата лозинка<ph name="END_LINK" /> за да ги шифрирате сите податоци од Chrome во вашата сметка на Google. Начините на плаќање и адресите од Google Pay нема да се шифрираат. Историјата на прелистувањето од Chrome нема да се синхронизира.</translation>
+<translation id="8575047640889685742">Користете ја <ph name="BEGIN_LINK" />својата лозинка<ph name="END_LINK" /> за да ги шифрирате сите податоци од Ultimatum во вашата сметка на Google. Начините на плаќање и адресите од Google Pay нема да се шифрираат. Историјата на прелистувањето од Ultimatum нема да се синхронизира.</translation>
 <translation id="8601359445272098721">Ново! Може да ги преведувате и текстот и сликите на екранот така што ќе го изберете копчето „Преведи го екранот“</translation>
-<translation id="8614913330719544658">Google Chrome не реагира. Да се рестартира сега?</translation>
-<translation id="861702415419836452">На Chrome му треба дозвола за да пристапи до камерата и да создаде 3D-карта од вашето опкружување</translation>
+<translation id="8614913330719544658">Ultimatum не реагира. Да се рестартира сега?</translation>
+<translation id="861702415419836452">На Ultimatum му треба дозвола за да пристапи до камерата и да создаде 3D-карта од вашето опкружување</translation>
 <translation id="8624541899164515475">Поставки, се отвора во нова картичка.</translation>
-<translation id="8625237574518804553">{0,plural, =1{Chrome ќе се рестартира по 1 минута}one{Chrome ќе се рестартира по # минута}other{Chrome ќе се рестартира по # минути}}</translation>
-<translation id="8637932705841171563">За да го споделите прозорецот, дозволете снимање на екранот за Chrome во System Settings</translation>
-<translation id="8641606876632989680">Chrome ќе ве извести кога ќе се најавите со компромитирана лозинка</translation>
-<translation id="8647930742055103497">Чувајте сѐ во Chrome</translation>
-<translation id="8656634243791296665">Отворете го Gemini во Chrome Dev</translation>
-<translation id="8669527147644353129">Google Chrome Helper</translation>
-<translation id="8679801911857917785">Контролира и која страница се прикажува кога ќе стартувате Chrome.</translation>
+<translation id="8625237574518804553">{0,plural, =1{Ultimatum ќе се рестартира по 1 минута}one{Ultimatum ќе се рестартира по # минута}other{Ultimatum ќе се рестартира по # минути}}</translation>
+<translation id="8637932705841171563">За да го споделите прозорецот, дозволете снимање на екранот за Ultimatum во System Settings</translation>
+<translation id="8641606876632989680">Ultimatum ќе ве извести кога ќе се најавите со компромитирана лозинка</translation>
+<translation id="8647930742055103497">Чувајте сѐ во Ultimatum</translation>
+<translation id="8656634243791296665">Отворете го Gemini во Ultimatum Dev</translation>
+<translation id="8669527147644353129">Ultimatum Helper</translation>
+<translation id="8679801911857917785">Контролира и која страница се прикажува кога ќе стартувате Ultimatum.</translation>
 <translation id="8712637175834984815">Сфатив</translation>
-<translation id="8712767363896337380">Речиси сте готови! Рестартирајте го Chrome за да заврши ажурирањето.</translation>
-<translation id="8718062187489036808">Одјави се од Chrome</translation>
+<translation id="8712767363896337380">Речиси сте готови! Рестартирајте го Ultimatum за да заврши ажурирањето.</translation>
+<translation id="8718062187489036808">Одјави се од Ultimatum</translation>
 <translation id="8725440680697264016">Прашајте го Google за видеово</translation>
-<translation id="873133009373065397">Google Chrome не може да го одреди или постави стандардниот прелистувач</translation>
+<translation id="873133009373065397">Ultimatum не може да го одреди или постави стандардниот прелистувач</translation>
 <translation id="8747073452963259673">долен лев агол на областа за пребарување: лево <ph name="LEFT" /> %, долу <ph name="BOTTOM" /> %</translation>
-<translation id="8748735421235723888">Chrome ослободува меморија од неактивните картички. Ова им обезбедува повеќе компјутерски ресурси на активните картички и другите апликации и ја одржува брзината на Chrome. Вашите неактивни картички автоматски стануваат активни повторно кога ќе се вратите на нив. <ph name="BEGIN_LINK" />Дознајте повеќе за „Штедачот на меморија“<ph name="END_LINK" /></translation>
-<translation id="8765470054473112089">Кога ќе напишете нешто во лентата за адреси или полето за пребарување, Chrome го испраќа напишаното до вашиот стандарден пребарувач за да добиете подобри предлози. Ова е исклучено во „Инкогнито“.</translation>
-<translation id="8781673607513845160">За да ја користи камерата, дајте му пристап на Chrome во <ph name="BEGIN_LINK" />системските поставки<ph name="END_LINK" /></translation>
+<translation id="8748735421235723888">Ultimatum ослободува меморија од неактивните картички. Ова им обезбедува повеќе компјутерски ресурси на активните картички и другите апликации и ја одржува брзината на Ultimatum. Вашите неактивни картички автоматски стануваат активни повторно кога ќе се вратите на нив. <ph name="BEGIN_LINK" />Дознајте повеќе за „Штедачот на меморија“<ph name="END_LINK" /></translation>
+<translation id="8765470054473112089">Кога ќе напишете нешто во лентата за адреси или полето за пребарување, Ultimatum го испраќа напишаното до вашиот стандарден пребарувач за да добиете подобри предлози. Ова е исклучено во „Инкогнито“.</translation>
+<translation id="8781673607513845160">За да ја користи камерата, дајте му пристап на Ultimatum во <ph name="BEGIN_LINK" />системските поставки<ph name="END_LINK" /></translation>
 <translation id="878572486461146056">Грешка при инсталирање: вашиот мрежен администратор применил групно правило што спречува инсталирање: <ph name="INSTALL_ERROR" /></translation>
-<translation id="8796919761992612392">Приспособете го вашиот Chrome</translation>
-<translation id="8798550110818026746">Вашата организација може да ги гледа и да управува со податоците од прелистување, како што се вашите обележувачи, историја и лозинки. Не може да ги гледа податоците од прелистување во другите профили на Chrome</translation>
+<translation id="8796919761992612392">Приспособете го вашиот Ultimatum</translation>
+<translation id="8798550110818026746">Вашата организација може да ги гледа и да управува со податоците од прелистување, како што се вашите обележувачи, историја и лозинки. Не може да ги гледа податоците од прелистување во другите профили на Ultimatum</translation>
 <translation id="8813277370772331957">Потсети ме подоцна</translation>
-<translation id="8821043148920470810">За да добивате идни ажурирања на Google Chrome, потребен ви е Windows 10 или понова верзија. Компјутеров користи Windows 7.</translation>
-<translation id="8823341990149967727">Chrome е застарен</translation>
-<translation id="8834965163890861871">Google Chrome се обидува да измени лозинки. Внесете ја својата лозинка за Windows за да го дозволите ова.</translation>
-<translation id="8851180723659088381">{NUM_EXTENSIONS,plural, =1{Chrome препорачува да ја отстраните}one{Chrome препорачува да ги отстраните}other{Chrome препорачува да ги отстраните}}</translation>
+<translation id="8821043148920470810">За да добивате идни ажурирања на Ultimatum, потребен ви е Windows 10 или понова верзија. Компјутеров користи Windows 7.</translation>
+<translation id="8823341990149967727">Ultimatum е застарен</translation>
+<translation id="8834965163890861871">Ultimatum се обидува да измени лозинки. Внесете ја својата лозинка за Windows за да го дозволите ова.</translation>
+<translation id="8851180723659088381">{NUM_EXTENSIONS,plural, =1{Ultimatum препорачува да ја отстраните}one{Ultimatum препорачува да ги отстраните}other{Ultimatum препорачува да ги отстраните}}</translation>
 <translation id="8862326446509486874">Немате соодветни права за инсталирање на системско ниво. Обидете се да го извршите инсталаторот повторно како администратор.</translation>
-<translation id="8865415417596392024">Податоци од Chrome во вашата сметка</translation>
+<translation id="8865415417596392024">Податоци од Ultimatum во вашата сметка</translation>
 <translation id="8883862939660515976">Прашајте ја Google Lens за сликава</translation>
-<translation id="8914504000324227558">Рестартирајте го Chrome</translation>
-<translation id="8922193594870374009">За да испратите број од <ph name="ORIGIN" /> до телефонот со Android, најавете се на Chrome на двата уреда.</translation>
-<translation id="8922998289262614701">Отстрани ги податоците поврзани со апликацијава од Chrome</translation>
+<translation id="8914504000324227558">Рестартирајте го Ultimatum</translation>
+<translation id="8922193594870374009">За да испратите број од <ph name="ORIGIN" /> до телефонот со Android, најавете се на Ultimatum на двата уреда.</translation>
+<translation id="8922998289262614701">Отстрани ги податоците поврзани со апликацијава од Ultimatum</translation>
 <translation id="8925636929359899517">Ги користиме податоците за да ја подобриме услугава. Погледнете ги <ph name="BEGIN_LINK1" />Политиката за приватност<ph name="END_LINK1" /> и <ph name="BEGIN_LINK2" />Условите за користење<ph name="END_LINK2" />.</translation>
-<translation id="8936233353620149764">Вклучете/исклучете го Gemini во Chrome</translation>
-<translation id="8948460679427074738">Екстензијава нема објавено практики за приватност, како на пример, како прибира и користи податоци. Chrome препорачува да ја отстраните.</translation>
-<translation id="8958307504142971576">Отсега имате повеќе достапни функции во Chrome</translation>
-<translation id="8991530961471831170">Отвори го Gemini во Chrome</translation>
-<translation id="8992769679401294069">Вашите податоци се шифрирани со вашата лозинка. Внесете ја за да користите и зачувувате податоци од Chrome во вашата сметка на Google.</translation>
-<translation id="8999117580775242387">Кога не е достапна HTTPS, Chrome ќе користи небезбедна врска без да ве предупреди</translation>
-<translation id="8999208279178790196">{0,plural, =0{Достапно е ажурирање за Chrome}=1{Достапно е ажурирање за Chrome}one{Достапно е ажурирање за Chrome веќе # ден}other{Достапно е ажурирање за Chrome веќе # дена}}</translation>
-<translation id="9010418943148193727">Вашиот стандарден пребарувач го промени апликација надвор од Chrome. Chrome го ресетираше за да ве заштити.</translation>
-<translation id="9014771989710951291">Повеќе организации управуваат со Chrome</translation>
-<translation id="9024318700713112071">Поставете го Chrome како стандарден прелистувач</translation>
-<translation id="9066987883552592250">Затворете го Gemini во Chrome Canary</translation>
-<translation id="9090566250983691233">Дознајте зошто Chrome блокира некои датотеки</translation>
+<translation id="8936233353620149764">Вклучете/исклучете го Gemini во Ultimatum</translation>
+<translation id="8948460679427074738">Екстензијава нема објавено практики за приватност, како на пример, како прибира и користи податоци. Ultimatum препорачува да ја отстраните.</translation>
+<translation id="8958307504142971576">Отсега имате повеќе достапни функции во Ultimatum</translation>
+<translation id="8991530961471831170">Отвори го Gemini во Ultimatum</translation>
+<translation id="8992769679401294069">Вашите податоци се шифрирани со вашата лозинка. Внесете ја за да користите и зачувувате податоци од Ultimatum во вашата сметка на Google.</translation>
+<translation id="8999117580775242387">Кога не е достапна HTTPS, Ultimatum ќе користи небезбедна врска без да ве предупреди</translation>
+<translation id="8999208279178790196">{0,plural, =0{Достапно е ажурирање за Ultimatum}=1{Достапно е ажурирање за Ultimatum}one{Достапно е ажурирање за Ultimatum веќе # ден}other{Достапно е ажурирање за Ultimatum веќе # дена}}</translation>
+<translation id="9010418943148193727">Вашиот стандарден пребарувач го промени апликација надвор од Ultimatum. Ultimatum го ресетираше за да ве заштити.</translation>
+<translation id="9014771989710951291">Повеќе организации управуваат со Ultimatum</translation>
+<translation id="9024318700713112071">Поставете го Ultimatum како стандарден прелистувач</translation>
+<translation id="9066987883552592250">Затворете го Gemini во Ultimatum Canary</translation>
+<translation id="9090566250983691233">Дознајте зошто Ultimatum блокира некои датотеки</translation>
 <translation id="9106236359747881194">Изберете текст за да пребарате</translation>
 <translation id="911206726377975832">Да се избришат ли и вашите податоци од пребарувањата?</translation>
 <translation id="9134482777260927479">Помош за домашната работа</translation>
-<translation id="9138603949443464873">За да се применат измените, рестартирајте го Chrome</translation>
+<translation id="9138603949443464873">За да се применат измените, рестартирајте го Ultimatum</translation>
 <translation id="9148058034647219655">Излези</translation>
-<translation id="919706545465235479">Ажурирајте го Chrome за да започнете со синхронизирање</translation>
-<translation id="922152298093051471">Приспособете го Chrome</translation>
-<translation id="93760716455950538">Рестартирајте ја ChromeOS Flex</translation>
-<translation id="943390475793766444">Chrome препорачува скенирање на датотекава бидејќи можеби е опасна.</translation>
+<translation id="919706545465235479">Ажурирајте го Ultimatum за да започнете со синхронизирање</translation>
+<translation id="922152298093051471">Приспособете го Ultimatum</translation>
+<translation id="93760716455950538">Рестартирајте ја UltimatumOS Flex</translation>
+<translation id="943390475793766444">Ultimatum препорачува скенирање на датотекава бидејќи можеби е опасна.</translation>
 <translation id="945522503751344254">Испратете повратни информации</translation>
 <translation id="983803489796659991">Инсталацијата не успеа бидејќи серверот за ажурирање нема хаш-податоци за апликацијата.</translation>
-<translation id="989369509083708165">Google Chrome е вашиот стандарден прелистувач</translation>
-<translation id="989816563149873169">Со <ph name="SHORTCUT" /> се менуваат профили на Chrome</translation>
+<translation id="989369509083708165">Ultimatum е вашиот стандарден прелистувач</translation>
+<translation id="989816563149873169">Со <ph name="SHORTCUT" /> се менуваат профили на Ultimatum</translation>
 </translationbundle>

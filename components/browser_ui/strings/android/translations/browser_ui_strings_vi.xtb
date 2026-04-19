@@ -5,20 +5,20 @@
 <translation id="1036348656032585052">Tắt</translation>
 <translation id="1046742265332833834">Giao diện màu xanh dương</translation>
 <translation id="1070329623210597193">Các tệp mà trang web này có thể xem hoặc chỉnh sửa</translation>
-<translation id="1073417869336441572">Hãy chia sẻ lý do bạn cho phép cookie của bên thứ ba để giúp chúng tôi cải thiện Chrome. <ph name="BEGIN_LINK" />Gửi phản hồi<ph name="END_LINK" /></translation>
+<translation id="1073417869336441572">Hãy chia sẻ lý do bạn cho phép cookie của bên thứ ba để giúp chúng tôi cải thiện Ultimatum. <ph name="BEGIN_LINK" />Gửi phản hồi<ph name="END_LINK" /></translation>
 <translation id="1074758928858737435">Bạn có thể yêu cầu xem phiên bản trang web dành cho máy tính</translation>
 <translation id="1109482864356262001">Các tính năng cần dùng cảm biến chuyển động hoặc cảm biến ánh sáng sẽ không hoạt động</translation>
-<translation id="1126523729897810826">Làm theo các đề xuất dưới đây để sử dụng Chrome hiệu quả nhất</translation>
+<translation id="1126523729897810826">Làm theo các đề xuất dưới đây để sử dụng Ultimatum hiệu quả nhất</translation>
 <translation id="113098737392899175">Di chuyển giữa các trang bằng con trỏ văn bản khi kết nối bàn phím</translation>
 <translation id="1148624853678088576">Bạn đã hoàn tất!</translation>
-<translation id="1149644372535087155">Lưu mật khẩu trong Chrome</translation>
+<translation id="1149644372535087155">Lưu mật khẩu trong Ultimatum</translation>
 <translation id="1178015372320901893">Bảng các lối tắt của tôi ở dưới cùng</translation>
 <translation id="1178581264944972037">Tạm dừng</translation>
 <translation id="1181037720776840403">Xoá</translation>
 <translation id="1192844206376121885">Thao tác này sẽ xoá toàn bộ dữ liệu và cookie do <ph name="ORIGIN" /> lưu trữ.</translation>
 <translation id="1199963004393929848">Giao diện màu xanh lục</translation>
 <translation id="1201402288615127009">Tiếp theo</translation>
-<translation id="1240190568154816272">Mẹo dùng Chrome</translation>
+<translation id="1240190568154816272">Mẹo dùng Ultimatum</translation>
 <translation id="1242008676835033345">Được nhúng trên <ph name="WEBSITE_URL" /></translation>
 <translation id="1263609676484797429">Nhấn vào Ứng dụng &gt; Ứng dụng mặc định</translation>
 <translation id="1272079795634619415">Dừng</translation>
@@ -38,7 +38,7 @@
 <translation id="1396327438254055134">Cho phép trang web sử dụng trình tối ưu hoá V8.</translation>
 <translation id="1409338233051621926">Nhấn vào Ứng dụng rồi nhấn vào Ứng dụng mặc định</translation>
 <translation id="1415402041810619267">URL đã được cắt bớt</translation>
-<translation id="1415855080660575082">Cho phép Chrome chia sẻ các thẻ gần đây với thiết bị của bạn để xem các thẻ này trong danh sách ứng dụng và kết quả tìm kiếm trên thiết bị. Bạn có thể bật hoặc tắt tính năng này trong phần cài đặt của Chrome.</translation>
+<translation id="1415855080660575082">Cho phép Ultimatum chia sẻ các thẻ gần đây với thiết bị của bạn để xem các thẻ này trong danh sách ứng dụng và kết quả tìm kiếm trên thiết bị. Bạn có thể bật hoặc tắt tính năng này trong phần cài đặt của Ultimatum.</translation>
 <translation id="1420688843103859429">Di chuyển qua lại bằng cách vuốt hai ngón tay trên bàn di chuột</translation>
 <translation id="1432650420699700107">Các trang web có thể yêu cầu kết nối với thiết bị bất kỳ trên mạng cục bộ của bạn</translation>
 <translation id="1442081309487427303">Bật các đường liên kết ở Chế độ đọc</translation>
@@ -52,7 +52,7 @@
 <translation id="1532175480576580256">Bảng các lối tắt của tôi ở dưới cùng đã mở toàn bộ</translation>
 <translation id="1538031354170655462">Các trang web thường sử dụng công nghệ giao tiếp phạm vi gần (NFC) để tương tác với thẻ hoặc thiết bị lân cận, chẳng hạn như quét thẻ hoặc thanh toán không tiếp xúc</translation>
 <translation id="1547123415014299762">Cho phép sử dụng cookie của bên thứ ba</translation>
-<translation id="1569054338208717605">Tăng tốc độ tải trang web bằng công cụ V8 của Chrome nhưng làm giảm khả năng chống lại các cuộc tấn công của Chrome</translation>
+<translation id="1569054338208717605">Tăng tốc độ tải trang web bằng công cụ V8 của Ultimatum nhưng làm giảm khả năng chống lại các cuộc tấn công của Ultimatum</translation>
 <translation id="1593426485665524382">Có các thao tác mới ở gần đầu màn hình</translation>
 <translation id="1594521731409209842">Chụm hai ngón tay trên màn hình để đổi kích thước ảnh</translation>
 <translation id="1599268789440304082">Đã mở trang thiết lập</translation>
@@ -73,14 +73,14 @@
 <translation id="1717996979683942279">Khi bạn bật chế độ này, các trang web có thể yêu cầu quản lý các cửa sổ trên tất cả màn hình của bạn. Khi bạn tắt chế độ này, các trang web không thể quản lý các cửa sổ trên tất cả màn hình của bạn.</translation>
 <translation id="1738912554587725807">Bảng bộ sưu tập giao diện trang thẻ mới ở dưới cùng</translation>
 <translation id="1743802530341753419">Hỏi trước khi cho phép trang web kết nối với một thiết bị (khuyên dùng)</translation>
-<translation id="1766455884659449403">Nhận thông báo về mẹo dùng Chrome</translation>
+<translation id="1766455884659449403">Nhận thông báo về mẹo dùng Ultimatum</translation>
 <translation id="1777815584158991902">Bảng nguồn cấp dữ liệu Khám phá ở dưới cùng</translation>
 <translation id="1779089405699405702">Bộ giải mã hình ảnh</translation>
 <translation id="1781533683087883868">Tắt các đường liên kết ở Chế độ đọc</translation>
 <translation id="1785415724048343560">Nên chọn để có trải nghiệm tốt nhất</translation>
 <translation id="1796588414813960292">Các tính năng cần dùng âm thanh sẽ không hoạt động</translation>
-<translation id="1799920918471566157">Mẹo dùng Chrome</translation>
-<translation id="1816835383954230954">Khi bạn bật công cụ này, Chrome sẽ hoạt động nhanh hơn và các tính năng sử dụng JavaScript sẽ hoạt động như dự kiến. Khi bạn tắt công cụ này, hiệu suất sẽ giảm nhưng V8 có thể chống lại các cuộc tấn công tốt hơn.</translation>
+<translation id="1799920918471566157">Mẹo dùng Ultimatum</translation>
+<translation id="1816835383954230954">Khi bạn bật công cụ này, Ultimatum sẽ hoạt động nhanh hơn và các tính năng sử dụng JavaScript sẽ hoạt động như dự kiến. Khi bạn tắt công cụ này, hiệu suất sẽ giảm nhưng V8 có thể chống lại các cuộc tấn công tốt hơn.</translation>
 <translation id="1818308510395330587">Để cho phép <ph name="APP_NAME" /> sử dụng công nghệ thực tế tăng cường (AR), hãy bật cả máy ảnh trong phần <ph name="BEGIN_LINK" />Cài đặt Android<ph name="END_LINK" />.</translation>
 <translation id="1822318649925991542">Di chuyển để tuỳ chỉnh trải nghiệm duyệt web của bạn</translation>
 <translation id="1848033246551405023">Phông chữ Sans Serif</translation>
@@ -135,7 +135,7 @@
 <translation id="2315043854645842844">Lựa chọn chứng chỉ phía ứng dụng khách không được hệ điều hành hỗ trợ.</translation>
 <translation id="2347601491101454548">Bảng các lối tắt của tôi ở dưới cùng đã mở trên một nửa màn hình</translation>
 <translation id="2359808026110333948">Tiếp tục</translation>
-<translation id="2379925928934107488">Áp dụng giao diện tối cho các trang web khi Chrome sử dụng giao diện tối, nếu có thể</translation>
+<translation id="2379925928934107488">Áp dụng giao diện tối cho các trang web khi Ultimatum sử dụng giao diện tối, nếu có thể</translation>
 <translation id="2390272837142897736">Tăng mức thu phóng</translation>
 <translation id="2397689164757137845">Được cho phép • Vị trí chính xác</translation>
 <translation id="2402980924095424747"><ph name="MEGABYTES" /> MB</translation>
@@ -147,7 +147,7 @@
 <translation id="2433507940547922241">Hình thức</translation>
 <translation id="2434158240863470628">Quá trình tải xuống hoàn tất <ph name="SEPARATOR" /> <ph name="BYTES_DOWNLOADED" /></translation>
 <translation id="2442870161001914531">Luôn yêu cầu trang web dành cho máy tính</translation>
-<translation id="2445311670906052406">Chrome hiện chia sẻ các thẻ gần đây với thiết bị của bạn. Bạn sẽ thấy các thẻ này trong danh sách ứng dụng và kết quả tìm kiếm trên thiết bị. Bạn có thể tắt tính năng này bất cứ lúc nào trong phần cài đặt của Chrome.</translation>
+<translation id="2445311670906052406">Ultimatum hiện chia sẻ các thẻ gần đây với thiết bị của bạn. Bạn sẽ thấy các thẻ này trong danh sách ứng dụng và kết quả tìm kiếm trên thiết bị. Bạn có thể tắt tính năng này bất cứ lúc nào trong phần cài đặt của Ultimatum.</translation>
 <translation id="245322989586167203">Các trang web thường kết nối với cổng nối tiếp để hỗ trợ những tính năng chuyển dữ liệu, chẳng hạn như thiết lập mạng</translation>
 <translation id="2469312991797799607">Thao tác này sẽ xoá toàn bộ dữ liệu và cookie của <ph name="ORIGIN" /> cũng như mọi trang web thuộc miền đó</translation>
 <translation id="2482878487686419369">Thông báo</translation>
@@ -159,7 +159,7 @@
 <translation id="2536779053640817375">Được cho phép lần này • Vị trí chính xác</translation>
 <translation id="2544997614631598250">Giao diện màu tối</translation>
 <translation id="2546283357679194313">Cookie và dữ liệu trang web</translation>
-<translation id="2553552004849639664">Được bảo vệ trước các mối đe doạ trên mạng bằng công nghệ mạnh mẽ nhất của Chrome</translation>
+<translation id="2553552004849639664">Được bảo vệ trước các mối đe doạ trên mạng bằng công nghệ mạnh mẽ nhất của Ultimatum</translation>
 <translation id="2570922361219980984">Quyền truy cập vị trí cũng đã bị tắt đối với thiết bị này. Hãy bật trong <ph name="BEGIN_LINK" />Cài đặt Android<ph name="END_LINK" />.</translation>
 <translation id="257931822824936280">Đã mở rộng - nhấp để thu gọn.</translation>
 <translation id="2586657967955657006">Bảng nhớ tạm</translation>
@@ -167,7 +167,7 @@
 <translation id="2597457036804169544">Không áp dụng giao diện tối cho các trang web</translation>
 <translation id="2606760465469169465">Tự động xác minh</translation>
 <translation id="2610903128639500624">Quản lý trong phần <ph name="BEGIN_LINK1" />Cài đặt Android<ph name="END_LINK1" />
-Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt sau của Chrome:
+Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt sau của Ultimatum:
 • Chế độ "Luôn sử dụng kết nối bảo mật" đang bật.
 • "Trình tối ưu hoá JavaScript" đang tắt. <ph name="BEGIN_LINK2" />Quản lý các ngoại lệ của trang web<ph name="END_LINK2" /></translation>
 <translation id="2621115761605608342">Cho phép JavaScript cho trang web cụ thể.</translation>
@@ -182,18 +182,18 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="2710883118091822664">Đăng nhập để dễ dàng tiếp tục trên tất cả thiết bị của bạn</translation>
 <translation id="2713106313042589954">Tắt máy ảnh</translation>
 <translation id="2717722538473713889">Địa chỉ email</translation>
-<translation id="2726059656860238749">Mở Chrome với chế độ tập trung vào Thanh địa chỉ, giúp giảm thời gian khởi động trên thiết bị cấp thấp.</translation>
+<translation id="2726059656860238749">Mở Ultimatum với chế độ tập trung vào Thanh địa chỉ, giúp giảm thời gian khởi động trên thiết bị cấp thấp.</translation>
 <translation id="2750481671343847896">Các trang web có thể đưa ra lời nhắc đăng nhập qua các dịch vụ định danh.</translation>
 <translation id="2787357173144933081">Khởi động nhanh Thanh địa chỉ</translation>
 <translation id="2789132527330338807">Các trang web có thể yêu cầu tạo bản đồ 3D khu vực xung quanh bạn hoặc theo dõi thông tin vị trí của camera</translation>
 <translation id="2790501146643349491">Khi bạn bật tuỳ chọn này, các trang web đã đóng gần đây có thể hoàn tất quá trình gửi và nhận dữ liệu. Khi bạn tắt tuỳ chọn này, các trang web đã đóng gần đây không thể hoàn tất quá trình gửi hoặc nhận dữ liệu.</translation>
-<translation id="2794551654724114396">Bật thông báo để nhận các mẹo hữu ích giúp bạn tận dụng Chrome</translation>
+<translation id="2794551654724114396">Bật thông báo để nhận các mẹo hữu ích giúp bạn tận dụng Ultimatum</translation>
 <translation id="2795716239552913152">Các trang web thường sử dụng thông tin vị trí của bạn cho các tính năng hoặc thông tin liên quan, như tin tức địa phương hoặc cửa hàng lân cận</translation>
 <translation id="2800760947029405028">Tải ảnh lên</translation>
 <translation id="2802908157808345702">Không cho phép các trang web hiển thị cửa sổ bật lên hay dùng lệnh chuyển hướng</translation>
-<translation id="2814830417943086299">Giờ đây, Chrome sẽ hiển thị các thẻ gần đây trong danh sách ứng dụng và kết quả tìm kiếm trên thiết bị. Bạn có thể tắt tính năng này bất cứ lúc nào trong phần cài đặt của Chrome.</translation>
+<translation id="2814830417943086299">Giờ đây, Ultimatum sẽ hiển thị các thẻ gần đây trong danh sách ứng dụng và kết quả tìm kiếm trên thiết bị. Bạn có thể tắt tính năng này bất cứ lúc nào trong phần cài đặt của Ultimatum.</translation>
 <translation id="2822354292072154809">Bạn có chắc muốn đặt lại tất cả các quyền của trang web cho <ph name="CHOSEN_OBJECT_NAME" /> không?</translation>
-<translation id="2848335882304088250">Giờ đây, bạn có thể khai thác tối đa Chrome trên thiết bị của mình.</translation>
+<translation id="2848335882304088250">Giờ đây, bạn có thể khai thác tối đa Ultimatum trên thiết bị của mình.</translation>
 <translation id="2850913818900871965">Yêu cầu chế độ xem trên thiết bị di động</translation>
 <translation id="2870560284913253234">Trang web</translation>
 <translation id="2874939134665556319">Bản nhạc trước</translation>
@@ -272,7 +272,7 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="3678318839615834650">Bảng thẻ trên trang Thẻ mới ở dưới cùng đã mở trên toàn màn hình</translation>
 <translation id="3697164069658504920">Khi bạn bật tuỳ chọn này, các trang web có thể yêu cầu sử dụng thiết bị USB. Khi bạn tắt tuỳ chọn này, các trang web không thể sử dụng thiết bị USB.</translation>
 <translation id="3703430731944883733">Quản lý nguồn cấp dữ liệu của bạn</translation>
-<translation id="3707034683772193706">Trang web bạn truy cập có thể lưu một lượng nhỏ thông tin với Chrome, chủ yếu để xác thực rằng bạn không phải là bot</translation>
+<translation id="3707034683772193706">Trang web bạn truy cập có thể lưu một lượng nhỏ thông tin với Ultimatum, chủ yếu để xác thực rằng bạn không phải là bot</translation>
 <translation id="3708684582558000260">Không cho phép các trang web đã đóng hoàn tất quá trình gửi hoặc nhận dữ liệu</translation>
 <translation id="3709818294139939629">Đã xoá quyền truy cập của trang web vào tệp</translation>
 <translation id="3721953990244350188">Đóng và hiện thao tác có sẵn tiếp theo</translation>
@@ -284,13 +284,13 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="3779154269823594982">Đổi mật khẩu</translation>
 <translation id="3797520601150691162">Không áp dụng giao diện tối cho một trang web cụ thể</translation>
 <translation id="3803367742635802571">Các trang web bạn truy cập có thể không còn hoạt động như dự kiến</translation>
-<translation id="3816118180265633665">Màu Chrome</translation>
+<translation id="3816118180265633665">Màu Ultimatum</translation>
 <translation id="381841723434055211">Số điện thoại</translation>
 <translation id="3823453485268218808">Phông chữ đơn cách</translation>
 <translation id="3826050100957962900">Đăng nhập qua bên thứ ba</translation>
 <translation id="3831065134033923230">Kiểm tra mật khẩu bạn đã lưu</translation>
 <translation id="3835233591525155343">Hoạt động dùng thiết bị</translation>
-<translation id="3843916486309149084">Hôm nay, Chrome sẽ chặn cookie trở lại</translation>
+<translation id="3843916486309149084">Hôm nay, Ultimatum sẽ chặn cookie trở lại</translation>
 <translation id="385051799172605136">Quay lại</translation>
 <translation id="3859306556332390985">Tìm kiếm tiến</translation>
 <translation id="389521680295183045">Các trang web có thể yêu cầu được phát hiện khi bạn đang dùng thiết bị</translation>
@@ -317,7 +317,7 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="4046123991198612571">Bản nhạc tiếp theo</translation>
 <translation id="4077310749977440510">Các trang web thường đọc bảng nhớ tạm để áp dụng những tính năng như giữ nguyên định dạng của văn bản mà bạn đã sao chép</translation>
 <translation id="4082080074595021446">Không cho phép các trường hợp ngoại lệ đối với một số trang web cụ thể vì thiết bị Android không có đủ RAM.</translation>
-<translation id="4089304748532599471">Một vài chế độ cài đặt của Chrome đã thay đổi</translation>
+<translation id="4089304748532599471">Một vài chế độ cài đặt của Ultimatum đã thay đổi</translation>
 <translation id="4149890623864272035">Bạn có chắc chắn muốn xoá toàn bộ dữ liệu cục bộ, kể cả cookie, và đặt lại mọi quyền cho trang web này không?</translation>
 <translation id="4149994727733219643">Chế độ xem đơn giản cho trang web</translation>
 <translation id="4151930093518524179">Thu phóng mặc định</translation>
@@ -341,13 +341,13 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="4340799661701629185">Không cho phép các trang web gửi thông báo</translation>
 <translation id="4341577178275615435">Để bật hoặc tắt tính năng duyệt web có con nháy, hãy dùng phím tắt F7</translation>
 <translation id="4402755511846832236">Không cho các trang web biết khi bạn đang dùng thiết bị này</translation>
-<translation id="4412683424767388419">Bảng màu Chrome ở dưới cùng đã mở trên một nửa màn hình</translation>
+<translation id="4412683424767388419">Bảng màu Ultimatum ở dưới cùng đã mở trên một nửa màn hình</translation>
 <translation id="4412992751769744546">Cho phép cookie của bên thứ ba</translation>
 <translation id="4425416282877905577">Phông chữ Serif</translation>
 <translation id="443121186588148776">Cổng nối tiếp</translation>
 <translation id="4434045419905280838">Cửa sổ bật lên và chuyển hướng</translation>
 <translation id="443552056913301231">Thao tác này sẽ xoá toàn bộ dữ liệu cục bộ, kể cả cookie, và đặt lại mọi quyền cho <ph name="ORIGIN" /></translation>
-<translation id="4441527683895888777">Bảng màu Chrome ở dưới cùng đã mở toàn bộ</translation>
+<translation id="4441527683895888777">Bảng màu Ultimatum ở dưới cùng đã mở toàn bộ</translation>
 <translation id="4468959413250150279">Tắt âm thanh trên một trang web cụ thể.</translation>
 <translation id="4475912480633855319">{COOKIES,plural, =1{# cookie}other{# cookie}}</translation>
 <translation id="4478158430052450698">Giúp dễ dàng tuỳ chỉnh mức thu phóng cho các trang web khác nhau</translation>
@@ -369,7 +369,7 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="4655846733459137112">Nhấn vào Có để dễ dàng sử dụng mật khẩu này vào lần đăng nhập tới</translation>
 <translation id="4663373278480897665">Cho phép máy ảnh</translation>
 <translation id="4670064810192446073">Thực tế ảo</translation>
-<translation id="4672315773691449562">Nhấn vào Ứng dụng trình duyệt rồi nhấn vào Chrome</translation>
+<translation id="4672315773691449562">Nhấn vào Ứng dụng trình duyệt rồi nhấn vào Ultimatum</translation>
 <translation id="4676059169848868271">Để cho phép <ph name="APP_NAME" /> dùng tính năng theo dõi cử chỉ tay, hãy bật cả tính năng này trong phần <ph name="BEGIN_LINK" />cài đặt hệ thống<ph name="END_LINK" />.</translation>
 <translation id="4688045258817337666">Quản lý thẻ</translation>
 <translation id="4722332387043141878">Các trang web thường sử dụng cảm biến chuyển động và cảm biến ánh sáng trên thiết bị của bạn để cung cấp các tính năng như thực tế ảo hoặc theo dõi hoạt động thể dục</translation>
@@ -390,7 +390,7 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="4953688446973710931">Khi bạn bật tuỳ chọn này, các trang web có thể yêu cầu tự động tải nhiều tệp xuống. Khi bạn tắt tuỳ chọn này, các trang web không thể tự động tải nhiều tệp xuống.</translation>
 <translation id="4962975101802056554">Thu hồi tất cả các quyền đối với thiết bị</translation>
 <translation id="4972737347717125191">Các trang web có thể yêu cầu sử dụng dữ liệu và thiết bị thực tế ảo</translation>
-<translation id="4973805849704516244">Bảng màu Chrome ở dưới cùng</translation>
+<translation id="4973805849704516244">Bảng màu Ultimatum ở dưới cùng</translation>
 <translation id="497421865427891073">Đi về phía trước</translation>
 <translation id="4976702386844183910">Lần truy cập gần đây nhất: <ph name="DATE" /></translation>
 <translation id="4978178243417029856">Tìm hiểu thêm về nguồn cấp dữ liệu Khám phá</translation>
@@ -408,7 +408,7 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="5091663350197390230">Khi bạn bật tuỳ chọn này, các trang web có thể dùng JavaScript. Khi bạn tắt tuỳ chọn này, các trang web không thể dùng JavaScript.</translation>
 <translation id="5099358668261120049">Thao tác này sẽ xoá toàn bộ dữ liệu và cookie do <ph name="ORIGIN" /> hoặc ứng dụng liên quan trên Màn hình chính lưu trữ.</translation>
 <translation id="5100237604440890931">Đã thu gọn - nhấp để mở rộng.</translation>
-<translation id="5116239826668864748">Bạn có thể dùng Chrome bất cứ khi nào nhấn vào các đường liên kết trong thư/tin nhắn, tài liệu và các ứng dụng khác</translation>
+<translation id="5116239826668864748">Bạn có thể dùng Ultimatum bất cứ khi nào nhấn vào các đường liên kết trong thư/tin nhắn, tài liệu và các ứng dụng khác</translation>
 <translation id="5123685120097942451">Thẻ ẩn danh</translation>
 <translation id="512938610812707830">Bảng bộ sưu tập giao diện trang thẻ mới ở dưới cùng đã mở toàn bộ</translation>
 <translation id="5137460097045297858">Bảng nguồn cấp dữ liệu Khám phá ở dưới cùng đã mở trên một nửa màn hình</translation>
@@ -445,7 +445,7 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="5516455585884385570">Mở mục cài đặt thông báo</translation>
 <translation id="5527111080432883924">Hỏi trước khi cho phép các trang web đọc văn bản và hình ảnh từ bảng nhớ tạm (khuyên dùng)</translation>
 <translation id="5553374991681107062">Mới nhất</translation>
-<translation id="5555115555607204100">Không tăng tốc độ tải trang web bằng công cụ V8 của Chrome nhưng giúp Chrome tăng khả năng chống lại các cuộc tấn công</translation>
+<translation id="5555115555607204100">Không tăng tốc độ tải trang web bằng công cụ V8 của Ultimatum nhưng giúp Ultimatum tăng khả năng chống lại các cuộc tấn công</translation>
 <translation id="5556459405103347317">Tải lại</translation>
 <translation id="5591840828808741583"><ph name="SITE_NAME" /> bị chặn</translation>
 <translation id="560980142378233747">Điều này có nghĩa là các tính năng của trang web sẽ hoạt động như mong đợi, nhưng khả năng bảo vệ khi duyệt web có thể bị giảm. <ph name="BEGIN_LINK" />Gửi phản hồi<ph name="END_LINK" /></translation>
@@ -472,7 +472,7 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="5804241973901381774">Quyền</translation>
 <translation id="5817042798620209981">Thông tin về trang web, hộp thoại</translation>
 <translation id="5822675474983796325">Bảng tuỳ chỉnh trang thẻ mới của bạn ở dưới cùng đã mở trên toàn màn hình</translation>
-<translation id="5826403277762134844">Bảng hướng dẫn ở dưới cùng về cách lưu mật khẩu trong Chrome</translation>
+<translation id="5826403277762134844">Bảng hướng dẫn ở dưới cùng về cách lưu mật khẩu trong Ultimatum</translation>
 <translation id="5833899990800318936">Không cho phép các trang web sử dụng JavaScript</translation>
 <translation id="583673505367439042">Các trang web có thể yêu cầu chỉnh sửa tệp và thư mục trên thiết bị</translation>
 <translation id="5844448279347999754">Khi bạn bật tuỳ chọn này, các trang web có thể yêu cầu xem văn bản và hình ảnh đã lưu vào bảng nhớ tạm. Khi bạn tắt tuỳ chọn này, các trang web không thể xem văn bản hoặc hình ảnh đã lưu vào bảng nhớ tạm.</translation>
@@ -501,7 +501,7 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="6012967556075291653">Lối tắt đã ghim</translation>
 <translation id="6013003831291591200">Đã hoàn thành việc cần làm</translation>
 <translation id="6015775454662021376">Kiểm soát quyền truy cập của trang web này vào thiết bị của bạn</translation>
-<translation id="6022659036123304283">Tuỳ chỉnh Chrome theo cách của bạn</translation>
+<translation id="6022659036123304283">Tuỳ chỉnh Ultimatum theo cách của bạn</translation>
 <translation id="6040143037577758943">Đóng</translation>
 <translation id="6042308850641462728">Xem thêm</translation>
 <translation id="6064125863973209585">Đã hoàn tất quá trình tải xuống</translation>
@@ -509,20 +509,20 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="6085954183010297841">Xoá quyền chỉnh sửa tệp? <ph name="FILE" /></translation>
 <translation id="6104860901391833523">Khi bạn bật lựa chọn này, các trang web có thể tự động chuyển sang chế độ hình trong hình. Khi bạn tắt lựa chọn này, các trang web không thể tự động chuyển sang chế độ hình trong hình.</translation>
 <translation id="6120483543004435978">Khi bạn bật tuỳ chọn này, các trang web có thể yêu cầu được biết khi nào bạn đang sử dụng thiết bị. Khi bạn tắt tuỳ chọn này, các trang web sẽ không được biết khi nào bạn đang sử dụng thiết bị.</translation>
-<translation id="6132075343662013154">Chrome sẽ đề xuất lưu mật khẩu của bạn</translation>
+<translation id="6132075343662013154">Ultimatum sẽ đề xuất lưu mật khẩu của bạn</translation>
 <translation id="615886654739818377">Không cho phép các trang web quản lý các cửa sổ trên tất cả màn hình của bạn</translation>
 <translation id="6165508094623778733">Tìm hiểu thêm</translation>
 <translation id="6171020522141473435">Khi bạn bật tuỳ chọn này, các trang web có thể yêu cầu sử dụng thiết bị Bluetooth. Khi bạn tắt tuỳ chọn này, các trang web không thể sử dụng thiết bị Bluetooth.</translation>
 <translation id="6177128806592000436">Kết nối của bạn tới trang web này không an toàn</translation>
 <translation id="6181444274883918285">Thêm trang web ngoại lệ</translation>
-<translation id="6194967801833346599">{DAYS,plural, =1{Chrome sẽ chặn cookie trở lại vào ngày mai}other{Cookie sẽ bị chặn trở lại sau # ngày nữa}}</translation>
+<translation id="6194967801833346599">{DAYS,plural, =1{Ultimatum sẽ chặn cookie trở lại vào ngày mai}other{Cookie sẽ bị chặn trở lại sau # ngày nữa}}</translation>
 <translation id="6196640612572343990">Chặn cookie của bên thứ ba</translation>
 <translation id="6205314730813004066">Quyền riêng tư trong quảng cáo</translation>
 <translation id="6207207788774442484">Xoá dữ liệu và đặt lại quyền</translation>
 <translation id="6211409961905616543">Các trang web có thể sử dụng cảm biến chuyển động và cảm biến ánh sáng</translation>
 <translation id="6218508144653756827">Giao diện màu hồng hoa vân anh</translation>
 <translation id="6231752747840485235">Gỡ cài đặt "<ph name="APP_NAME" />"?</translation>
-<translation id="6234351944623978659">Nhấn vào Ứng dụng trình duyệt &gt; Chrome</translation>
+<translation id="6234351944623978659">Nhấn vào Ứng dụng trình duyệt &gt; Ultimatum</translation>
 <translation id="6260830281887654268">Bảng bộ sưu tập giao diện trang thẻ mới ở dưới cùng đã mở trên một nửa màn hình</translation>
 <translation id="6262191102408817757">Dựa trên thẻ gần đây nhất của bạn</translation>
 <translation id="6262279340360821358">Đã chặn: <ph name="PERMISSION_1" /> và <ph name="PERMISSION_2" /></translation>
@@ -572,7 +572,7 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="6787751205395685251">Chọn một lựa chọn cho <ph name="SITE_NAME" /></translation>
 <translation id="6790428901817661496">Phát</translation>
 <translation id="6818926723028410516">Chọn mục</translation>
-<translation id="6838525730752203626">Sử dụng Chrome theo mặc định</translation>
+<translation id="6838525730752203626">Sử dụng Ultimatum theo mặc định</translation>
 <translation id="6840760312327750441">Để nhóm các thẻ, hãy chạm và giữ một thẻ. Sau đó, kéo thẻ đó lên một thẻ khác.</translation>
 <translation id="6842868554183332230">Các trang web thường phát hiện khi bạn đang dùng thiết bị để đặt tình trạng rảnh/bận của bạn trên ứng dụng trò chuyện</translation>
 <translation id="6864395892908308021">Thiết bị này không hỗ trợ công nghệ giao tiếp phạm vi gần (NFC)</translation>
@@ -590,7 +590,7 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="6992014788289743568">Tăng cường bảo mật và bảo vệ dữ liệu an toàn hơn bằng cách kiểm tra mật khẩu</translation>
 <translation id="6992289844737586249">Hỏi trước trước khi cho phép các trang web sử dụng micrô của bạn (được đề xuất)</translation>
 <translation id="7000754031042624318">Đã tắt trong phần Cài đặt Android</translation>
-<translation id="702275896380648118">Trang web này xác định sở thích của bạn, sau đó đề xuất quảng cáo mà các trang web khác nên hiển thị. Trang web này cũng thu thập thông tin về chủ đề quảng cáo bạn quan tâm qua Chrome để hiển thị cho bạn những quảng cáo phù hợp hơn.</translation>
+<translation id="702275896380648118">Trang web này xác định sở thích của bạn, sau đó đề xuất quảng cáo mà các trang web khác nên hiển thị. Trang web này cũng thu thập thông tin về chủ đề quảng cáo bạn quan tâm qua Ultimatum để hiển thị cho bạn những quảng cáo phù hợp hơn.</translation>
 <translation id="7036823721811529709">Nghe nhạc dưới nền</translation>
 <translation id="7044081119134178347">Đã cho phép sử dụng máy ảnh cho lần này</translation>
 <translation id="7053983685419859001">Chặn</translation>
@@ -648,7 +648,7 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="7658239707568436148">Huỷ</translation>
 <translation id="7667547420449112975">Phù thủy xứ Oz</translation>
 <translation id="7681597159868843240">Các trang web thường sử dụng cảm biến chuyển động của thiết bị cho các tính năng như thực tế ảo hoặc theo dõi hoạt động thể dục</translation>
-<translation id="7688240020069572972">Ẩn thẻ mẹo dùng Chrome</translation>
+<translation id="7688240020069572972">Ẩn thẻ mẹo dùng Ultimatum</translation>
 <translation id="7719367874908701697">Thu phóng trang</translation>
 <translation id="775043444390799886">Thu hồi quyền</translation>
 <translation id="7758789811447313947">Giao diện màu tím</translation>
@@ -680,7 +680,7 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="8033047164036749181">Đăng ký nhận thông báo từ trang web này</translation>
 <translation id="8042586301629853791">Sắp xếp theo:</translation>
 <translation id="8051193500142930381">Những tính năng cần sử dụng camera sẽ không hoạt động</translation>
-<translation id="8056330801132235235">Chrome mặc định</translation>
+<translation id="8056330801132235235">Ultimatum mặc định</translation>
 <translation id="8067883171444229417">Phát video</translation>
 <translation id="8068648041423924542">Không thể chọn chứng chỉ.</translation>
 <translation id="8077120325605624147">Mọi trang web bạn truy cập đều có thể hiện quảng cáo cho bạn</translation>
@@ -734,10 +734,10 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="8514955299594277296">Không cho phép các trang web lưu dữ liệu trên thiết bị của bạn (không khuyến nghị)</translation>
 <translation id="851751545965956758">Chặn các trang web kết nối với thiết bị</translation>
 <translation id="8525306231823319788">Toàn màn hình</translation>
-<translation id="8541410041357371550">Trang web này thu thập thông tin về chủ đề quảng cáo bạn quan tâm qua Chrome để hiển thị cho bạn những quảng cáo phù hợp hơn</translation>
+<translation id="8541410041357371550">Trang web này thu thập thông tin về chủ đề quảng cáo bạn quan tâm qua Ultimatum để hiển thị cho bạn những quảng cáo phù hợp hơn</translation>
 <translation id="854876774113449365">Các trang web bạn truy cập có thể nhúng nội dung từ các trang web khác, chẳng hạn như hình ảnh, quảng cáo và văn bản. Các trang web khác này có thể yêu cầu quyền sử dụng thông tin mà họ đã lưu về bạn khi bạn duyệt xem trang web. <ph name="BEGIN_LINK" />Tìm hiểu thêm về nội dung được nhúng<ph name="END_LINK" /></translation>
 <translation id="8549127125482561383">Cách hiển thị yêu cầu</translation>
-<translation id="8558480467877843976">Giờ bạn có thể dùng Chrome mỗi khi duyệt web hoặc nhấn vào liên kết trong thư/tin nhắn, tài liệu, v.v.</translation>
+<translation id="8558480467877843976">Giờ bạn có thể dùng Ultimatum mỗi khi duyệt web hoặc nhấn vào liên kết trong thư/tin nhắn, tài liệu, v.v.</translation>
 <translation id="857943718398505171">Được phép (nên dùng)</translation>
 <translation id="8593422116412089302">Khi bạn bật tuỳ chọn này, các trang web có thể yêu cầu sử dụng thông tin mà trang web đã lưu về bạn. Khi bạn tắt tuỳ chọn này, các trang web không thể yêu cầu sử dụng thông tin mà trang web đã lưu về bạn.</translation>
 <translation id="8609465669617005112">Di chuyển lên</translation>
@@ -754,7 +754,7 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="8719283222052720129">Bật quyền cho <ph name="APP_NAME" /> trong phần <ph name="BEGIN_LINK" />Cài đặt Android<ph name="END_LINK" />.</translation>
 <translation id="8721719390026067591">Khi bạn bật tuỳ chọn này, các trang web có thể yêu cầu tìm thiết bị Bluetooth. Khi bạn tắt tuỳ chọn này, các trang web không thể tìm thiết bị Bluetooth.</translation>
 <translation id="8725066075913043281">Thử lại</translation>
-<translation id="8727043961453758442">Khai thác tối đa Chrome</translation>
+<translation id="8727043961453758442">Khai thác tối đa Ultimatum</translation>
 <translation id="8730621377337864115">Xong</translation>
 <translation id="8737426583868847403">Các trang web mà bạn lưu mức thu phóng tuỳ chỉnh sẽ xuất hiện tại đây</translation>
 <translation id="8748714929822124637">Không cho phép trang web truy cập vào các thiết bị khác trên mạng cục bộ của bạn</translation>
@@ -762,13 +762,13 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="8775741625735357092">Bạn có thể bật thanh dấu trang trong phần Cài đặt &gt; Giao diện</translation>
 <translation id="8800034312320686233">Trang web không hoạt động?</translation>
 <translation id="8801436777607969138">Chặn JavaScript cho một trang web cụ thể.</translation>
-<translation id="8801657293260363985">V8 là công cụ WebAssembly và JavaScript của Chrome, có tác dụng cải thiện hiệu suất của trang web</translation>
+<translation id="8801657293260363985">V8 là công cụ WebAssembly và JavaScript của Ultimatum, có tác dụng cải thiện hiệu suất của trang web</translation>
 <translation id="8803526663383843427">Khi bật</translation>
 <translation id="8805385115381080995">Duyệt web nhanh hơn vì trang web ít khi yêu cầu xác minh bạn là người thực hơn</translation>
 <translation id="881644524232657178">Khi bạn bật tuỳ chọn này, các trang web sẽ có thể sử dụng cảm biến chuyển động và cảm biến ánh sáng trên thiết bị của bạn. Khi bạn tắt tuỳ chọn này, các trang web sẽ không thể sử dụng cảm biến.</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">Hãy thử tạm thời cho phép cookie của bên thứ ba. Chế độ cài đặt này sẽ làm giảm khả năng bảo vệ khi duyệt web nhưng các tính năng của trang có thể sẽ hoạt động đúng như mong đợi.</translation>
-<translation id="8889294078294184559">Khi bạn tiếp tục duyệt web, các trang web có thể kiểm tra qua Chrome và xác minh qua trang web mà bạn truy cập trước đó rằng bạn có thể là người thực</translation>
+<translation id="8889294078294184559">Khi bạn tiếp tục duyệt web, các trang web có thể kiểm tra qua Ultimatum và xác minh qua trang web mà bạn truy cập trước đó rằng bạn có thể là người thực</translation>
 <translation id="8899807382908246773">Quảng cáo xâm nhập</translation>
 <translation id="8903921497873541725">Phóng to</translation>
 <translation id="8919911527569629802">Đăng nhập vào bất kỳ trang web nào</translation>
@@ -794,7 +794,7 @@ Chương trình Bảo vệ nâng cao kiểm soát các chế độ cài đặt s
 <translation id="9138037198177304356">Cho phép thông báo</translation>
 <translation id="9138217887606523162">Mức thu phóng hiện tại là <ph name="ZOOM_LEVEL" /> %%</translation>
 <translation id="915112772806845021">Các trang web dùng tính năng này để tự động chuyển sang dạng xem hình trong hình. Nhờ đó, bạn vừa có thể xem tiếp video, vừa thoải mái dùng màn hình để thực hiện các tác vụ khác.</translation>
-<translation id="9156722768168878035">Cho phép Chrome hiển thị các thẻ gần đây trong danh sách ứng dụng và kết quả tìm kiếm trên thiết bị. Bạn có thể tắt tính năng này bất cứ lúc nào trong phần cài đặt của Chrome.</translation>
+<translation id="9156722768168878035">Cho phép Ultimatum hiển thị các thẻ gần đây trong danh sách ứng dụng và kết quả tìm kiếm trên thiết bị. Bạn có thể tắt tính năng này bất cứ lúc nào trong phần cài đặt của Ultimatum.</translation>
 <translation id="9162462602695099906">Đây là trang nguy hiểm</translation>
 <translation id="9182556968660520230">Không cho phép trang web phát nội dung được bảo vệ</translation>
 <translation id="947156494302904893">Các trang web bạn truy cập có thể xác minh rằng bạn là người thực chứ không phải bot</translation>

@@ -5,20 +5,20 @@
 <translation id="1036348656032585052">I-off</translation>
 <translation id="1046742265332833834">Asul na tema</translation>
 <translation id="1070329623210597193">Mga file na puwedeng tingnan o i-edit ng site na ito</translation>
-<translation id="1073417869336441572">Tulungan kaming pahusayin ang Chrome sa pamamagitan ng pagsasabi sa amin kung bakit mo pinayagan ang third-party na cookies. <ph name="BEGIN_LINK" />Magpadala ng feedback<ph name="END_LINK" /></translation>
+<translation id="1073417869336441572">Tulungan kaming pahusayin ang Ultimatum sa pamamagitan ng pagsasabi sa amin kung bakit mo pinayagan ang third-party na cookies. <ph name="BEGIN_LINK" />Magpadala ng feedback<ph name="END_LINK" /></translation>
 <translation id="1074758928858737435">Puwede mong hilinging makita ang desktop na bersyon ng mga site</translation>
 <translation id="1109482864356262001">Hindi gagana ang mga feature na nangangailangan ng mga sensor ng paggalaw o liwanag</translation>
-<translation id="1126523729897810826">Kumpletuhin ang mga iminumungkahing aksyong ito sa ibaba para masulit ang Chrome</translation>
+<translation id="1126523729897810826">Kumpletuhin ang mga iminumungkahing aksyong ito sa ibaba para masulit ang Ultimatum</translation>
 <translation id="113098737392899175">Mag-navigate sa mga page gamit ang cursor ng text kapag may nakakabit na keyboard</translation>
 <translation id="1148624853678088576">Handa ka na!</translation>
-<translation id="1149644372535087155">Mag-save ng mga password sa Chrome</translation>
+<translation id="1149644372535087155">Mag-save ng mga password sa Ultimatum</translation>
 <translation id="1178015372320901893">Bottom sheet ng aking mga shortcut</translation>
 <translation id="1178581264944972037">I-pause</translation>
 <translation id="1181037720776840403">Alisin</translation>
 <translation id="1192844206376121885">Ide-delete nito ang lahat ng data at cookies na na-store ng <ph name="ORIGIN" />.</translation>
 <translation id="1199963004393929848">Berdeng tema</translation>
 <translation id="1201402288615127009">Susunod</translation>
-<translation id="1240190568154816272">Mga tip sa Chrome</translation>
+<translation id="1240190568154816272">Mga tip sa Ultimatum</translation>
 <translation id="1242008676835033345">Naka-embed sa <ph name="WEBSITE_URL" /></translation>
 <translation id="1263609676484797429">I-tap ang Mga App &gt; Mga default na app</translation>
 <translation id="1272079795634619415">Stop</translation>
@@ -38,7 +38,7 @@
 <translation id="1396327438254055134">Payagan ang site na gumamit ng V8 optimizer.</translation>
 <translation id="1409338233051621926">I-tap ang Mga App at pagkatapos ay i-tap ang Mga default na app</translation>
 <translation id="1415402041810619267">Naputol ang URL</translation>
-<translation id="1415855080660575082">Hayaang i-share ng Chrome ang iyong mga kamakailang tab gamit ang device mo para makita ang mga ito sa listahan ng app at mga resulta ng paghahanap ng iyong device. Puwede mo itong i-on o i-off sa mga setting ng Chrome.</translation>
+<translation id="1415855080660575082">Hayaang i-share ng Ultimatum ang iyong mga kamakailang tab gamit ang device mo para makita ang mga ito sa listahan ng app at mga resulta ng paghahanap ng iyong device. Puwede mo itong i-on o i-off sa mga setting ng Ultimatum.</translation>
 <translation id="1420688843103859429">Mag-navigate pabalik-balik sa pamamagitan ng pag-swipe gamit ang dalawang daliri sa touchpad</translation>
 <translation id="1432650420699700107">Puwedeng hilingin ng mga site na kumonekta sa anumang device sa iyong lokal na network</translation>
 <translation id="1442081309487427303">I-on ang mga link sa Reading Mode</translation>
@@ -52,7 +52,7 @@
 <translation id="1532175480576580256">Binuksan nang buo ang bottom sheet ng aking mga shortcut</translation>
 <translation id="1538031354170655462">Karaniwang gumagamit ang mga site ng near-field communication (NFC) para gumana sa malalapit na tag o device, tulad ng pag-scan ng mga badge o pagbabayad nang contactless</translation>
 <translation id="1547123415014299762">Pinapayagan ang third-party na cookies</translation>
-<translation id="1569054338208717605">Pabilisin ang mga site gamit ang V8 na engine ng Chrome pero gawing bahagyang hindi gaanong resistant sa mga attack ang Chrome</translation>
+<translation id="1569054338208717605">Pabilisin ang mga site gamit ang V8 na engine ng Ultimatum pero gawing bahagyang hindi gaanong resistant sa mga attack ang Ultimatum</translation>
 <translation id="1593426485665524382">Available ang mga bagong pagkilos malapit sa itaas ng screen</translation>
 <translation id="1594521731409209842">I-pinch ang screen para i-resize ang larawan</translation>
 <translation id="1599268789440304082">Binuksan ang sheet ng pag-set up</translation>
@@ -73,14 +73,14 @@
 <translation id="1717996979683942279">Kapag naka-on, posibleng hilingin ng mga site na pamahalaan ang mga window sa lahat ng iyong screen. Kapag naka-off, hindi mapapamahalaan ng mga site ang mga window sa lahat ng iyong screen.</translation>
 <translation id="1738912554587725807">Bottom sheet ng mga koleksyon ng tema para sa hitsura ng page ng bagong tab</translation>
 <translation id="1743802530341753419">Magtanong bago payagan ang mga site na kumonekta sa isang device (inirerekomenda)</translation>
-<translation id="1766455884659449403">Makakuha ng mga notification sa mga tip sa Chrome</translation>
+<translation id="1766455884659449403">Makakuha ng mga notification sa mga tip sa Ultimatum</translation>
 <translation id="1777815584158991902">Bottom sheet ng feed ng Discover</translation>
 <translation id="1779089405699405702">Pang-decode ng larawan</translation>
 <translation id="1781533683087883868">I-off ang mga link sa Reading Mode</translation>
 <translation id="1785415724048343560">Inirerekomenda para sa pinakamagandang experience</translation>
 <translation id="1796588414813960292">Hindi gagana ang mga feature na nangangailangan ng tunog</translation>
-<translation id="1799920918471566157">Mga Tip sa Chrome</translation>
-<translation id="1816835383954230954">Kapag naka-on, mas mabilis na tatakbo ang Chrome at gagana ang mga feature na gumagamit ng JavaScript ayon sa pagkakadisenyo sa mga ito. Kapag naka-off, pinapahina nito ang performance pero ginagawang mas matatag ang V8 laban sa mga attack.</translation>
+<translation id="1799920918471566157">Mga Tip sa Ultimatum</translation>
+<translation id="1816835383954230954">Kapag naka-on, mas mabilis na tatakbo ang Ultimatum at gagana ang mga feature na gumagamit ng JavaScript ayon sa pagkakadisenyo sa mga ito. Kapag naka-off, pinapahina nito ang performance pero ginagawang mas matatag ang V8 laban sa mga attack.</translation>
 <translation id="1818308510395330587">Para payagan ang <ph name="APP_NAME" /> na gumamit ng AR, i-on din ang camera sa <ph name="BEGIN_LINK" />Mga Setting ng Android<ph name="END_LINK" />.</translation>
 <translation id="1822318649925991542">Ilipat ang posisyon para i-customize ang iyong experience sa pag-browse</translation>
 <translation id="1848033246551405023">Font Sans Serif</translation>
@@ -135,7 +135,7 @@
 <translation id="2315043854645842844">Hindi sinusuportahan ng operating system ang pagpipilian ng certificate sa panig ng kliyente.</translation>
 <translation id="2347601491101454548">Binuksan nang kalahati ang bottom sheet ng aking mga shortcut</translation>
 <translation id="2359808026110333948">Magpatuloy</translation>
-<translation id="2379925928934107488">Ilapat ang madilim na tema sa mga site kapag ginagamit ng Chrome ang madilim na tema, kapag posible</translation>
+<translation id="2379925928934107488">Ilapat ang madilim na tema sa mga site kapag ginagamit ng Ultimatum ang madilim na tema, kapag posible</translation>
 <translation id="2390272837142897736">Dagdagan ang pag-zoom</translation>
 <translation id="2397689164757137845">Pinapayagan • Eksakto</translation>
 <translation id="2402980924095424747"><ph name="MEGABYTES" /> MB</translation>
@@ -147,7 +147,7 @@
 <translation id="2433507940547922241">Hitsura</translation>
 <translation id="2434158240863470628">Tapos nang mag-download <ph name="SEPARATOR" /> <ph name="BYTES_DOWNLOADED" /></translation>
 <translation id="2442870161001914531">Palaging hilingin ang pang-desktop na site</translation>
-<translation id="2445311670906052406">Shine-share na ngayon ng Chrome ang iyong mga kamakailang tab sa device mo. Makikita mo ang mga ito sa listahan ng app at mga resulta ng paghahanap ng iyong device. Puwede mo itong i-off anumang oras sa mga setting ng Chrome.</translation>
+<translation id="2445311670906052406">Shine-share na ngayon ng Ultimatum ang iyong mga kamakailang tab sa device mo. Makikita mo ang mga ito sa listahan ng app at mga resulta ng paghahanap ng iyong device. Puwede mo itong i-off anumang oras sa mga setting ng Ultimatum.</translation>
 <translation id="245322989586167203">Karaniwang kumokonekta ang mga site sa mga serial port para sa mga feature sa paglilipat ng data, gaya ng pag-set up ng iyong network</translation>
 <translation id="2469312991797799607">Ide-delete ng pagkilos na ito ang lahat ng data at cookies para sa <ph name="ORIGIN" /> at lahat ng site sa ilalim nito</translation>
 <translation id="2482878487686419369">Mga Abiso</translation>
@@ -159,7 +159,7 @@
 <translation id="2536779053640817375">Pinapayagan sa pagkakataong ito • Eksakto</translation>
 <translation id="2544997614631598250">Madilim na kulay ng tema</translation>
 <translation id="2546283357679194313">Cookies at data ng site</translation>
-<translation id="2553552004849639664">Kunin ang pinakamalakas na proteksyon ng Chrome laban sa mga banta online</translation>
+<translation id="2553552004849639664">Kunin ang pinakamalakas na proteksyon ng Ultimatum laban sa mga banta online</translation>
 <translation id="2570922361219980984">Naka-off din ang access sa lokasyon para sa device na ito. I-on ito sa <ph name="BEGIN_LINK" />Mga Setting ng Android<ph name="END_LINK" />.</translation>
 <translation id="257931822824936280">Pinalawak - i-click upang i-collapse.</translation>
 <translation id="2586657967955657006">Clipboard</translation>
@@ -168,7 +168,7 @@
 <translation id="2606760465469169465">Awtomatikong pag-verify</translation>
 <translation id="2610903128639500624">Pamahalaan sa <ph name="BEGIN_LINK1" />mga setting ng Android<ph name="END_LINK1" />
 
-Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
+Kinokontrol ng Advanced na Proteksyon ang mga setting ng Ultimatum na ito:
 • Naka-on ang "Palaging gumamit ng mga secure na koneksyon."
 • Naka-off ang "JavaScript optimizer." <ph name="BEGIN_LINK2" />Pamahalaan ang mga exception sa Site<ph name="END_LINK2" /></translation>
 <translation id="2621115761605608342">Payagan ang JavaScript para sa isang partikular na site.</translation>
@@ -183,18 +183,18 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="2710883118091822664">Mag-sign in para madaling makapagpatuloy sa lahat ng iyong device</translation>
 <translation id="2713106313042589954">I-off ang camera</translation>
 <translation id="2717722538473713889">Mga email address</translation>
-<translation id="2726059656860238749">Ilunsad ang Chrome nang nakatuon ang Omnibox, na binabawasan ang tagal ng pag-start up sa mga low-end na device.</translation>
+<translation id="2726059656860238749">Ilunsad ang Ultimatum nang nakatuon ang Omnibox, na binabawasan ang tagal ng pag-start up sa mga low-end na device.</translation>
 <translation id="2750481671343847896">Puwedeng magpakita ang mga site ng mga prompt sa pag-sign in mula sa mga serbisyo ng pagkakakilanlan.</translation>
 <translation id="2787357173144933081">Simulan ang Omnibox</translation>
 <translation id="2789132527330338807">Puwedeng hilingin ng mga site na gumawa ng 3D na map ng iyong kapaligiran o subaybayan ang posisyon ng camera</translation>
 <translation id="2790501146643349491">Kapag naka-on, matatapos ng mga kamakailang isinarang site ang pagpapadala at pagtanggap ng data. Kapag naka-off, hindi matatapos ng mga kamakailang isinarang site ang pagpapadala at pagtanggap ng data.</translation>
-<translation id="2794551654724114396">I-on ang mga notification para sa mga kapaki-pakinabang na tip para matulungan kang masulit ang Chrome</translation>
+<translation id="2794551654724114396">I-on ang mga notification para sa mga kapaki-pakinabang na tip para matulungan kang masulit ang Ultimatum</translation>
 <translation id="2795716239552913152">Karaniwang ginagamit ng mga site ang iyong lokasyon para sa mga nauugnay na feature o impormasyon, gaya ng lokal na balita o mga kalapit na tindahan</translation>
 <translation id="2800760947029405028">Mag-upload ng larawan</translation>
 <translation id="2802908157808345702">Huwag payagan ang mga site na magpadala ng mga pop-up at gumamit ng mga redirect</translation>
-<translation id="2814830417943086299">Ipinapakita na ngayon ng Chrome ang iyong mga kamakailang tab sa listahan ng app at mga resulta ng paghahanap ng device mo. Puwede mo itong i-off anumang oras sa mga setting ng Chrome.</translation>
+<translation id="2814830417943086299">Ipinapakita na ngayon ng Ultimatum ang iyong mga kamakailang tab sa listahan ng app at mga resulta ng paghahanap ng device mo. Puwede mo itong i-off anumang oras sa mga setting ng Ultimatum.</translation>
 <translation id="2822354292072154809">Sigurado ka bang gusto mong i-reset ang lahat ng pahintulot sa site para sa <ph name="CHOSEN_OBJECT_NAME" />?</translation>
-<translation id="2848335882304088250">Masusulit mo na ngayon ang Chrome sa iyong device.</translation>
+<translation id="2848335882304088250">Masusulit mo na ngayon ang Ultimatum sa iyong device.</translation>
 <translation id="2850913818900871965">Mag-request ng mobile view</translation>
 <translation id="2870560284913253234">Site</translation>
 <translation id="2874939134665556319">Nakaraang track</translation>
@@ -273,7 +273,7 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="3678318839615834650">Binuksan nang buo ang bottom sheet ng mga card ng page na bagong tab</translation>
 <translation id="3697164069658504920">Kapag naka-on, puwedeng hilingin ng mga site na gumamit ng mga USB device. Kapag naka-off, hindi makakagamit ng mga USB device ang mga site.</translation>
 <translation id="3703430731944883733">Pamahalaan ang iyong feed</translation>
-<translation id="3707034683772193706">Puwedeng mag-save ng kaunting impormasyon sa Chrome ang isang site na binibisita mo, para lang ma-validate na hindi ka bot</translation>
+<translation id="3707034683772193706">Puwedeng mag-save ng kaunting impormasyon sa Ultimatum ang isang site na binibisita mo, para lang ma-validate na hindi ka bot</translation>
 <translation id="3708684582558000260">Huwag payagan ang mga isinarang site na tapusin ang pagpapadala o pagtanggap ng data</translation>
 <translation id="3709818294139939629">Inalis ang file access ng site</translation>
 <translation id="3721953990244350188">I-dismiss at ipakita ang susunod na available na pagkilos</translation>
@@ -285,13 +285,13 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="3779154269823594982">Palitan ang mga password</translation>
 <translation id="3797520601150691162">Huwag ilapat ang madilim na tema para sa isang partikular na site</translation>
 <translation id="3803367742635802571">Posibleng hindi na gumana ayon sa disenyo ang mga site na binibisita mo</translation>
-<translation id="3816118180265633665">Mga Kulay ng Chrome</translation>
+<translation id="3816118180265633665">Mga Kulay ng Ultimatum</translation>
 <translation id="381841723434055211">Mga numero ng telepono</translation>
 <translation id="3823453485268218808">Font Mono</translation>
 <translation id="3826050100957962900">Third-party na pag-sign in</translation>
 <translation id="3831065134033923230">Tingnan ang iyong mga naka-save na password</translation>
 <translation id="3835233591525155343">Iyong paggamit ng device</translation>
-<translation id="3843916486309149084">Magba-block ulit ang Chrome ng cookies ngayong araw</translation>
+<translation id="3843916486309149084">Magba-block ulit ang Ultimatum ng cookies ngayong araw</translation>
 <translation id="385051799172605136">Bumalik</translation>
 <translation id="3859306556332390985">Maghanap nang pasulong</translation>
 <translation id="389521680295183045">Puwedeng hilingin ng mga site na malaman kung aktibo mong ginagamit ang iyong device</translation>
@@ -318,7 +318,7 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="4046123991198612571">Susunod na track</translation>
 <translation id="4077310749977440510">Karaniwang binabasa ng mga site ang iyong clipboard para sa mga feature gaya ng pagpapanatili ng pag-format ng text na nakopya mo</translation>
 <translation id="4082080074595021446">Hindi pinapayagan ang mga exception para sa mga partikular na website dahil walang sapat na RAM ang Android device.</translation>
-<translation id="4089304748532599471">Nagbago ang ilang setting ng Chrome</translation>
+<translation id="4089304748532599471">Nagbago ang ilang setting ng Ultimatum</translation>
 <translation id="4149890623864272035">Sigurado ka bang gusto mong i-delete ang lahat ng lokal na data, kabilang ang cookies, at i-reset ang lahat ng pahintulot para sa website na ito?</translation>
 <translation id="4149994727733219643">Pinasimpleng view para sa mga web page</translation>
 <translation id="4151930093518524179">Default na pag-zoom</translation>
@@ -342,13 +342,13 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="4340799661701629185">Huwag payagan ang mga site na magpadala ng mga notification</translation>
 <translation id="4341577178275615435">Para i-on o i-off ang caret browsing, gamitin ang shortcut na F7</translation>
 <translation id="4402755511846832236">Pigilan ang mga site na malaman kung kailan mo aktibong ginagamit ang device na ito</translation>
-<translation id="4412683424767388419">Binuksan nang kalahati ang bottom sheet ng mga kulay ng Chrome</translation>
+<translation id="4412683424767388419">Binuksan nang kalahati ang bottom sheet ng mga kulay ng Ultimatum</translation>
 <translation id="4412992751769744546">Payagan ang third-party na cookies</translation>
 <translation id="4425416282877905577">Font Serif</translation>
 <translation id="443121186588148776">Serial port</translation>
 <translation id="4434045419905280838">Mga pop-up at pag-redirect</translation>
 <translation id="443552056913301231">Ide-delete ng pagkilos na ito ang lahat ng lokal na data, kabilang ang cookies, at ire-reset nito ang lahat ng pahintulot para sa <ph name="ORIGIN" /></translation>
-<translation id="4441527683895888777">Binuksan nang buo ang bottom sheet ng mga kulay ng Chrome</translation>
+<translation id="4441527683895888777">Binuksan nang buo ang bottom sheet ng mga kulay ng Ultimatum</translation>
 <translation id="4468959413250150279">I-mute ang tunog para sa isang partikular na site.</translation>
 <translation id="4475912480633855319">{COOKIES,plural, =1{# cookie}one{# cookie}other{# na cookie}}</translation>
 <translation id="4478158430052450698">Mas padalii ang pag-customize sa pag-zoom para sa iba't ibang site</translation>
@@ -370,7 +370,7 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="4655846733459137112">I-tap ang Oo para madaling magamit ang password na ito sa susunod na mag-sign in ka</translation>
 <translation id="4663373278480897665">Pinapayagan ang camera</translation>
 <translation id="4670064810192446073">Virtual reality</translation>
-<translation id="4672315773691449562">I-tap ang Browser app at pagkatapos ay i-tap ang Chrome</translation>
+<translation id="4672315773691449562">I-tap ang Browser app at pagkatapos ay i-tap ang Ultimatum</translation>
 <translation id="4676059169848868271">Para payagan ang <ph name="APP_NAME" /> na gamitin ang pag-track sa kamay, i-on din ang pag-track sa kamay sa <ph name="BEGIN_LINK" />mga setting ng system<ph name="END_LINK" />.</translation>
 <translation id="4688045258817337666">Pamahalaan ang iyong mga card</translation>
 <translation id="4722332387043141878">Karaniwang ginagamit ng mga site ang mga sensor ng paggalaw at liwanag ng iyong device para sa mga feature na tulad ng virtual reality o pag-track sa fitness</translation>
@@ -391,7 +391,7 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="4953688446973710931">Kapag naka-on, puwedeng hilingin ng mga site na awtomatikong mag-download ng maraming file. Kapag naka-off, hindi awtomatikong makakapag-download ng maraming file ang mga site.</translation>
 <translation id="4962975101802056554">Bawiin ang lahat ng pahintulot para sa device</translation>
 <translation id="4972737347717125191">Puwedeng hilingin ng mga site na gumamit ng mga virtual reality device at data</translation>
-<translation id="4973805849704516244">Bottom sheet ng Mga Kulay ng Chrome</translation>
+<translation id="4973805849704516244">Bottom sheet ng Mga Kulay ng Ultimatum</translation>
 <translation id="497421865427891073">Sumulong</translation>
 <translation id="4976702386844183910">Huling binisita noong <ph name="DATE" /></translation>
 <translation id="4978178243417029856">Matuto pa tungkol sa discover feed</translation>
@@ -409,7 +409,7 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="5091663350197390230">Kapag naka-on, makakagamit ng JavaScript ang mga site. Kapag naka-off, hindi makakagamit ng JavaScript ang mga site.</translation>
 <translation id="5099358668261120049">Ide-delete nito ang lahat ng data at cookies na na-store ng <ph name="ORIGIN" /> o ng app nito sa iyong Home screen.</translation>
 <translation id="5100237604440890931">Naka-collapse - i-click upang palawakin</translation>
-<translation id="5116239826668864748">Magagamit mo ang Chrome sa tuwing magta-tap ka ng mga link sa mga mensahe, dokumento, at iba pang app</translation>
+<translation id="5116239826668864748">Magagamit mo ang Ultimatum sa tuwing magta-tap ka ng mga link sa mga mensahe, dokumento, at iba pang app</translation>
 <translation id="5123685120097942451">Tab na incognito</translation>
 <translation id="512938610812707830">Binuksan nang buo ang bottom sheet ng mga koleksyon ng tema para sa hitsura ng page ng bagong tab</translation>
 <translation id="5137460097045297858">Binuksan nang kalahati ang bottom sheet ng feed ng Discover</translation>
@@ -446,7 +446,7 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="5516455585884385570">Buksan ang mga setting ng notification</translation>
 <translation id="5527111080432883924">Magtanong bago payagan ang mga site na i-read ang text at mga larawan mula sa clipboard (inirerekomenda)</translation>
 <translation id="5553374991681107062">Pinakabago</translation>
-<translation id="5555115555607204100">Huwag pabilisin ang mga site gamit ang V8 na engine ng Chrome pero gawing bahagyang mas resistant sa mga attack ang Chrome</translation>
+<translation id="5555115555607204100">Huwag pabilisin ang mga site gamit ang V8 na engine ng Ultimatum pero gawing bahagyang mas resistant sa mga attack ang Ultimatum</translation>
 <translation id="5556459405103347317">I-reload</translation>
 <translation id="5591840828808741583">Naka-block ang <ph name="SITE_NAME" /></translation>
 <translation id="560980142378233747">Nangangahulugan itong dapat gumana ang mga feature ng site na gaya ng inaasahan, pero posibleng magkaroon ka ng mas mahinang proteksyon sa pag-browse. <ph name="BEGIN_LINK" />Magpadala ng feedback<ph name="END_LINK" /></translation>
@@ -473,7 +473,7 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="5804241973901381774">Mga Pahintulot</translation>
 <translation id="5817042798620209981">Impormasyon ng site, dialog</translation>
 <translation id="5822675474983796325">Binuksan nang buo ang bottom sheet ng pag-customize ng page ng bagong tab mo</translation>
-<translation id="5826403277762134844">Bottom sheet ng tagubilin sa pag-save ng mga password sa Chrome</translation>
+<translation id="5826403277762134844">Bottom sheet ng tagubilin sa pag-save ng mga password sa Ultimatum</translation>
 <translation id="5833899990800318936">Huwag payagan ang mga site na gumamit ng JavaScript</translation>
 <translation id="583673505367439042">Puwedeng hilingin ng mga site na mag-edit ng mga file at folder sa iyong device</translation>
 <translation id="5844448279347999754">Kapag naka-on, puwedeng hilingin ng mga site na makita ang text at mga larawang naka-save sa iyong clipboard. Kapag naka-off, hindi makikita ng mga site ang text o mga larawang naka-save sa iyong clipboard.</translation>
@@ -502,7 +502,7 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="6012967556075291653">Naka-pin na shortcut</translation>
 <translation id="6013003831291591200">Natapos na ang gawain</translation>
 <translation id="6015775454662021376">Kontrolin ang access ng site na ito sa iyong device</translation>
-<translation id="6022659036123304283">Gawing iyo ang Chrome</translation>
+<translation id="6022659036123304283">Gawing iyo ang Ultimatum</translation>
 <translation id="6040143037577758943">Isara</translation>
 <translation id="6042308850641462728">Marami pang iba</translation>
 <translation id="6064125863973209585">Mga nakumpletong download</translation>
@@ -510,20 +510,20 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="6085954183010297841">I-delete ang pahintulot sa pag-edit ng file? <ph name="FILE" /></translation>
 <translation id="6104860901391833523">Kapag naka-on, puwedeng awtomatikong makapasok sa picture-in-picture ang mga site. Kapag naka-off, hindi puwedeng awtomatikong makapasok sa picture-in-picture ang mga site.</translation>
 <translation id="6120483543004435978">Kapag naka-on, puwedeng hilingin ng mga site na malaman kung kailan mo aktibong ginagamit ang iyong device. Kapag naka-off, hindi malalaman ng mga site kung kailan mo aktibong ginagamit ang iyong device.</translation>
-<translation id="6132075343662013154">Mag-aalok ang Chrome na i-save ang iyong password</translation>
+<translation id="6132075343662013154">Mag-aalok ang Ultimatum na i-save ang iyong password</translation>
 <translation id="615886654739818377">Huwag payagan ang mga site na pamahalaan ang mga window sa lahat ng iyong screen</translation>
 <translation id="6165508094623778733">Matuto pa</translation>
 <translation id="6171020522141473435">Kapag naka-on, puwedeng hilingin ng mga site na gumamit ng mga Bluetooth device. Kapag naka-off, hindi makakagamit ng mga Bluetooth device ang mga site.</translation>
 <translation id="6177128806592000436">Hindi ligtas ang iyong koneksyon sa site na ito</translation>
 <translation id="6181444274883918285">Magdagdag ng pagbubukod ng site</translation>
-<translation id="6194967801833346599">{DAYS,plural, =1{Magba-block ulit ang Chrome ng cookies bukas}one{# araw bago mag-block ulit ng cookies}other{# na araw bago mag-block ulit ng cookies}}</translation>
+<translation id="6194967801833346599">{DAYS,plural, =1{Magba-block ulit ang Ultimatum ng cookies bukas}one{# araw bago mag-block ulit ng cookies}other{# na araw bago mag-block ulit ng cookies}}</translation>
 <translation id="6196640612572343990">I-block ang mga third-party na cookie</translation>
 <translation id="6205314730813004066">Privacy sa mga ad</translation>
 <translation id="6207207788774442484">I-delete ang data at i-reset ang mga pahintulot</translation>
 <translation id="6211409961905616543">Puwedeng gumamit ang mga site ng mga sensor ng paggalaw at liwanag</translation>
 <translation id="6218508144653756827">Fuchsia na tema</translation>
 <translation id="6231752747840485235">I-uninstall ang '<ph name="APP_NAME" />'?</translation>
-<translation id="6234351944623978659">I-tap ang Browser app &gt; Chrome</translation>
+<translation id="6234351944623978659">I-tap ang Browser app &gt; Ultimatum</translation>
 <translation id="6260830281887654268">Binuksan nang kalahati ang bottom sheet ng mga koleksyon ng tema para sa hitsura ng page ng bagong tab</translation>
 <translation id="6262191102408817757">Batay sa iyong huling tab</translation>
 <translation id="6262279340360821358">Naka-block ang <ph name="PERMISSION_1" /> at <ph name="PERMISSION_2" /></translation>
@@ -573,7 +573,7 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="6787751205395685251">Pumili ng opsyon para sa <ph name="SITE_NAME" /></translation>
 <translation id="6790428901817661496">I-play</translation>
 <translation id="6818926723028410516">Pumili ng mga item</translation>
-<translation id="6838525730752203626">Gamitin ang Chrome bilang default</translation>
+<translation id="6838525730752203626">Gamitin ang Ultimatum bilang default</translation>
 <translation id="6840760312327750441">Sa mga tab ng grupo, pindutin nang matagal ang isang tab. Pagkatapos, i-drag ito sa isa pang tab.</translation>
 <translation id="6842868554183332230">Karaniwang nade-detect ng mga site kung aktibo mong ginagamit ang iyong device para maitakda ang iyong availability sa mga chat app</translation>
 <translation id="6864395892908308021">Hindi nababasa ng device na ito ang NFC</translation>
@@ -591,7 +591,7 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="6992014788289743568">Paigtingin ang iyong seguridad at panatilihing mas ligtas ang data mo sa pamamagitan ng pagsusuri sa iyong mga password</translation>
 <translation id="6992289844737586249">Magtanong muna bago payagan ang mga site na gamitin ang iyong mikropono (inirerekomenda)</translation>
 <translation id="7000754031042624318">Naka-off sa mga setting ng Android</translation>
-<translation id="702275896380648118">Tinutukoy ng site na ito ang mga bagay na gusto mo at pagkatapos ay nagmumungkahi ito ng mga ad sa iba pang site. Kinukuha rin ng site na ito ang mga paksa ng ad mo mula sa Chrome para magpakita sa iyo ng higit pang kaugnay na ad.</translation>
+<translation id="702275896380648118">Tinutukoy ng site na ito ang mga bagay na gusto mo at pagkatapos ay nagmumungkahi ito ng mga ad sa iba pang site. Kinukuha rin ng site na ito ang mga paksa ng ad mo mula sa Ultimatum para magpakita sa iyo ng higit pang kaugnay na ad.</translation>
 <translation id="7036823721811529709">Makinig sa background</translation>
 <translation id="7044081119134178347">Pinapayagan ang camera sa ngayon</translation>
 <translation id="7053983685419859001">I-block</translation>
@@ -649,7 +649,7 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="7658239707568436148">Kanselahin</translation>
 <translation id="7667547420449112975">The Wonderful Wizard of Oz</translation>
 <translation id="7681597159868843240">Karaniwang ginagamit ng mga site ang mga sensor ng paggalaw ng iyong device para sa mga feature na tulad ng virtual reality o pag-track sa fitness</translation>
-<translation id="7688240020069572972">Itago ang card ng mga tip sa Chrome</translation>
+<translation id="7688240020069572972">Itago ang card ng mga tip sa Ultimatum</translation>
 <translation id="7719367874908701697">Pag-zoom ng page</translation>
 <translation id="775043444390799886">Bawiin ang pahintulot</translation>
 <translation id="7758789811447313947">Violet na tema</translation>
@@ -681,7 +681,7 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="8033047164036749181">Mag-subscribe para sa mga notification mula sa site na ito</translation>
 <translation id="8042586301629853791">Pagbukud-bukurin ayon sa:</translation>
 <translation id="8051193500142930381">Hindi gagana ang mga feature na nangangailangan ng camera</translation>
-<translation id="8056330801132235235">Default ng Chrome</translation>
+<translation id="8056330801132235235">Default ng Ultimatum</translation>
 <translation id="8067883171444229417">I-play ang video</translation>
 <translation id="8068648041423924542">Hindi makapili ng certificate.</translation>
 <translation id="8077120325605624147">Puwedeng magpakita ng anumang ad sa iyo ang anumang site na bibisitahin mo</translation>
@@ -735,10 +735,10 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="8514955299594277296">Huwag payagan ang mga site na mag-save ng data sa iyong device (hindi inirerekomenda)</translation>
 <translation id="851751545965956758">I-block ang mga site sa pagkonekta sa mga device</translation>
 <translation id="8525306231823319788">Buong screen</translation>
-<translation id="8541410041357371550">Kinukuha ng site na ito ang iyong mga paksa ng ad mula sa Chrome para magpakita pa sa iyo ng mga may kaugnayang ad</translation>
+<translation id="8541410041357371550">Kinukuha ng site na ito ang iyong mga paksa ng ad mula sa Ultimatum para magpakita pa sa iyo ng mga may kaugnayang ad</translation>
 <translation id="854876774113449365">Puwedeng mag-embed ng content mula sa iba pang site ang mga site na binibisita mo, halimbawa, mga larawan, ad, at text. Puwedeng humingi ng pahintulot ang iba pang site na ito para gumamit ng impormasyong na-save ng mga ito tungkol sa iyo habang bina-browse mo ang site. <ph name="BEGIN_LINK" />Matuto pa tungkol sa naka-embed na content<ph name="END_LINK" /></translation>
 <translation id="8549127125482561383">Paano ipapakita ang mga request</translation>
-<translation id="8558480467877843976">Magagamit mo na ngayon ang Chrome sa tuwing magbo-browse o magta-tap ka ng mga link sa mga mensahe, dokumento, at iba pang app.</translation>
+<translation id="8558480467877843976">Magagamit mo na ngayon ang Ultimatum sa tuwing magbo-browse o magta-tap ka ng mga link sa mga mensahe, dokumento, at iba pang app.</translation>
 <translation id="857943718398505171">Pinapayagan (inirerekomenda)</translation>
 <translation id="8593422116412089302">Kapag naka-on, puwedeng hilingin ng mga site na gumamit ng impormasyong na-save ng mga ito tungkol sa iyo. Kapag naka-off, hindi puwedeng hilingin sa iyo ng mga site na gumamit ng impormasyong na-save ng mga ito tungkol sa iyo.</translation>
 <translation id="8609465669617005112">Ilipat sa itaas</translation>
@@ -755,7 +755,7 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="8719283222052720129">I-on ang pahintulot para sa <ph name="APP_NAME" /> sa <ph name="BEGIN_LINK" />Mga Setting ng Android<ph name="END_LINK" />.</translation>
 <translation id="8721719390026067591">Kapag naka-on, puwedeng hilingin ng mga site na maghanap ng mga Bluetooth device. Kapag naka-off, hindi makakapaghanap ng mga Bluetooth device ang mga site.</translation>
 <translation id="8725066075913043281">Subukan ulit</translation>
-<translation id="8727043961453758442">Sulitin ang Chrome</translation>
+<translation id="8727043961453758442">Sulitin ang Ultimatum</translation>
 <translation id="8730621377337864115">Tapos na</translation>
 <translation id="8737426583868847403">Lalabas dito ang mga site kung para saan ka nag-save ng custom na level ng pag-zoom</translation>
 <translation id="8748714929822124637">Huwag payagan ang mga site na i-access ang iba pang device sa iyong lokal na network</translation>
@@ -763,13 +763,13 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="8775741625735357092">Puwede mong i-on ang bookmarks bar sa Mga Setting &gt; Hitsura</translation>
 <translation id="8800034312320686233">Hindi gumagana ang site?</translation>
 <translation id="8801436777607969138">I-block ang JavaScript para sa isang partikular na site.</translation>
-<translation id="8801657293260363985">V8 ang JavaScript at WebAssembly engine ng Chrome na ginagamit para pahusayin ang performance ng site</translation>
+<translation id="8801657293260363985">V8 ang JavaScript at WebAssembly engine ng Ultimatum na ginagamit para pahusayin ang performance ng site</translation>
 <translation id="8803526663383843427">Kapag naka-on</translation>
 <translation id="8805385115381080995">Mas mabilis ang pag-browse dahil mas maliit ang posibilidad na hilingin sa iyo ng site na i-verify na totoong tao ka</translation>
 <translation id="881644524232657178">Kapag naka-on, magagamit ng mga site ang mga sensor ng paggalaw at liwanag ng iyong device. Kapag naka-off, hindi makakagamit ang mga site ng mga sensor.</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">Subukang payagan nang pansamantala ang third-party na cookies, na nangangahulugang mas mahina ang proteksyon sa pag-browse pero mas malamang na gumana ang mga feature ng site gaya ng inaasahan.</translation>
-<translation id="8889294078294184559">Habang patuloy kang nagba-browse, puwedeng sumangguni ang mga site sa Chrome at i-verify sa naunang site na binisita mo kung malamang na totoong tao ka.</translation>
+<translation id="8889294078294184559">Habang patuloy kang nagba-browse, puwedeng sumangguni ang mga site sa Ultimatum at i-verify sa naunang site na binisita mo kung malamang na totoong tao ka.</translation>
 <translation id="8899807382908246773">Mga nakakasagabal na ad</translation>
 <translation id="8903921497873541725">Mag-zoom in</translation>
 <translation id="8919911527569629802">Mag-sign in sa anumang website</translation>
@@ -795,7 +795,7 @@ Kinokontrol ng Advanced na Proteksyon ang mga setting ng Chrome na ito:
 <translation id="9138037198177304356">Pinapayagan ang mga notification</translation>
 <translation id="9138217887606523162"><ph name="ZOOM_LEVEL" /> %% ang kasalukuyang pag-zoom</translation>
 <translation id="915112772806845021">Ginagamit ng mga site ang feature na ito para awtomatikong pumasok sa picture-in-picture. Nagbibigay-daan ito sa iyong patuloy na makapanood ng video, habang binabakante ang screen mo para sa iba pang gawain.</translation>
-<translation id="9156722768168878035">Hayaang ipakita ng Chrome ang iyong mga kamakailang tab sa listahan ng app at mga resulta ng paghahanap ng device mo. Puwede mo itong i-off anumang oras sa mga setting ng Chrome.</translation>
+<translation id="9156722768168878035">Hayaang ipakita ng Ultimatum ang iyong mga kamakailang tab sa listahan ng app at mga resulta ng paghahanap ng device mo. Puwede mo itong i-off anumang oras sa mga setting ng Ultimatum.</translation>
 <translation id="9162462602695099906">Mapanganib ang page na ito</translation>
 <translation id="9182556968660520230">Huwag payagan ang mga site na mag-play ng pinoprotektahang content</translation>
 <translation id="947156494302904893">Magagawa ng mga site na binibisita mo na i-verify na totoong tao ka at hindi ka bot</translation>

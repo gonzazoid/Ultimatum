@@ -24,9 +24,9 @@
 <translation id="1089606299949659462">הבדיקה הושלמה!</translation>
 <translation id="1094555143448724771">כדי לראות כרטיסיות מהמכשירים האחרים שלך, צריך לסנכרן את הכרטיסיות ואת ההיסטוריה</translation>
 <translation id="1095761715416917775">כדאי לוודא שניתן לגשת לנתונים המסונכרנים בכל רגע</translation>
-<translation id="1096091316906284742">‏הגיליון התחתון של ההצעה להצטרף ל-Chrome Finds</translation>
+<translation id="1096091316906284742">‏הגיליון התחתון של ההצעה להצטרף ל-Ultimatum Finds</translation>
 <translation id="1100066534610197918">פתיחה בכרטיסייה חדשה בקבוצה</translation>
-<translation id="1103142993930332957">‏רוצה לעזור לנו לשפר את Chrome?</translation>
+<translation id="1103142993930332957">‏רוצה לעזור לנו לשפר את Ultimatum?</translation>
 <translation id="1105960400813249514">צילום מסך</translation>
 <translation id="1108214977745280468">הצגת התובנות לגבי הדף</translation>
 <translation id="1108938384783527433">סנכרון ההיסטוריה</translation>
@@ -34,20 +34,20 @@
 <translation id="1123537484474186311">‫<ph name="TAB_TITLE" />, כרטיסייה במצב "תמונה בתוך תמונה"</translation>
 <translation id="1126696498560056882">ניהול החשבונות במכשיר הזה</translation>
 <translation id="1135018701024399762">'מצב פרטי' מאפשר לך לגלוש באופן פרטי שלא יהיה גלוי למשתמשים אחרים במכשיר</translation>
-<translation id="113752097246673894">‏כדי לקבל גישה לסימניות ולנתונים נוספים בכל המכשירים שלך, צריך להיכנס ל-Chrome עם <ph name="EMAIL" /></translation>
+<translation id="113752097246673894">‏כדי לקבל גישה לסימניות ולנתונים נוספים בכל המכשירים שלך, צריך להיכנס ל-Ultimatum עם <ph name="EMAIL" /></translation>
 <translation id="1138458427267715730">קבלת התראות כשיש הנחות באתרים באינטרנט</translation>
 <translation id="1140317858355046628">אם הקבוצה תימחק, כולם יאבדו באופן מיידי את הגישה לקבוצת הכרטיסיות "<ph name="GROUP_NAME" />", והיא תימחק מכל המכשירים.</translation>
 <translation id="1142732900304639782">אין להציג את ההצעה לתרגם את האתרים האלה</translation>
 <translation id="1143193470214071120">אפשר לסגור חלון או לנהל חלונות</translation>
 <translation id="1149725087019908252">מתבצעת סריקה של <ph name="FILE_NAME" /></translation>
-<translation id="1150263420752757504">‏האפליקציה <ph name="APP_NAME" /> תיפתח ב-Chrome. המשך הפעולה מבטא הסכמה <ph name="BEGIN_LINK1" />לתנאים ולהגבלות של Google<ph name="END_LINK1" /> ו<ph name="BEGIN_LINK2" />לתנאים ולהגבלות הנוספים של Google Chrome ו-ChromeOS<ph name="END_LINK2" />.</translation>
+<translation id="1150263420752757504">‏האפליקציה <ph name="APP_NAME" /> תיפתח ב-Ultimatum. המשך הפעולה מבטא הסכמה <ph name="BEGIN_LINK1" />לתנאים ולהגבלות של Google<ph name="END_LINK1" /> ו<ph name="BEGIN_LINK2" />לתנאים ולהגבלות הנוספים של Ultimatum ו-UltimatumOS<ph name="END_LINK2" />.</translation>
 <translation id="1154555449933432029">‏אין לך סיסמאות שמורות במנהל הסיסמאות של Google.</translation>
 <translation id="115483310321669804">שימוש בסיסמה <ph name="PASSWORD" /></translation>
 <translation id="1161065531352634524">סנכרון הכרטיסיות וההיסטוריה</translation>
 <translation id="1165109137568919258">כדי לחפש, אפשר לצלם תמונה או להוסיף תמונה מגלריית התמונות</translation>
 <translation id="1173894706177603556">שינוי שם</translation>
-<translation id="1174479719160874822">‏אם המסך צר, Chrome יבקש את האתר לנייד</translation>
-<translation id="1175241315203286684">‏לאדמין יש אפשרות לבצע מרחוק שינויים בפרופיל ובדפדפן, לנתח מידע על הדפדפן באמצעות דוחות ולבצע משימות חשובות אחרות. אפשר לנהל את הפעילות במכשיר הזה גם מחוץ ל-Chrome.</translation>
+<translation id="1174479719160874822">‏אם המסך צר, Ultimatum יבקש את האתר לנייד</translation>
+<translation id="1175241315203286684">‏לאדמין יש אפשרות לבצע מרחוק שינויים בפרופיל ובדפדפן, לנתח מידע על הדפדפן באמצעות דוחות ולבצע משימות חשובות אחרות. אפשר לנהל את הפעילות במכשיר הזה גם מחוץ ל-Ultimatum.</translation>
 <translation id="1177863135347784049">מותאם אישית</translation>
 <translation id="1181037720776840403">הסרה</translation>
 <translation id="1183189057400844278">‏כדי שתמיד תהיה לך אפשרות להשתמש בסיסמאות בחשבון Google שלך, עליך לאמת את הזהות שלך</translation>
@@ -85,13 +85,13 @@
 <translation id="1318262688555255786">שיתוף הקישור לדף האינטרנט <ph name="PAGE_TITLE" />. מקור: <ph name="PAGE_URL" /></translation>
 <translation id="1320912611264252795">תהליך שמירת תיקיות הסימניות שפתוחות בגובה מלא</translation>
 <translation id="1327257854815634930">היסטוריית הניווט פתוחה</translation>
-<translation id="1331212799747679585">‏לא ניתן לעדכן את Chrome. אפשרויות נוספות</translation>
-<translation id="1332501820983677155">‏מקשי קיצור לתכונות של Google Chrome‏</translation>
+<translation id="1331212799747679585">‏לא ניתן לעדכן את Ultimatum. אפשרויות נוספות</translation>
+<translation id="1332501820983677155">‏מקשי קיצור לתכונות של Ultimatum‏</translation>
 <translation id="1333491156693005331">התבצעה בדיקה לאחרונה</translation>
 <translation id="1336996151357442890">ביטלת את ההרשמה לאתר <ph name="SITE_NAME" />. תוצג שאלה נוספת בביקור הבא שלך.</translation>
 <translation id="1340839264183302272">יציאה מהקבוצה</translation>
 <translation id="1342886103232377846">‏כדי לבדוק אם יש סיסמאות שנחשפו, צריך לעבור למנהל הסיסמאות של Google</translation>
-<translation id="1343830902827845050">‏כניסה ל-Chrome</translation>
+<translation id="1343830902827845050">‏כניסה ל-Ultimatum</translation>
 <translation id="1344653310988386453">עליך לכלול קישור לטקסט המודגש</translation>
 <translation id="1355088659320425659">היסטוריה וכרטיסיות</translation>
 <translation id="1360432990279830238">לצאת ולהשבית את הסנכרון?</translation>
@@ -105,12 +105,12 @@
 <translation id="1383876407941801731">חיפוש</translation>
 <translation id="1384704387250346179">‏תרגום תמונה באמצעות Google Lens‏ <ph name="BEGIN_NEW" />חדש<ph name="END_NEW" /></translation>
 <translation id="1386674309198842382">פעילות אחרונה: לפני <ph name="LAST_UPDATED" /> ימים</translation>
-<translation id="1390418506739274310">‏יכול להיות שתוצג היסטוריה מאפליקציות אחרות שפותחות קישורים ב-Chrome. בחשבון שלך ב-Google עשויים להופיע סוגים אחרים של היסטוריית גלישה בכתובת <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
+<translation id="1390418506739274310">‏יכול להיות שתוצג היסטוריה מאפליקציות אחרות שפותחות קישורים ב-Ultimatum. בחשבון שלך ב-Google עשויים להופיע סוגים אחרים של היסטוריית גלישה בכתובת <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="139752016751285248">הגיליון התחתון של מדדי המחירים נפתח בגובה מלא</translation>
 <translation id="1397811292916898096">חיפוש באמצעות <ph name="PRODUCT_NAME" /></translation>
-<translation id="1398057416966591719">‏אפשר <ph name="BEGIN_LINK1" />לקבוע אילו נתונים מ-Chrome יישמרו<ph name="END_LINK1" /> בחשבון שלך ב-Google.
+<translation id="1398057416966591719">‏אפשר <ph name="BEGIN_LINK1" />לקבוע אילו נתונים מ-Ultimatum יישמרו<ph name="END_LINK1" /> בחשבון שלך ב-Google.
 
-כדי לראות אילו הגדרות נוספות מתבססות על נתונים לצורך שיפור חוויית השימוש ב-Chrome, ניתן לעבור אל <ph name="BEGIN_LINK2" />שירותי Google<ph name="END_LINK2" />.</translation>
+כדי לראות אילו הגדרות נוספות מתבססות על נתונים לצורך שיפור חוויית השימוש ב-Ultimatum, ניתן לעבור אל <ph name="BEGIN_LINK2" />שירותי Google<ph name="END_LINK2" />.</translation>
 <translation id="1407069428457324124">עיצוב כהה</translation>
 <translation id="1407135791313364759">פתיחת כל הכרטיסיות</translation>
 <translation id="1409879593029778104">הורדת <ph name="FILE_NAME" /> נמנעה מכיוון שהקובץ כבר קיים.</translation>
@@ -124,10 +124,10 @@
 <translation id="1448440926884431741">‏יש לך אפשרות לארגן את המוצרים שבמעקב ב-Bookmarks</translation>
 <translation id="1455845192930279203">רוצה להוריד את <ph name="FILE_NAME" /> ‏(<ph name="FILE_SIZE" />) מ-<ph name="DOWNLOAD_DOMAIN" /> בכל זאת?</translation>
 <translation id="1460751212339734034">חוסכים זמן, מקלידים פחות</translation>
-<translation id="1466383950273130737">‏בחירת השפה ב-Chrome</translation>
+<translation id="1466383950273130737">‏בחירת השפה ב-Ultimatum</translation>
 <translation id="1477626028522505441">הורדת <ph name="FILE_NAME" /> נכשלה עקב בעיות בשרת.</translation>
 <translation id="147982357559798527">השתנתה</translation>
-<translation id="1480287803138246127">‏יכול להיות שחלק מההיסטוריה שלך לא תוצג כאן. צריך לפתוח את ההיסטוריה המלאה ב-Chrome כדי לראות את כולה.</translation>
+<translation id="1480287803138246127">‏יכול להיות שחלק מההיסטוריה שלך לא תוצג כאן. צריך לפתוח את ההיסטוריה המלאה ב-Ultimatum כדי לראות את כולה.</translation>
 <translation id="1493287004536771723">בחרת לעקוב אחר <ph name="SITE_NAME" /></translation>
 <translation id="1495677929897281669">חזרה לכרטיסייה</translation>
 <translation id="1496514951988037011">שם משתמש</translation>
@@ -137,14 +137,14 @@
 <translation id="1515901671075971249">מקשי קיצור לניווט בכרטיסיות</translation>
 <translation id="1516966594427080024">פתיחת חלון חדש במצב אנונימי</translation>
 <translation id="1521774566618522728">סנכרון אחרון: היום</translation>
-<translation id="153446405401665083">‏יש גרסה חדשה של Chrome</translation>
+<translation id="153446405401665083">‏יש גרסה חדשה של Ultimatum</translation>
 <translation id="1540012742443808215">סרגל הכתובות נמצא כרגע בחלק העליון</translation>
-<translation id="1544084554881119930">‏אמצעי תשלום וכתובות לא יוצפנו. היסטוריית הגלישה ב-Chrome לא תסונכרן.
-רק מי שיודע את ביטוי הסיסמה יכול לקרוא את הנתונים המוצפנים. ביטוי הסיסמה לא נשלח אל Google ולא מאוחסן ב-Google. אם שכחת את ביטוי הסיסמה או שברצונך לשנות את ההגדרה הזו, <ph name="BEGIN_LINK" />עליך לנקות את נתוני Chrome בחשבון<ph name="END_LINK" />.</translation>
+<translation id="1544084554881119930">‏אמצעי תשלום וכתובות לא יוצפנו. היסטוריית הגלישה ב-Ultimatum לא תסונכרן.
+רק מי שיודע את ביטוי הסיסמה יכול לקרוא את הנתונים המוצפנים. ביטוי הסיסמה לא נשלח אל Google ולא מאוחסן ב-Google. אם שכחת את ביטוי הסיסמה או שברצונך לשנות את ההגדרה הזו, <ph name="BEGIN_LINK" />עליך לנקות את נתוני Ultimatum בחשבון<ph name="END_LINK" />.</translation>
 <translation id="1544826120773021464">‏כדי לנהל את חשבון Google, יש ללחוץ על הכפתור "ניהול החשבון"</translation>
 <translation id="1549000191223877751">העברה לחלון האחר</translation>
-<translation id="1553358976309200471">‏כדאי לעדכן את Chrome</translation>
-<translation id="1554532453982918912">‏המדדים שישותפו יעזרו בשיפור Chrome בשביל אנשים שמשתמשים בו בצורה דומה לשלך</translation>
+<translation id="1553358976309200471">‏כדאי לעדכן את Ultimatum</translation>
+<translation id="1554532453982918912">‏המדדים שישותפו יעזרו בשיפור Ultimatum בשביל אנשים שמשתמשים בו בצורה דומה לשלך</translation>
 <translation id="1568636008098739136">האזנה לדף הזה. ניתן לערוך את קיצור הדרך הזה בלחיצה ארוכה.</translation>
 <translation id="1571041387761170095">אין סיסמאות חלשות או סיסמאות בשימוש חוזר</translation>
 <translation id="1578591621182011812">{NUM_PASSWORDS,plural, =1{יש במכשיר הזה סיסמה אחת שנחשפה}one{יש במכשיר הזה # סיסמאות שנחשפו}two{יש במכשיר הזה # סיסמאות שנחשפו}other{יש במכשיר הזה # סיסמאות שנחשפו}}</translation>
@@ -171,24 +171,24 @@
 <translation id="1702907158640575240">דפדפן מנוהל</translation>
 <translation id="170478069042229393">‫<ph name="TAB_TITLE" />, הכרטיסייה הפרטית הוצמדה</translation>
 <translation id="1718835860248848330">מהשעה האחרונה</translation>
-<translation id="1726477445370128854">‏אפשר לגלוש ולחפש מהר יותר כשמערכת Chrome מבצעת הערכה לגבי דפים שהמשתמש יעבור אליהם וטוענת אותם מראש</translation>
+<translation id="1726477445370128854">‏אפשר לגלוש ולחפש מהר יותר כשמערכת Ultimatum מבצעת הערכה לגבי דפים שהמשתמש יעבור אליהם וטוענת אותם מראש</translation>
 <translation id="1728803206919861584">לשמור את מפתח הגישה מחוץ למצב הפרטי?</translation>
 <translation id="1732514748744806741">אם הסיסמאות שלך ייחשפו לאחרים, אנחנו נודיע לך</translation>
-<translation id="1737694586321018892">‏רוצה ליהנות מהאבטחה החזקה ביותר של Chrome?</translation>
+<translation id="1737694586321018892">‏רוצה ליהנות מהאבטחה החזקה ביותר של Ultimatum?</translation>
 <translation id="1747593111377567311">{NUM_SITES,plural, =1{אתר אחד שלח לאחרונה הרבה התראות}one{‫# אתרים שלחו הרבה התראות לאחרונה}two{‫# אתרים שלחו הרבה התראות לאחרונה}other{‫# אתרים שלחו הרבה התראות לאחרונה}}</translation>
 <translation id="1749561566933687563">סנכרון הסימניות שלך</translation>
 <translation id="1750238553597293878">‏המשך השימוש בסיסמאות בחשבון Google שלך</translation>
 <translation id="17513872634828108">כרטיסיות פתוחות</translation>
 <translation id="1753744496844366747">Aa</translation>
 <translation id="1760873718737761808">{FILE_COUNT,plural, =1{דפים, דף אחד ברשימה}one{דפים, # דפים ברשימה}two{דפים, # דפים ברשימה}other{דפים, # דפים ברשימה}}</translation>
-<translation id="1771929606532798550">‏מידע על אופן השימוש שלך ב-Chrome נשלח אל Google, אבל הוא לא משויך אליך\n\nאם Chrome קורס, הפרטים בנוגע לקריסה עשויים להכיל גם פרטים אישיים\n\nאם ההיסטוריה מסונכרנת עם חשבון Google, יכול להיות שהמדדים יכללו גם מידע על כתובות ה-URL שביקרת בהן</translation>
+<translation id="1771929606532798550">‏מידע על אופן השימוש שלך ב-Ultimatum נשלח אל Google, אבל הוא לא משויך אליך\n\nאם Ultimatum קורס, הפרטים בנוגע לקריסה עשויים להכיל גם פרטים אישיים\n\nאם ההיסטוריה מסונכרנת עם חשבון Google, יכול להיות שהמדדים יכללו גם מידע על כתובות ה-URL שביקרת בהן</translation>
 <translation id="1778457539567749232">סימון ככרטיסייה שלא נקראה</translation>
 <translation id="1779766957982586368">סגירת חלון</translation>
 <translation id="1780023393214832643">הסיסמאות נשמרו בחשבון <ph name="USERNAME" /></translation>
 <translation id="1791662854739702043">מותקן</translation>
 <translation id="1792959175193046959">אפשר תמיד לשנות את מיקום ההורדות</translation>
 <translation id="1796666869097395659">מזעור הכרטיסייה כדי לחזור אליה מאוחר יותר</translation>
-<translation id="1799920918471566157">‏טיפים ל-Chrome</translation>
+<translation id="1799920918471566157">‏טיפים ל-Ultimatum</translation>
 <translation id="1807246157184219062">בהיר</translation>
 <translation id="1807709131360304325">פתיחת חלון חדש</translation>
 <translation id="1810845389119482123">ההגדרה הראשונית של הסנכרון לא הושלמה</translation>
@@ -197,13 +197,13 @@
 <translation id="1820408774134375111">גיליון תחתון של כניסה</translation>
 <translation id="1823492026305965829">כניסה בתור <ph name="USER_FULL_NAME" /></translation>
 <translation id="1824902652744048041">לוחצים על מחיקת נתוני הגלישה</translation>
-<translation id="1825772852827001597">‏אמצעי תשלום וכתובות שנשמרו ב-Google Pay לא יוצפנו. היסטוריית הגלישה ב-Chrome לא תסונכרן.
-רק מי שיודע את ביטוי הסיסמה יכול לקרוא את הנתונים המוצפנים. ביטוי הסיסמה לא נשלח אל Google ולא מאוחסן ב-Google. אם שכחת את ביטוי הסיסמה או שברצונך לשנות את ההגדרה הזו, <ph name="BEGIN_LINK" />עליך למחוק את נתוני Chrome בחשבון<ph name="END_LINK" />.</translation>
+<translation id="1825772852827001597">‏אמצעי תשלום וכתובות שנשמרו ב-Google Pay לא יוצפנו. היסטוריית הגלישה ב-Ultimatum לא תסונכרן.
+רק מי שיודע את ביטוי הסיסמה יכול לקרוא את הנתונים המוצפנים. ביטוי הסיסמה לא נשלח אל Google ולא מאוחסן ב-Google. אם שכחת את ביטוי הסיסמה או שברצונך לשנות את ההגדרה הזו, <ph name="BEGIN_LINK" />עליך למחוק את נתוני Ultimatum בחשבון<ph name="END_LINK" />.</translation>
 <translation id="1829244130665387512">חיפוש בדף</translation>
 <translation id="1832459821645506983">כן, אני רוצה</translation>
-<translation id="1845958458910716240">‏כדי להגן על הנתונים שלך, כדאי לאפשר ל-Chrome להסיר הרשאות מאתרים שלא נכנסת אליהם לאחרונה</translation>
-<translation id="1871098866036088250">‏פתיחה בדפדפן Chrome</translation>
-<translation id="1877026089748256423">‏Chrome אינו מעודכן</translation>
+<translation id="1845958458910716240">‏כדי להגן על הנתונים שלך, כדאי לאפשר ל-Ultimatum להסיר הרשאות מאתרים שלא נכנסת אליהם לאחרונה</translation>
+<translation id="1871098866036088250">‏פתיחה בדפדפן Ultimatum</translation>
+<translation id="1877026089748256423">‏Ultimatum אינו מעודכן</translation>
 <translation id="1877073879466606884">הפרופיל שאליו נכנסת הוא פרופיל מנוהל. לאדמין יש אפשרות לשנות מרחוק את הגדרות הפרופיל, לנתח מידע על הדפדפן באמצעות דוחות ולבצע משימות חשובות אחרות.</translation>
 <translation id="1879904908408734349">הגיליון התחתון של הכניסה סגור</translation>
 <translation id="1883903952484604915">הקבצים שלי</translation>
@@ -215,7 +215,7 @@
 <translation id="1910950723001426294">רשימת אפשרויות השיתוף סגורה.</translation>
 <translation id="191726024256261717">בדיקת ההרשאות</translation>
 <translation id="1917766536967060661">‏הגישה שלך לקבוצת הכרטיסיות '<ph name="GROUP_NAME" />', וגם האפשרות של <ph name="BLOCKED_MEMBER_FULL_NAME" /> ‏(<ph name="BLOCKED_MEMBER_EMAIL" />) ליצור איתך אינטראקציה בשירותי Google, יאבדו באופן מיידי.</translation>
-<translation id="1919130412786645364">‏התרת כניסה אל Chrome</translation>
+<translation id="1919130412786645364">‏התרת כניסה אל Ultimatum</translation>
 <translation id="1922362554271624559">שפות מוצעות</translation>
 <translation id="1924255092154549435">הכרטיסייה מורחבת</translation>
 <translation id="1925021887439448749">יש להזין כתובת אינטרנט מותאמת אישית</translation>
@@ -225,11 +225,11 @@
 <translation id="1944535645109964458">אין מפתחות גישה זמינים</translation>
 <translation id="1957557050935255529">‏קובץ ה-PDF בטעינה…</translation>
 <translation id="1959679933317802873">בהמתנה לתוכן</translation>
-<translation id="1960290143419248813">‏עדכוני Chrome לא נתמכים יותר בגרסה הזו של Android</translation>
+<translation id="1960290143419248813">‏עדכוני Ultimatum לא נתמכים יותר בגרסה הזו של Android</translation>
 <translation id="1962061488333185936">‫<ph name="TAB_TITLE" />, סדרת כרטיסיות שנבחרו עם תוכן שאפשר לשמוע</translation>
 <translation id="1963976881984600709">הגנה רגילה</translation>
 <translation id="1966710179511230534">יש לעדכן את פרטי הכניסה שלך.</translation>
-<translation id="1969037871259811890">‏מחיקת נתוני הגלישה לא מובילה ליציאה מהחשבון שלך ב-Google. כדי לעשות את זה, <ph name="BEGIN_LINK1" />צריך לצאת מהחשבון ב-Chrome<ph name="END_LINK1" />.</translation>
+<translation id="1969037871259811890">‏מחיקת נתוני הגלישה לא מובילה ליציאה מהחשבון שלך ב-Google. כדי לעשות את זה, <ph name="BEGIN_LINK1" />צריך לצאת מהחשבון ב-Ultimatum<ph name="END_LINK1" />.</translation>
 <translation id="197288927597451399">שמירה</translation>
 <translation id="1973912524893600642">שמירת הנתונים</translation>
 <translation id="1974060860693918893">מתקדם</translation>
@@ -242,7 +242,7 @@
 <translation id="2021896219286479412">פקדי אתר במסך מלא</translation>
 <translation id="2029669011553795746">ההצעה להצטרפות לקבלת טיפים נפתחה בחצי הגובה</translation>
 <translation id="2038563949887743358">הפעלה של 'בקשת אתר עבור מחשב שולחני'</translation>
-<translation id="204321170514947529">‏ל-<ph name="APP_NAME" /> יש נתונים גם ב-Chrome</translation>
+<translation id="204321170514947529">‏ל-<ph name="APP_NAME" /> יש נתונים גם ב-Ultimatum</translation>
 <translation id="2047378580182589770">כדי לצאת מהמצב הפרטי, לוחצים לחיצה ארוכה</translation>
 <translation id="2049574241039454490"><ph name="FILE_SIZE_OF_TOTAL" /> <ph name="SEPARATOR" /> <ph name="DESCRIPTION" /></translation>
 <translation id="2051669996101374349">‏יש להשתמש ב-HTTPS כשאפשר, ולקבל אזהרה לפני שטוענים אתרים שלא תומכים ב-HTTPS. לא ניתן לשנות את ההגדרה הזו כי ההגנה המתקדמת מופעלת.</translation>
@@ -265,9 +265,9 @@
 <translation id="2138283760993967204">סמל הניהול</translation>
 <translation id="2138632817776076519">‫<ph name="TAB_TITLE" />, כרטיסייה שנבחרה והתוכן בה מוקלט</translation>
 <translation id="2141396931810938595">על סמך השימוש שלך</translation>
-<translation id="2145315049852051678">‏‫Chrome מוודא בקביעות שלדפדפן שלך יש את ההגדרות הבטוחות ביותר. נודיע לך אם צריך לבדוק משהו.</translation>
+<translation id="2145315049852051678">‏‫Ultimatum מוודא בקביעות שלדפדפן שלך יש את ההגדרות הבטוחות ביותר. נודיע לך אם צריך לבדוק משהו.</translation>
 <translation id="2149973817440762519">עריכת סימניות</translation>
-<translation id="2163089732491971196">‏כדי להשתמש בנתוני Chrome ולשמור אותם בחשבון Google, עליך להזין את ביטוי הסיסמה שלך</translation>
+<translation id="2163089732491971196">‏כדי להשתמש בנתוני Ultimatum ולשמור אותם בחשבון Google, עליך להזין את ביטוי הסיסמה שלך</translation>
 <translation id="2166228530126694506">גרסה <ph name="VERSION_NUMBER" /></translation>
 <translation id="2172688499998841696">התכונה 'תיאורי תמונות' מושבתת</translation>
 <translation id="2172905120685242547">לסגור את החלון?</translation>
@@ -280,7 +280,7 @@
 <translation id="2194856509914051091">מה כדאי לקחת בחשבון</translation>
 <translation id="2205701497928406883">‫<ph name="TAB_TITLE" />, כרטיסייה שהוצמדה והתוכן בה משותף</translation>
 <translation id="22091350895006575">הוספה של שם המשתמש</translation>
-<translation id="221494669172414749">‏פתיחת Chrome בלי נעילת פרופיל תגרום להסרת הסיסמאות ואמצעי התשלום השמורים מהמכונית. שימוש בנעילת פרופיל עוזר לשמור על אבטחת הנתונים האלה.</translation>
+<translation id="221494669172414749">‏פתיחת Ultimatum בלי נעילת פרופיל תגרום להסרת הסיסמאות ואמצעי התשלום השמורים מהמכונית. שימוש בנעילת פרופיל עוזר לשמור על אבטחת הנתונים האלה.</translation>
 <translation id="2226826835915474236">קיצורי דרך לא פעילים</translation>
 <translation id="2227179592712503583">הסרת ההצעה</translation>
 <translation id="2227444325776770048">המשך בשם <ph name="USER_FULL_NAME" /></translation>
@@ -311,7 +311,7 @@
 <translation id="2332515770639153015">הגרסה המשופרת של הגלישה הבטוחה מופעלת</translation>
 <translation id="233375395665273385">מחיקה ויציאה מהחשבון</translation>
 <translation id="2341410551640223969">לא הצלחנו להתקין את <ph name="WEBAPK_NAME" />.</translation>
-<translation id="2349710944427398404">‏סך כל הנתונים שבהם משתמש Chrome, כולל חשבונות, סימניות והגדרות שמורות</translation>
+<translation id="2349710944427398404">‏סך כל הנתונים שבהם משתמש Ultimatum, כולל חשבונות, סימניות והגדרות שמורות</translation>
 <translation id="235789365079050412">‏מדיניות הפרטיות של Google</translation>
 <translation id="2359808026110333948">המשך</translation>
 <translation id="2362083820973145409">נכנסת לחשבון בתור <ph name="USER_NAME" />. <ph name="USER_EMAIL" />. ההגדרות ייפתחו.</translation>
@@ -333,7 +333,7 @@
 <translation id="2427025860753516072">{FILE_COUNT,plural, =1{סרטונים, סרטון אחד ברשימה}one{סרטונים, # סרטונים ברשימה}two{סרטונים, # סרטונים ברשימה}other{סרטונים, # סרטונים ברשימה}}</translation>
 <translation id="2433507940547922241">מראה</translation>
 <translation id="2439153523196674349">תצוגה מקדימה של <ph name="SITE_NAME" /></translation>
-<translation id="2449931042095204989">‏כשאתר או אפליקציה של Google מבקשים לטעון מראש קישורים שמופיעים בדף שלהם באופן פרטי, דפדפן Chrome מצפין וטוען מראש את הדפים באמצעות השרתים של Google ללא קובצי Cookie. כך מוסתרת הזהות שלך מהאתר שנטען מראש.</translation>
+<translation id="2449931042095204989">‏כשאתר או אפליקציה של Google מבקשים לטעון מראש קישורים שמופיעים בדף שלהם באופן פרטי, דפדפן Ultimatum מצפין וטוען מראש את הדפים באמצעות השרתים של Google ללא קובצי Cookie. כך מוסתרת הזהות שלך מהאתר שנטען מראש.</translation>
 <translation id="2450019289047528273">‏אמצעי תשלום ומידע אחר מ-Google Wallet</translation>
 <translation id="2450083983707403292">להתחיל שוב את ההורדה של <ph name="FILE_NAME" />?</translation>
 <translation id="2451607499823206582">במעקב</translation>
@@ -342,17 +342,17 @@
 <translation id="2466378451804467735">‫<ph name="TAB_TITLE" />, כרטיסייה מתוך סדרת כרטיסיות שנבחרו והתוכן בה מושתק</translation>
 <translation id="2468444275314013497">נראה שהכול בסדר בדפדפן שלך</translation>
 <translation id="2471632347767899461">אפשר לנסות לחפש במרכז העזרה</translation>
-<translation id="2472163211318554013">‏כדי להפיק את המרב מ-Chrome, עליך להיכנס לחשבון</translation>
+<translation id="2472163211318554013">‏כדי להפיק את המרב מ-Ultimatum, עליך להיכנס לחשבון</translation>
 <translation id="247737702124049222">התכונה 'תיאורי תמונות' מופעלת</translation>
 <translation id="2479148705183875116">למעבר אל ההגדרות</translation>
 <translation id="2482878487686419369">התראות</translation>
 <translation id="2496180316473517155">היסטוריית גלישה</translation>
 <translation id="2497852260688568942">מנהל המערכת שלך השבית את הסנכרון</translation>
-<translation id="250020030759455918">‏ב-Chrome יוצגו סטטוס הכניסה שלך ל-<ph name="SITE_NAME" />, נתוני הגלישה ונתוני האתר</translation>
+<translation id="250020030759455918">‏ב-Ultimatum יוצגו סטטוס הכניסה שלך ל-<ph name="SITE_NAME" />, נתוני הגלישה ונתוני האתר</translation>
 <translation id="2510106555128151389">מתבצעת התקנה של <ph name="WEBAPK_NAME" />...</translation>
 <translation id="2512234228327349533">חיפוש אפשרויות קנייה</translation>
 <translation id="2513403576141822879">‏אפשר למצוא הגדרות נוספות בנושא פרטיות, אבטחה ואיסוף נתונים בדף <ph name="BEGIN_LINK" />סנכרון ושירותי Google<ph name="END_LINK" /></translation>
-<translation id="2515921719039583189">‏למחוק את הנתונים מ-Chrome מהמכשיר הזה?</translation>
+<translation id="2515921719039583189">‏למחוק את הנתונים מ-Ultimatum מהמכשיר הזה?</translation>
 <translation id="2517113738956581680">גיליון בגודל מלא</translation>
 <translation id="2523184218357549926">‏שליחת כתובות אתרים של דפים שבהם ביקרת ל-Google</translation>
 <translation id="2524132927880411790">‏מעבר לחיפוש הקולי של אפליקציית Google</translation>
@@ -374,9 +374,9 @@
 <translation id="2569733278091928697">באמצעות ההתראות, קל יותר לנהל את בקרי המדיה, הסשנים הפרטיים, ההורדות ועוד</translation>
 <translation id="2571711316400087311">‏הצעה לשלוח דפים בשפות אחרות ל-Google Translate</translation>
 <translation id="2571834852878229351">יצירת סיסמה משלי</translation>
-<translation id="2574249610672786438">‏כדי לראות את הכרטיסיות שלך מכל מקום שבו פתחת את Chrome יש להיכנס לחשבון בכל המכשירים</translation>
+<translation id="2574249610672786438">‏כדי לראות את הכרטיסיות שלך מכל מקום שבו פתחת את Ultimatum יש להיכנס לחשבון בכל המכשירים</translation>
 <translation id="2577981599306533385">‏הגישה של <ph name="MEMBER_FULL_NAME" /> ‏(<ph name="EMAIL" />) לקבוצת הכרטיסיות "<ph name="GROUP_NAME" />", וגם האפשרות ליצור איתך אינטראקציה בשירותי Google, יאבדו באופן מיידי.</translation>
-<translation id="2581165646603367611">‏פעולה זו תמחק את קובצי ה-Cookie, את המטמון ונתונים אחרים של אתרים ש-Chrome לא מחשיב כחשובים.</translation>
+<translation id="2581165646603367611">‏פעולה זו תמחק את קובצי ה-Cookie, את המטמון ונתונים אחרים של אתרים ש-Ultimatum לא מחשיב כחשובים.</translation>
 <translation id="2587052924345400782">יש גרסה חדשה יותר</translation>
 <translation id="2593272815202181319">רוחב אחיד</translation>
 <translation id="260403163289591229">במעקב</translation>
@@ -415,8 +415,8 @@
 <translation id="2779651927720337254">נכשל</translation>
 <translation id="2781151931089541271">נותרה שנייה אחת</translation>
 <translation id="2789486458103222910">אישור</translation>
-<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{‏‫Chrome זיהה סיסמה בשימוש חוזר שאפשר לשפר}one{‏‫Chrome זיהה # סיסמאות בשימוש חוזר שאפשר לשפר}two{‏‫Chrome זיהה # סיסמאות בשימוש חוזר שאפשר לשפר}other{‏‫Chrome זיהה # סיסמאות בשימוש חוזר שאפשר לשפר}}</translation>
-<translation id="2794551654724114396">‏כדאי להפעיל את ההתראות כדי לקבל טיפים שימושיים שיעזרו לך ליהנות מכל מה שיש ל-Chrome להציע</translation>
+<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{‏‫Ultimatum זיהה סיסמה בשימוש חוזר שאפשר לשפר}one{‏‫Ultimatum זיהה # סיסמאות בשימוש חוזר שאפשר לשפר}two{‏‫Ultimatum זיהה # סיסמאות בשימוש חוזר שאפשר לשפר}other{‏‫Ultimatum זיהה # סיסמאות בשימוש חוזר שאפשר לשפר}}</translation>
+<translation id="2794551654724114396">‏כדאי להפעיל את ההתראות כדי לקבל טיפים שימושיים שיעזרו לך ליהנות מכל מה שיש ל-Ultimatum להציע</translation>
 <translation id="2805210243313393104">איך מקבלים גישה לסימניות ולנתונים נוספים בכל המכשירים</translation>
 <translation id="2805756323405976993">אפליקציות</translation>
 <translation id="2819849308549746319">ביטול ההרשמה לכולם</translation>
@@ -433,7 +433,7 @@
 <translation id="2842985007712546952">תיקיית אב</translation>
 <translation id="2854916915045135148">כדי לעבור למצב פרטי, לוחצים לחיצה ארוכה</translation>
 <translation id="2860954141821109167">יש לוודא שמופעלת במכשיר הזה אפליקציית טלפון</translation>
-<translation id="2861923151411510142">‏חלק מהתכונות של Chrome לא יהיו זמינות יותר</translation>
+<translation id="2861923151411510142">‏חלק מהתכונות של Ultimatum לא יהיו זמינות יותר</translation>
 <translation id="286473047976978798">להחיל את העדפות העיצוב?</translation>
 <translation id="2869416538780777323">{OTHER_TAB_COUNT,plural, =1{‫<ph name="URL" /> וכרטיסייה נוספת אחת}one{‫<ph name="URL" /> ו-<ph name="TAB_COUNT_MANY" /> כרטיסיות נוספות}two{‫<ph name="URL" /> ו-<ph name="TAB_COUNT_MANY" /> כרטיסיות נוספות}other{‫<ph name="URL" /> ו-<ph name="TAB_COUNT_MANY" /> כרטיסיות נוספות}}</translation>
 <translation id="2869430948265924908">כדי להגן על תוכן רגיש ברכב, עליך ליצור נעילת פרופיל ברכב.  אפשר לעשות זאת באמצעות קוד אימות, קוד או סיסמה.</translation>
@@ -441,10 +441,10 @@
 <translation id="2871733351037274014">טעינה מראש של דפים</translation>
 <translation id="2876136027428473467">נשלחה מ<ph name="CHILD_NAME" /> בקשה לאישור כדי לבקר באתר הבא:</translation>
 <translation id="2876556152483133018">חיפוש באתרים ספציפיים</translation>
-<translation id="2876628302275096482">‏<ph name="BEGIN_LINK" />מידע נוסף לגבי השמירה על פרטיות הנתונים ב-Chrome<ph name="END_LINK" /></translation>
+<translation id="2876628302275096482">‏<ph name="BEGIN_LINK" />מידע נוסף לגבי השמירה על פרטיות הנתונים ב-Ultimatum<ph name="END_LINK" /></translation>
 <translation id="2878607776582720720">‫<ph name="TAB_TITLE" />, כרטיסייה פרטית מתוך סדרת כרטיסיות פרטיות שנבחרו והתוכן בה משותף</translation>
 <translation id="2885355868600171871">מעבר לסרגל הכתובות</translation>
-<translation id="2888126860611144412">‏מידע כללי על Chrome</translation>
+<translation id="2888126860611144412">‏מידע כללי על Ultimatum</translation>
 <translation id="2891154217021530873">הפסקת טעינת הדף</translation>
 <translation id="2893168226686371498">דפדפן ברירת מחדל</translation>
 <translation id="2894821468041866720">ההגנה המשופרת לא מאטה במידה משמעותית את הדפדפן או המכשיר.</translation>
@@ -463,14 +463,14 @@
 <translation id="2923908459366352541">השם לא חוקי</translation>
 <translation id="2932150158123903946">‏נפח אחסון של <ph name="APP_NAME" />‏ Google</translation>
 <translation id="2932222164150889403">לא יהיה שינוי במקלדת</translation>
-<translation id="2936980480904111527">‏ההתראות של Chrome: קל יותר, פשוט יותר</translation>
+<translation id="2936980480904111527">‏ההתראות של Ultimatum: קל יותר, פשוט יותר</translation>
 <translation id="2940075786175545812">אפשרות לאשר או לא לאשר אתר</translation>
 <translation id="2942036813789421260">כרטיסיית התצוגה המקדימה סגורה</translation>
 <translation id="2951071800649516099">מוסיפים דפים לרשימת הקריאה לשלב מאוחר יותר</translation>
 <translation id="2954586176076923855">העברת סרגל הכתובות למעלה</translation>
 <translation id="2961208450284224863">{READING_LIST_UNREAD_PAGE_COUNT,plural, =1{דף אחד (<ph name="READING_LIST_UNREAD_PAGE_COUNT_ONE" />) שלא נקרא}one{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> דפים שלא נקראו}two{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> דפים שלא נקראו}other{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> דפים שלא נקראו}}</translation>
 <translation id="2972109037780336501">הסרה אוטומטית של הרשאות</translation>
-<translation id="2976550651269220761">‏חלק מהנתונים ב-Chrome עדיין לא נשמרו בחשבון שלך ב-Google‏.\nכדאי להמתין כמה דקות לפני היציאה מהחשבון. אם תתבצע יציאה מהחשבון, הנתונים האלה יימחקו.</translation>
+<translation id="2976550651269220761">‏חלק מהנתונים ב-Ultimatum עדיין לא נשמרו בחשבון שלך ב-Google‏.\nכדאי להמתין כמה דקות לפני היציאה מהחשבון. אם תתבצע יציאה מהחשבון, הנתונים האלה יימחקו.</translation>
 <translation id="2977350910003566746">בתהליך מיון לפי מועד הפתיחה האחרונה</translation>
 <translation id="297771753501244313">מיון לפי נפתחו לאחרונה</translation>
 <translation id="2979639724566107830">פתיחה בחלון חדש</translation>
@@ -493,15 +493,15 @@
 <translation id="3035527385626181784">‫<ph name="TAB_TITLE" />, כרטיסייה שנבחרה והתוכן בה משותף</translation>
 <translation id="3036750288708366620"><ph name="BEGIN_LINK" />קבלת עזרה<ph name="END_LINK" /></translation>
 <translation id="3037177537145227281">המחיר במעקב</translation>
-<translation id="3037517125981011456">‏יוצגו הודעות לצורך כניסה אל Chrome</translation>
+<translation id="3037517125981011456">‏יוצגו הודעות לצורך כניסה אל Ultimatum</translation>
 <translation id="3038272154009688107">הצגת כל האתרים</translation>
 <translation id="3057938290530993634">כדי להצמיד את האתרים הנצפים ביותר לקבלת גישה נוחה בפעם הבאה, צריך ללחוץ לחיצה ארוכה</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{סימנייה אחת (<ph name="BOOKMARKS_COUNT_ONE" />)}one{<ph name="BOOKMARKS_COUNT_MANY" /> סימניות}two{<ph name="BOOKMARKS_COUNT_MANY" /> סימניות}other{<ph name="BOOKMARKS_COUNT_MANY" /> סימניות}}</translation>
-<translation id="3062802207422175757">‏ב-Chrome מחכים לך מאמרים בנושאים שמעניינים אותך</translation>
+<translation id="3062802207422175757">‏ב-Ultimatum מחכים לך מאמרים בנושאים שמעניינים אותך</translation>
 <translation id="3066573403916685335">רד למטה</translation>
 <translation id="3067505415088964188">המחיר נמוך</translation>
 <translation id="3070005020161560471">יש לתרגם אוטומטית</translation>
-<translation id="3072980200212375806">‏האפליקציה <ph name="APP_NAME" /> תיפתח ב-Chrome. המשך הפעולה מבטא הסכמה <ph name="BEGIN_LINK1" />לתנאים ולהגבלות של Google<ph name="END_LINK1" /> ו<ph name="BEGIN_LINK2" />לתנאים ולהגבלות הנוספים של Google Chrome ו-ChromeOS<ph name="END_LINK2" />. גם <ph name="BEGIN_LINK3" />מדיניות הפרטיות<ph name="END_LINK3" /> חלה.</translation>
+<translation id="3072980200212375806">‏האפליקציה <ph name="APP_NAME" /> תיפתח ב-Ultimatum. המשך הפעולה מבטא הסכמה <ph name="BEGIN_LINK1" />לתנאים ולהגבלות של Google<ph name="END_LINK1" /> ו<ph name="BEGIN_LINK2" />לתנאים ולהגבלות הנוספים של Ultimatum ו-UltimatumOS<ph name="END_LINK2" />. גם <ph name="BEGIN_LINK3" />מדיניות הפרטיות<ph name="END_LINK3" /> חלה.</translation>
 <translation id="3080525922482950719">ניתן לשמור דפים לקריאה במועד מאוחר יותר או במצב אופליין</translation>
 <translation id="3087734570205094154">תחתית</translation>
 <translation id="3091010850649238832">הצגת התוכן שבלוח</translation>
@@ -511,7 +511,7 @@
 <translation id="3123734510202723619">הודעות</translation>
 <translation id="3134385238404760368">אין לך כרטיסיות מהזמן האחרון</translation>
 <translation id="3135655388926735587">לוחצים על סמל הכרטיסיות האחרונות</translation>
-<translation id="314939179385989105">‏דף הבית של Chrome</translation>
+<translation id="314939179385989105">‏דף הבית של Ultimatum</translation>
 <translation id="3158667104057012316">בתהליך מיון לפי סדר ידני</translation>
 <translation id="3159335509547415276">מידע על חשבונות חסומים</translation>
 <translation id="3161699713309727585">‫<ph name="BUTTON_TEXT" />, פתיחה בכרטיסייה חדשה</translation>
@@ -531,7 +531,7 @@
 <translation id="3236059992281584593">נותרה דקה אחת</translation>
 <translation id="3237087289225714896">טעינה רגילה מראש:</translation>
 <translation id="3244271242291266297">MM</translation>
-<translation id="3245429137663807393">‏אם בנוסף ישותפו דוחות שימוש ב-Chrome, הדוחות האלה יכללו את כתובות ה-URL שבהן ביקרת</translation>
+<translation id="3245429137663807393">‏אם בנוסף ישותפו דוחות שימוש ב-Ultimatum, הדוחות האלה יכללו את כתובות ה-URL שבהן ביקרת</translation>
 <translation id="3250563604907490871">‏תיאורי תמונות יופיעו כשיהיה חיבור ל-Wi-Fi</translation>
 <translation id="3254409185687681395">הוספת הדף לסימניות</translation>
 <translation id="3265093782546847662">כל הדפים של <ph name="DOMAIN" /></translation>
@@ -568,22 +568,22 @@
 <translation id="3435575784518354875">‏כדי לשמור על הגישה לסיסמאות, צריך לייצא אותן עכשיו, לעדכן את Google Play Services ואז לייבא אותן חזרה למנהל הסיסמאות של Google. <ph name="BEGIN_LINK" />לצפייה בהוראות המלאות<ph name="END_LINK" />.</translation>
 <translation id="3435738964857648380">אבטחה</translation>
 <translation id="3435914367318771664">הוספת הכרטיסייה לקבוצה חדשה</translation>
-<translation id="3438681572027105609">‏כדי לקבל גישה לסיסמאות ולנתונים נוספים בכל המכשירים שלך, כדאי להיכנס ל-Chrome</translation>
+<translation id="3438681572027105609">‏כדי לקבל גישה לסיסמאות ולנתונים נוספים בכל המכשירים שלך, כדאי להיכנס ל-Ultimatum</translation>
 <translation id="3439276997620616816">הכרטיסיות האחרונות יופיעו כאן</translation>
 <translation id="3443221991560634068">טעינה מחדש של הדף הנוכחי</translation>
 <translation id="3444179773590444986">רוצה לשתף משוב לגבי עיצוב כהה של אתרים?</translation>
 <translation id="3448874648066942074">‏סיכום הדף באמצעות AI</translation>
-<translation id="3452832259067974318">‏כדי להגן על הפרטיות שלך, לא מתבצע ב-Chrome מילוי אוטומטי של הסיסמה שלך בשדה הזה.</translation>
+<translation id="3452832259067974318">‏כדי להגן על הפרטיות שלך, לא מתבצע ב-Ultimatum מילוי אוטומטי של הסיסמה שלך בשדה הזה.</translation>
 <translation id="3474624961160222204">המשך כ-<ph name="NAME" /></translation>
 <translation id="3478363558367712427">אפשר לבחור את מנוע החיפוש</translation>
 <translation id="3482805106082349287">חיפוש בהקלדה, בקול, במצב פרטי או בעזרת המצלמה</translation>
-<translation id="3487903178221457900">‏יכול להיות שאנשים אחרים יוכלו לגשת לקובץ המיובא, כולל אפליקציות. לאחר הייצוא, הסיסמאות שלך יימחקו מ-Chrome.</translation>
+<translation id="3487903178221457900">‏יכול להיות שאנשים אחרים יוכלו לגשת לקובץ המיובא, כולל אפליקציות. לאחר הייצוא, הסיסמאות שלך יימחקו מ-Ultimatum.</translation>
 <translation id="3488199663160411179">שם</translation>
 <translation id="3493531032208478708"><ph name="BEGIN_LINK" />מידע נוסף<ph name="END_LINK" /> על הצעות לתוכן</translation>
 <translation id="3499246418971111862">chrome_qrcode_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="350276055892098337">מיון לפי הישן ביותר</translation>
 <translation id="3507132249039706973">מופעלת הגנה רגילה</translation>
-<translation id="3509330069915219067">‏אין חיבור לאינטרנט. מערכת Chrome לא יכולה לבדוק אם יש עדכונים.</translation>
+<translation id="3509330069915219067">‏אין חיבור לאינטרנט. מערכת Ultimatum לא יכולה לבדוק אם יש עדכונים.</translation>
 <translation id="3513019849832307207">הצטרפות ופתיחה</translation>
 <translation id="3513704683820682405">מציאות רבודה</translation>
 <translation id="3516053221628030540">‏מעבר אל Google Play</translation>
@@ -615,10 +615,10 @@
 <translation id="3623240789707551553">{DOMAIN_COUNT,plural, =1{ועוד אתר אחד}one{ועוד # אתרים}two{ועוד # אתרים}other{ועוד # אתרים}}</translation>
 <translation id="3625870480639975468">אפס מרחק מתצוגה</translation>
 <translation id="3631987586758005671">השיתוף עם <ph name="DEVICE_NAME" /> מתבצע</translation>
-<translation id="3635073343384702370">‏ל-Chrome יש אפשרות לבדוק את הסיסמאות שלך רק אם שמרת אותן</translation>
+<translation id="3635073343384702370">‏ל-Ultimatum יש אפשרות לבדוק את הסיסמאות שלך רק אם שמרת אותן</translation>
 <translation id="3636940436873918441">השפות המועדפות</translation>
-<translation id="3637744895182738742">‏אם שכחת את ביטוי הסיסמה או שברצונך לשנות את ההגדרה הזו, <ph name="BEGIN_LINK" />עליך למחוק את נתוני Chrome בחשבון<ph name="END_LINK" />.</translation>
-<translation id="3641581193271938629">‏האפשרות להצטרף ל-Chrome Finds נסגרה</translation>
+<translation id="3637744895182738742">‏אם שכחת את ביטוי הסיסמה או שברצונך לשנות את ההגדרה הזו, <ph name="BEGIN_LINK" />עליך למחוק את נתוני Ultimatum בחשבון<ph name="END_LINK" />.</translation>
+<translation id="3641581193271938629">‏האפשרות להצטרף ל-Ultimatum Finds נסגרה</translation>
 <translation id="3647019414263135904">פתיחה או סגירה של החלון הקופץ של "הוספת הקשר"</translation>
 <translation id="3653111872753786013"><ph name="WEBSITE_TITLE" />: <ph name="WEBSITE_URL" /></translation>
 <translation id="3674208116086565128">‏מעבר לדף הבית של אפליקציית Google</translation>
@@ -636,7 +636,7 @@
 <translation id="3710501561113687889">כדי להמשיך, הפרטים '<ph name="FIELDS_STRING" />' ישותפו על ידי <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> עם האתר הזה.</translation>
 <translation id="3710560693796335511">שיתוף פעולה</translation>
 <translation id="3714430408451673233">הגיליון התחתון של הכרטיסייה בחצי הגובה.</translation>
-<translation id="3718765429352682176">‏יכול להיות שתוצג היסטוריה מאפליקציות אחרות שפותחות קישורים ב-Chrome.</translation>
+<translation id="3718765429352682176">‏יכול להיות שתוצג היסטוריה מאפליקציות אחרות שפותחות קישורים ב-Ultimatum.</translation>
 <translation id="3721119614952978349">‏ההגדרות שלך ב-Google</translation>
 <translation id="3727000368239390918">לאחר הכניסה לחשבון, הכרטיסיות ונתונים נוספים יופיעו בכל המכשירים שלך</translation>
 <translation id="3737319253362202215">הגדרות התרגום</translation>
@@ -690,8 +690,8 @@
 <translation id="3943322906274039960">‫<ph name="TAB_TITLE" />, כרטיסייה מוצמדת במצב "תמונה בתוך תמונה"</translation>
 <translation id="3950820424414687140">כניסה</translation>
 <translation id="395377504920307820">שימוש ללא חשבון</translation>
-<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{‏Chrome יטען את הדף כשיהיה מוכן}one{‏Chrome יטען את הדפים כשיהיו מוכנים}two{‏Chrome יטען את הדפים כשיהיו מוכנים}other{‏Chrome יטען את הדפים כשיהיו מוכנים}}</translation>
-<translation id="3969142555815019568">‏ל-Chrome אין אפשרות לבדוק את הסיסמאות שלך</translation>
+<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{‏Ultimatum יטען את הדף כשיהיה מוכן}one{‏Ultimatum יטען את הדפים כשיהיו מוכנים}two{‏Ultimatum יטען את הדפים כשיהיו מוכנים}other{‏Ultimatum יטען את הדפים כשיהיו מוכנים}}</translation>
+<translation id="3969142555815019568">‏ל-Ultimatum אין אפשרות לבדוק את הסיסמאות שלך</translation>
 <translation id="3969863827134279083">עלה למעלה</translation>
 <translation id="397105322502079400">מתבצע חישוב...</translation>
 <translation id="397583555483684758">הסנכרון הפסיק לפעול</translation>
@@ -702,10 +702,10 @@
 <translation id="3987993985790029246">העתקת קישור</translation>
 <translation id="3994236846568425219">הפעלת העיצוב הכהה כשהוא מופעל במכשיר</translation>
 <translation id="4000212216660919741">דף הבית במצב אופליין</translation>
-<translation id="4000670338830950598">‏התאמה אישית של Google Chrome ושליטה בו באמצעות פריט מודגש</translation>
+<translation id="4000670338830950598">‏התאמה אישית של Ultimatum ושליטה בו באמצעות פריט מודגש</translation>
 <translation id="4015643064997321279">{NUM_PASSWORDS,plural, =1{‏סיסמה אחת שנחשפה בחשבון שלך ב-Google}one{‏‫# סיסמאות שנחשפו בחשבון שלך ב-Google}two{‏‫# סיסמאות שנחשפו בחשבון שלך ב-Google}other{‏‫# סיסמאות שנחשפו בחשבון שלך ב-Google}}</translation>
 <translation id="4016425174436051808">לא ניתן לעקוב. משהו השתבש.</translation>
-<translation id="4023638601467301498">‏כדי לקבל גישה לסימניות ולנתונים נוספים בכל המכשירים שלך, צריך להיכנס ל-Chrome</translation>
+<translation id="4023638601467301498">‏כדי לקבל גישה לסימניות ולנתונים נוספים בכל המכשירים שלך, צריך להיכנס ל-Ultimatum</translation>
 <translation id="4024768890073681126">הדפדפן מנוהל על ידי ההורה שלך</translation>
 <translation id="4027569221211770437">תיקיית <ph name="FOLDER_TITLE" /></translation>
 <translation id="4034817413553209278">{HOURS,plural, =1{שעה אחת}one{# שעות}two{שעתיים}other{# שעות}}</translation>
@@ -745,13 +745,13 @@
 <translation id="4180726336228139707">רק במכשיר הזה</translation>
 <translation id="4181841719683918333">שפות</translation>
 <translation id="4188221736490993796">מיון בסדר אלפביתי יורד</translation>
-<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{‏‫Chrome הפסיק להציג ההתראות מהאתר הזה בגלל ספאם או תוכן מטעה}one{‏‫Chrome הפסיק להציג התראות מהאתרים האלה בגלל ספאם או תוכן מטעה}two{‏‫Chrome הפסיק להציג התראות מהאתרים האלה בגלל ספאם או תוכן מטעה}other{‏‫Chrome הפסיק להציג התראות מהאתרים האלה בגלל ספאם או תוכן מטעה}}</translation>
+<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{‏‫Ultimatum הפסיק להציג ההתראות מהאתר הזה בגלל ספאם או תוכן מטעה}one{‏‫Ultimatum הפסיק להציג התראות מהאתרים האלה בגלל ספאם או תוכן מטעה}two{‏‫Ultimatum הפסיק להציג התראות מהאתרים האלה בגלל ספאם או תוכן מטעה}other{‏‫Ultimatum הפסיק להציג התראות מהאתרים האלה בגלל ספאם או תוכן מטעה}}</translation>
 <translation id="4195643157523330669">פתיחה בכרטיסייה חדשה</translation>
 <translation id="4197828496439691735">{NUM_TABS,plural, =1{כרטיסייה אחת במכשיר הזה}one{# כרטיסיות במכשיר הזה}two{# כרטיסיות במכשיר הזה}other{# כרטיסיות במכשיר הזה}}</translation>
 <translation id="4198268995694216131">אתרים נוספים</translation>
 <translation id="4198423547019359126">אין מיקומים זמינים להורדה</translation>
 <translation id="4209029522667123437">‫<ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> • החשבון שהשתמשת בו באתר הזה</translation>
-<translation id="4214315110991671325">‏אם מאפשרים שימוש בקובצי Cookie, יכול להיות שמערכת Chrome תשתמש בהם בטעינה מראש.</translation>
+<translation id="4214315110991671325">‏אם מאפשרים שימוש בקובצי Cookie, יכול להיות שמערכת Ultimatum תשתמש בהם בטעינה מראש.</translation>
 <translation id="421517251707893998">לוחצים על "הצמדת קיצור הדרך הזה"</translation>
 <translation id="4216511743389425832">האזנה לדף הזה</translation>
 <translation id="4217657297368492684">‫<ph name="TAB_TITLE" />, כרטיסייה פרטית מוצמדת שנבחרה, במצב "תמונה בתוך תמונה"</translation>
@@ -759,7 +759,7 @@
 <translation id="4225895483398857530">קיצור דרך בסרגל הכלים</translation>
 <translation id="4232376164796433044">סיסמאות ומילוי אוטומטי</translation>
 <translation id="4242533952199664413">פתיחת ההגדרות</translation>
-<translation id="424864128008805179">‏האם לצאת מ-Chrome?</translation>
+<translation id="424864128008805179">‏האם לצאת מ-Ultimatum?</translation>
 <translation id="4249955472157341256">מיון לפי 'האחרון'</translation>
 <translation id="4255841059940367080">‏הגנה מבוססת-AI בזמן אמת מפני אתרים, הורדות ותוספים מסוכנים, המבוססת על נתוני הגלישה שלך שנשלחים אל Google</translation>
 <translation id="4256782883801055595">רישיונות קוד פתוח</translation>
@@ -768,7 +768,7 @@
 <translation id="4270730597186910506">מעקב אחרי מוצר או ביטול המעקב אחריו.</translation>
 <translation id="4277529130885813215">שימוש במכשיר אחר</translation>
 <translation id="427987768447457592">קבוצת כרטיסיות חדשה</translation>
-<translation id="4282440837784183472">‏הארגון שלך, <ph name="MANAGED_DOMAIN" />, מנהל את החשבון שבחרת להיכנס אליו ואת אופן השימוש ב-Chrome. לאדמין יש אפשרות להגדיר תכונות מסוימות או להגביל אותן.</translation>
+<translation id="4282440837784183472">‏הארגון שלך, <ph name="MANAGED_DOMAIN" />, מנהל את החשבון שבחרת להיכנס אליו ואת אופן השימוש ב-Ultimatum. לאדמין יש אפשרות להגדיר תכונות מסוימות או להגביל אותן.</translation>
 <translation id="4283234489712362947">‫<ph name="TAB_TITLE" />, כרטיסייה פרטית במצב "תמונה בתוך תמונה"</translation>
 <translation id="4285498937028063278">ביטול ההצמדה</translation>
 <translation id="4285846616383034558">‏קובצי cookie, מטמון ונתונים נוספים מאתרים</translation>
@@ -784,10 +784,10 @@
 <translation id="4311652497846705514">‏לפתוח את קובץ ה-PDF?</translation>
 <translation id="4313895677475587452">{NUM_SUSPICIOUS_NOTIFICATIONS,plural, =1{ספאם אפשרי}one{ספאם אפשרי (#)}two{ספאם אפשרי (#)}other{ספאם אפשרי (#)}}</translation>
 <translation id="4320177379694898372">אין חיבור לאינטרנט</translation>
-<translation id="4326079409704643112">‏כדי להשתמש בנתוני Chrome ולשמור אותם בחשבון Google, עליך לאמת את הזהות שלך</translation>
+<translation id="4326079409704643112">‏כדי להשתמש בנתוני Ultimatum ולשמור אותם בחשבון Google, עליך לאמת את הזהות שלך</translation>
 <translation id="433213510553688132">יתבצע מעקב…</translation>
 <translation id="4335835283689002019">הגלישה הבטוחה כבויה.</translation>
-<translation id="4343250402091037179">‏כדי לחפש באתר ספציפי או בחלק כלשהו של Chrome, מקלידים את קיצור הדרך שלהם בסרגל הכתובות ולאחר מכן מקישים על מקש הקיצור המועדף.</translation>
+<translation id="4343250402091037179">‏כדי לחפש באתר ספציפי או בחלק כלשהו של Ultimatum, מקלידים את קיצור הדרך שלהם בסרגל הכתובות ולאחר מכן מקישים על מקש הקיצור המועדף.</translation>
 <translation id="4351244548802238354">סגירת תיבת הדו-שיח</translation>
 <translation id="4352287748243729941">להשתמש בסיסמה של <ph name="PROVIDER" />?</translation>
 <translation id="4355272626458588338">כדי שיהיה קל לחזור לדפים שחשובים לך, אפשר להוסיף אותם לסימניות</translation>
@@ -800,7 +800,7 @@
 <translation id="4384468725000734951">‏שימוש ב-Sogou לחיפוש</translation>
 <translation id="4387647248986092471">יצירה של נעילת פרופיל ברכב</translation>
 <translation id="4387817230000841154">לפתיחת התיקייה "הורדות"</translation>
-<translation id="4395046795145457714">‏ההצעה להצטרף ל-Chrome Finds נפתחה בגובה מלא</translation>
+<translation id="4395046795145457714">‏ההצעה להצטרף ל-Ultimatum Finds נפתחה בגובה מלא</translation>
 <translation id="4398561997852463382">‫<ph name="TAB_TITLE" />, כרטיסייה פרטית שנבחרה והוצמדה, והתוכן בה מוקלט</translation>
 <translation id="4402611456429872546"><ph name="LANG" /> - ההורדה מתבצעת…</translation>
 <translation id="4404568932422911380">ללא סימניות</translation>
@@ -822,16 +822,16 @@
 <translation id="4460822871039013969">‫<ph name="TAB_TITLE" />, כרטיסייה שנבחרה והוצמדה, והתוכן בה משותף</translation>
 <translation id="4460861538906892109">{ITEMS_COUNT,plural, =1{סימנייה אחת}one{‫# סימניות}two{‫# סימניות}other{‫# סימניות}}</translation>
 <translation id="4478161224666880173">אפשר להשתמש בחשבון <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> באתר הזה. כדי להמשיך עליך להיכנס אל <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="4479972344484327217">‏מתבצעת התקנה של <ph name="MODULE" /> ל-Chrome…</translation>
+<translation id="4479972344484327217">‏מתבצעת התקנה של <ph name="MODULE" /> ל-Ultimatum…</translation>
 <translation id="4484496141267039529">אין חיבור. כדאי לנסות שוב מאוחר יותר.</translation>
-<translation id="4487967297491345095">‏כל נתוני היישומים של Chrome יימחקו לצמיתות, כולל כל הקבצים, ההגדרות, החשבונות, מסדי הנתונים וכו'</translation>
+<translation id="4487967297491345095">‏כל נתוני היישומים של Ultimatum יימחקו לצמיתות, כולל כל הקבצים, ההגדרות, החשבונות, מסדי הנתונים וכו'</translation>
 <translation id="4494315997125191493">כדי לראות את כל החלונות, צריך לבחור באפשרות "ניהול"</translation>
 <translation id="4494806687727322324">האפשרות לשמור סיסמאות הופעלה על ידי האדמין</translation>
 <translation id="4508528996305412043">תפריט כרטיס הפיד נפתח</translation>
 <translation id="4509741852167209430">רק סוגים מסוימים של נתונים ישותפו בין אתרים כדי למדוד את ביצועי המודעות שלהם. למשל, אם ביצעת רכישה אחרי ביקור באתר.</translation>
 <translation id="4513387527876475750">{DAYS,plural, =1{לפני יום}one{לפני # ימים}two{לפני יומיים}other{לפני # ימים}}</translation>
 <translation id="451872707440238414">חיפוש בסימניות</translation>
-<translation id="4521489764227272523">‏הנתונים שבחרת הוסרו מ-Chrome ומהמכשירים המסונכרנים.
+<translation id="4521489764227272523">‏הנתונים שבחרת הוסרו מ-Ultimatum ומהמכשירים המסונכרנים.
 
 ייתכן שבכתובת <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" /> יש סוגים אחרים של היסטוריית גלישה בחשבון Google, כמו חיפושים ופעילות משירותי Google אחרים.</translation>
 <translation id="4523326818319942067">בשעה האחרונה</translation>
@@ -853,10 +853,10 @@
 <translation id="4595276580892809760">צירוף תמונות מהגלריה</translation>
 <translation id="4595805675102978678">‏שגיאה בחשבון Google</translation>
 <translation id="4601095002996233687">סריקות מעמיקות לאיתור הורדות חשודות.</translation>
-<translation id="4606559747793337066">‏כשאתר או אפליקציה מבקשים לטעון מראש קישורים בדף שלהם באופן פרטי, דפדפן Chrome מצפין וטוען מראש את הדפים באמצעות השרתים של Google ללא קובצי Cookie. כך מוסתרת הזהות שלך מהאתר שנטען מראש.</translation>
+<translation id="4606559747793337066">‏כשאתר או אפליקציה מבקשים לטעון מראש קישורים בדף שלהם באופן פרטי, דפדפן Ultimatum מצפין וטוען מראש את הדפים באמצעות השרתים של Google ללא קובצי Cookie. כך מוסתרת הזהות שלך מהאתר שנטען מראש.</translation>
 <translation id="4616150815774728855">פתיחה של <ph name="WEBAPK_NAME" /></translation>
 <translation id="4619564267100705184">אימות הזהות שלך</translation>
-<translation id="4624065194742029982">‏מצב פרטי ב-Chrome</translation>
+<translation id="4624065194742029982">‏מצב פרטי ב-Ultimatum</translation>
 <translation id="4634124774493850572">שימוש בסיסמה</translation>
 <translation id="463471994228293091">{PASSWORDS_COUNT,plural, =1{‏סיסמה אחת ופריטים נוספים שמורים רק במכשיר הזה. כדי להשתמש בהם במכשירים אחרים, צריך לשמור אותם בחשבון Google.}one{‏‫# סיסמאות ופריטים נוספים שמורים רק במכשיר הזה. כדי להשתמש בהם במכשירים אחרים, צריך לשמור אותם בחשבון Google.}two{‏‫# סיסמאות ופריטים נוספים שמורים רק במכשיר הזה. כדי להשתמש בהם במכשירים אחרים, צריך לשמור אותם בחשבון Google.}other{‏‫# סיסמאות ופריטים נוספים שמורים רק במכשיר הזה. כדי להשתמש בהם במכשירים אחרים, צריך לשמור אותם בחשבון Google.}}</translation>
 <translation id="4640331037679501949">{NUM_PASSWORDS,plural, =1{סיסמה אחת שנחשפה}one{# סיסמאות שנחשפו}two{# סיסמאות שנחשפו}other{# סיסמאות שנחשפו}}</translation>
@@ -871,7 +871,7 @@
 <translation id="4668347365065281350">‏כל הנתונים שאוחסנו על ידי אתרים, כולל קובצי cookie ונתונים אחרים המאוחסנים באופן מקומי</translation>
 <translation id="4673702426794876519">חלון פרטי</translation>
 <translation id="4675298276894277358">האתר הזה לא יוצג שוב</translation>
-<translation id="4678082183394354975">‏עיצוב כהה פועל לאתרים ב-Chrome</translation>
+<translation id="4678082183394354975">‏עיצוב כהה פועל לאתרים ב-Ultimatum</translation>
 <translation id="4682306524980568490">אפשר להציג רק <ph name="MAX_INSTANCE_COUNT" /> חלונות</translation>
 <translation id="4684427112815847243">סנכרון של הכל</translation>
 <translation id="4685741273709472646">בחירה מתוך הרשימה הנפתחת</translation>
@@ -893,7 +893,7 @@
 <translation id="4738836084190194332">סונכרן לאחרונה: <ph name="WHEN" /></translation>
 <translation id="474121291218385686">סינון לפי אפליקציות</translation>
 <translation id="4741753828624614066">בסרגל הכתובות יוצגו הצעות משופרות</translation>
-<translation id="4742795653798179840">‏הנתונים של Chrome נמחקו</translation>
+<translation id="4742795653798179840">‏הנתונים של Ultimatum נמחקו</translation>
 <translation id="4742970037960872810">הסרת ההדגשה</translation>
 <translation id="4749960740855309258">פתיחת כרטיסייה חדשה</translation>
 <translation id="4753600213727157212">‏נכנסת לחשבון בתור <ph name="USER_NAME" />. <ph name="USER_EMAIL" />. שגיאה בחשבון Google. ההגדרות ייפתחו.</translation>
@@ -911,21 +911,21 @@
 <translation id="4782929588435725897">מנוע החיפוש שמוגדר כברירת מחדל הוא <ph name="SEARCH_ENGINE" /></translation>
 <translation id="4784349455504343791">האתר <ph name="WEBSITE_ORIGIN" /> רוצה להשתמש בפרטים האישיים מהארנק הדיגיטלי שלך.</translation>
 <translation id="4787736314074622408">רוצה למחוק את <ph name="ITEM_TITLE" />?</translation>
-<translation id="4793679854893018356">‏איך מערכת Chromium שומרת על האבטחה שלך</translation>
+<translation id="4793679854893018356">‏איך מערכת Ultimatum שומרת על האבטחה שלך</translation>
 <translation id="4794291718671962615">(<ph name="MEGABYTES" />) <ph name="URL" /></translation>
 <translation id="4807098396393229769">שם על הכרטיס</translation>
 <translation id="480990236307250886">פתיחת דף הבית</translation>
 <translation id="4822710610088666676">קבוצת הכרטיסיות <ph name="TAB_GROUP_TITLE" /> נסגרה ונשמרה</translation>
 <translation id="482405935591409882">חיפוש בכרטיסיות ובקבוצות</translation>
 <translation id="4834250788637067901">‏אמצעי תשלום, מבצעים וכתובות שנשמרו ב‑Google Pay</translation>
-<translation id="4835385943915508971">‏ל-Chrome אין גישה למשאב המבוקש.</translation>
+<translation id="4835385943915508971">‏ל-Ultimatum אין גישה למשאב המבוקש.</translation>
 <translation id="483742037940503070">{TAB_COUNT,plural, =1{שחזור של קבוצת כרטיסיות שמכילה כרטיסייה אחת (<ph name="TAB_COUNT_ONE" />) בצבע <ph name="COLOR_NAME" /> כקבוצת כרטיסיות חדשה ברקע.}one{שחזור של קבוצת כרטיסיות שמכילה <ph name="TAB_COUNT_MANY" /> כרטיסיות, בצבע <ph name="COLOR_NAME" />, כקבוצת כרטיסיות חדשה ברקע.}two{שחזור של קבוצת כרטיסיות שמכילה <ph name="TAB_COUNT_MANY" /> כרטיסיות, בצבע <ph name="COLOR_NAME" />, כקבוצת כרטיסיות חדשה ברקע.}other{שחזור של קבוצת כרטיסיות שמכילה <ph name="TAB_COUNT_MANY" /> כרטיסיות, בצבע <ph name="COLOR_NAME" />, כקבוצת כרטיסיות חדשה ברקע.}}</translation>
 <translation id="4849731766219625109">שימוש בחשבון <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="4850886885716139402">הצגה</translation>
 <translation id="4852014461738377247">‏בתהליך כניסה\u2026</translation>
 <translation id="4860895144060829044">תרימו טלפון</translation>
 <translation id="4864369630010738180">מתבצעת כניסה...</translation>
-<translation id="4866368707455379617">‏לא ניתן להתקין את <ph name="MODULE" /> ל-Chrome</translation>
+<translation id="4866368707455379617">‏לא ניתן להתקין את <ph name="MODULE" /> ל-Ultimatum</translation>
 <translation id="4871568871368204250">כיבוי הסינכרון</translation>
 <translation id="487567923005969537">‏הפעלת מצב AI</translation>
 <translation id="4875775213178255010">תוכן מוצע</translation>
@@ -934,27 +934,27 @@
 <translation id="4880127995492972015">תרגום…</translation>
 <translation id="4881695831933465202">פתיחה</translation>
 <translation id="488187801263602086">שינוי שם של קובץ</translation>
-<translation id="4885273946141277891">‏מספר בלתי נתמך של מופעי Chrome.</translation>
+<translation id="4885273946141277891">‏מספר בלתי נתמך של מופעי Ultimatum.</translation>
 <translation id="4890973535105146893">‏אין סיסמאות שמורות בחשבון שלך ב-Google</translation>
 <translation id="4905823827770127520">הוספת קישור לדף</translation>
 <translation id="4908869848243824489">Discover by Google</translation>
 <translation id="4910889077668685004">אפליקציות תשלום</translation>
 <translation id="4911042367886397055">שמחים שחזרת, <ph name="USER_NAME" />!</translation>
 <translation id="4913169188695071480">הפסקת הרענון</translation>
-<translation id="4921224083091001889">‏כדי לקבל גישה לסיסמאות ולנתונים נוספים בכל המכשירים שלך, צריך להיכנס ל-Chrome עם <ph name="EMAIL" /></translation>
+<translation id="4921224083091001889">‏כדי לקבל גישה לסיסמאות ולנתונים נוספים בכל המכשירים שלך, צריך להיכנס ל-Ultimatum עם <ph name="EMAIL" /></translation>
 <translation id="4923173329789776645">הארגון שלך לא ממליץ להוריד את הקובץ</translation>
 <translation id="4925120120285606924">צילום מסך <ph name="CURRENT_DATE_ISO" /></translation>
 <translation id="4926901776383726965">אפשר לשמור תמונות וקבצים לצפייה במצב אופליין או לשיתוף באפליקציות אחרות</translation>
 <translation id="492699891214363151">{BOOKMARKS_COUNT,plural, =1{‏סימנייה אחת ופריטים נוספים שמורים רק במכשיר הזה. כדי להשתמש בהם במכשירים אחרים, צריך לשמור אותם בחשבון Google.}one{‏‫# סימניות ופריטים נוספים שמורים רק במכשיר הזה. כדי להשתמש בהם במכשירים אחרים, צריך לשמור אותם בחשבון Google.}two{‏‫# סימניות ופריטים נוספים שמורים רק במכשיר הזה. כדי להשתמש בהם במכשירים אחרים, צריך לשמור אותם בחשבון Google.}other{‏‫# סימניות ופריטים נוספים שמורים רק במכשיר הזה. כדי להשתמש בהם במכשירים אחרים, צריך לשמור אותם בחשבון Google.}}</translation>
-<translation id="4932247056774066048">‏מכיוון שבחרת לצאת מחשבון שמנוהל על ידי <ph name="DOMAIN_NAME" />, נתוני Chrome שלך יימחקו מהמכשיר הזה. הם יישמרו בחשבון Google שלך.</translation>
+<translation id="4932247056774066048">‏מכיוון שבחרת לצאת מחשבון שמנוהל על ידי <ph name="DOMAIN_NAME" />, נתוני Ultimatum שלך יימחקו מהמכשיר הזה. הם יישמרו בחשבון Google שלך.</translation>
 <translation id="4943703118917034429">מציאות מדומה</translation>
 <translation id="4943872375798546930">אין תוצאות</translation>
 <translation id="4957722034734105353">למידע נוסף...</translation>
 <translation id="4959115606310463263">הגיליון התחתון של הכניסה נפתח בחצי הגובה</translation>
 <translation id="4961107849584082341">אפשר לתרגם את הדף הזה לשפה כלשהי</translation>
-<translation id="4964614743143953889">‏ב-Chrome מוצגות אזהרות מפני הורדות ואתרים לא בטוחים</translation>
+<translation id="4964614743143953889">‏ב-Ultimatum מוצגות אזהרות מפני הורדות ואתרים לא בטוחים</translation>
 <translation id="496607651705915226">‏כדי לשמור סיסמאות חדשות ולהשתמש בהן בחשבון Google, צריך לעדכן את Google Play Services</translation>
-<translation id="4971753085054504448">‏אפשר לנסות לחפש משהו אחר או לפתוח את ההיסטוריה המלאה ב-Chrome כדי לראות תוצאות נוספות.</translation>
+<translation id="4971753085054504448">‏אפשר לנסות לחפש משהו אחר או לפתוח את ההיסטוריה המלאה ב-Ultimatum כדי לראות תוצאות נוספות.</translation>
 <translation id="497421865427891073">ניווט קדימה</translation>
 <translation id="497983151715419057">כאן אפשר לראות את הכרטיסיות והקבוצות הלא פעילות</translation>
 <translation id="498624032394115435">כל מי שיש לו את הקישור יכול לערוך את כל הכרטיסיות.</translation>
@@ -981,7 +981,7 @@
 <translation id="506254248375231072">אין כרטיסיות</translation>
 <translation id="5075939510584558547">שמירה ללא הצפנה</translation>
 <translation id="5078638979202084724">יצירת סימנייה לכל הכרטיסיות</translation>
-<translation id="5085038751173179818">‏צריך להיכנס לחשבון באתר הזה וב-Chrome כדי שהסימניות ונתונים נוספים יופיעו בכל המכשירים שלך</translation>
+<translation id="5085038751173179818">‏צריך להיכנס לחשבון באתר הזה וב-Ultimatum כדי שהסימניות ונתונים נוספים יופיעו בכל המכשירים שלך</translation>
 <translation id="5088347662971855383">‏הצמדת Gemini</translation>
 <translation id="5091199029769593641">‏בקרוב יוצגו סטוריז מהאתר <ph name="SITE_NAME" /> בפתיחת כרטיסייה חדשה. אתרים שנמצאים במעקב נשמרים בחשבון Google שלך. יש לך אפשרות לנהל אותם בהגדרות של Discover.</translation>
 <translation id="509429900233858213">אירעה שגיאה.</translation>
@@ -989,7 +989,7 @@
 <translation id="510275257476243843">נותרה שעה אחת</translation>
 <translation id="5114895953710637392">גיליון הסינון לפי אפליקציות סגור.</translation>
 <translation id="5115811374190515607">אל <ph name="PRODUCT_NAME" /></translation>
-<translation id="5116239826668864748">‏אפשר להשתמש ב-Chrome בכל פעם שלוחצים על קישורים בהודעות, במסמכים ובאפליקציות אחרות.</translation>
+<translation id="5116239826668864748">‏אפשר להשתמש ב-Ultimatum בכל פעם שלוחצים על קישורים בהודעות, במסמכים ובאפליקציות אחרות.</translation>
 <translation id="5118713593561876160">תחומי עניין</translation>
 <translation id="5122378528687922675">אם צריך עזרה, אפשר לבקש עזרה מהורה (<ph name="PARENT_NAME_1" /> או <ph name="PARENT_NAME_2" />)</translation>
 <translation id="5123685120097942451">כרטיסייה אנונימית</translation>
@@ -1012,11 +1012,11 @@
 <translation id="5206168361184759344">{FILE_COUNT,plural, =1{מתבצעת הורדה של קובץ…}one{מתבצעת הורדה של # קבצים…}two{מתבצעת הורדה של # קבצים…}other{מתבצעת הורדה של # קבצים…}}</translation>
 <translation id="5210286577605176222">חזרה לכרטיסייה הקודמת</translation>
 <translation id="5210365745912300556">סגירת הכרטיסייה</translation>
-<translation id="5212800876504289412">‏כדי לסיים את השינוי, צריך להפעיל מחדש את Chrome. הכרטיסיות נפתחות מחדש באופן אוטומטי כשמפעילים מחדש את המכשיר.</translation>
+<translation id="5212800876504289412">‏כדי לסיים את השינוי, צריך להפעיל מחדש את Ultimatum. הכרטיסיות נפתחות מחדש באופן אוטומטי כשמפעילים מחדש את המכשיר.</translation>
 <translation id="5213114823401215820">פתיחה מחדש של קבוצה שנסגרה</translation>
 <translation id="5215957675041756913">שליטה בנתונים ובחשבון</translation>
 <translation id="5218324087477576825">צריך להזין מספר כרטיס</translation>
-<translation id="5221437554987713282">‏‫<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> ועוד <ph name="SEPARATOR" /> Chrome הסיר את ההרשאות האלה כי לא נכנסת לאחרונה</translation>
+<translation id="5221437554987713282">‏‫<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> ועוד <ph name="SEPARATOR" /> Ultimatum הסיר את ההרשאות האלה כי לא נכנסת לאחרונה</translation>
 <translation id="5222676887888702881">יציאה</translation>
 <translation id="5226378907213531272">יהיה צורך לבטל את נעילת המסך בכל פעם שמשתמשים ברכב</translation>
 <translation id="5227554086496586518">יש ללחוץ כדי להציג את תוצאות החיפוש</translation>
@@ -1036,7 +1036,7 @@
 <translation id="5313967007315987356">הוספת אתר</translation>
 <translation id="5316947901395241499">האפשרות לשמור סיסמאות הושבתה על ידי האדמין</translation>
 <translation id="5317780077021120954">שמירה</translation>
-<translation id="5319359161174645648">‏Google ממליצה על Chrome</translation>
+<translation id="5319359161174645648">‏Google ממליצה על Ultimatum</translation>
 <translation id="5326246328175179736">אי אפשר להיכנס באמצעות החשבון הזה</translation>
 <translation id="5327248766486351172">שם</translation>
 <translation id="5328542107300944283">שימוש עם <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
@@ -1049,7 +1049,7 @@
 <translation id="5375374982898812658">הגישה שלך לקבוצת הכרטיסיות '<ph name="GROUP_NAME" />' תאבד באופן מיידי, והיא תימחק מכל המכשירים שלך</translation>
 <translation id="5375577065097716013">‏חיפוש תמונה בעזרת Google Lens <ph name="BEGIN_NEW" />חדש<ph name="END_NEW" /></translation>
 <translation id="5390367025924544771">האתר <ph name="WEBSITE_ORIGIN" /> רוצה להשתמש בפרטים האישיים מהארנק הדיגיטלי שלך. מומלץ להמשיך רק אם האתר מהימן. יש אתרים מסוכנים שעשויים להטעות אותך כדי לגרום לך לחשוף פרטים כמו השם החוקי או מספר תעודת הזהות שלך.</translation>
-<translation id="5395376160638294582">‏כדאי לוודא שתמיד תהיה לך אפשרות להשתמש בנתוני Chrome בחשבון Google שלך</translation>
+<translation id="5395376160638294582">‏כדאי לוודא שתמיד תהיה לך אפשרות להשתמש בנתוני Ultimatum בחשבון Google שלך</translation>
 <translation id="539881862970320163">מוצגת הצעה לסיסמה חזקה. המקלדת מוסתרת.</translation>
 <translation id="5409881200985013443">לשלוח את <ph name="ONE_TIME_CODE" /> באמצעות <ph name="CLIENT_NAME" />?</translation>
 <translation id="5410300144953132176">‫<ph name="OWNER_FULL_NAME" />‏ (<ph name="OWNER_EMAIL" />) רוצה לצרף אותך לקבוצת כרטיסיות. לפני שמצטרפים, חשוב לדעת שכל מי שיש לו את הקישור יכול לערוך את כל הכרטיסיות. תוקף הקישור יפוג בעוד 48 שעות.</translation>
@@ -1061,7 +1061,7 @@
 <translation id="543271133149552180">‫<ph name="TAB_TITLE" />, כרטיסייה פרטית מתוך סדרת כרטיסיות שנבחרו, במצב "תמונה בתוך תמונה"</translation>
 <translation id="5436928407363358055">כדי להמשיך בקלות מהנקודה שבה הפסקת, צריך לסנכרן את ההיסטוריה ואת הכרטיסיות</translation>
 <translation id="5438292632479953702">להורדה מחדש</translation>
-<translation id="5439191312780166229">‏מקבלים אזהרות לגבי אתרים מסוכנים, גם כאלה שלא היו ידועים ל-Google לפני כן, בעזרת ניתוח של יותר נתונים מאתרים בהשוואה להגנה הרגילה. אפשר לדלג על האזהרות מ-Chrome.</translation>
+<translation id="5439191312780166229">‏מקבלים אזהרות לגבי אתרים מסוכנים, גם כאלה שלא היו ידועים ל-Google לפני כן, בעזרת ניתוח של יותר נתונים מאתרים בהשוואה להגנה הרגילה. אפשר לדלג על האזהרות מ-Ultimatum.</translation>
 <translation id="5441137934526263133">‏האתר לא פועל? קובצי cookie של צד שלישי חסומים</translation>
 <translation id="5441466871879044658">תרגום לשפה הזו</translation>
 <translation id="5444999712122199445">חזרה לאתר</translation>
@@ -1072,7 +1072,7 @@
 <translation id="5469852975082458401">‏ניתן לנווט בדפים באמצעות סמן הטקסט. כדי להפסיק, אפשר להקיש על F7.</translation>
 <translation id="5471273988133666918">לא ניתן להעביר את הכרטיסייה <ph name="TAB_TITLE" /></translation>
 <translation id="548278423535722844">פתיחה באפליקציית מפות</translation>
-<translation id="5489222148748465285">‏רוצה ש-Chrome ימשיך לחפש?</translation>
+<translation id="5489222148748465285">‏רוצה ש-Ultimatum ימשיך לחפש?</translation>
 <translation id="5490848366863949315">‫<ph name="TAB_TITLE" />, כרטיסייה מתוך סדרת כרטיסיות שנבחרו, במצב "תמונה בתוך תמונה"</translation>
 <translation id="5494920125229734069">בחירת הכול</translation>
 <translation id="549660026907543296">הצטרפות בתור <ph name="MEMBER_FULL_NAME" /></translation>
@@ -1080,7 +1080,7 @@
 <translation id="5526281268548144413">אי אפשר לסגור בכמה חלונות</translation>
 <translation id="5532536403031755365">מוסיפים עוד שכבה של הגנה משופרת מפני איומים באינטרנט</translation>
 <translation id="5548606607480005320">בדיקת אבטחה</translation>
-<translation id="5554520618550346933">‏אם משתמשים בסיסמה והיא פורסמה באינטרנט, מוצגת אזהרה ב-Chrome. כשהבדיקה הזו מתבצעת, הסיסמאות ושמות המשתמשים מוצפנים, כך שאיש לא יכול לקרוא אותם, כולל Google.</translation>
+<translation id="5554520618550346933">‏אם משתמשים בסיסמה והיא פורסמה באינטרנט, מוצגת אזהרה ב-Ultimatum. כשהבדיקה הזו מתבצעת, הסיסמאות ושמות המשתמשים מוצפנים, כך שאיש לא יכול לקרוא אותם, כולל Google.</translation>
 <translation id="5555525474779371165">בחירת סוג ההגנה במסגרת 'גלישה בטוחה'</translation>
 <translation id="5556459405103347317">טעינה מחדש</translation>
 <translation id="555671485580955310">היסטוריית הסנכרון וכרטיסיות</translation>
@@ -1093,10 +1093,10 @@
 <translation id="5578795271662203820">חיפוש התמונה הזו ב-<ph name="SEARCH_ENGINE" /></translation>
 <translation id="5596627076506792578">אפשרויות נוספות</translation>
 <translation id="5599455543593328020">מצב אנונימי</translation>
-<translation id="5601180634394228718">‏כדי לראות אילו הגדרות נוספות מתבססות על נתונים לצורך שיפור חוויית השימוש ב-Chrome, אפשר לעבור אל <ph name="BEGIN_LINK" />שירותי Google<ph name="END_LINK" />.</translation>
+<translation id="5601180634394228718">‏כדי לראות אילו הגדרות נוספות מתבססות על נתונים לצורך שיפור חוויית השימוש ב-Ultimatum, אפשר לעבור אל <ph name="BEGIN_LINK" />שירותי Google<ph name="END_LINK" />.</translation>
 <translation id="5601924940067278327">אפשר לקבל גישה לכרטיסיות ולפריטים נוספים בכל המכשירים</translation>
 <translation id="5611398002774823980">שמירה בחשבון</translation>
-<translation id="5613381935190035031">‏כדי לקבל גישה לכרטיסיות ולפריטים נוספים בכל המכשירים שלך, כדאי להיכנס ל-Chrome עם <ph name="EMAIL" /></translation>
+<translation id="5613381935190035031">‏כדי לקבל גישה לכרטיסיות ולפריטים נוספים בכל המכשירים שלך, כדאי להיכנס ל-Ultimatum עם <ph name="EMAIL" /></translation>
 <translation id="5614625640221885312">לאחר הכניסה לחשבון, הסימניות, הסיסמאות ונתונים נוספים יופיעו בכל המכשירים שלך</translation>
 <translation id="5619633276517849615">הארגון שלך הפעיל את הגלישה הבטוחה</translation>
 <translation id="5620163320393916465">אין סיסמאות שמורות</translation>
@@ -1112,21 +1112,21 @@
 <translation id="5657871969392618475">המידע שלך מאובטח באמצעות נעילת פרופיל</translation>
 <translation id="5659593005791499971">אימייל</translation>
 <translation id="5665379678064389456">יצירת אירוע ב-<ph name="APP_NAME" /></translation>
-<translation id="5683547024293500885">‏מערכת Chrome לא יכולה לבדוק אם יש עדכונים</translation>
+<translation id="5683547024293500885">‏מערכת Ultimatum לא יכולה לבדוק אם יש עדכונים</translation>
 <translation id="5683916195767086779">קבוצת כרטיסיות</translation>
 <translation id="5686790454216892815">שם הקובץ ארוך מדי</translation>
 <translation id="569536719314091526">דרך כפתור האפשרויות הנוספות אפשר לתרגם את הדף הזה לשפה כלשהי</translation>
-<translation id="5696597120588531049">‏Chrome יכול להגן עליך מפני פרצות באבטחת מידע, אתרים לא בטוחים וסכנות נוספות</translation>
+<translation id="5696597120588531049">‏Ultimatum יכול להגן עליך מפני פרצות באבטחת מידע, אתרים לא בטוחים וסכנות נוספות</translation>
 <translation id="5698878456427040674">עליך לבדוק אם יש תמיכה בחשבון שנבחר.</translation>
 <translation id="5709213329446699338">האתר <ph name="SITE" /> מבקש להתחבר אל יציאה טורית</translation>
 <translation id="5715150588940290235">למחוק את קודי האבטחה שנשמרו?</translation>
-<translation id="571930967925877633">‏הסימניות, ההיסטוריה ונתונים אחרים ב-Chrome כבר לא יסונכרנו עם חשבון Google</translation>
+<translation id="571930967925877633">‏הסימניות, ההיסטוריה ונתונים אחרים ב-Ultimatum כבר לא יסונכרנו עם חשבון Google</translation>
 <translation id="572328651809341494">כרטיסיות אחרונות</translation>
 <translation id="5728072125198221967">‏שירותי Google מקושרים</translation>
 <translation id="5734658507307260911">‫<ph name="TAB_TITLE" />, כרטיסייה פרטית שהוצמדה ומכילה תוכן שאפשר לשמוע</translation>
 <translation id="5744751019568455640">אלה הקולות שאפשר לבחור להקראה של דפי האינטרנט. אם הקול הזה מוצא חן בעיניך וברצונך שאמשיך להשתמש בו, פשוט צריך ללחוץ על שם הקול.</translation>
 <translation id="574845902699630049">שיתוף בתור <ph name="OWNER_FULL_NAME" /></translation>
-<translation id="5749068826913805084">‏לצורך הורדת קבצים, Chrome זקוק לגישה לאחסון.</translation>
+<translation id="5749068826913805084">‏לצורך הורדת קבצים, Ultimatum זקוק לגישה לאחסון.</translation>
 <translation id="5749237766298580851">כבויה <ph name="SEPARATOR" /> לא מומלץ</translation>
 <translation id="5752232708629533680">‏שיתוף קובץ GIF בלבד</translation>
 <translation id="5753570386948603678">מחיקה מההיסטוריה</translation>
@@ -1145,14 +1145,14 @@
 <translation id="5811144606237321538">‫<ph name="TAB_TITLE" />, כרטיסייה מוצמדת מתוך סדרת כרטיסיות שנבחרו והתוכן בה מושתק</translation>
 <translation id="5814749351757353073">עוקבים אחר אתרים שאוהבים</translation>
 <translation id="5823093032261493462">רוצה להוריד את <ph name="FILE_NAME" /> מ-<ph name="DOWNLOAD_DOMAIN" /> בכל זאת?</translation>
-<translation id="5825135637446025843">‏אחרי ההפעלה מחדש של Chrome, הפרטים שנשמרו מהספק החדש ישמשו למילוי אוטומטי של סיסמאות, מפתחות גישה, כתובות, אמצעי תשלום ופרטים אחרים.</translation>
-<translation id="5828921839638612740">‏אפשר למחוק את הנתונים דרך ההגדרות של Chrome</translation>
+<translation id="5825135637446025843">‏אחרי ההפעלה מחדש של Ultimatum, הפרטים שנשמרו מהספק החדש ישמשו למילוי אוטומטי של סיסמאות, מפתחות גישה, כתובות, אמצעי תשלום ופרטים אחרים.</translation>
+<translation id="5828921839638612740">‏אפשר למחוק את הנתונים דרך ההגדרות של Ultimatum</translation>
 <translation id="5829586821381540080">בוצעה שמירה בתיקייה <ph name="FOLDER_NAME" /></translation>
 <translation id="583281660410589416">לא ידוע</translation>
 <translation id="5833984609253377421">שיתוף קישור</translation>
-<translation id="5839058148541733625">Chrome Dino</translation>
+<translation id="5839058148541733625">Ultimatum Dino</translation>
 <translation id="5841444063256914865">רוצה להוריד את <ph name="FILE_NAME" /> בכל זאת?</translation>
-<translation id="5847265694842662173">‏‫Chrome הפסיק להציג התראות מאתרים פוגעניים ומאתרים שלא נמצאים בשימוש</translation>
+<translation id="5847265694842662173">‏‫Ultimatum הפסיק להציג התראות מאתרים פוגעניים ומאתרים שלא נמצאים בשימוש</translation>
 <translation id="5848257610304005265">‏לפתוח את קובץ ה-PDF באמצעות <ph name="APP_NAME" />?</translation>
 <translation id="5849288995120328556">להפסיק את השיתוף?</translation>
 <translation id="5853623416121554550">ההורדה בהשהיה</translation>
@@ -1166,8 +1166,8 @@
 <translation id="5865733239029070421">‏שליחת דוחות קריסה וסטטיסטיקת שימוש אל Google באופן אוטומטי</translation>
 <translation id="5869522115854928033">סיסמאות שמורות</translation>
 <translation id="5870416898561279542">כרטיסיות וקבוצות של כרטיסיות כפולות או כאלה שלא השתמשת בהן במשך <ph name="DAYS_INACTIVE" /> ימים מועברות לכאן<ph name="AUTODELETE_SECTION" />. תמיד אפשר לשנות את זה ב<ph name="DECLUTTER_SETTINGS_TITLE" />.</translation>
-<translation id="587735546353481577">‏כדי לעקוב אחר אתר כלשהו, עוברים אליו, פותחים את תפריט Chrome ולוחצים על 'מעקב'.</translation>
-<translation id="5885378508678660271">‏התראות <ph name="SEPARATOR" /> Chrome הסיר את ההרשאות האלה כי האתר הזה מסוכן</translation>
+<translation id="587735546353481577">‏כדי לעקוב אחר אתר כלשהו, עוברים אליו, פותחים את תפריט Ultimatum ולוחצים על 'מעקב'.</translation>
+<translation id="5885378508678660271">‏התראות <ph name="SEPARATOR" /> Ultimatum הסיר את ההרשאות האלה כי האתר הזה מסוכן</translation>
 <translation id="5899667542927581604">אין גיליון של מפתחות גישה שנסגר</translation>
 <translation id="5907542076239273525">הסימנייה נשמרה בתיקייה <ph name="FOLDER_NAME" /></translation>
 <translation id="5911301511366365629">‫<ph name="TAB_TITLE" />, כרטיסייה פרטית שנבחרה ומכילה תוכן שאפשר לשמוע</translation>
@@ -1178,23 +1178,23 @@
 <translation id="5942872142862698679">‏שימוש ב-Google לחיפוש</translation>
 <translation id="5945035219773565305">המלצה נוכחית:  <ph name="RECOMMENDATION" /></translation>
 <translation id="5951119116059277034">מוצג דף פעיל</translation>
-<translation id="5956665950594638604">‏פתיחת מרכז העזרה של Chrome בכרטיסייה חדשה</translation>
+<translation id="5956665950594638604">‏פתיחת מרכז העזרה של Ultimatum בכרטיסייה חדשה</translation>
 <translation id="59577092665511740">בחירת חשבון.</translation>
 <translation id="5958275228015807058">הקבצים והדפים שלך נמצאים ב'הורדות'</translation>
-<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{‏‫Chrome הפסיק להציג לך התראות מאתר שלא ביקרת בו לאחרונה}one{‏‫Chrome הפסיק להציג לך התראות מאתרים שלא ביקרת בהם לאחרונה}two{‏‫Chrome הפסיק להציג לך התראות מאתרים שלא ביקרת בהם לאחרונה}other{‏‫Chrome הפסיק להציג לך התראות מאתרים שלא ביקרת בהם לאחרונה}}</translation>
+<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{‏‫Ultimatum הפסיק להציג לך התראות מאתר שלא ביקרת בו לאחרונה}one{‏‫Ultimatum הפסיק להציג לך התראות מאתרים שלא ביקרת בהם לאחרונה}two{‏‫Ultimatum הפסיק להציג לך התראות מאתרים שלא ביקרת בהם לאחרונה}other{‏‫Ultimatum הפסיק להציג לך התראות מאתרים שלא ביקרת בהם לאחרונה}}</translation>
 <translation id="5962718611393537961">יש ללחוץ כדי לכווץ</translation>
 <translation id="5964869237734432770">הפסקה של תיאורי התמונות</translation>
 <translation id="5972844218283131174">ביטול הבחירה בכול הכרטיסיות</translation>
 <translation id="5975083100439434680">התרחקות</translation>
 <translation id="5977976211062815271">במכשיר הזה</translation>
 <translation id="5978661847409534366">{ITEMS_COUNT,plural, =1{דף אחד ברשימת הקריאה}one{‫# דפים ברשימת הקריאה}two{‫# דפים ברשימת הקריאה}other{‫# דפים ברשימת הקריאה}}</translation>
-<translation id="5992182727984874868">‏‫<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Chrome הסיר את ההרשאות האלה כי לא נכנסת לאחרונה</translation>
+<translation id="5992182727984874868">‏‫<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Ultimatum הסיר את ההרשאות האלה כי לא נכנסת לאחרונה</translation>
 <translation id="5995726099713306770">להוריד שוב את הדף?</translation>
 <translation id="6000066717592683814">‏להמשיך להשתמש ב-Google</translation>
 <translation id="6000203700195075278">מעקב מחודש</translation>
 <translation id="6011308810877101166">שיפור של ההצעות לחיפוש</translation>
 <translation id="6013305291643746595">בתהליך מיון לפי הפריט הישן ביותר</translation>
-<translation id="6022659036123304283">‏אפשר להתאים אישית את Chrome בדרך שנוחה לך</translation>
+<translation id="6022659036123304283">‏אפשר להתאים אישית את Ultimatum בדרך שנוחה לך</translation>
 <translation id="6026538407078977628">הרחבה למסך מלא</translation>
 <translation id="6030719887161080597">ניהול המידע שמשמש אתרים למדידת ביצועי מודעות</translation>
 <translation id="6039379616847168523">מעבר לכרטיסייה הבאה</translation>
@@ -1223,7 +1223,7 @@
 <translation id="6125864963080902918"><ph name="BEGIN_LINK" />פרטים נוספים<ph name="END_LINK" /></translation>
 <translation id="6127860394906721547">פתיחה של קבוצת הכרטיסיות "<ph name="TITLE_OF_GROUP" />" בצבע <ph name="COLOR_NAME" /> עם האתרים <ph name="URL_LIST" />.</translation>
 <translation id="6130303040046284160">מזעור הכרטיסייה</translation>
-<translation id="6132075343662013154">‏‫Chrome יציע לשמור את הסיסמה</translation>
+<translation id="6132075343662013154">‏‫Ultimatum יציע לשמור את הסיסמה</translation>
 <translation id="6134168885321518274">פתיחת סרגל החיפוש</translation>
 <translation id="6135608400322377268">{TAB_COUNT,plural, =1{כרטיסייה אחת (<ph name="TAB_COUNT_ONE" />)}one{‫<ph name="TAB_COUNT_MANY" /> כרטיסיות}two{‫<ph name="TAB_COUNT_MANY" /> כרטיסיות}other{‫<ph name="TAB_COUNT_MANY" /> כרטיסיות}}</translation>
 <translation id="6137022273846704445">השפה ב-<ph name="APP_NAME" /></translation>
@@ -1234,10 +1234,10 @@
 <translation id="6146563240635539929">סרטונים</translation>
 <translation id="614890671148262506">לאתר הזה תמיד תהיה הרשאה לשלוח התראות</translation>
 <translation id="6150320133806434356">הסימנייה נשמרה</translation>
-<translation id="6150706324143004339">‏כדי להשתמש בנתוני Chrome ולשמור אותם בחשבון Google, צריך לעדכן את Chrome</translation>
+<translation id="6150706324143004339">‏כדי להשתמש בנתוני Ultimatum ולשמור אותם בחשבון Google, צריך לעדכן את Ultimatum</translation>
 <translation id="6154478581116148741">יש להפעיל נעילת מסך ב'הגדרות' כדי לייצא את הסיסמאות מהמכשיר הזה</translation>
 <translation id="6156323911414505561">הצגת סרגל הסימניות</translation>
-<translation id="6162892189396105610">‏מערכת Chrome טוענת מראש דפים שסביר שהמשתמש יעבור אליהם.</translation>
+<translation id="6162892189396105610">‏מערכת Ultimatum טוענת מראש דפים שסביר שהמשתמש יעבור אליהם.</translation>
 <translation id="6165508094623778733">למידע נוסף</translation>
 <translation id="6170675927290506430">לדף הגדרת ההתראות</translation>
 <translation id="6184972259157699660">‫<ph name="TAB_TITLE" />, כרטיסייה פרטית שהושתקה</translation>
@@ -1246,7 +1246,7 @@
 <translation id="6193448654517602979">בחירת כרטיסיות</translation>
 <translation id="6196315980958524839">‏סיסמאות נשמרות במנהל הסיסמאות של Google במכשיר הזה</translation>
 <translation id="6202812185118613467">עליך להיכנס שוב כדי להתחיל את הסנכרון</translation>
-<translation id="6204781143409202534">‏‫Chrome זיהה משהו שנראה כמו ספאם מהכתובת <ph name="DOMAIN" />.</translation>
+<translation id="6204781143409202534">‏‫Ultimatum זיהה משהו שנראה כמו ספאם מהכתובת <ph name="DOMAIN" />.</translation>
 <translation id="6205314730813004066">פרטיות בפרסום</translation>
 <translation id="6210282067670792090">בסרגל הכתובות, צריך להשתמש במקש הקיצור הזה בשילוב עם קיצורי דרך למנועי חיפוש ולחיפוש באתרים.</translation>
 <translation id="6210748933810148297">אינך <ph name="EMAIL" />?</translation>
@@ -1260,12 +1260,12 @@
 <translation id="6247557882553405851">‏מנהל הסיסמאות של Google</translation>
 <translation id="6248988683584659830">חיפוש בהגדרות</translation>
 <translation id="6250847299079540062">‫<ph name="TAB_TITLE" />, כרטיסייה פרטית מוצמדת מתוך סדרת כרטיסיות שנבחרה</translation>
-<translation id="6251449557817521191">‏לצפייה בהיסטוריה ב-Chrome</translation>
+<translation id="6251449557817521191">‏לצפייה בהיסטוריה ב-Ultimatum</translation>
 <translation id="6254139308321626268">‏מוצג לך קובץ PDF</translation>
-<translation id="6255809143828972562">‏בעזרת הכלים של Chrome אפשר לגלוש בבטחה ובשליטה</translation>
+<translation id="6255809143828972562">‏בעזרת הכלים של Ultimatum אפשר לגלוש בבטחה ובשליטה</translation>
 <translation id="6264376385120300461">להוריד בכל זאת</translation>
 <translation id="6264485186158353794">חזרה לחוף מבטחים</translation>
-<translation id="6267106249090587268">‏התראות <ph name="SEPARATOR" /> Chrome הסיר את ההרשאות האלה בגלל ספאם או תוכן מטעה</translation>
+<translation id="6267106249090587268">‏התראות <ph name="SEPARATOR" /> Ultimatum הסיר את ההרשאות האלה בגלל ספאם או תוכן מטעה</translation>
 <translation id="6276708887952587684">הצגת מקור הדף</translation>
 <translation id="6277522088822131679">אירעה בעיה בעת הדפסת הדף. יש לנסות שוב.</translation>
 <translation id="6278428485366576908">עיצוב</translation>
@@ -1281,7 +1281,7 @@
 <translation id="6312687380483398334">אפליקציות אינטרנט (שקט)</translation>
 <translation id="6315386555979018699">מחיקה והמשך</translation>
 <translation id="6316139424528454185">‏אין תמיכה בגרסת Android</translation>
-<translation id="631839948975905034">‏נעילת החלונות הפרטיים כשיוצאים מ-Chrome</translation>
+<translation id="631839948975905034">‏נעילת החלונות הפרטיים כשיוצאים מ-Ultimatum</translation>
 <translation id="6324916366299863871">עריכת קיצור דרך</translation>
 <translation id="6324977638108296054">אי אפשר ליצור קישור לטקסט המודגש</translation>
 <translation id="6333140779060797560">שיתוף באמצעות <ph name="APPLICATION" /></translation>
@@ -1297,13 +1297,13 @@
 <translation id="6356893102071098867">עליך לוודא שבחרת בחשבון הנכון</translation>
 <translation id="6363990818884053551">כדי להתחיל בסנכרון עליך לאמת את זהותך</translation>
 <translation id="6364438453358674297">האם להסיר את ההצעה מההיסטוריה?</translation>
-<translation id="6380100320871303656">‏מערכת Chrome טוענת מראש בתדירות גבוהה יותר דפים שסביר שהמשתמש יעבור אליהם. ההגדרה הזו יכולה לגרום לשימוש מוגבר בנתונים.</translation>
+<translation id="6380100320871303656">‏מערכת Ultimatum טוענת מראש בתדירות גבוהה יותר דפים שסביר שהמשתמש יעבור אליהם. ההגדרה הזו יכולה לגרום לשימוש מוגבר בנתונים.</translation>
 <translation id="6382848304055775421">מתבצע ייצוא</translation>
 <translation id="6388152137132427505">חשוב לשים לב עם מי משתפים. תוקף הקישורים פג אחרי 48 שעות.</translation>
 <translation id="6394791151443660613">חיפוש: <ph name="SEARCH_QUERY" /></translation>
 <translation id="6397616442223433927">חזרה למצב אונליין</translation>
 <translation id="6399363707848566877">עכשיו אפשר להוסיף בקלות כרטיסיות לקבוצות כאן</translation>
-<translation id="6401458660421980302">‏כדי לשלוח את הכרטיסייה הזו למכשיר אחר, צריך להיכנס ל-Chrome במכשיר האחר</translation>
+<translation id="6401458660421980302">‏כדי לשלוח את הכרטיסייה הזו למכשיר אחר, צריך להיכנס ל-Ultimatum במכשיר האחר</translation>
 <translation id="6404511346730675251">עריכת סימנייה</translation>
 <translation id="6406506848690869874">סנכרון</translation>
 <translation id="6408370409308816490">‫<ph name="TAB_TITLE" />, כרטיסייה פרטית שנבחרה והוצמדה, והתוכן בה משותף</translation>
@@ -1323,24 +1323,24 @@
 <translation id="6452534462676960500">פעילות חדשה</translation>
 <translation id="6459045781120991510">סקרים</translation>
 <translation id="6461962085415701688">לא ניתן לפתוח את הקובץ</translation>
-<translation id="6464977750820128603">‏אפשר לראות אתרים שמבקרים בהם ב-Chrome ולהגדיר טיימרים בשבילם.\n\n‏Google מקבלת מידע על האתרים שמוגדרים בשבילם טיימרים ומשך השהייה שלך באתרים האלה. המידע עוזר לשפר את 'שימוש חכם בדיגיטל'.</translation>
+<translation id="6464977750820128603">‏אפשר לראות אתרים שמבקרים בהם ב-Ultimatum ולהגדיר טיימרים בשבילם.\n\n‏Google מקבלת מידע על האתרים שמוגדרים בשבילם טיימרים ומשך השהייה שלך באתרים האלה. המידע עוזר לשפר את 'שימוש חכם בדיגיטל'.</translation>
 <translation id="6468703991511753953">סרגל הכתובות נמצא כרגע בחלק התחתון</translation>
-<translation id="6470181189905173055">‏הדפים שפתחת ב-Chrome בזמן השימוש ב-<ph name="APP_LABEL" /> יופיעו כאן.</translation>
+<translation id="6470181189905173055">‏הדפים שפתחת ב-Ultimatum בזמן השימוש ב-<ph name="APP_LABEL" /> יופיעו כאן.</translation>
 <translation id="6473086018775716761">רשימת אפשרויות השיתוף נפתחה בחצי הגובה.</translation>
 <translation id="6475951671322991020">הורדת סרטון</translation>
 <translation id="6477928892249167417">נראה שהאתרים האלה חשובים לך:</translation>
-<translation id="6479881432656947268">‏לחנות האינטרנט של Chrome</translation>
-<translation id="6481963882741794338">‏אפשר לקשר את Chrome לשירותי Google אחרים לצורך התאמה אישית ולמטרות אחרות</translation>
+<translation id="6479881432656947268">‏לחנות האינטרנט של Ultimatum</translation>
+<translation id="6481963882741794338">‏אפשר לקשר את Ultimatum לשירותי Google אחרים לצורך התאמה אישית ולמטרות אחרות</translation>
 <translation id="6482749332252372425">הורדת <ph name="FILE_NAME" /> נכשלה מאחר שחסר נפח אחסון.</translation>
 <translation id="6486420406192123355">‏קובץ ה-PDF הזה מגיע מאתר שמשתמש בחיבור לא מאובטח</translation>
 <translation id="650224091954855786">{FILE_COUNT,plural, =1{קובץ אחד הורד}one{# הורדות הושלמו}two{# הורדות הושלמו}other{# הורדות הושלמו}}</translation>
-<translation id="6508722015517270189">‏הפעלה מחדש של Chrome</translation>
+<translation id="6508722015517270189">‏הפעלה מחדש של Ultimatum</translation>
 <translation id="6513924416597632811">העתקת הקישור לדף תוצאות החיפוש של: <ph name="SEARCH_QUERY" />. מקור: <ph name="PAGE_URL" /></translation>
 <translation id="6518133107902771759">אימות</translation>
 <translation id="6521218807522232085">כדי להיכנס לחשבון בקלות, אפשר ליצור, לשמור ולנהל סיסמאות</translation>
 <translation id="6527303717912515753">שיתוף</translation>
-<translation id="652948702951888897">‏היסטוריה של Chrome</translation>
-<translation id="6532866250404780454">‏אתרים שנכנסים אליהם ב-Chrome לא יופיעו. כל הטיימרים של האתרים יימחקו.</translation>
+<translation id="652948702951888897">‏היסטוריה של Ultimatum</translation>
+<translation id="6532866250404780454">‏אתרים שנכנסים אליהם ב-Ultimatum לא יופיעו. כל הטיימרים של האתרים יימחקו.</translation>
 <translation id="6539092367496845964">משהו השתבש. יש לנסות שוב מאוחר יותר.</translation>
 <translation id="6541983376925655882">{NUM_HOURS,plural, =1{התבצעה בדיקה לפני שעה אחת}one{התבצעה בדיקה לפני # שעות}two{התבצעה בדיקה לפני שעתיים}other{התבצעה בדיקה לפני # שעות}}</translation>
 <translation id="6545017243486555795">ניקוי כל הנתונים</translation>
@@ -1355,7 +1355,7 @@
 <translation id="6569373978618239158">‏בפתיחת כרטיסייה חדשה, יוצגו לך סטוריז מהאתר <ph name="SITE_NAME" />. אתרים שנמצאים במעקב נשמרים בחשבון Google שלך. יש לך אפשרות לנהל אותם בהגדרות של Discover.</translation>
 <translation id="657177046675873214">כדי שהסימניות יופיעו בכל המכשירים, צריך להפעיל את האפשרות "סימניות" בהגדרות</translation>
 <translation id="6573096386450695060">אני רוצה לאפשר תמיד</translation>
-<translation id="6573431926118603307">‏כרטיסיות שפתחת ב-Chrome במכשירים האחרים שלך יופיעו כאן.</translation>
+<translation id="6573431926118603307">‏כרטיסיות שפתחת ב-Ultimatum במכשירים האחרים שלך יופיעו כאן.</translation>
 <translation id="6583199322650523874">סימון הדף הנוכחי בסימנייה</translation>
 <translation id="6588043302623806746">‏שימוש ב-DNS מאובטח</translation>
 <translation id="6590471736817333463">חיסכון של עד 60% בשימוש בחבילת הגלישה</translation>
@@ -1363,28 +1363,28 @@
 <translation id="6594347733515723558">אפשרויות למיון ולהצגה</translation>
 <translation id="6595046016124923392">‏התמונות נשלחות אל Google כדי לשפר את התיאורים לנוחיותך.</translation>
 <translation id="661266467055912436">רמת אבטחה משופרת עבורך ועבור כל מי שמתחבר לאינטרנט.</translation>
-<translation id="6621391692573306628">‏כדי לשלוח את הכרטיסייה הזו למכשיר אחר, צריך להיכנס ל-Chrome בשני המכשירים</translation>
+<translation id="6621391692573306628">‏כדי לשלוח את הכרטיסייה הזו למכשיר אחר, צריך להיכנס ל-Ultimatum בשני המכשירים</translation>
 <translation id="6627583120233659107">עריכת התיקייה</translation>
 <translation id="6633067410344541938">ביטול הנעילה של המצב הפרטי</translation>
 <translation id="6636623428211296678">אפשר לעיין למטה בהגדרות נוספות או לסיים עכשיו.</translation>
-<translation id="6637100877383020115">‏כדי לעזור בשיפור האפליקציה, Chrome ישלח נתוני שימוש וקריסות אל Google. <ph name="BEGIN_UMA_LINK" />ניהול<ph name="END_UMA_LINK" /></translation>
+<translation id="6637100877383020115">‏כדי לעזור בשיפור האפליקציה, Ultimatum ישלח נתוני שימוש וקריסות אל Google. <ph name="BEGIN_UMA_LINK" />ניהול<ph name="END_UMA_LINK" /></translation>
 <translation id="6641780377503683465">הסרה של תחום העניין '<ph name="INTEREST" />'</translation>
 <translation id="6642299196749785472">צירוף כרטיסיות</translation>
 <translation id="6647441008198474441">‏כתובות URL שבהן ביקרת יישלחו אל Google כדי לחזות את האתרים הבאים שאליהם תתבצע כניסה על ידך</translation>
 <translation id="6648977384226967773">{CONTACT,plural, =1{‏<ph name="CONTACT_PREVIEW" />‎\u2026‎ ו-<ph name="NUMBER_OF_ADDITIONAL_CONTACTS" /> נוסף}one{‏<ph name="CONTACT_PREVIEW" />‎\u2026‎ ו-<ph name="NUMBER_OF_ADDITIONAL_CONTACTS" /> נוספים}two{‏<ph name="CONTACT_PREVIEW" />‎\u2026‎ ו-<ph name="NUMBER_OF_ADDITIONAL_CONTACTS" /> נוספים}other{‏<ph name="CONTACT_PREVIEW" />‎\u2026‎ ו-<ph name="NUMBER_OF_ADDITIONAL_CONTACTS" /> נוספים}}</translation>
 <translation id="6649642165559792194">הצגת התמונה בתצוגה מקדימה <ph name="BEGIN_NEW" />חדש<ph name="END_NEW" /></translation>
 <translation id="6659594942844771486">Tab</translation>
-<translation id="6661521899577697780">‏ההצעה להצטרף ל-Chrome Finds נפתחה בחצי גובה</translation>
+<translation id="6661521899577697780">‏ההצעה להצטרף ל-Ultimatum Finds נפתחה בחצי גובה</translation>
 <translation id="666731172850799929">פתיחה ב-<ph name="APP_NAME" /></translation>
 <translation id="6669390930482049506">אני רוצה לקבל התראות</translation>
-<translation id="6670767097276846646">‏חלק מהתוספים יכולים להוסיף מנועי חיפוש ל-Chrome</translation>
+<translation id="6670767097276846646">‏חלק מהתוספים יכולים להוסיף מנועי חיפוש ל-Ultimatum</translation>
 <translation id="6671495933530132209">העתקת התמונה</translation>
 <translation id="6672697278890207089">הזן את משפט הסיסמה</translation>
 <translation id="6672917148207387131">הוספה של <ph name="DOMAIN" /></translation>
 <translation id="6674571176963658787">כדי להתחיל לסנכרן צריך להזין את ביטוי הסיסמה</translation>
-<translation id="6676927815633975364">‏כניסה לאתר הזה ול-Chrome</translation>
+<translation id="6676927815633975364">‏כניסה לאתר הזה ול-Ultimatum</translation>
 <translation id="6684262542644248484">נכנסים לחשבון באתר כלשהו</translation>
-<translation id="6684809838922667136">‏משפרים את Chrome</translation>
+<translation id="6684809838922667136">‏משפרים את Ultimatum</translation>
 <translation id="6689436252814043643">מצב הקריאה לא זמין</translation>
 <translation id="669971068476817798">לוחצים על "שמירה"</translation>
 <translation id="6700279777779583398">הבחירות נשמרו</translation>
@@ -1408,18 +1408,18 @@
 <translation id="6764137532716892442">פעילות חדשה בקבוצת הכרטיסיות המשותפת "<ph name="GROUP_TITLE" />"</translation>
 <translation id="6767294960381293877">רשימת המכשירים שאפשר לשתף איתם כרטיסייה נפתחה בחצי גובה המסך.</translation>
 <translation id="6783664456110886353">{TAB_COUNT,plural, =1{כרטיסיית מצב פרטי אחת (<ph name="INCOGNITO_TAB_COUNT" />) וכרטיסייה אחת (<ph name="TAB_COUNT_ONE" />) נוספת ייסגרו}one{כרטיסיית מצב פרטי אחת (<ph name="INCOGNITO_TAB_COUNT" />) ו-<ph name="TAB_COUNT_MANY" /> כרטיסיות נוספות ייסגרו}two{כרטיסיית מצב פרטי אחת (<ph name="INCOGNITO_TAB_COUNT" />) ו-<ph name="TAB_COUNT_MANY" /> כרטיסיות נוספות ייסגרו}other{כרטיסיית מצב פרטי אחת (<ph name="INCOGNITO_TAB_COUNT" />) ו-<ph name="TAB_COUNT_MANY" /> כרטיסיות נוספות ייסגרו}}</translation>
-<translation id="6785476624617658922">‏תנאים והגבלות נוספים של Chrome ושל ChromeOS</translation>
+<translation id="6785476624617658922">‏תנאים והגבלות נוספים של Ultimatum ושל UltimatumOS</translation>
 <translation id="6786747875388722282">תוספים</translation>
 <translation id="6787600234697426339">הגעת למגבלת החלון של <ph name="MAX_INSTANCE_COUNT" /></translation>
 <translation id="6795633245022906657">פתיחת כרטיסייה חדשה במהירות. ניתן לערוך את קיצור הדרך ב'הגדרות'.</translation>
-<translation id="679588508577699489">‏הגדרת Chrome כדפדפן ברירת המחדל</translation>
+<translation id="679588508577699489">‏הגדרת Ultimatum כדפדפן ברירת המחדל</translation>
 <translation id="679956319013005046">‏כדי להגדיר את השירות המועדף למילוי אוטומטי, צריך קודם להוסיף את השירות ב<ph name="BEGIN_LINK" />הגדרות Android<ph name="END_LINK" />.</translation>
 <translation id="6802555630140434547">החלון הזה ייסגר</translation>
 <translation id="6803791793483522764">בדיקת ההתראות</translation>
 <translation id="6809470175540814047">פתיחה בחלון אנונימי</translation>
 <translation id="6811034713472274749">הדף מוכן להצגה</translation>
 <translation id="6813359536773993594">{FILE_COUNT,plural, =1{תמונות, תמונה אחת ברשימה}one{תמונות, # תמונות ברשימה}two{תמונות, # תמונות ברשימה}other{תמונות, # תמונות ברשימה}}</translation>
-<translation id="6813446258015311409">‏כניסה ל-Chrome, פתוח.</translation>
+<translation id="6813446258015311409">‏כניסה ל-Ultimatum, פתוח.</translation>
 <translation id="6815692190508268848">העדפות העיצוב הוחלו</translation>
 <translation id="6817747507826986771">שיתוף הדף הזה במהירות. ניתן לערוך את קיצור הדרך הזה בלחיצה ארוכה.</translation>
 <translation id="6820686453637990663">CVC</translation>
@@ -1428,7 +1428,7 @@
 <translation id="6828070228333235514">הפסקת המעקב אחר מחירים</translation>
 <translation id="6830728435402077660">לא מאובטח</translation>
 <translation id="6831043979455480757">תרגום</translation>
-<translation id="6835182496791325827">‏יש לך אפשרות לקבל הודעה כש-Chrome מוצא את התוצאות שהכי מתאימות לחיפושים שלך, גם אם הוא לא בשימוש באותו הרגע.</translation>
+<translation id="6835182496791325827">‏יש לך אפשרות לקבל הודעה כש-Ultimatum מוצא את התוצאות שהכי מתאימות לחיפושים שלך, גם אם הוא לא בשימוש באותו הרגע.</translation>
 <translation id="6846298663435243399">הטעינה מתבצעת...</translation>
 <translation id="6850409657436465440">ההורדה עדיין מתבצעת</translation>
 <translation id="6850830437481525139"><ph name="TAB_COUNT" /> כרטיסיות נסגרו</translation>
@@ -1451,7 +1451,7 @@
 <translation id="6886500155621657325">{ITEMS_COUNT,plural, =1{סיסמה אחת}one{‫# סיסמאות}two{‫# סיסמאות}other{‫# סיסמאות}}</translation>
 <translation id="688730033107341407">‏אחרי היציאה מהחשבון, הסימניות, הסיסמאות ופרטים נוספים בחשבון שלך ב-Google יוסרו מהמכשיר הזה.</translation>
 <translation id="6896758677409633944">העתקה</translation>
-<translation id="6898797562238201317">‏שימוש בביטוי סיסמה משלך כדי להצפין את כל נתוני Chrome בחשבון Google</translation>
+<translation id="6898797562238201317">‏שימוש בביטוי סיסמה משלך כדי להצפין את כל נתוני Ultimatum בחשבון Google</translation>
 <translation id="6900532703269623216">הגנה משופרת</translation>
 <translation id="6903907808598579934">הפעלת הסנכרון</translation>
 <translation id="6906448540340261898">‏כדאי לוודא שתמיד תהיה לך אפשרות להשתמש בסיסמאות בחשבון Google שלך</translation>
@@ -1461,7 +1461,7 @@
 <translation id="6910211073230771657">נמחק</translation>
 <translation id="6916590542764765824">ניהול תוספים</translation>
 <translation id="6918398787259831832">אם הבעיה נמשכת, <ph name="BEGIN_LINK" />ניתן לעיין במידע נוסף<ph name="END_LINK" /> ב-<ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="6922812712751566567">‏‫<ph name="PERMISSION" /> <ph name="SEPARATOR" /> Chrome הסיר את ההרשאות האלה כי לא נכנסת לאחרונה</translation>
+<translation id="6922812712751566567">‏‫<ph name="PERMISSION" /> <ph name="SEPARATOR" /> Ultimatum הסיר את ההרשאות האלה כי לא נכנסת לאחרונה</translation>
 <translation id="6927821422725196292">{TABS_COUNT,plural, =1{כרטיסייה אחת}one{‫<ph name="NUMBER_OF_TABS" /> כרטיסיות}two{‫<ph name="NUMBER_OF_TABS" /> כרטיסיות}other{‫<ph name="NUMBER_OF_TABS" /> כרטיסיות}}</translation>
 <translation id="6929224077895306814">‏כל קודי האבטחה שנשמרו במכשיר ובחשבון Google שלך יימחקו</translation>
 <translation id="6933180670536678127">‫<ph name="TAB_TITLE" />, כרטיסייה מוצמדת שנבחרה ומכילה תוכן שאפשר לשמוע</translation>
@@ -1490,30 +1490,30 @@
 <translation id="7020741890149022655">הוספה לרשימת הקריאה <ph name="BEGIN_NEW" />חדש<ph name="END_NEW" /></translation>
 <translation id="7022756207310403729">פתיחה בדפדפן</translation>
 <translation id="7029809446516969842">סיסמאות</translation>
-<translation id="7037994709569287156">‏הגדרת Chrome כברירת מחדל</translation>
+<translation id="7037994709569287156">‏הגדרת Ultimatum כברירת מחדל</translation>
 <translation id="7053256416619638731">חיזוק הסיסמאות במכשיר הזה</translation>
 <translation id="7053983685419859001">חסימה</translation>
 <translation id="7054588988317389591">רוצה לקבל תיאורי תמונות?</translation>
-<translation id="7057969023583258980">‏פתיחת ההיסטוריה המלאה ב-Chrome</translation>
+<translation id="7057969023583258980">‏פתיחת ההיסטוריה המלאה ב-Ultimatum</translation>
 <translation id="7063006564040364415">לא ניתן היה להתחבר אל שרת הסנכרון.</translation>
 <translation id="7063106218165698546">מתאימים אישית את קבוצת הכרטיסיות ולוחצים על "סיום"</translation>
 <translation id="7071521146534760487">ניהול חשבון</translation>
 <translation id="707155805709242880">יש לבחור למטה מה לסנכרן</translation>
 <translation id="7072949719501323344">‫<ph name="TAB_TITLE" />, כרטיסייה פרטית מוצמדת מתוך סדרת כרטיסיות שנבחרו, במצב "תמונה בתוך תמונה"</translation>
 <translation id="7077143737582773186">‏כרטיס SD</translation>
-<translation id="7078916049958741685">‏צריך למחוק גם את נתוני Chrome מהמכשיר הזה</translation>
+<translation id="7078916049958741685">‏צריך למחוק גם את נתוני Ultimatum מהמכשיר הזה</translation>
 <translation id="7080145768121641840">‫<ph name="TAB_TITLE" />, כרטיסייה שנבחרה והוצמדה, והתוכן בה מושתק</translation>
 <translation id="7084115944294706056">בחירת מיקום סרגל הכתובות</translation>
-<translation id="7085332316435785646">‏בוחרים אם לכלול את ההיסטוריה ב-Chrome להתאמה אישית מדויקת יותר בשירותי Google</translation>
-<translation id="7088681679121566888">‏Chrome מעודכן</translation>
+<translation id="7085332316435785646">‏בוחרים אם לכלול את ההיסטוריה ב-Ultimatum להתאמה אישית מדויקת יותר בשירותי Google</translation>
+<translation id="7088681679121566888">‏Ultimatum מעודכן</translation>
 <translation id="7098100324909062850">‫<ph name="TAB_TITLE" />, כרטיסייה פרטית מתוך סדרת כרטיסיות פרטית שנבחרו והתוכן בה מושתק</translation>
 <translation id="7106762743910369165">הדפדפן מנוהל על ידי הארגון שלך</translation>
-<translation id="7111394291981742152">‏ב-Chrome יש לך יותר שליטה במודעות שמוצגות לך, וחלות הגבלות על המידע עליך שהאתרים יכולים לקבל בהצגת מודעות בהתאמה אישית.</translation>
+<translation id="7111394291981742152">‏ב-Ultimatum יש לך יותר שליטה במודעות שמוצגות לך, וחלות הגבלות על המידע עליך שהאתרים יכולים לקבל בהצגת מודעות בהתאמה אישית.</translation>
 <translation id="7111822978084196600">יש לתת שם לחלון</translation>
 <translation id="7115358764509798967">ברירת המחדל של המערכת</translation>
 <translation id="7117485132243600300">ניהול התוכן שבמעקב שלך והמלצות לנושאים ולחיפושים</translation>
 <translation id="7119984597597798764">סגירה של <ph name="INSTANCE_TITLE" /></translation>
-<translation id="7121179479711575744">‏כניסה ל-Chrome</translation>
+<translation id="7121179479711575744">‏כניסה ל-Ultimatum</translation>
 <translation id="7136694880210472378">הגדרה כברירת מחדל</translation>
 <translation id="7136902389402789299">{NUM_SITES,plural, =1{נבדקו הרשאות של אתר אחד}one{נבדקו ההרשאות של # אתרים}two{נבדקו ההרשאות של # אתרים}other{נבדקו ההרשאות של # אתרים}}</translation>
 <translation id="7138678301420049075">אחר</translation>
@@ -1523,8 +1523,8 @@
 <translation id="7149893636342594995">מהיום האחרון</translation>
 <translation id="71503698506017927">‏הצפנה של ביטוי סיסמה לא כוללת אמצעי תשלום וכתובות מ-Google Pay.
 
-כדי לשנות את ההגדרה הזו, עליך <ph name="BEGIN_LINK" />למחוק את נתוני Chrome בחשבון<ph name="END_LINK" />.</translation>
-<translation id="7165972437814027679">‏מידע נוסף על חסימה של קבצים מסוימים ב-Chrome</translation>
+כדי לשנות את ההגדרה הזו, עליך <ph name="BEGIN_LINK" />למחוק את נתוני Ultimatum בחשבון<ph name="END_LINK" />.</translation>
+<translation id="7165972437814027679">‏מידע נוסף על חסימה של קבצים מסוימים ב-Ultimatum</translation>
 <translation id="7168323970702333693">נכנסת לחשבון בתור <ph name="USER_NAME" />. ההגדרות ייפתחו.</translation>
 <translation id="7170930892977483182">‏כל קודי האבטחה ששמורים במכשיר וב-Google Wallet יימחקו</translation>
 <translation id="7173114856073700355">פתיחת ההגדרות</translation>
@@ -1544,7 +1544,7 @@
 <translation id="7197682514647286393">מחיקה מהירה של נתוני הגלישה</translation>
 <translation id="719791532916917144">מקש קיצור</translation>
 <translation id="7207760545532569765">שחזור של <ph name="TAB_COUNT" /> כרטיסיות ככרטיסיות חדשות ברקע.</translation>
-<translation id="7217781228893594884">‏כרטיסיות פרטיות ננעלות כשסוגרים את Chrome</translation>
+<translation id="7217781228893594884">‏כרטיסיות פרטיות ננעלות כשסוגרים את Ultimatum</translation>
 <translation id="7221869452894271364">רענון הדף</translation>
 <translation id="722681077040152344">ביטלת את ההרשמה ל-<ph name="COUNT" /> אתרים</translation>
 <translation id="7227218174981371415">{FILE_COUNT,plural, =1{הורדה אחת בהמתנה}one{# הורדות בהמתנה}two{# הורדות בהמתנה}other{# הורדות בהמתנה}}</translation>
@@ -1554,12 +1554,12 @@
 <translation id="724510009481365878">לא ניתן להדפיס את הדף הזה</translation>
 <translation id="7248671827512403053">יישום</translation>
 <translation id="7253951228444156601">הסיסמאות נבדקות…</translation>
-<translation id="7260367682327802201">‏במכשיר Android עשויה להופיע הגדרה דומה. אם מדידת המודעות מופעלת ב-Chrome ובמכשיר Android, לחברה מסוימת עשויה להיות הרשאה למדוד את רמת האפקטיביות של מודעה כלשהי באתרים שבהם מבקרים ובאפליקציות שבהן משתמשים.</translation>
+<translation id="7260367682327802201">‏במכשיר Android עשויה להופיע הגדרה דומה. אם מדידת המודעות מופעלת ב-Ultimatum ובמכשיר Android, לחברה מסוימת עשויה להיות הרשאה למדוד את רמת האפקטיביות של מודעה כלשהי באתרים שבהם מבקרים ובאפליקציות שבהן משתמשים.</translation>
 <translation id="727288900855680735">לשלוח את <ph name="ONE_TIME_CODE" /> אל <ph name="ORIGIN" />?</translation>
 <translation id="7274013316676448362">אתר חסום</translation>
 <translation id="7276868533747677875">‏אם ייצאת בעבר סיסמאות, צריך לחפש את קובץ ה-CSV עם הסיסמאות במכשיר שלך ולייבא אותו למנהל הסיסמאות הרלוונטי.</translation>
 <translation id="728377807486816582">לוחצים על סרגל הכתובות</translation>
-<translation id="7289049772085228972">‏במכשיר שלך פועלים אמצעי האבטחה הכי חזקים של Chrome</translation>
+<translation id="7289049772085228972">‏במכשיר שלך פועלים אמצעי האבטחה הכי חזקים של Ultimatum</translation>
 <translation id="7289303553784750393">אם יש חיבור לאינטרנט אבל הבעיה נמשכת, אפשר לנסות להמשיך בדרכים אחרות ב-<ph name="SITE_ETLD_PLUS_ONE" />.</translation>
 <translation id="7290209999329137901">לא ניתן היה לשנת את השם מפני שהפריט לא זמין</translation>
 <translation id="7291910923717764901">נוספו תיאורי תמונות בדף זה</translation>
@@ -1592,12 +1592,12 @@
 <translation id="7400003506822844357">{FILE_COUNT,plural, =1{סוג אחר, קובץ אחד ברשימה}one{סוג אחר, # קבצים ברשימה}two{סוג אחר, # קבצים ברשימה}other{סוג אחר, # קבצים ברשימה}}</translation>
 <translation id="7400418766976504921">כתובת אתר</translation>
 <translation id="7400424692675800399">כדי לפתוח חלון חדש, צריך לסגור כמה חלונות פעילים ולא פעילים עד שרק <ph name="MAX_WINDOW_COUNT_MINUS_ONE" /> חלונות או פחות יישארו פתוחים.</translation>
-<translation id="7403691278183511381">‏חוויית ההפעלה הראשונה של Chrome</translation>
+<translation id="7403691278183511381">‏חוויית ההפעלה הראשונה של Ultimatum</translation>
 <translation id="7411224099004328643">‏משתמש בחשבון Google</translation>
 <translation id="7419565702166471774">להשתמש תמיד בחיבורים מאובטחים</translation>
 <translation id="7421293530411019405">לצאת מקבוצת הכרטיסיות?</translation>
 <translation id="7435356471928173109">מנהל המערכת כיבה את התכונה הזו</translation>
-<translation id="7437998757836447326">‏יציאה מ-Chrome</translation>
+<translation id="7437998757836447326">‏יציאה מ-Ultimatum</translation>
 <translation id="7439467816829380878">העברת הכרטיסייה לקבוצה</translation>
 <translation id="7439749340204407129">פתיחת ניהול הסימניות</translation>
 <translation id="7453810262525006706">כיווץ לחלונית צדדית</translation>
@@ -1631,7 +1631,7 @@
 <translation id="7525248386620136756">‫<ph name="TAB_GROUPS_AND_TABS_PART" /> נסגרו ונשמרו</translation>
 <translation id="7545347190366646170">אנשים שיש להם גישה</translation>
 <translation id="7553482318994371148">פתיחת כרטיסיות שנסגרו</translation>
-<translation id="7554643625247105821">‏לא ניתן לבדוק את הגרסה של Chrome</translation>
+<translation id="7554643625247105821">‏לא ניתן לבדוק את הגרסה של Ultimatum</translation>
 <translation id="7557508262441527045">החשבון לא מחובר</translation>
 <translation id="7573665567024262965">בחירת האפליקציות שיוגדרו כברירות המחדל</translation>
 <translation id="757855969265046257">{FILES,plural, =1{הורדת קובץ אחד (<ph name="FILES_DOWNLOADED_ONE" />)}one{הורדת <ph name="FILES_DOWNLOADED_MANY" /> קבצים}two{הורדת <ph name="FILES_DOWNLOADED_MANY" /> קבצים}other{הורדת <ph name="FILES_DOWNLOADED_MANY" /> קבצים}}</translation>
@@ -1647,7 +1647,7 @@
 <translation id="7612619742409846846">‏התחברת ל-Google בשם</translation>
 <translation id="7612989789287281429">מתבצעת כניסה לחשבון…</translation>
 <translation id="7619072057915878432">הורדת <ph name="FILE_NAME" /> נכשלה עקב כשלים ברשת.</translation>
-<translation id="7626032353295482388">‏ברוך בואך אל Chrome</translation>
+<translation id="7626032353295482388">‏ברוך בואך אל Ultimatum</translation>
 <translation id="7628417132421583481">מעבר למנהל הסיסמאות</translation>
 <translation id="7630202231528827509">‏כתובת ה-URL של הספק</translation>
 <translation id="7638584964844754484">ביטוי סיסמה שגוי</translation>
@@ -1662,7 +1662,7 @@
 <translation id="7666185984446444960">‫<ph name="TAB_GROUPS_AND_TABS_PART" /> נסגרו</translation>
 <translation id="7682724950699840886">אפשר לנסות את הטיפים הבאים: צריך לוודא שיש מספיק מקום פנוי במכשיר ואז לנסות לייצא שוב.</translation>
 <translation id="7686086654630106285">מידע נוסף על הצעות למודעות באתרים</translation>
-<translation id="7690596512217303514">‏לא ניתן לפתוח את Chrome במכשיר. כדי לפתור את הבעיה, עליך להוריד את העדכון האחרון של Chrome מחנות האפליקציות.</translation>
+<translation id="7690596512217303514">‏לא ניתן לפתוח את Ultimatum במכשיר. כדי לפתור את הבעיה, עליך להוריד את העדכון האחרון של Ultimatum מחנות האפליקציות.</translation>
 <translation id="7691043218961417207">אפשרויות לתוכן למעקב</translation>
 <translation id="7692761875510935111">פתיחה מהירה בדפדפן. כדי לערוך את קיצור הדרך הזה, לוחצים לחיצה ארוכה.</translation>
 <translation id="7697383401610880082">נקודת אחיזה לגרירה</translation>
@@ -1670,7 +1670,7 @@
 <translation id="7702420606070050505">הגיליון התחתון של הפעילות האחרונה נפתח בגובה מלא</translation>
 <translation id="7707922173985738739">שימוש בחבילת הגלישה</translation>
 <translation id="7708994397325774423">קבלת כל הסיסמאות</translation>
-<translation id="7714077993070342304">‏פתיחת תפריט Chrome</translation>
+<translation id="7714077993070342304">‏פתיחת תפריט Ultimatum</translation>
 <translation id="7733878270780732638">אין מספיק נפח אחסון פנוי במכשיר.</translation>
 <translation id="7740287852186792672">תוצאות חיפוש</translation>
 <translation id="774403695779169686">‫<ph name="TAB_TITLE" />, כרטיסייה פרטית שנבחרה והתוכן בה משותף</translation>
@@ -1697,9 +1697,9 @@
 <translation id="7821130663268546430">כל הכרטיסיות הפתוחות מופיעות בכלי למעבר בין כרטיסיות</translation>
 <translation id="7822705602465980873">‏אחרי הכניסה לחשבון, הנתונים האלה מקושרים לחשבון Google כדי להגן עליך בשירותי Google. לדוגמה, במקרה של אירוע אבטחה, ההגנה ב-Gmail מוגברת.</translation>
 <translation id="7824665136384946951">הארגון שלך השבית את הגלישה הבטוחה</translation>
-<translation id="7826342993930002256">‏חשבון Chrome, בכל מקום</translation>
+<translation id="7826342993930002256">‏חשבון Ultimatum, בכל מקום</translation>
 <translation id="7844171778363018843">אין נתונים שנבחרו לסנכרון</translation>
-<translation id="784453721355882533">‏כדי לקבל תשובות, מסקנות ועוד, כדאי לנסות את Gemini ב-Chrome.</translation>
+<translation id="784453721355882533">‏כדי לקבל תשובות, מסקנות ועוד, כדאי לנסות את Gemini ב-Ultimatum.</translation>
 <translation id="7846161022626028328">אירעה שגיאה. אפשר לנסות שוב.</translation>
 <translation id="7846296061357476882">‏שירותי Google</translation>
 <translation id="784652447248278262">חלון נוכחי</translation>
@@ -1709,10 +1709,10 @@
 <translation id="7853202427316060426">פעילות</translation>
 <translation id="7859988229622350291">אין לתרגם אף פעם</translation>
 <translation id="7866213166286285359">תרגום הדפים שכאן</translation>
-<translation id="7873610418439765081">‏כדאי לנסות את Gemini ב-Chrome כדי לקבל תשובות, מסקנות ועוד בעזרת הכפתור "אפשרויות נוספות".</translation>
+<translation id="7873610418439765081">‏כדאי לנסות את Gemini ב-Ultimatum כדי לקבל תשובות, מסקנות ועוד בעזרת הכפתור "אפשרויות נוספות".</translation>
 <translation id="7875915731392087153">הודעת אימייל חדשה</translation>
 <translation id="7876243839304621966">הסרת הכול</translation>
-<translation id="7886917304091689118">‏פועל ב-Chrome</translation>
+<translation id="7886917304091689118">‏פועל ב-Ultimatum</translation>
 <translation id="7887174313503389866">סיור מודרך באמצעי הבקרה החשובים ביותר על פרטיות ואבטחה. לאפשרויות נוספות, יש לעבור להגדרות ספציפיות.</translation>
 <translation id="7913993612870913335">{FILE_COUNT,plural, =1{הורדה אחת נחסמה על ידי הארגון שלך}one{‫# הורדות נחסמו על ידי הארגון שלך}two{‫# הורדות נחסמו על ידי הארגון שלך}other{‫# הורדות נחסמו על ידי הארגון שלך}}</translation>
 <translation id="7914399737746719723">האפליקציה הותקנה</translation>
@@ -1721,7 +1721,7 @@
 <translation id="7921782882718083488">סיכום הדף הזה</translation>
 <translation id="7926975587469166629">כינוי הכרטיס</translation>
 <translation id="7927073875790626822">XR</translation>
-<translation id="7929587383660661825">‏‫Chrome מסיר באופן אוטומטי הרשאות מאתרים שמשתמשים לרעה בהתראות או שלא ביקרת בהם לאחרונה</translation>
+<translation id="7929587383660661825">‏‫Ultimatum מסיר באופן אוטומטי הרשאות מאתרים שמשתמשים לרעה בהתראות או שלא ביקרת בהם לאחרונה</translation>
 <translation id="7934668619883965330">לא ניתן להוריד את הקובץ. פורמט הקובץ לא נתמך.</translation>
 <translation id="7942131818088350342"><ph name="PRODUCT_NAME" /> אינו מעודכן.</translation>
 <translation id="7944772052836377867">כדי לסנכרן צריך לאמת את הזהות שלך</translation>
@@ -1738,7 +1738,7 @@
 <translation id="7971136598759319605">פעילות אחרונה: לפני יום אחד</translation>
 <translation id="7975379999046275268">הצגת הדף בתצוגה מקדימה<ph name="BEGIN_NEW" />חדש<ph name="END_NEW" /></translation>
 <translation id="7977451675950311423">מקבלים אזהרה אם משתמשים בסיסמה שנחשפה בפרצה באבטחת מידע.</translation>
-<translation id="7987499071758862048">‏‫<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Chrome הסיר את ההרשאות האלה כי לא נכנסת לאחרונה</translation>
+<translation id="7987499071758862048">‏‫<ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Ultimatum הסיר את ההרשאות האלה כי לא נכנסת לאחרונה</translation>
 <translation id="7995059495660416932">תוכן יוצג לך ברגע שיהיה זמין</translation>
 <translation id="799576009106109668">מהירות הגלישה תגבר כי התוכן ייטען באופן יזום, על סמך הביקור הנוכחי שלך בדף האינטרנט</translation>
 <translation id="7998918019931843664">פתיחה מחדש של כרטיסייה שנסגרה</translation>
@@ -1756,17 +1756,17 @@
 <translation id="804335162455518893">‏לא נמצא כרטיס SD</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{כרטיסייה אחת (<ph name="TAB_COUNT_ONE" />) של מצב אנונימי}one{<ph name="TAB_COUNT_NORMAL" /> כרטיסיות של מצב אנונימי}two{<ph name="TAB_COUNT_NORMAL" /> כרטיסיות של מצב אנונימי}other{<ph name="TAB_COUNT_NORMAL" /> כרטיסיות של מצב אנונימי}}</translation>
 <translation id="8051695050440594747">‏‎<ph name="MEGABYTES" />MB זמינים</translation>
-<translation id="8058746566562539958">‏פתיחה בכרטיסייה חדשה של Chrome</translation>
+<translation id="8058746566562539958">‏פתיחה בכרטיסייה חדשה של Ultimatum</translation>
 <translation id="8062594758852531064">טעינה מורחבת מראש:</translation>
 <translation id="8063895661287329888">הוספת הסימנייה נכשלה.</translation>
 <translation id="8066816452984416180">הוספה מהירה של הדף הזה לסימניות. ניתן לערוך את קיצור הדרך הזה בלחיצה ארוכה.</translation>
-<translation id="8072436850275034464">‏אפשר לפתוח מחדש כרטיסיות שנסגרו לאחרונה מכל מקום שבו משתמשים ב-Chrome</translation>
+<translation id="8072436850275034464">‏אפשר לפתוח מחדש כרטיסיות שנסגרו לאחרונה מכל מקום שבו משתמשים ב-Ultimatum</translation>
 <translation id="8073388330009372546">פתיחת התמונה בכרטיסייה חדשה</translation>
 <translation id="8076492880354921740">כרטיסיות</translation>
 <translation id="8078096376109663956">יש לשתף טקסט בלבד</translation>
 <translation id="8078348702936632821">הצמדת קיצור הדרך הזה</translation>
 <translation id="8084285576995584326">‏שליטה בנתונים שלך בחשבון Google</translation>
-<translation id="8084864785646838999">‏יכול להיות שחלק מההיסטוריה שלך לא תופיע כאן. צריך לפתוח את ההיסטוריה המלאה ב-Chrome כדי לראות את כולה. כמו כן, יכול להיות שאפשר יהיה לגשת לסוגים אחרים של היסטוריית גלישה בחשבון Google בכתובת <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
+<translation id="8084864785646838999">‏יכול להיות שחלק מההיסטוריה שלך לא תופיע כאן. צריך לפתוח את ההיסטוריה המלאה ב-Ultimatum כדי לראות את כולה. כמו כן, יכול להיות שאפשר יהיה לגשת לסוגים אחרים של היסטוריית גלישה בחשבון Google בכתובת <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="8088176524274673045">‏כדי לשתף עם אנשים בקרבת מקום, הם צריכים לסרוק את קוד ה-QR הזה</translation>
 <translation id="8090732854597034573">אם צריך עזרה, אפשר לבקש עזרה מהורה</translation>
 <translation id="8101414242770404289">לא יסגרו כרטיסיות במסגרת <ph name="TIME_PERIOD" /></translation>
@@ -1774,10 +1774,10 @@
 <translation id="810433609302852">גיליון תחתון עם הודעה לגבי תכונת הטיפים ושלבי השימוש</translation>
 <translation id="8105893657415066307"><ph name="DESCRIPTION" /> <ph name="SEPARATOR" /> <ph name="FILE_SIZE" /></translation>
 <translation id="8107530384992929318">סגירה של אפשרויות המיון</translation>
-<translation id="8110024788458304985">‏עזרה בשיפור התכונות והביצועים של Chrome</translation>
-<translation id="8110087112193408731">‏להציג את הפעילות שלך ב-Chrome ב'שימוש חכם בדיגיטל'?</translation>
+<translation id="8110024788458304985">‏עזרה בשיפור התכונות והביצועים של Ultimatum</translation>
+<translation id="8110087112193408731">‏להציג את הפעילות שלך ב-Ultimatum ב'שימוש חכם בדיגיטל'?</translation>
 <translation id="8118117428362942925">אם צריך עזרה, אפשר לבקש עזרה מהורה (<ph name="PARENT_NAME" />)</translation>
-<translation id="8118151008374483324">‏כדי לקבל גישה לכרטיסיות ולפריטים נוספים בכל המכשירים שלך, כדאי להיכנס ל-Chrome</translation>
+<translation id="8118151008374483324">‏כדי לקבל גישה לכרטיסיות ולפריטים נוספים בכל המכשירים שלך, כדאי להיכנס ל-Ultimatum</translation>
 <translation id="8120286190326371840">אין במכשיר הזה סיסמאות שנחשפו</translation>
 <translation id="8122623268651408616">בתהליך מיון לפי הפריט החדש ביותר</translation>
 <translation id="8127542551745560481">עריכת דף הבית</translation>
@@ -1818,7 +1818,7 @@
 <translation id="8260126382462817229">יש להיכנס שוב</translation>
 <translation id="8261506727792406068">מחיקה</translation>
 <translation id="82619448491672958">הצגת כרטיסיות אחרות</translation>
-<translation id="8265730590513812063">‏פתיחת תפריט Chrome</translation>
+<translation id="8265730590513812063">‏פתיחת תפריט Ultimatum</translation>
 <translation id="8266753737658117282">המשך עם <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8266862848225348053">מיקום ההורדה</translation>
 <translation id="8271267069224406035">דיווח על ספאם</translation>
@@ -1832,7 +1832,7 @@
 <translation id="8317318757008452355">פתיחת האפשרויות להדפסה</translation>
 <translation id="8320212361750431956">פעילות אחרונה</translation>
 <translation id="832514020744584629">‫<ph name="PREF_TITLE" />  <ph name="BEGIN_NEW" />חדש<ph name="END_NEW" /></translation>
-<translation id="8342727528718219152">‏‫Chrome יודיע לך על אתרים שעלולים לשלוח יותר מדי התראות</translation>
+<translation id="8342727528718219152">‏‫Ultimatum יודיע לך על אתרים שעלולים לשלוח יותר מדי התראות</translation>
 <translation id="834313815369870491">אין לתרגם את האתרים אף פעם</translation>
 <translation id="8348215005712416247">‫<ph name="TAB_TITLE" />, כרטיסייה פרטית שהוצמדה מתוך סדרת כרטיסיות שנבחרו והתוכן בה מוקלט</translation>
 <translation id="8348430946834215779">‏יש להשתמש ב-HTTPS כשאפשר, ולקבל אזהרה לפני שטוענים אתרים שלא תומכים ב-HTTPS</translation>
@@ -1846,12 +1846,12 @@
 <translation id="8398389123831319859">כדי לעבור למצב פרטי, לוחצים לחיצה כפולה ולוחצים לחיצה ארוכה</translation>
 <translation id="8402673309244746971">מעבר אל הפיד 'במעקב'</translation>
 <translation id="8413126021676339697">להצגת ההיסטוריה המלאה</translation>
-<translation id="8413795581997394485">‏הגנה מפני אתרים, הורדות ותוספים שידועים כמסוכנים. כשמבקרים באתר מסוים, Chrome שולח ל-Google קטע קוד מעורפל מכתובת ה-URL דרך שרת פרטיות שמסתיר את כתובת ה-IP. אם האתר פועל באופן שמעורר חשד, נשלחות גם כתובות URL מלאות וקטעי תוכן מדפים.</translation>
+<translation id="8413795581997394485">‏הגנה מפני אתרים, הורדות ותוספים שידועים כמסוכנים. כשמבקרים באתר מסוים, Ultimatum שולח ל-Google קטע קוד מעורפל מכתובת ה-URL דרך שרת פרטיות שמסתיר את כתובת ה-IP. אם האתר פועל באופן שמעורר חשד, נשלחות גם כתובות URL מלאות וקטעי תוכן מדפים.</translation>
 <translation id="8414396119627470038">כניסה אל <ph name="SITE_ETLD_PLUS_ONE" /> באמצעות <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8419144699778179708">ההיסטוריה תימחק, כולל ההיסטוריה בתיבת החיפוש</translation>
 <translation id="8419244640277402268">הוספה</translation>
 <translation id="8422250855136581222">אין כרטיסיות במכשיר הזה</translation>
-<translation id="842386925677997438">‏הכלים לבטיחות של Chrome</translation>
+<translation id="842386925677997438">‏הכלים לבטיחות של Ultimatum</translation>
 <translation id="8427875596167638501">כרטיסיית התצוגה המקדימה פתוחה בחצי גובה המסך</translation>
 <translation id="8428213095426709021">הגדרות</translation>
 <translation id="8430824733382774043">שיתוף צילום המסך בלבד</translation>
@@ -1859,7 +1859,7 @@
 <translation id="8438566539970814960">שיפור החיפושים והגלישה</translation>
 <translation id="8439974325294139057"><ph name="LANG" /> - השפה מוכנה, צריך להפעיל מחדש את <ph name="APP_NAME" />.</translation>
 <translation id="8442258441309440798">אין סיפורים זמינים</translation>
-<translation id="8443209985646068659">‏אי אפשר לעדכן את Chrome</translation>
+<translation id="8443209985646068659">‏אי אפשר לעדכן את Ultimatum</translation>
 <translation id="8443600937324357591">העברת הכרטיסייה לחלון אחר</translation>
 <translation id="8445448999790540984">אי אפשר לייצא סיסמאות</translation>
 <translation id="8446884382197647889">למידע נוסף</translation>
@@ -1868,7 +1868,7 @@
 <translation id="8455675988389029454">יש לך אפשרות לקבל גישה לסימניות, לסיסמאות ולנתונים נוספים בכל המכשירים שלך</translation>
 <translation id="8458341576712814616">קיצור דרך</translation>
 <translation id="8458413889418591446">אחרי סנכרון ההיסטוריה והכרטיסיות אפשר יהיה לחזור במהירות לאתרים שביקרת בהם</translation>
-<translation id="84594714173170813">‏המשך השימוש בנתוני Chrome בחשבון Google שלך</translation>
+<translation id="84594714173170813">‏המשך השימוש בנתוני Ultimatum בחשבון Google שלך</translation>
 <translation id="8460008946585880786">גוררים כרטיסייה אחת מעל כרטיסייה אחרת ומשחררים אותה</translation>
 <translation id="8460448946170646641">בדיקה של אמצעי הבקרה החשובים ביותר על פרטיות ואבטחה</translation>
 <translation id="8460932807646981183">ניהול של מנועי החיפוש ושל החיפוש באתרים ספציפיים</translation>
@@ -1890,8 +1890,8 @@
 <translation id="8540136935098276800">‏יש להזין כתובת URL בפורמט חוקי</translation>
 <translation id="854522910157234410">פתיחת דף זה</translation>
 <translation id="8547466829003330976">‏בדיקת קובץ PDF באמצעות AI</translation>
-<translation id="8551513938758868521">‏נעילת הכרטיסיות הפרטיות כשיוצאים מ-Chrome</translation>
-<translation id="8559961053328923750">‏ב-Chrome מוגדרת מגבלה על כמות הנתונים הכוללת שאתרים רשאים לשתף דרך הדפדפן כדי למדוד את ביצועי המודעות</translation>
+<translation id="8551513938758868521">‏נעילת הכרטיסיות הפרטיות כשיוצאים מ-Ultimatum</translation>
+<translation id="8559961053328923750">‏ב-Ultimatum מוגדרת מגבלה על כמות הנתונים הכוללת שאתרים רשאים לשתף דרך הדפדפן כדי למדוד את ביצועי המודעות</translation>
 <translation id="8559990750235505898">הצעה לתרגם דפים בשפות אחרות</translation>
 <translation id="8560602726703398413">ניתן למצוא את רשימת הקריאה בקטע 'סימניות'</translation>
 <translation id="85618473456579127">לוחצים על הפרופיל בפינה השמאלית העליונה</translation>
@@ -1904,12 +1904,12 @@
 <translation id="859046281437143747">אפשר לעקוב אחר המחיר באמצעות כפתור האפשרויות הנוספות</translation>
 <translation id="859064343657890103">קבוצת הכרטיסיות <ph name="TAB_GROUP_TITLE" /> נמחקה</translation>
 <translation id="860043288473659153">שם בעל הכרטיס</translation>
-<translation id="8602358303461588329">‏כניסה ל-Chrome, סגור.</translation>
+<translation id="8602358303461588329">‏כניסה ל-Ultimatum, סגור.</translation>
 <translation id="860282621117673749">התראות על הנחות</translation>
 <translation id="8611922158252451755">צריך לשים לב עם מי משתפים את הכרטיסיות כי כל מי שיש לו את הקישור יכול לערוך את כל הכרטיסיות. תוקף הקישור יפוג בעוד 48 שעות.</translation>
 <translation id="8616006591992756292">‏ייתכן שלחשבון Google שלך יהיו צורות אחרות של היסטוריית גלישה בכתובת <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="8617240290563765734">האם לעבור אל כתובת האתר שצוינה כהצעה בתוכן שהורדת?</translation>
-<translation id="8629093325209491835">‏פותחים את תפריט Chrome &gt; הגדרות</translation>
+<translation id="8629093325209491835">‏פותחים את תפריט Ultimatum &gt; הגדרות</translation>
 <translation id="8634050254805484913">הסרגל מוסתר במסכים צרים</translation>
 <translation id="8635399646025169806">לשמור את קבוצת הכרטיסיות?</translation>
 <translation id="8636825310635137004">כדי לקבל את הכרטיסיות מהמכשירים האחרים שלך, יש להפעיל את הסנכרון.</translation>
@@ -1928,15 +1928,15 @@
 <translation id="8715300232952757586">‫<ph name="TAB_TITLE" /> ייסגר</translation>
 <translation id="8723453889042591629">תרגום מהיר של הדף הזה. ניתן לערוך את קיצור הדרך הזה בלחיצה ארוכה.</translation>
 <translation id="8725066075913043281">ניסיון חוזר</translation>
-<translation id="8727043961453758442">‏נהנים מהמיטב של Chrome</translation>
+<translation id="8727043961453758442">‏נהנים מהמיטב של Ultimatum</translation>
 <translation id="8731268612289859741">קוד האבטחה</translation>
 <translation id="8738163682604285902">לעבור למצב הקריאה?</translation>
 <translation id="8746155870861185046">שיתוף של הטקסט המודגש</translation>
 <translation id="8748850008226585750">התוכן מוסתר</translation>
 <translation id="8754448020583829686">העתקה בלי הקישור</translation>
 <translation id="8756969031206844760">לעדכן את הסיסמה?</translation>
-<translation id="8765470054473112089">‏כשמקלידים טקסט בסרגל הכתובות או בתיבת החיפוש, Chrome שולח את הטקסט הזה למנוע החיפוש שמוגדר כברירת מחדל כדי לקבל הצעות טובות יותר. האפשרות הזו מושבתת במצב הפרטי.</translation>
-<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{‏‫Chrome זיהה סיסמה חלשה שאפשר לשפר}one{‏‫Chrome זיהה # סיסמאות חלשות שאפשר לשפר}two{‏‫Chrome זיהה # סיסמאות חלשות שאפשר לשפר}other{‏‫Chrome זיהה # סיסמאות חלשות שאפשר לשפר}}</translation>
+<translation id="8765470054473112089">‏כשמקלידים טקסט בסרגל הכתובות או בתיבת החיפוש, Ultimatum שולח את הטקסט הזה למנוע החיפוש שמוגדר כברירת מחדל כדי לקבל הצעות טובות יותר. האפשרות הזו מושבתת במצב הפרטי.</translation>
+<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{‏‫Ultimatum זיהה סיסמה חלשה שאפשר לשפר}one{‏‫Ultimatum זיהה # סיסמאות חלשות שאפשר לשפר}two{‏‫Ultimatum זיהה # סיסמאות חלשות שאפשר לשפר}other{‏‫Ultimatum זיהה # סיסמאות חלשות שאפשר לשפר}}</translation>
 <translation id="8766529642647037772">רוצה ליצור קישור מודגש כמו זה שמופיע כאן?</translation>
 <translation id="8788265440806329501">היסטוריית הניווט סגורה</translation>
 <translation id="8790193082819560975">צריך ללחוץ כדי לחפש אפשרויות קנייה של המוצר בכרטיסייה חדשה.</translation>
@@ -1959,7 +1959,7 @@
 <translation id="885480114717186641">ניתן לבקש את האתר שמותאם למחשב של <ph name="HOST_NAME" /></translation>
 <translation id="8856607253650333758">ליצירת תיאורים</translation>
 <translation id="8863714995118816041">הרשאות ניתנו מחדש לאתר <ph name="SITE_NAME" /></translation>
-<translation id="8865415417596392024">‏נתוני Chrome בחשבון שלך</translation>
+<translation id="8865415417596392024">‏נתוני Ultimatum בחשבון שלך</translation>
 <translation id="8872506776304248286">פתח ביישום</translation>
 <translation id="8890668505403261809">חיפוש בכרטיסיות הפרטיות</translation>
 <translation id="8892234476517513962">נכנסת כבר לחשבון</translation>
@@ -1971,7 +1971,7 @@
 <translation id="8922289737868596582">כדי להשתמש בדפים במצב אופליין, אפשר להוריד אותם דרך הכפתור 'אפשרויות נוספות'</translation>
 <translation id="8924575305646776101"><ph name="BEGIN_LINK" />מידע נוסף<ph name="END_LINK" /></translation>
 <translation id="892496902842311796"><ph name="LANG" /> מוכנה לשימוש</translation>
-<translation id="8937772741022875483">‏האם להסיר את הפעילות שלך ב-Chrome מ'שימוש חכם בדיגיטל'?</translation>
+<translation id="8937772741022875483">‏האם להסיר את הפעילות שלך ב-Ultimatum מ'שימוש חכם בדיגיטל'?</translation>
 <translation id="8942627711005830162">פתיחה בחלון האחר</translation>
 <translation id="8945143127965743188"><ph name="LANG" /> - לא ניתן היה להוריד את השפה הזו. יש לנסות שוב מאוחר יותר.</translation>
 <translation id="8946759102391960088">שמירה על הגישה לסיסמאות</translation>
@@ -1983,12 +1983,12 @@
 <translation id="8970887620466824814">משהו השתבש.</translation>
 <translation id="8972098258593396643">האם להוריד לתיקיית ברירת המחדל?</translation>
 <translation id="8987736167266086032">המשך מהנקודה שבה הפסקת</translation>
-<translation id="8992769679401294069">‏הנתונים שלך מוצפנים באמצעות ביטוי הסיסמה. כדי להשתמש בנתוני Chrome ולשמור אותם בחשבון Google, עליך להזין את ביטוי הסיסמה.</translation>
+<translation id="8992769679401294069">‏הנתונים שלך מוצפנים באמצעות ביטוי הסיסמה. כדי להשתמש בנתוני Ultimatum ולשמור אותם בחשבון Google, עליך להזין את ביטוי הסיסמה.</translation>
 <translation id="8993760627012879038">פתיחת חלון חדש במצב אנונימי</translation>
 <translation id="8995521496079646922">האפליקציות שבחרת ישמשו כברירת מחדל. אם האפליקציה לא מותקנת במכשיר הזה, המערכת תוריד אותה בקרוב.</translation>
 <translation id="8996847606757455498">בחירת ספק אחר</translation>
 <translation id="8998837250940831980">לא ניתן למזער את הכרטיסייה. אפשר לנסות שוב אחר כך.</translation>
-<translation id="9001604755921395912">‏פתיחה בכרטיסייה פרטית ב-Chrome</translation>
+<translation id="9001604755921395912">‏פתיחה בכרטיסייה פרטית ב-Ultimatum</translation>
 <translation id="9012585441087414258">‏הגנה מפני אתרים, הורדות ותוספים שידועים כמסוכנים. אם בדף כלשהו מתבצעת פעולה חשודה, כתובות URL וקטעים מהתוכן בדף נשלחים אל הגלישה הבטוחה של Google.</translation>
 <translation id="9019199799064251516">להמשיך בלי נעילת פרופיל במכונית?</translation>
 <translation id="9022774213089566801">אתרים עם ביקורים תכופים</translation>
@@ -1996,7 +1996,7 @@
 <translation id="9027728231343310283">ביטול ההרשאה לאתר <ph name="SITE" /></translation>
 <translation id="9035378196785279980">‏העברה אל\u2026</translation>
 <translation id="9042893549633094279">פרטיות ואבטחה</translation>
-<translation id="9047347135558855162">‏חיפוש מהיר ב-Chrome</translation>
+<translation id="9047347135558855162">‏חיפוש מהיר ב-Ultimatum</translation>
 <translation id="9050666287014529139">ביטוי סיסמה</translation>
 <translation id="9055497320631373736">האתר הוחזר לאתרים פוטנציאליים</translation>
 <translation id="9057030985451135243">מידע על קבוצות משותפות של כרטיסיות</translation>
@@ -2004,7 +2004,7 @@
 <translation id="9063400323119781058">ההרשמה בוטלה</translation>
 <translation id="9063523880881406963">כיבוי של 'בקשת אתר עבור מחשב שולחני'</translation>
 <translation id="9065203028668620118">עריכה</translation>
-<translation id="9065383040763568503">‏נתונים מאוחסנים שלא מוגדרים כחשובים ב-Chrome (למשל: אתרים ללא הגדרות שמורות או כאלה שתדירות הביקור בהם נמוכה)</translation>
+<translation id="9065383040763568503">‏נתונים מאוחסנים שלא מוגדרים כחשובים ב-Ultimatum (למשל: אתרים ללא הגדרות שמורות או כאלה שתדירות הביקור בהם נמוכה)</translation>
 <translation id="9067341854474068781">אין גיליון של מפתחות גישה שנפתח בגובה מלא</translation>
 <translation id="906781307897697745">מיקום הסימנייה: <ph name="PRODUCT_NAME" /></translation>
 <translation id="9068568736932147490">‫<ph name="TAB_TITLE" />, כרטיסייה פרטית מתוך סדרת כרטיסיות פרטית שנבחרה והוצמדה, ומכילה תוכן שאפשר לשמוע</translation>
@@ -2014,8 +2014,8 @@
 <translation id="9074739597929991885">Bluetooth</translation>
 <translation id="9081543426177426948">אתרים שנכנסים אליהם לא נשמרים במצב אנונימי</translation>
 <translation id="9086455579313502267">אין אפשרות לגשת לרשת</translation>
-<translation id="9093915805850895575">‏פתיחה בחלון של Chrome</translation>
-<translation id="909756639352028172">‏כדי ליהנות מחוויה מותאמת אישית ברמה גבוהה, כדאי לכלול את Chrome ב'פעילות באינטרנט ובאפליקציות' ובשירותי Google המקושרים.</translation>
+<translation id="9093915805850895575">‏פתיחה בחלון של Ultimatum</translation>
+<translation id="909756639352028172">‏כדי ליהנות מחוויה מותאמת אישית ברמה גבוהה, כדאי לכלול את Ultimatum ב'פעילות באינטרנט ובאפליקציות' ובשירותי Google המקושרים.</translation>
 <translation id="9099220545925418560">על סמך היסטוריית הגלישה שלך. ההגדרה הזו מושבתת.</translation>
 <translation id="9100610230175265781">יש להזין ביטוי סיסמה</translation>
 <translation id="9101137867221042551">ניהול</translation>
@@ -2051,9 +2051,9 @@
 <translation id="9218430445555521422">הגדרה כברירת מחדל</translation>
 <translation id="9219103736887031265">תמונות</translation>
 <translation id="9222198206152536936">כדי לקבל גישה לכרטיסיות ולפריטים נוספים בכל המכשירים שלך, כדאי להיכנס לחשבון <ph name="EMAIL" /></translation>
-<translation id="924447568950697217">‏הגדר את Chrome בתור דפדפן ברירת המחדל</translation>
-<translation id="926205370408745186">‏הסרת הפעילות שלך ב-Chrome מ'שימוש חכם בדיגיטל'.</translation>
-<translation id="927968626442779827">‏כדאי להשתמש במצב הטעינה המהירה ב-Google Chrome</translation>
+<translation id="924447568950697217">‏הגדר את Ultimatum בתור דפדפן ברירת המחדל</translation>
+<translation id="926205370408745186">‏הסרת הפעילות שלך ב-Ultimatum מ'שימוש חכם בדיגיטל'.</translation>
+<translation id="927968626442779827">‏כדאי להשתמש במצב הטעינה המהירה ב-Ultimatum</translation>
 <translation id="928550791203542716">האתר <ph name="SITE_NAME" /> נמצא במעקב</translation>
 <translation id="930124987204876019">‏מחיקת ההיסטוריה, קובצי ה-Cookie, נתוני האתרים, המטמון…</translation>
 <translation id="930834144334005936">איפוס המצב הנוכחי <ph name="MODE_NAME" /> ל"חיפוש"</translation>
@@ -2061,7 +2061,7 @@
 <translation id="939598580284253335">הזנת ביטוי סיסמה</translation>
 <translation id="94161319503679839">‫<ph name="TAB_TITLE" />, כרטיסייה פרטית מוצמדת, במצב "תמונה בתוך תמונה"</translation>
 <translation id="945522503751344254"> שליחת משוב</translation>
-<translation id="95817756606698420">‏דפדפן Chrome יכול להשתמש ב-<ph name="BEGIN_BOLD" />Sogou‏<ph name="END_BOLD" /> כדי לבצע חיפוש מסין. אפשר לשנות את ההעדפה הזאת ב<ph name="BEGIN_LINK" />הגדרות<ph name="END_LINK" />.</translation>
+<translation id="95817756606698420">‏דפדפן Ultimatum יכול להשתמש ב-<ph name="BEGIN_BOLD" />Sogou‏<ph name="END_BOLD" /> כדי לבצע חיפוש מסין. אפשר לשנות את ההעדפה הזאת ב<ph name="BEGIN_LINK" />הגדרות<ph name="END_LINK" />.</translation>
 <translation id="961856697154696964">מחיקת נתוני הגלישה</translation>
 <translation id="963246339335003378">פתיחת מנהל המשימות</translation>
 <translation id="966131775676567255">נתוני החשבון נמחקים</translation>

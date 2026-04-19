@@ -24,9 +24,9 @@
 <translation id="1089606299949659462">Revisione completata.</translation>
 <translation id="1094555143448724771">Per vedere le schede degli altri tuoi dispositivi, sincronizza le schede e la cronologia</translation>
 <translation id="1095761715416917775">Assicurati di poter accedere sempre ai dati sincronizzati</translation>
-<translation id="1096091316906284742">Riquadro inferiore di attivazione di Chrome Finds</translation>
+<translation id="1096091316906284742">Riquadro inferiore di attivazione di Ultimatum Finds</translation>
 <translation id="1100066534610197918">Apri in nuova scheda in gruppo</translation>
-<translation id="1103142993930332957">Vuoi contribuire a migliorare Chrome?</translation>
+<translation id="1103142993930332957">Vuoi contribuire a migliorare Ultimatum?</translation>
 <translation id="1105960400813249514">Acquisizione schermo</translation>
 <translation id="1108214977745280468">Mostra statistiche pagine</translation>
 <translation id="1108938384783527433">Sincronizzazione della cronologia</translation>
@@ -34,20 +34,20 @@
 <translation id="1123537484474186311"><ph name="TAB_TITLE" />, scheda Picture in picture</translation>
 <translation id="1126696498560056882">Gestisci gli account su questo dispositivo</translation>
 <translation id="1135018701024399762">La modalità Incognito mantiene la navigazione nascosta agli altri utenti che utilizzano il tuo dispositivo</translation>
-<translation id="113752097246673894">Accedi a Chrome come <ph name="EMAIL" /> per trovare preferiti e altri dati su tutti i tuoi dispositivi</translation>
+<translation id="113752097246673894">Accedi a Ultimatum come <ph name="EMAIL" /> per trovare preferiti e altri dati su tutti i tuoi dispositivi</translation>
 <translation id="1138458427267715730">Ricevi avvisi quando il prezzo cala su qualsiasi sito del web</translation>
 <translation id="1140317858355046628">Se lo elimini, tutti perderanno immediatamente l'accesso al gruppo di schede "<ph name="GROUP_NAME" />", che verrà eliminato da tutti i dispositivi.</translation>
 <translation id="1142732900304639782">Non proporre di tradurre questi siti</translation>
 <translation id="1143193470214071120">Chiudi una finestra o gestisci le finestre</translation>
 <translation id="1149725087019908252">Scansione di <ph name="FILE_NAME" /></translation>
-<translation id="1150263420752757504"><ph name="APP_NAME" /> si aprirà in Chrome. Se continui, accetti i <ph name="BEGIN_LINK1" />Termini di servizio di Google<ph name="END_LINK1" /> e i <ph name="BEGIN_LINK2" />Termini di servizio aggiuntivi di Google Chrome e ChromeOS<ph name="END_LINK2" />.</translation>
+<translation id="1150263420752757504"><ph name="APP_NAME" /> si aprirà in Ultimatum. Se continui, accetti i <ph name="BEGIN_LINK1" />Termini di servizio di Google<ph name="END_LINK1" /> e i <ph name="BEGIN_LINK2" />Termini di servizio aggiuntivi di Ultimatum e UltimatumOS<ph name="END_LINK2" />.</translation>
 <translation id="1154555449933432029">Non hai password salvate in Gestore delle password di Google.</translation>
 <translation id="115483310321669804">Utilizza password <ph name="PASSWORD" /></translation>
 <translation id="1161065531352634524">Sincronizza schede e cronologia</translation>
 <translation id="1165109137568919258">Scatta una foto o aggiungi un'immagine dalla tua galleria fotografica per eseguire la ricerca</translation>
 <translation id="1173894706177603556">Rinomina</translation>
-<translation id="1174479719160874822">Se lo schermo è stretto, Chrome richiederà il sito mobile</translation>
-<translation id="1175241315203286684">L'amministratore può apportare modifiche al profilo e al browser da remoto, analizzare le informazioni sul browser tramite i report ed eseguire altre attività necessarie. L'attività svolta su questo dispositivo potrebbe essere gestita anche al di fuori di Chrome.</translation>
+<translation id="1174479719160874822">Se lo schermo è stretto, Ultimatum richiederà il sito mobile</translation>
+<translation id="1175241315203286684">L'amministratore può apportare modifiche al profilo e al browser da remoto, analizzare le informazioni sul browser tramite i report ed eseguire altre attività necessarie. L'attività svolta su questo dispositivo potrebbe essere gestita anche al di fuori di Ultimatum.</translation>
 <translation id="1177863135347784049">Personalizzati</translation>
 <translation id="1181037720776840403">Rimuovi</translation>
 <translation id="1183189057400844278">Verifica la tua identità per assicurarti di poter usare sempre le password nel tuo Account Google</translation>
@@ -85,13 +85,13 @@
 <translation id="1318262688555255786">Condividi il link alla pagina web <ph name="PAGE_TITLE" />. Fonte: <ph name="PAGE_URL" /></translation>
 <translation id="1320912611264252795">Cartelle del flusso di salvataggio dei preferiti aperte a schermo intero</translation>
 <translation id="1327257854815634930">La cronologia di navigazione è aperta</translation>
-<translation id="1331212799747679585">Impossibile aggiornare Chrome. Altre opzioni</translation>
-<translation id="1332501820983677155">Scorciatoie delle funzioni di Google Chrome</translation>
+<translation id="1331212799747679585">Impossibile aggiornare Ultimatum. Altre opzioni</translation>
+<translation id="1332501820983677155">Scorciatoie delle funzioni di Ultimatum</translation>
 <translation id="1333491156693005331">Controllo eseguito di recente</translation>
 <translation id="1336996151357442890">Iscrizione a <ph name="SITE_NAME" /> annullata. Alla tua prossima visita verrà visualizzata la stessa richiesta.</translation>
 <translation id="1340839264183302272">Lascia il gruppo</translation>
 <translation id="1342886103232377846">Per controllare la presenza di password compromesse, vai a Gestore delle password di Google</translation>
-<translation id="1343830902827845050">Accedi a Chrome</translation>
+<translation id="1343830902827845050">Accedi a Ultimatum</translation>
 <translation id="1344653310988386453">Includi link al testo evidenziato</translation>
 <translation id="1355088659320425659">Cronologia e schede</translation>
 <translation id="1360432990279830238">Uscire e disattivare la sincronizzazione?</translation>
@@ -105,12 +105,12 @@
 <translation id="1383876407941801731">Cerca</translation>
 <translation id="1384704387250346179">Traduci l'immagine con Google Lens <ph name="BEGIN_NEW" />Novità<ph name="END_NEW" /></translation>
 <translation id="1386674309198842382">Attivo <ph name="LAST_UPDATED" /> giorni fa</translation>
-<translation id="1390418506739274310">Potresti vedere la cronologia di altre app che aprono link in Chrome. Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione all'indirizzo <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
+<translation id="1390418506739274310">Potresti vedere la cronologia di altre app che aprono link in Ultimatum. Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione all'indirizzo <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="139752016751285248">Riquadro inferiore di approfondimenti sul prezzo aperto a schermo intero</translation>
 <translation id="1397811292916898096">Cerca con <ph name="PRODUCT_NAME" /></translation>
-<translation id="1398057416966591719">Puoi <ph name="BEGIN_LINK1" />gestire quali dati di Chrome salvare<ph name="END_LINK1" /> nel tuo Account Google.
+<translation id="1398057416966591719">Puoi <ph name="BEGIN_LINK1" />gestire quali dati di Ultimatum salvare<ph name="END_LINK1" /> nel tuo Account Google.
 
-Per altre impostazioni che utilizzano i dati per migliorare la tua esperienza con Chrome, vai alle impostazioni dei <ph name="BEGIN_LINK2" />servizi Google<ph name="END_LINK2" />.</translation>
+Per altre impostazioni che utilizzano i dati per migliorare la tua esperienza con Ultimatum, vai alle impostazioni dei <ph name="BEGIN_LINK2" />servizi Google<ph name="END_LINK2" />.</translation>
 <translation id="1407069428457324124">Tema scuro</translation>
 <translation id="1407135791313364759">Apri tutte</translation>
 <translation id="1409879593029778104">Download di <ph name="FILE_NAME" /> impedito perché il file esiste già.</translation>
@@ -124,10 +124,10 @@ Per altre impostazioni che utilizzano i dati per migliorare la tua esperienza co
 <translation id="1448440926884431741">Organizza i tuoi prodotti monitorati in Segnalibri</translation>
 <translation id="1455845192930279203">Scaricare comunque "<ph name="FILE_NAME" />" (<ph name="FILE_SIZE" />) da <ph name="DOWNLOAD_DOMAIN" />?</translation>
 <translation id="1460751212339734034">Risparmia tempo e digita meno</translation>
-<translation id="1466383950273130737">Seleziona la lingua di Chrome</translation>
+<translation id="1466383950273130737">Seleziona la lingua di Ultimatum</translation>
 <translation id="1477626028522505441">Download di <ph name="FILE_NAME" /> non riuscito a causa di problemi del server.</translation>
 <translation id="147982357559798527">Modificata</translation>
-<translation id="1480287803138246127">Parte della tua cronologia potrebbe non essere visualizzata qui. Per vedere tutta la cronologia di Chrome, apri la cronologia completa del browser.</translation>
+<translation id="1480287803138246127">Parte della tua cronologia potrebbe non essere visualizzata qui. Per vedere tutta la cronologia di Ultimatum, apri la cronologia completa del browser.</translation>
 <translation id="1493287004536771723">Stai seguendo <ph name="SITE_NAME" /></translation>
 <translation id="1495677929897281669">Torna alla scheda</translation>
 <translation id="1496514951988037011">nome utente</translation>
@@ -137,14 +137,14 @@ Per altre impostazioni che utilizzano i dati per migliorare la tua esperienza co
 <translation id="1515901671075971249">Scorciatoie di navigazione tra le schede</translation>
 <translation id="1516966594427080024">Apri una nuova finestra in modalità Incognito</translation>
 <translation id="1521774566618522728">Attivo oggi</translation>
-<translation id="153446405401665083">È disponibile una nuova versione di Chrome</translation>
+<translation id="153446405401665083">È disponibile una nuova versione di Ultimatum</translation>
 <translation id="1540012742443808215">Al momento la barra degli indirizzi è in alto</translation>
-<translation id="1544084554881119930">I metodi di pagamento e gli indirizzi non verranno criptati. La cronologia di navigazione di Chrome non verrà sincronizzata.
-Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphrase non viene inviata a Google o memorizzata da Google. Se dimentichi la passphrase o vuoi modificare questa impostazione, <ph name="BEGIN_LINK" />cancella i dati di Chrome nel tuo account<ph name="END_LINK" />.</translation>
+<translation id="1544084554881119930">I metodi di pagamento e gli indirizzi non verranno criptati. La cronologia di navigazione di Ultimatum non verrà sincronizzata.
+Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphrase non viene inviata a Google o memorizzata da Google. Se dimentichi la passphrase o vuoi modificare questa impostazione, <ph name="BEGIN_LINK" />cancella i dati di Ultimatum nel tuo account<ph name="END_LINK" />.</translation>
 <translation id="1544826120773021464">Per gestire il tuo Account Google, tocca il pulsante "Gestisci account"</translation>
 <translation id="1549000191223877751">Passa a un'altra finestra</translation>
-<translation id="1553358976309200471">Aggiorna Chrome</translation>
-<translation id="1554532453982918912">Contribuisci a migliorare Chrome per le persone che lo usano come fai tu</translation>
+<translation id="1553358976309200471">Aggiorna Ultimatum</translation>
+<translation id="1554532453982918912">Contribuisci a migliorare Ultimatum per le persone che lo usano come fai tu</translation>
 <translation id="1568636008098739136">Ascolta questa pagina. Tocca e tieni premuto per modificare questa scorciatoia.</translation>
 <translation id="1571041387761170095">Nessuna password inefficace o riutilizzata</translation>
 <translation id="1578591621182011812">{NUM_PASSWORDS,plural, =1{1 password compromessa su questo dispositivo}other{# password compromesse su questo dispositivo}}</translation>
@@ -171,24 +171,24 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="1702907158640575240">Browser gestito</translation>
 <translation id="170478069042229393"><ph name="TAB_TITLE" />, scheda Incognito fissata</translation>
 <translation id="1718835860248848330">Ultima ora</translation>
-<translation id="1726477445370128854">Puoi eseguire ricerche e navigare più rapidamente quando Chrome precarica le pagine che ritiene tu possa visitare</translation>
+<translation id="1726477445370128854">Puoi eseguire ricerche e navigare più rapidamente quando Ultimatum precarica le pagine che ritiene tu possa visitare</translation>
 <translation id="1728803206919861584">Vuoi salvare la passkey al di fuori della modalità Incognito?</translation>
 <translation id="1732514748744806741">Ti comunicheremo se le tue password sono compromesse</translation>
-<translation id="1737694586321018892">Usa la funzionalità di sicurezza più efficace di Chrome</translation>
+<translation id="1737694586321018892">Usa la funzionalità di sicurezza più efficace di Ultimatum</translation>
 <translation id="1747593111377567311">{NUM_SITES,plural, =1{1 sito ha inviato molte notifiche di recente}other{# siti hanno inviato molte notifiche di recente}}</translation>
 <translation id="1749561566933687563">Sincronizza i tuoi preferiti</translation>
 <translation id="1750238553597293878">Continua a usare le password nel tuo Account Google</translation>
 <translation id="17513872634828108">Schede aperte</translation>
 <translation id="1753744496844366747">Aa</translation>
 <translation id="1760873718737761808">{FILE_COUNT,plural, =1{Pagine, 1 pagina nell'elenco}other{Pagine, # pagine nell'elenco}}</translation>
-<translation id="1771929606532798550">A Google vengono inviate informazioni sul tuo utilizzo di Chrome, ma non sono riconducibili a te\n\nSe Chrome si arresta in modo anomalo, i dettagli su questo evento potrebbero includere alcune delle tue informazioni personali\n\nSe sincronizzi la cronologia dell'Account Google, le metriche potrebbero includere anche informazioni sugli URL che visiti</translation>
+<translation id="1771929606532798550">A Google vengono inviate informazioni sul tuo utilizzo di Ultimatum, ma non sono riconducibili a te\n\nSe Ultimatum si arresta in modo anomalo, i dettagli su questo evento potrebbero includere alcune delle tue informazioni personali\n\nSe sincronizzi la cronologia dell'Account Google, le metriche potrebbero includere anche informazioni sugli URL che visiti</translation>
 <translation id="1778457539567749232">Segna come da leggere</translation>
 <translation id="1779766957982586368">Chiudi finestra</translation>
 <translation id="1780023393214832643">Password salvate su <ph name="USERNAME" /></translation>
 <translation id="1791662854739702043">Installato</translation>
 <translation id="1792959175193046959">Modifica il percorso di download predefinito in qualsiasi momento</translation>
 <translation id="1796666869097395659">Riduci a icona la scheda per riaprirla in un secondo momento</translation>
-<translation id="1799920918471566157">Suggerimenti per Chrome</translation>
+<translation id="1799920918471566157">Suggerimenti per Ultimatum</translation>
 <translation id="1807246157184219062">Chiaro</translation>
 <translation id="1807709131360304325">Aprire una nuova finestra</translation>
 <translation id="1810845389119482123">Configurazione iniziale della sincronizzazione non terminata</translation>
@@ -197,13 +197,13 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="1820408774134375111">Riquadro inferiore di accesso</translation>
 <translation id="1823492026305965829">Accedi come <ph name="USER_FULL_NAME" /></translation>
 <translation id="1824902652744048041">Tocca Elimina dati di navigazione</translation>
-<translation id="1825772852827001597">I metodi di pagamento e gli indirizzi memorizzati su Google Pay non verranno criptati. La cronologia di navigazione di Chrome non verrà sincronizzata.
-Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphrase non viene inviata a Google o memorizzata da Google. Se dimentichi la passphrase o vuoi modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Chrome nel tuo account<ph name="END_LINK" />.</translation>
+<translation id="1825772852827001597">I metodi di pagamento e gli indirizzi memorizzati su Google Pay non verranno criptati. La cronologia di navigazione di Ultimatum non verrà sincronizzata.
+Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphrase non viene inviata a Google o memorizzata da Google. Se dimentichi la passphrase o vuoi modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ultimatum nel tuo account<ph name="END_LINK" />.</translation>
 <translation id="1829244130665387512">Trova nella pagina</translation>
 <translation id="1832459821645506983">Ok</translation>
-<translation id="1845958458910716240">Per proteggere i tuoi dati, consenti a Chrome di rimuovere le autorizzazioni dai siti che non hai visitato di recente</translation>
-<translation id="1871098866036088250">Apri nel browser Chrome</translation>
-<translation id="1877026089748256423">Chrome non è aggiornato</translation>
+<translation id="1845958458910716240">Per proteggere i tuoi dati, consenti a Ultimatum di rimuovere le autorizzazioni dai siti che non hai visitato di recente</translation>
+<translation id="1871098866036088250">Apri nel browser Ultimatum</translation>
+<translation id="1877026089748256423">Ultimatum non è aggiornato</translation>
 <translation id="1877073879466606884">Il profilo a cui hai eseguito l'accesso è un profilo gestito. L'amministratore può apportare modifiche alle impostazioni del profilo da remoto, analizzare le informazioni sul browser tramite i report ed eseguire altre attività necessarie.</translation>
 <translation id="1879904908408734349">Riquadro inferiore di accesso chiuso</translation>
 <translation id="1883903952484604915">I miei file</translation>
@@ -215,7 +215,7 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="1910950723001426294">L'elenco di opzioni di condivisione è chiuso.</translation>
 <translation id="191726024256261717">Rivedi le autorizzazioni</translation>
 <translation id="1917766536967060661">Perderai immediatamente l'accesso al gruppo di schede "<ph name="GROUP_NAME" />" e <ph name="BLOCKED_MEMBER_FULL_NAME" /> (<ph name="BLOCKED_MEMBER_EMAIL" />) non potrà più interagire con te nei servizi Google.</translation>
-<translation id="1919130412786645364">Consenti l'accesso a Chrome</translation>
+<translation id="1919130412786645364">Consenti l'accesso a Ultimatum</translation>
 <translation id="1922362554271624559">Lingue consigliate</translation>
 <translation id="1924255092154549435">La scheda è espansa</translation>
 <translation id="1925021887439448749">Inserisci un indirizzo web personalizzato</translation>
@@ -225,11 +225,11 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="1944535645109964458">Nessuna passkey disponibile</translation>
 <translation id="1957557050935255529">Caricamento PDF in corso…</translation>
 <translation id="1959679933317802873">In attesa di contenuti</translation>
-<translation id="1960290143419248813">Gli aggiornamenti di Chrome non sono più supportati per questa versione di Android</translation>
+<translation id="1960290143419248813">Gli aggiornamenti di Ultimatum non sono più supportati per questa versione di Android</translation>
 <translation id="1962061488333185936"><ph name="TAB_TITLE" />, schede udibili selezionate</translation>
 <translation id="1963976881984600709">Protezione standard</translation>
 <translation id="1966710179511230534">Aggiorna i dati di accesso.</translation>
-<translation id="1969037871259811890">Se elimini i dati di navigazione, non uscirai dal tuo Account Google. Per farlo, <ph name="BEGIN_LINK1" />esci da Chrome<ph name="END_LINK1" />.</translation>
+<translation id="1969037871259811890">Se elimini i dati di navigazione, non uscirai dal tuo Account Google. Per farlo, <ph name="BEGIN_LINK1" />esci da Ultimatum<ph name="END_LINK1" />.</translation>
 <translation id="197288927597451399">Conserva</translation>
 <translation id="1973912524893600642">Conserva i dati</translation>
 <translation id="1974060860693918893">Avanzate</translation>
@@ -242,7 +242,7 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="2021896219286479412">Controlli sito a schermo intero</translation>
 <translation id="2029669011553795746">Attivazione delle notifiche di suggerimenti aperta nella parte inferiore dello schermo</translation>
 <translation id="2038563949887743358">Attiva Richiedi sito desktop</translation>
-<translation id="204321170514947529">Anche <ph name="APP_NAME" /> presenta dati in Chrome</translation>
+<translation id="204321170514947529">Anche <ph name="APP_NAME" /> presenta dati in Ultimatum</translation>
 <translation id="2047378580182589770">Tocca e tieni premuto per uscire dalla modalità Incognito</translation>
 <translation id="2049574241039454490"><ph name="FILE_SIZE_OF_TOTAL" /> <ph name="SEPARATOR" /> <ph name="DESCRIPTION" /></translation>
 <translation id="2051669996101374349">Se possibile, utilizza HTTPS e ricevi un avviso prima di caricare i siti che non lo supportano. Non puoi modificare questa impostazione perché hai attivato la protezione avanzata.</translation>
@@ -265,9 +265,9 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="2138283760993967204">Icona Gestisci</translation>
 <translation id="2138632817776076519"><ph name="TAB_TITLE" />, scheda con registrazione selezionata</translation>
 <translation id="2141396931810938595">In base al tuo utilizzo</translation>
-<translation id="2145315049852051678">Chrome esegue controlli regolari per verificare che il browser disponga delle impostazioni più sicure. Ti informeremo qualora fosse necessario un controllo da parte tua.</translation>
+<translation id="2145315049852051678">Ultimatum esegue controlli regolari per verificare che il browser disponga delle impostazioni più sicure. Ti informeremo qualora fosse necessario un controllo da parte tua.</translation>
 <translation id="2149973817440762519">Modifica Preferito</translation>
-<translation id="2163089732491971196">Per usare e salvare i dati di Chrome nel tuo Account Google, inserisci la tua passphrase</translation>
+<translation id="2163089732491971196">Per usare e salvare i dati di Ultimatum nel tuo Account Google, inserisci la tua passphrase</translation>
 <translation id="2166228530126694506">Versione <ph name="VERSION_NUMBER" /></translation>
 <translation id="2172688499998841696">Le descrizioni delle immagini sono disattivate</translation>
 <translation id="2172905120685242547">Chiudere la finestra?</translation>
@@ -280,7 +280,7 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="2194856509914051091">Aspetti da considerare</translation>
 <translation id="2205701497928406883"><ph name="TAB_TITLE" />, scheda condivisa fissata</translation>
 <translation id="22091350895006575">Aggiungi nome utente</translation>
-<translation id="221494669172414749">Se apri Chrome senza un blocco del profilo, le password e i metodi di pagamento salvati verranno rimossi dall'auto. L'utilizzo di un blocco del profilo protegge questi dati.</translation>
+<translation id="221494669172414749">Se apri Ultimatum senza un blocco del profilo, le password e i metodi di pagamento salvati verranno rimossi dall'auto. L'utilizzo di un blocco del profilo protegge questi dati.</translation>
 <translation id="2226826835915474236">Scorciatoie non attive</translation>
 <translation id="2227179592712503583">Rimuovi suggerimento</translation>
 <translation id="2227444325776770048">Continua come <ph name="USER_FULL_NAME" /></translation>
@@ -311,7 +311,7 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="2332515770639153015">Navigazione sicura avanzata attiva</translation>
 <translation id="233375395665273385">Elimina ed esci</translation>
 <translation id="2341410551640223969">Impossibile installare <ph name="WEBAPK_NAME" />.</translation>
-<translation id="2349710944427398404">Dati totali utilizzati da Chrome, tra cui account, preferiti e impostazioni salvate</translation>
+<translation id="2349710944427398404">Dati totali utilizzati da Ultimatum, tra cui account, preferiti e impostazioni salvate</translation>
 <translation id="235789365079050412">Norme sulla privacy di Google</translation>
 <translation id="2359808026110333948">Continua</translation>
 <translation id="2362083820973145409">Accesso eseguito come <ph name="USER_NAME" />. <ph name="USER_EMAIL" />. Consente di aprire le impostazioni.</translation>
@@ -333,7 +333,7 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="2427025860753516072">{FILE_COUNT,plural, =1{Video, 1 video nell'elenco}other{Video, # video nell'elenco}}</translation>
 <translation id="2433507940547922241">Aspetto</translation>
 <translation id="2439153523196674349">Anteprima di <ph name="SITE_NAME" /></translation>
-<translation id="2449931042095204989">Quando un sito o un'app Google richiede di precaricare privatamente i link sulle sue pagine, Chrome cripta e precarica le pagine tramite i server di Google senza usare cookie. In questo modo la tua identità rimane nascosta ai siti precaricati.</translation>
+<translation id="2449931042095204989">Quando un sito o un'app Google richiede di precaricare privatamente i link sulle sue pagine, Ultimatum cripta e precarica le pagine tramite i server di Google senza usare cookie. In questo modo la tua identità rimane nascosta ai siti precaricati.</translation>
 <translation id="2450019289047528273">Metodi di pagamento e altre informazioni da Google Wallet</translation>
 <translation id="2450083983707403292">Vuoi avviare di nuovo il download di <ph name="FILE_NAME" />?</translation>
 <translation id="2451607499823206582">Monitoraggio</translation>
@@ -342,17 +342,17 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="2466378451804467735"><ph name="TAB_TITLE" />, schede con audio disattivato selezionate</translation>
 <translation id="2468444275314013497">Il tuo browser è protetto</translation>
 <translation id="2471632347767899461">Prova a cercare nel Centro assistenza</translation>
-<translation id="2472163211318554013">Accedi per usare al meglio Chrome</translation>
+<translation id="2472163211318554013">Accedi per usare al meglio Ultimatum</translation>
 <translation id="247737702124049222">Le descrizioni delle immagini sono attive</translation>
 <translation id="2479148705183875116">Vai a Impostazioni</translation>
 <translation id="2482878487686419369">Notifiche</translation>
 <translation id="2496180316473517155">Cronologia di navigazione</translation>
 <translation id="2497852260688568942">La sincronizzazione è stata disattivata dall'amministratore</translation>
-<translation id="250020030759455918">Troverai lo stato di accesso a <ph name="SITE_NAME" />, i dati di navigazione e i dati relativi al sito in Chrome</translation>
+<translation id="250020030759455918">Troverai lo stato di accesso a <ph name="SITE_NAME" />, i dati di navigazione e i dati relativi al sito in Ultimatum</translation>
 <translation id="2510106555128151389">Installazione di <ph name="WEBAPK_NAME" /> in corso…</translation>
 <translation id="2512234228327349533">Cerca opzioni di acquisto</translation>
 <translation id="2513403576141822879">Per altre impostazioni relative a privacy, sicurezza e raccolta dei dati, consulta la sezione <ph name="BEGIN_LINK" />Sincronizzazione e servizi Google<ph name="END_LINK" /></translation>
-<translation id="2515921719039583189">Eliminare i dati di Chrome dal dispositivo?</translation>
+<translation id="2515921719039583189">Eliminare i dati di Ultimatum dal dispositivo?</translation>
 <translation id="2517113738956581680">Riquadro a dimensioni intere</translation>
 <translation id="2523184218357549926">Invia a Google gli URL delle pagine che visiti</translation>
 <translation id="2524132927880411790">Vai alla ricerca vocale dell'app Google</translation>
@@ -374,9 +374,9 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="2569733278091928697">Potrai gestire facilmente i controlli multimediali, le sessioni in incognito, i download e altro ancora</translation>
 <translation id="2571711316400087311">Proponi di inviare pagine in altre lingue a Google Traduttore</translation>
 <translation id="2571834852878229351">Creane una personalizzata</translation>
-<translation id="2574249610672786438">Esegui l'accesso su tutti i dispositivi su cui utilizzi Chrome per visualizzare le tue schede</translation>
+<translation id="2574249610672786438">Esegui l'accesso su tutti i dispositivi su cui utilizzi Ultimatum per visualizzare le tue schede</translation>
 <translation id="2577981599306533385"><ph name="MEMBER_FULL_NAME" /> (<ph name="EMAIL" />) perderà immediatamente l'accesso al gruppo di schede "<ph name="GROUP_NAME" />" e non potrà più interagire con te nei servizi Google.</translation>
-<translation id="2581165646603367611">Verrà svuotata la cache e verranno cancellati i cookie e altri dati relativi a siti che Chrome non ritiene importanti.</translation>
+<translation id="2581165646603367611">Verrà svuotata la cache e verranno cancellati i cookie e altri dati relativi a siti che Ultimatum non ritiene importanti.</translation>
 <translation id="2587052924345400782">Nuova versione disponibile</translation>
 <translation id="2593272815202181319">Monospace</translation>
 <translation id="260403163289591229">Stai seguendo</translation>
@@ -415,8 +415,8 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="2779651927720337254">non riuscito</translation>
 <translation id="2781151931089541271">1 sec rimanente</translation>
 <translation id="2789486458103222910">OK</translation>
-<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Chrome ha rilevato una password riutilizzata che potresti migliorare}other{Chrome ha rilevato # password riutilizzate che potresti migliorare}}</translation>
-<translation id="2794551654724114396">Attiva le notifiche per ricevere suggerimenti utili che ti aiuteranno a usare Chrome al meglio</translation>
+<translation id="2791129728587938169">{NUM_PASSWORDS,plural, =1{Ultimatum ha rilevato una password riutilizzata che potresti migliorare}other{Ultimatum ha rilevato # password riutilizzate che potresti migliorare}}</translation>
+<translation id="2794551654724114396">Attiva le notifiche per ricevere suggerimenti utili che ti aiuteranno a usare Ultimatum al meglio</translation>
 <translation id="2805210243313393104">Trova i preferiti e altri dati su tutti i tuoi dispositivi</translation>
 <translation id="2805756323405976993">App</translation>
 <translation id="2819849308549746319">Annulla l'iscrizione per tutti i siti</translation>
@@ -433,7 +433,7 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="2842985007712546952">Cartella principale</translation>
 <translation id="2854916915045135148">Tocca e tieni premuto per passare alla modalità Incognito</translation>
 <translation id="2860954141821109167">Assicurati che su questo dispositivo ci sia un'app per telefono attiva</translation>
-<translation id="2861923151411510142">Alcune funzionalità di Chrome non saranno più disponibili</translation>
+<translation id="2861923151411510142">Alcune funzionalità di Ultimatum non saranno più disponibili</translation>
 <translation id="286473047976978798">Vuoi applicare le tue preferenze per l'aspetto?</translation>
 <translation id="2869416538780777323">{OTHER_TAB_COUNT,plural, =1{<ph name="URL" /> e 1 altra scheda}other{<ph name="URL" /> e <ph name="TAB_COUNT_MANY" /> altre schede}}</translation>
 <translation id="2869430948265924908">Per proteggere i tuoi contenuti sensibili in auto, devi creare un blocco del profilo dell'auto.  Puoi farlo con un PIN, un codice o una password.</translation>
@@ -441,10 +441,10 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="2871733351037274014">Precarica le pagine</translation>
 <translation id="2876136027428473467"><ph name="CHILD_NAME" /> ha chiesto la tua approvazione per il seguente sito web:</translation>
 <translation id="2876556152483133018">Ricerca nei siti</translation>
-<translation id="2876628302275096482">Scopri di più su <ph name="BEGIN_LINK" />come Chrome mantiene privati i tuoi dati<ph name="END_LINK" /></translation>
+<translation id="2876628302275096482">Scopri di più su <ph name="BEGIN_LINK" />come Ultimatum mantiene privati i tuoi dati<ph name="END_LINK" /></translation>
 <translation id="2878607776582720720"><ph name="TAB_TITLE" />, schede Incognito condivise selezionate</translation>
 <translation id="2885355868600171871">Vai alla barra degli indirizzi</translation>
-<translation id="2888126860611144412">Informazioni su Chrome</translation>
+<translation id="2888126860611144412">Informazioni su Ultimatum</translation>
 <translation id="2891154217021530873">Interrompe il caricamento della pagina</translation>
 <translation id="2893168226686371498">Browser predefinito</translation>
 <translation id="2894821468041866720">Non rallenta in modo significativo il browser o il dispositivo.</translation>
@@ -463,14 +463,14 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="2923908459366352541">Nome non valido</translation>
 <translation id="2932150158123903946">Spazio di archiviazione di Google <ph name="APP_NAME" /></translation>
 <translation id="2932222164150889403">La tua tastiera resterà invariata</translation>
-<translation id="2936980480904111527">Le notifiche di Chrome semplificano le cose</translation>
+<translation id="2936980480904111527">Le notifiche di Ultimatum semplificano le cose</translation>
 <translation id="2940075786175545812">Opzione per approvare o meno un sito web</translation>
 <translation id="2942036813789421260">La scheda di anteprima è chiusa</translation>
 <translation id="2951071800649516099">Aggiungi pagine al tuo Elenco di lettura per consultarle in un secondo momento</translation>
 <translation id="2954586176076923855">Sposta la barra degli indirizzi in alto</translation>
 <translation id="2961208450284224863">{READING_LIST_UNREAD_PAGE_COUNT,plural, =1{<ph name="READING_LIST_UNREAD_PAGE_COUNT_ONE" /> pagina da leggere}other{<ph name="READING_LIST_UNREAD_PAGE_COUNT_MANY" /> pagine da leggere}}</translation>
 <translation id="2972109037780336501">Rimuovi automaticamente le autorizzazioni</translation>
-<translation id="2976550651269220761">Alcuni dati di Chrome non sono ancora stati salvati nel tuo Account Google.\nProva ad attendere qualche minuto prima di uscire. Se esci ora, questi dati verranno eliminati.</translation>
+<translation id="2976550651269220761">Alcuni dati di Ultimatum non sono ancora stati salvati nel tuo Account Google.\nProva ad attendere qualche minuto prima di uscire. Se esci ora, questi dati verranno eliminati.</translation>
 <translation id="2977350910003566746">Ordinamento per ultimo aperto</translation>
 <translation id="297771753501244313">Ordina per ultimo aperto</translation>
 <translation id="2979639724566107830">Apri in un'altra finestra</translation>
@@ -493,15 +493,15 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="3035527385626181784"><ph name="TAB_TITLE" />, scheda condivisa selezionata</translation>
 <translation id="3036750288708366620"><ph name="BEGIN_LINK" />Richiedi assistenza<ph name="END_LINK" /></translation>
 <translation id="3037177537145227281">Monitoraggio del prezzo</translation>
-<translation id="3037517125981011456">Mostra le richieste di accesso a Chrome</translation>
+<translation id="3037517125981011456">Mostra le richieste di accesso a Ultimatum</translation>
 <translation id="3038272154009688107">Visualizza tutti i siti</translation>
 <translation id="3057938290530993634">Tocca e tieni premuto per fissare i siti web più visitati e accedervi facilmente la prossima volta</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> preferito}other{<ph name="BOOKMARKS_COUNT_MANY" /> preferiti}}</translation>
-<translation id="3062802207422175757">Articoli relativi ai tuoi interessi su Chrome</translation>
+<translation id="3062802207422175757">Articoli relativi ai tuoi interessi su Ultimatum</translation>
 <translation id="3066573403916685335">Sposta giù</translation>
 <translation id="3067505415088964188">Prezzo basso</translation>
 <translation id="3070005020161560471">Traduci automaticamente</translation>
-<translation id="3072980200212375806"><ph name="APP_NAME" /> si aprirà in Chrome. Se continui, accetti i <ph name="BEGIN_LINK1" />Termini di servizio di Google<ph name="END_LINK1" /> e i <ph name="BEGIN_LINK2" />Termini di servizio aggiuntivi di Google Chrome e ChromeOS<ph name="END_LINK2" />. Si applicano anche le <ph name="BEGIN_LINK3" />Norme sulla privacy<ph name="END_LINK3" />.</translation>
+<translation id="3072980200212375806"><ph name="APP_NAME" /> si aprirà in Ultimatum. Se continui, accetti i <ph name="BEGIN_LINK1" />Termini di servizio di Google<ph name="END_LINK1" /> e i <ph name="BEGIN_LINK2" />Termini di servizio aggiuntivi di Ultimatum e UltimatumOS<ph name="END_LINK2" />. Si applicano anche le <ph name="BEGIN_LINK3" />Norme sulla privacy<ph name="END_LINK3" />.</translation>
 <translation id="3080525922482950719">Puoi salvare le pagine da leggere in un secondo momento o quando sei offline</translation>
 <translation id="3087734570205094154">In basso</translation>
 <translation id="3091010850649238832">Mostra contenuti degli appunti</translation>
@@ -511,7 +511,7 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="3123734510202723619">Annunci</translation>
 <translation id="3134385238404760368">Nessuna scheda recente</translation>
 <translation id="3135655388926735587">Tocca Schede recenti</translation>
-<translation id="314939179385989105">Pagina iniziale di Chrome</translation>
+<translation id="314939179385989105">Pagina iniziale di Ultimatum</translation>
 <translation id="3158667104057012316">Ordinamento manuale</translation>
 <translation id="3159335509547415276">Scopri di più sugli account bloccati</translation>
 <translation id="3161699713309727585"><ph name="BUTTON_TEXT" />, si apre in una nuova scheda</translation>
@@ -531,7 +531,7 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="3236059992281584593">1 min rimanente</translation>
 <translation id="3237087289225714896">Precaricamento standard:</translation>
 <translation id="3244271242291266297">MM</translation>
-<translation id="3245429137663807393">Se condividi anche report sull'utilizzo di Chrome, tali report includono gli URL visitati</translation>
+<translation id="3245429137663807393">Se condividi anche report sull'utilizzo di Ultimatum, tali report includono gli URL visitati</translation>
 <translation id="3250563604907490871">Le descrizioni delle immagini verranno ripristinate quando avrai effettuato la connessione alla rete Wi-Fi</translation>
 <translation id="3254409185687681395">Aggiungi ai Preferiti</translation>
 <translation id="3265093782546847662">Tutte le pagine di <ph name="DOMAIN" /></translation>
@@ -568,22 +568,22 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="3435575784518354875">Per continuare ad accedere alle tue password, esportale ora, aggiorna Google Play Services e poi importale in Gestore delle password di Google. <ph name="BEGIN_LINK" />Visualizza le istruzioni complete<ph name="END_LINK" />.</translation>
 <translation id="3435738964857648380">Sicurezza</translation>
 <translation id="3435914367318771664">Aggiungi scheda a nuovo gruppo</translation>
-<translation id="3438681572027105609">Accedi a Chrome per trovare le password e altri dati su tutti i dispositivi</translation>
+<translation id="3438681572027105609">Accedi a Ultimatum per trovare le password e altri dati su tutti i dispositivi</translation>
 <translation id="3439276997620616816">Qui troverai le schede recenti</translation>
 <translation id="3443221991560634068">Ricarica la pagina corrente</translation>
 <translation id="3444179773590444986">Vuoi condividere un feedback sul tema scuro per i siti?</translation>
 <translation id="3448874648066942074">Riassumi la pagina con l'AI</translation>
-<translation id="3452832259067974318">Per proteggere la tua privacy, Chrome non compilerà automaticamente questo campo con la tua password.</translation>
+<translation id="3452832259067974318">Per proteggere la tua privacy, Ultimatum non compilerà automaticamente questo campo con la tua password.</translation>
 <translation id="3474624961160222204">Continua come <ph name="NAME" /></translation>
 <translation id="3478363558367712427">Puoi scegliere il motore di ricerca</translation>
 <translation id="3482805106082349287">Cerca usando la tastiera, la voce, la modalità Incognito o la fotocamera</translation>
-<translation id="3487903178221457900">Il file esportato potrebbe essere accessibile da altri utenti, anche da app. Una volta eseguita l'esportazione, le tue password vengono eliminate da Chrome.</translation>
+<translation id="3487903178221457900">Il file esportato potrebbe essere accessibile da altri utenti, anche da app. Una volta eseguita l'esportazione, le tue password vengono eliminate da Ultimatum.</translation>
 <translation id="3488199663160411179">nome</translation>
 <translation id="3493531032208478708"><ph name="BEGIN_LINK" />Ulteriori informazioni<ph name="END_LINK" /> sui contenuti suggeriti</translation>
 <translation id="3499246418971111862">chrome_qrcode_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="350276055892098337">Ordina per meno recente</translation>
 <translation id="3507132249039706973">È attiva la protezione standard</translation>
-<translation id="3509330069915219067">Offline. Chrome non può controllare la disponibilità di aggiornamenti.</translation>
+<translation id="3509330069915219067">Offline. Ultimatum non può controllare la disponibilità di aggiornamenti.</translation>
 <translation id="3513019849832307207">Entra e apri</translation>
 <translation id="3513704683820682405">Realtà aumentata</translation>
 <translation id="3516053221628030540">Vai su Google Play</translation>
@@ -615,10 +615,10 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="3623240789707551553">{DOMAIN_COUNT,plural, =1{+ 1 sito}other{+ # siti}}</translation>
 <translation id="3625870480639975468">Reimposta lo zoom</translation>
 <translation id="3631987586758005671">Condivisione con <ph name="DEVICE_NAME" /></translation>
-<translation id="3635073343384702370">Chrome può controllare le password quando le salvi</translation>
+<translation id="3635073343384702370">Ultimatum può controllare le password quando le salvi</translation>
 <translation id="3636940436873918441">Lingue preferite</translation>
-<translation id="3637744895182738742">Se dimentichi la passphrase o vuoi modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Chrome nel tuo account<ph name="END_LINK" />.</translation>
-<translation id="3641581193271938629">Attivazione di Chrome Finds chiusa</translation>
+<translation id="3637744895182738742">Se dimentichi la passphrase o vuoi modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ultimatum nel tuo account<ph name="END_LINK" />.</translation>
+<translation id="3641581193271938629">Attivazione di Ultimatum Finds chiusa</translation>
 <translation id="3647019414263135904">Apri o chiudi il popup contestuale</translation>
 <translation id="3653111872753786013"><ph name="WEBSITE_TITLE" />: <ph name="WEBSITE_URL" /></translation>
 <translation id="3674208116086565128">Vai alla home page dell'app Google</translation>
@@ -636,7 +636,7 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="3710501561113687889">Per continuare, <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> condividerà il tuo <ph name="FIELDS_STRING" /> con questo sito.</translation>
 <translation id="3710560693796335511">Collaborazione</translation>
 <translation id="3714430408451673233">Riquadro inferiore della scheda nella parte inferiore dello schermo.</translation>
-<translation id="3718765429352682176">Potresti vedere la cronologia di altre app che aprono link in Chrome.</translation>
+<translation id="3718765429352682176">Potresti vedere la cronologia di altre app che aprono link in Ultimatum.</translation>
 <translation id="3721119614952978349">Tu e Google</translation>
 <translation id="3727000368239390918">Accedi per avere a disposizione le tue schede e altri dati su tutti i dispositivi</translation>
 <translation id="3737319253362202215">Impostazioni di traduzione</translation>
@@ -690,8 +690,8 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="3943322906274039960"><ph name="TAB_TITLE" />, scheda Picture in picture fissata</translation>
 <translation id="3950820424414687140">Accedi</translation>
 <translation id="395377504920307820">Utilizza senza un account</translation>
-<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Chrome caricherà la tua pagina quando sarà pronta}other{Chrome caricherà le tue pagine quando saranno pronte}}</translation>
-<translation id="3969142555815019568">Chrome non può controllare le tue password</translation>
+<translation id="396192773038029076">{NUM_IN_PROGRESS,plural, =1{Ultimatum caricherà la tua pagina quando sarà pronta}other{Ultimatum caricherà le tue pagine quando saranno pronte}}</translation>
+<translation id="3969142555815019568">Ultimatum non può controllare le tue password</translation>
 <translation id="3969863827134279083">Sposta su</translation>
 <translation id="397105322502079400">Calcolo in corso...</translation>
 <translation id="397583555483684758">La sincronizzazione si è interrotta</translation>
@@ -702,10 +702,10 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="3987993985790029246">Copia link</translation>
 <translation id="3994236846568425219">Attiva il tema scuro quando sul dispositivo è attivo il tema scuro</translation>
 <translation id="4000212216660919741">Home page offline</translation>
-<translation id="4000670338830950598">Personalizza e controlla Google Chrome con un elemento evidenziato</translation>
+<translation id="4000670338830950598">Personalizza e controlla Ultimatum con un elemento evidenziato</translation>
 <translation id="4015643064997321279">{NUM_PASSWORDS,plural, =1{1 password compromessa nel tuo Account Google}other{# password compromesse nel tuo Account Google}}</translation>
 <translation id="4016425174436051808">Non è possibile seguire. Si è verificato un errore.</translation>
-<translation id="4023638601467301498">Accedi a Chrome per avere preferiti e altro su tutti i tuoi dispositivi</translation>
+<translation id="4023638601467301498">Accedi a Ultimatum per avere preferiti e altro su tutti i tuoi dispositivi</translation>
 <translation id="4024768890073681126">Il tuo browser è gestito da un genitore</translation>
 <translation id="4027569221211770437">Cartella <ph name="FOLDER_TITLE" /></translation>
 <translation id="4034817413553209278">{HOURS,plural, =1{# ora}other{# ore}}</translation>
@@ -745,13 +745,13 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="4180726336228139707">Solo su questo dispositivo</translation>
 <translation id="4181841719683918333">Lingue</translation>
 <translation id="4188221736490993796">Ordina dalla Z alla A</translation>
-<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{Chrome ha impedito a questo sito di inviare notifiche a causa di spam o contenuto ingannevole}other{Chrome ha impedito a questi siti di inviare notifiche a causa di spam o contenuto ingannevole}}</translation>
+<translation id="4189344235004694858">{NUM_REVOKED_PERMISSIONS,plural, =1{Ultimatum ha impedito a questo sito di inviare notifiche a causa di spam o contenuto ingannevole}other{Ultimatum ha impedito a questi siti di inviare notifiche a causa di spam o contenuto ingannevole}}</translation>
 <translation id="4195643157523330669">Apri in un'altra scheda</translation>
 <translation id="4197828496439691735">{NUM_TABS,plural, =1{1 scheda su questo dispositivo}other{# schede su questo dispositivo}}</translation>
 <translation id="4198268995694216131">Altri siti</translation>
 <translation id="4198423547019359126">Nessun percorso di download disponibile</translation>
 <translation id="4209029522667123437">Utilizzato su questo sito: <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
-<translation id="4214315110991671325">Se consenti i cookie, Chrome potrebbe usarli per il caricamento.</translation>
+<translation id="4214315110991671325">Se consenti i cookie, Ultimatum potrebbe usarli per il caricamento.</translation>
 <translation id="421517251707893998">Tocca Fissa questa scorciatoia</translation>
 <translation id="4216511743389425832">Ascolta questa pagina</translation>
 <translation id="4217657297368492684"><ph name="TAB_TITLE" />, scheda Incognito Picture in picture fissata selezionata</translation>
@@ -759,7 +759,7 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="4225895483398857530">Scorciatoia per la barra degli strumenti</translation>
 <translation id="4232376164796433044">Password e compilazione automatica</translation>
 <translation id="4242533952199664413">Apri le impostazioni</translation>
-<translation id="424864128008805179">Uscire da Chrome?</translation>
+<translation id="424864128008805179">Uscire da Ultimatum?</translation>
 <translation id="4249955472157341256">Ordina per Più recenti</translation>
 <translation id="4255841059940367080">Protezione basata sull'AI in tempo reale da estensioni, siti e download pericolosi in base ai tuoi dati di navigazione inviati a Google.</translation>
 <translation id="4256782883801055595">Licenze open source</translation>
@@ -768,7 +768,7 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="4270730597186910506">Monitora o interrompi il monitoraggio di un prodotto.</translation>
 <translation id="4277529130885813215">Usa un altro dispositivo</translation>
 <translation id="427987768447457592">Nuovo gruppo di schede</translation>
-<translation id="4282440837784183472">La tua organizzazione, <ph name="MANAGED_DOMAIN" />, gestisce l'account a cui stai accedendo e la modalità di utilizzo di Chrome. L'amministratore può configurare o limitare determinate funzionalità.</translation>
+<translation id="4282440837784183472">La tua organizzazione, <ph name="MANAGED_DOMAIN" />, gestisce l'account a cui stai accedendo e la modalità di utilizzo di Ultimatum. L'amministratore può configurare o limitare determinate funzionalità.</translation>
 <translation id="4283234489712362947"><ph name="TAB_TITLE" />, scheda Incognito Picture in picture</translation>
 <translation id="4285498937028063278">Stacca</translation>
 <translation id="4285846616383034558">Cookie, cache e altri dati dei siti</translation>
@@ -784,10 +784,10 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="4311652497846705514">Aprire il PDF?</translation>
 <translation id="4313895677475587452">{NUM_SUSPICIOUS_NOTIFICATIONS,plural, =1{Possibile spam}other{Possibile spam (#)}}</translation>
 <translation id="4320177379694898372">Nessuna connessione internet</translation>
-<translation id="4326079409704643112">Verifica la tua identità per usare e salvare i dati di Chrome nel tuo Account Google</translation>
+<translation id="4326079409704643112">Verifica la tua identità per usare e salvare i dati di Ultimatum nel tuo Account Google</translation>
 <translation id="433213510553688132">In attesa di seguire…</translation>
 <translation id="4335835283689002019">Navigazione sicura non attiva</translation>
-<translation id="4343250402091037179">Per eseguire ricerche in un sito o una parte specifici di Chrome, digita la relativa scorciatoia nella barra degli indirizzi, seguita dalla tua scorciatoia da tastiera preferita.</translation>
+<translation id="4343250402091037179">Per eseguire ricerche in un sito o una parte specifici di Ultimatum, digita la relativa scorciatoia nella barra degli indirizzi, seguita dalla tua scorciatoia da tastiera preferita.</translation>
 <translation id="4351244548802238354">Chiudi finestra di dialogo</translation>
 <translation id="4352287748243729941">Vuoi usare la tua password di <ph name="PROVIDER" />?</translation>
 <translation id="4355272626458588338">Puoi tornare a una pagina che ritieni importante aggiungendola ai preferiti</translation>
@@ -800,7 +800,7 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="4384468725000734951">Sogou in uso per la ricerca</translation>
 <translation id="4387647248986092471">Crea un blocco del profilo dell'auto</translation>
 <translation id="4387817230000841154">Apri Download</translation>
-<translation id="4395046795145457714">Attivazione di Chrome Finds aperta a schermo intero</translation>
+<translation id="4395046795145457714">Attivazione di Ultimatum Finds aperta a schermo intero</translation>
 <translation id="4398561997852463382"><ph name="TAB_TITLE" />, scheda Incognito con registrazione fissata selezionata</translation>
 <translation id="4402611456429872546"><ph name="LANG" />: download in corso…</translation>
 <translation id="4404568932422911380">Nessun preferito</translation>
@@ -822,16 +822,16 @@ Solo chi conosce la tua passphrase può leggere i tuoi dati criptati. La passphr
 <translation id="4460822871039013969"><ph name="TAB_TITLE" />, scheda con registrazione fissata selezionata</translation>
 <translation id="4460861538906892109">{ITEMS_COUNT,plural, =1{1 preferito}other{# preferiti}}</translation>
 <translation id="4478161224666880173">Puoi usare il tuo account <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /> su questo sito. Per continuare, accedi a <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="4479972344484327217">Installazione di <ph name="MODULE" /> per Chrome…</translation>
+<translation id="4479972344484327217">Installazione di <ph name="MODULE" /> per Ultimatum…</translation>
 <translation id="4484496141267039529">Nessuna connessione. Riprova più tardi.</translation>
-<translation id="4487967297491345095">Tutti i dati delle app di Chrome saranno eliminati definitivamente. Sono inclusi tutti i file, le impostazioni, gli account, i database e così via.</translation>
+<translation id="4487967297491345095">Tutti i dati delle app di Ultimatum saranno eliminati definitivamente. Sono inclusi tutti i file, le impostazioni, gli account, i database e così via.</translation>
 <translation id="4494315997125191493">Seleziona Gestisci per visualizzare tutte le finestre</translation>
 <translation id="4494806687727322324">Il salvataggio delle password è stato attivato dall'amministratore</translation>
 <translation id="4508528996305412043">Menu scheda feed aperto</translation>
 <translation id="4509741852167209430">Vengono condivisi tipi di dati limitati tra i siti per misurare il rendimento dei loro annunci, ad esempio se hai effettuato un acquisto dopo aver visitato un sito</translation>
 <translation id="4513387527876475750">{DAYS,plural, =1{# giorno fa}other{# giorni fa}}</translation>
 <translation id="451872707440238414">Cerca nei preferiti</translation>
-<translation id="4521489764227272523">I dati selezionati sono stati rimossi da Chrome e dai dispositivi sincronizzati.
+<translation id="4521489764227272523">I dati selezionati sono stati rimossi da Ultimatum e dai dispositivi sincronizzati.
 
 Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, ad esempio ricerche e attività, di altri servizi Google alla pagina <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="4523326818319942067">ultima ora</translation>
@@ -853,10 +853,10 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="4595276580892809760">Allega immagini dalla galleria</translation>
 <translation id="4595805675102978678">Errore dell'Account Google</translation>
 <translation id="4601095002996233687">Scansioni approfondite per rilevare i download sospetti.</translation>
-<translation id="4606559747793337066">Quando un sito o un'app richiede di precaricare privatamente i link sulle sue pagine, Chrome cripta e precarica le pagine tramite i server di Google senza usare cookie. In questo modo la tua identità rimane nascosta ai siti precaricati.</translation>
+<translation id="4606559747793337066">Quando un sito o un'app richiede di precaricare privatamente i link sulle sue pagine, Ultimatum cripta e precarica le pagine tramite i server di Google senza usare cookie. In questo modo la tua identità rimane nascosta ai siti precaricati.</translation>
 <translation id="4616150815774728855">Apri <ph name="WEBAPK_NAME" /></translation>
 <translation id="4619564267100705184">Verifica la tua identità</translation>
-<translation id="4624065194742029982">Modalità Incognito di Chrome</translation>
+<translation id="4624065194742029982">Modalità Incognito di Ultimatum</translation>
 <translation id="4634124774493850572">Utilizza password</translation>
 <translation id="463471994228293091">{PASSWORDS_COUNT,plural, =1{1 password e altri elementi sono stati salvati solo su questo dispositivo. Per usarli sugli altri dispositivi, salvali nel tuo Account Google.}other{# password e altri elementi sono stati salvati solo su questo dispositivo. Per usarli sugli altri dispositivi, salvali nel tuo Account Google.}}</translation>
 <translation id="4640331037679501949">{NUM_PASSWORDS,plural, =1{1 password compromessa}other{# password compromesse}}</translation>
@@ -871,7 +871,7 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="4668347365065281350">Tutti i dati memorizzati dai siti, inclusi i cookie e altri dati memorizzati localmente</translation>
 <translation id="4673702426794876519">Finestra nav. in incognito</translation>
 <translation id="4675298276894277358">Questo sito non verrà più mostrato</translation>
-<translation id="4678082183394354975">Il tema scuro per i siti è attivo in Chrome</translation>
+<translation id="4678082183394354975">Il tema scuro per i siti è attivo in Ultimatum</translation>
 <translation id="4682306524980568490">È possibile visualizzare solo <ph name="MAX_INSTANCE_COUNT" /> finestre</translation>
 <translation id="4684427112815847243">Sincronizza tutto</translation>
 <translation id="4685741273709472646">Seleziona dall'elenco a discesa</translation>
@@ -893,7 +893,7 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="4738836084190194332">Ultima sincronizzazione: <ph name="WHEN" /></translation>
 <translation id="474121291218385686">Filtra per app</translation>
 <translation id="4741753828624614066">Riceverai suggerimenti migliori nella barra degli indirizzi</translation>
-<translation id="4742795653798179840">Dati di Chrome eliminati</translation>
+<translation id="4742795653798179840">Dati di Ultimatum eliminati</translation>
 <translation id="4742970037960872810">Rimuovi evidenziazione</translation>
 <translation id="4749960740855309258">Apri una nuova scheda</translation>
 <translation id="4753600213727157212">Accesso eseguito come <ph name="USER_NAME" />. <ph name="USER_EMAIL" />. Errore dell'Account Google. Consente di aprire le impostazioni.</translation>
@@ -911,21 +911,21 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="4782929588435725897"><ph name="SEARCH_ENGINE" /> è il tuo motore di ricerca predefinito</translation>
 <translation id="4784349455504343791"><ph name="WEBSITE_ORIGIN" /> vuole usare le informazioni personali del tuo portafoglio digitale.</translation>
 <translation id="4787736314074622408">Eliminare il file <ph name="ITEM_TITLE" />?</translation>
-<translation id="4793679854893018356">Scopri in che modo Chrome ti protegge</translation>
+<translation id="4793679854893018356">Scopri in che modo Ultimatum ti protegge</translation>
 <translation id="4794291718671962615">(<ph name="MEGABYTES" />) <ph name="URL" /></translation>
 <translation id="4807098396393229769">Nome sulla carta di credito</translation>
 <translation id="480990236307250886">Apri pagina iniziale</translation>
 <translation id="4822710610088666676">Gruppo di schede <ph name="TAB_GROUP_TITLE" /> chiuso e salvato</translation>
 <translation id="482405935591409882">Cerca nelle schede e nei gruppi</translation>
 <translation id="4834250788637067901">Metodi di pagamento, offerte e indirizzi che utilizzano Google Pay</translation>
-<translation id="4835385943915508971">Chrome non ha accesso alla risorsa richiesta.</translation>
+<translation id="4835385943915508971">Ultimatum non ha accesso alla risorsa richiesta.</translation>
 <translation id="483742037940503070">{TAB_COUNT,plural, =1{Ripristina il gruppo di schede di <ph name="TAB_COUNT_ONE" /> scheda, colore <ph name="COLOR_NAME" />, come nuovo gruppo di schede in background.}other{Ripristina il gruppo di schede di <ph name="TAB_COUNT_MANY" /> schede, colore <ph name="COLOR_NAME" />, come nuovo gruppo di schede in background.}}</translation>
 <translation id="4849731766219625109">Usa il tuo account <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="4850886885716139402">Visualizza</translation>
 <translation id="4852014461738377247">Accesso in corso…</translation>
 <translation id="4860895144060829044">Chiama</translation>
 <translation id="4864369630010738180">Accesso in corso...</translation>
-<translation id="4866368707455379617">Impossibile installare <ph name="MODULE" /> per Chrome</translation>
+<translation id="4866368707455379617">Impossibile installare <ph name="MODULE" /> per Ultimatum</translation>
 <translation id="4871568871368204250">Disattiva sincronizzazione</translation>
 <translation id="487567923005969537">Attiva AI Mode</translation>
 <translation id="4875775213178255010">Contenuti suggeriti</translation>
@@ -934,27 +934,27 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="4880127995492972015">Traduci…</translation>
 <translation id="4881695831933465202">Apri</translation>
 <translation id="488187801263602086">Rinomina file</translation>
-<translation id="4885273946141277891">Numero di istanze di Chrome non supportato.</translation>
+<translation id="4885273946141277891">Numero di istanze di Ultimatum non supportato.</translation>
 <translation id="4890973535105146893">Nessuna password salvata nel tuo Account Google</translation>
 <translation id="4905823827770127520">Includi un link alla pagina</translation>
 <translation id="4908869848243824489">Discover di Google</translation>
 <translation id="4910889077668685004">App per pagamenti</translation>
 <translation id="4911042367886397055">Siamo felici di rivederti, <ph name="USER_NAME" />.</translation>
 <translation id="4913169188695071480">Interrompi aggiornamento</translation>
-<translation id="4921224083091001889">Accedi a Chrome per avere le tue password e altri dati su tutti i tuoi dispositivi <ph name="EMAIL" /></translation>
+<translation id="4921224083091001889">Accedi a Ultimatum per avere le tue password e altri dati su tutti i tuoi dispositivi <ph name="EMAIL" /></translation>
 <translation id="4923173329789776645">Download sconsigliato dalla tua organizzazione</translation>
 <translation id="4925120120285606924">Screenshot <ph name="CURRENT_DATE_ISO" /></translation>
 <translation id="4926901776383726965">Puoi salvare immagini e file per visualizzarli offline o condividerli in altre app</translation>
 <translation id="492699891214363151">{BOOKMARKS_COUNT,plural, =1{1 preferito e altri elementi sono stati salvati solo su questo dispositivo. Per usarli sugli altri dispositivi, salvali nel tuo Account Google.}other{# preferiti e altri elementi sono stati salvati solo su questo dispositivo. Per usarli sugli altri dispositivi, salvali nel tuo Account Google.}}</translation>
-<translation id="4932247056774066048">Poiché stai uscendo da un account gestito da <ph name="DOMAIN_NAME" />, i tuoi dati di Chrome verranno eliminati da questo dispositivo. Rimarranno memorizzati nel tuo Account Google.</translation>
+<translation id="4932247056774066048">Poiché stai uscendo da un account gestito da <ph name="DOMAIN_NAME" />, i tuoi dati di Ultimatum verranno eliminati da questo dispositivo. Rimarranno memorizzati nel tuo Account Google.</translation>
 <translation id="4943703118917034429">Realtà virtuale</translation>
 <translation id="4943872375798546930">Nessun risultato</translation>
 <translation id="4957722034734105353">Scopri di più...</translation>
 <translation id="4959115606310463263">Riquadro inferiore di accesso aperto nella parte inferiore dello schermo</translation>
 <translation id="4961107849584082341">Traduci questa pagina in qualsiasi lingua</translation>
-<translation id="4964614743143953889">Chrome ti avvisa in caso di siti e download non sicuri</translation>
+<translation id="4964614743143953889">Ultimatum ti avvisa in caso di siti e download non sicuri</translation>
 <translation id="496607651705915226">Per salvare e usare nuove password nel tuo Account Google, aggiorna Google Play Services</translation>
-<translation id="4971753085054504448">Prova a cercare qualcos'altro o apri la cronologia completa di Chrome per visualizzare più risultati.</translation>
+<translation id="4971753085054504448">Prova a cercare qualcos'altro o apri la cronologia completa di Ultimatum per visualizzare più risultati.</translation>
 <translation id="497421865427891073">Avanti</translation>
 <translation id="497983151715419057">Esamina le schede e i gruppi non attivi qui</translation>
 <translation id="498624032394115435">Chiunque abbia il link può modificare tutte le schede.</translation>
@@ -981,7 +981,7 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="506254248375231072">Nessuna scheda</translation>
 <translation id="5075939510584558547">Salva senza crittografia</translation>
 <translation id="5078638979202084724">Aggiungi tutte le schede ai preferiti</translation>
-<translation id="5085038751173179818">Accedi a questo sito e a Chrome per trovare i tuoi preferiti e altri dati su tutti i tuoi dispositivi</translation>
+<translation id="5085038751173179818">Accedi a questo sito e a Ultimatum per trovare i tuoi preferiti e altri dati su tutti i tuoi dispositivi</translation>
 <translation id="5088347662971855383">Fissa Gemini</translation>
 <translation id="5091199029769593641">A breve vedrai storie di <ph name="SITE_NAME" /> quando aprirai una nuova scheda. I siti che segui vengono salvati nel tuo Account Google. Puoi gestirli nelle impostazioni di Discover.</translation>
 <translation id="509429900233858213">Si è verificato un errore.</translation>
@@ -989,7 +989,7 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="510275257476243843">1 ora rimanente</translation>
 <translation id="5114895953710637392">Il foglio di filtro delle app è chiuso.</translation>
 <translation id="5115811374190515607">in <ph name="PRODUCT_NAME" /></translation>
-<translation id="5116239826668864748">Puoi usare Chrome ogni volta che tocchi link in messaggi, documenti e altre app</translation>
+<translation id="5116239826668864748">Puoi usare Ultimatum ogni volta che tocchi link in messaggi, documenti e altre app</translation>
 <translation id="5118713593561876160">Interessi</translation>
 <translation id="5122378528687922675">Se hai bisogno di aiuto, rivolgiti al tuo genitore (<ph name="PARENT_NAME_1" /> o <ph name="PARENT_NAME_2" />)</translation>
 <translation id="5123685120097942451">Scheda Incognito</translation>
@@ -1012,11 +1012,11 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="5206168361184759344">{FILE_COUNT,plural, =1{Download del file in corso…}other{Download di # file in corso…}}</translation>
 <translation id="5210286577605176222">Vai alla scheda precedente</translation>
 <translation id="5210365745912300556">Chiudi scheda</translation>
-<translation id="5212800876504289412">Riavvia Chrome per completare questa modifica. Le schede vengono riaperte automaticamente al riavvio.</translation>
+<translation id="5212800876504289412">Riavvia Ultimatum per completare questa modifica. Le schede vengono riaperte automaticamente al riavvio.</translation>
 <translation id="5213114823401215820">Riapri gruppo chiuso</translation>
 <translation id="5215957675041756913">Controlla i tuoi dati e il tuo account</translation>
 <translation id="5218324087477576825">Numero carta (obbligatorio)</translation>
-<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> e altre <ph name="SEPARATOR" /> Chrome ha rimosso queste autorizzazioni perché non hai visitato il sito di recente</translation>
+<translation id="5221437554987713282"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> e altre <ph name="SEPARATOR" /> Ultimatum ha rimosso queste autorizzazioni perché non hai visitato il sito di recente</translation>
 <translation id="5222676887888702881">Esci</translation>
 <translation id="5226378907213531272">Sbloccherai lo schermo ogni volta che userai l'auto</translation>
 <translation id="5227554086496586518">Tocca per visualizzare i risultati di ricerca</translation>
@@ -1036,7 +1036,7 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="5313967007315987356">Aggiungi sito</translation>
 <translation id="5316947901395241499">Il salvataggio delle password è stato disattivato dall'amministratore</translation>
 <translation id="5317780077021120954">Salva</translation>
-<translation id="5319359161174645648">Google consiglia Chrome</translation>
+<translation id="5319359161174645648">Google consiglia Ultimatum</translation>
 <translation id="5326246328175179736">Non puoi accedere con questo account</translation>
 <translation id="5327248766486351172">Nome</translation>
 <translation id="5328542107300944283">Utilizza con <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
@@ -1049,7 +1049,7 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="5375374982898812658">Perderai immediatamente l'accesso al gruppo di schede "<ph name="GROUP_NAME" />", che verrà eliminato da tutti i tuoi dispositivi</translation>
 <translation id="5375577065097716013">Cerca immagine con Lens <ph name="BEGIN_NEW" />Novità<ph name="END_NEW" /></translation>
 <translation id="5390367025924544771"><ph name="WEBSITE_ORIGIN" /> vuole usare le informazioni personali del tuo portafoglio digitale. Continua soltanto se ritieni attendibile questo sito. Siti pericolosi potrebbero indurti con l'inganno a rivelare dati come il tuo nome legale o il numero del tuo documento di identità.</translation>
-<translation id="5395376160638294582">Assicurati di poter usare sempre i dati di Chrome nel tuo Account Google</translation>
+<translation id="5395376160638294582">Assicurati di poter usare sempre i dati di Ultimatum nel tuo Account Google</translation>
 <translation id="539881862970320163">È stata suggerita una password efficace. Tastiera nascosta.</translation>
 <translation id="5409881200985013443">Vuoi inviare <ph name="ONE_TIME_CODE" /> a <ph name="CLIENT_NAME" />?</translation>
 <translation id="5410300144953132176"><ph name="OWNER_FULL_NAME" /> (<ph name="OWNER_EMAIL" />) vorrebbe che partecipassi a un gruppo di schede. Chiunque abbia il link può modificare tutte le schede, quindi agisci con prudenza. Il link scade tra 48 ore.</translation>
@@ -1061,7 +1061,7 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="543271133149552180"><ph name="TAB_TITLE" />, schede Incognito Picture in picture selezionate</translation>
 <translation id="5436928407363358055">Per riprendere facilmente da dove avevi interrotto, sincronizza la cronologia e le schede</translation>
 <translation id="5438292632479953702">Scarica di nuovo</translation>
-<translation id="5439191312780166229">Ricevi un avviso in caso di siti pericolosi, inclusi quelli di cui Google non era a conoscenza, analizzando più dati provenienti dai siti rispetto al livello Protezione standard. Puoi scegliere di ignorare gli avvisi di Chrome.</translation>
+<translation id="5439191312780166229">Ricevi un avviso in caso di siti pericolosi, inclusi quelli di cui Google non era a conoscenza, analizzando più dati provenienti dai siti rispetto al livello Protezione standard. Puoi scegliere di ignorare gli avvisi di Ultimatum.</translation>
 <translation id="5441137934526263133">Il sito non funziona? I cookie di terze parti sono bloccati</translation>
 <translation id="5441466871879044658">Traduci in questa lingua</translation>
 <translation id="5444999712122199445">Torna al sito</translation>
@@ -1072,7 +1072,7 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="5469852975082458401">Puoi navigare nelle pagine con un cursore di testo. Premi F7 per disattivare questa opzione.</translation>
 <translation id="5471273988133666918">Impossibile spostare la scheda <ph name="TAB_TITLE" /></translation>
 <translation id="548278423535722844">Apri nell'app di mappe</translation>
-<translation id="5489222148748465285">Vuoi che Chrome continui a cercare?</translation>
+<translation id="5489222148748465285">Vuoi che Ultimatum continui a cercare?</translation>
 <translation id="5490848366863949315"><ph name="TAB_TITLE" />, schede Picture in picture selezionate</translation>
 <translation id="5494920125229734069">Seleziona tutto</translation>
 <translation id="549660026907543296">Partecipa come <ph name="MEMBER_FULL_NAME" /></translation>
@@ -1080,23 +1080,23 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="5526281268548144413">Impossibile eseguire la chiusura in più finestre</translation>
 <translation id="5532536403031755365">Aggiungi un ulteriore livello di protezione contro le minacce online con la Protezione avanzata</translation>
 <translation id="5548606607480005320">Controllo di sicurezza</translation>
-<translation id="5554520618550346933">Quando utilizzi una password, Chrome ti avvisa se è stata pubblicata online. Durante questa operazione, le tue password e i tuoi nomi utente vengono criptati, quindi non possono essere letti da nessuno, Google compresa.</translation>
+<translation id="5554520618550346933">Quando utilizzi una password, Ultimatum ti avvisa se è stata pubblicata online. Durante questa operazione, le tue password e i tuoi nomi utente vengono criptati, quindi non possono essere letti da nessuno, Google compresa.</translation>
 <translation id="5555525474779371165">Scegli il livello di protezione di Navigazione sicura che preferisci</translation>
 <translation id="5556459405103347317">Ricarica</translation>
 <translation id="555671485580955310">Sincronizza cronologia e schede</translation>
 <translation id="555816257274242153">Monitoraggio del prezzo interrotto</translation>
 <translation id="5559778750856177186">Scorciatoia staccata</translation>
-<translation id="5561445479436807659">Gioca al divertente Dino di Chrome</translation>
+<translation id="5561445479436807659">Gioca al divertente Dino di Ultimatum</translation>
 <translation id="5561549206367097665">In attesa della rete…</translation>
 <translation id="5568069709869097550">Non riesco a effettuare l'accesso</translation>
 <translation id="557018954714092179">Crea nuova cartella</translation>
 <translation id="5578795271662203820">Cerca questa immagine su <ph name="SEARCH_ENGINE" /></translation>
 <translation id="5596627076506792578">Altre opzioni</translation>
 <translation id="5599455543593328020">Modalità Incognito</translation>
-<translation id="5601180634394228718">Per altre impostazioni che utilizzano i dati per migliorare la tua esperienza con Chrome, vai alle impostazioni dei <ph name="BEGIN_LINK" />servizi Google<ph name="END_LINK" />.</translation>
+<translation id="5601180634394228718">Per altre impostazioni che utilizzano i dati per migliorare la tua esperienza con Ultimatum, vai alle impostazioni dei <ph name="BEGIN_LINK" />servizi Google<ph name="END_LINK" />.</translation>
 <translation id="5601924940067278327">Trova le tue schede e altro su tutti i tuoi dispositivi</translation>
 <translation id="5611398002774823980">Salva nell'account</translation>
-<translation id="5613381935190035031">Accedi a Chrome come <ph name="EMAIL" /> per avere schede e altro su tutti i tuoi dispositivi</translation>
+<translation id="5613381935190035031">Accedi a Ultimatum come <ph name="EMAIL" /> per avere schede e altro su tutti i tuoi dispositivi</translation>
 <translation id="5614625640221885312">Accedi per avere a disposizione i tuoi preferiti, le password e altro ancora su tutti i dispositivi</translation>
 <translation id="5619633276517849615">La tua organizzazione ha attivato Navigazione sicura</translation>
 <translation id="5620163320393916465">Nessuna password salvata</translation>
@@ -1112,21 +1112,21 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="5657871969392618475">Le tue informazioni sono protette da un blocco del profilo</translation>
 <translation id="5659593005791499971">Email</translation>
 <translation id="5665379678064389456">Crea evento in <ph name="APP_NAME" /></translation>
-<translation id="5683547024293500885">Chrome non può controllare la disponibilità di aggiornamenti</translation>
+<translation id="5683547024293500885">Ultimatum non può controllare la disponibilità di aggiornamenti</translation>
 <translation id="5683916195767086779">Gruppo di schede</translation>
 <translation id="5686790454216892815">Nome file troppo lungo</translation>
 <translation id="569536719314091526">Traduci questa pagina in una lingua qualsiasi usando il pulsante Altre opzioni</translation>
-<translation id="5696597120588531049">Chrome può contribuire a proteggerti da violazioni dei dati, siti web non sicuri e non solo</translation>
+<translation id="5696597120588531049">Ultimatum può contribuire a proteggerti da violazioni dei dati, siti web non sicuri e non solo</translation>
 <translation id="5698878456427040674">Verifica se l'account selezionato è supportato.</translation>
 <translation id="5709213329446699338"><ph name="SITE" /> vuole collegarsi a una porta seriale</translation>
 <translation id="5715150588940290235">Eliminare i codici di sicurezza salvati?</translation>
-<translation id="571930967925877633">I preferiti, la cronologia e altri dati di Chrome non verranno più sincronizzati con il tuo Account Google</translation>
+<translation id="571930967925877633">I preferiti, la cronologia e altri dati di Ultimatum non verranno più sincronizzati con il tuo Account Google</translation>
 <translation id="572328651809341494">Schede recenti</translation>
 <translation id="5728072125198221967">Servizi Google collegati</translation>
 <translation id="5734658507307260911"><ph name="TAB_TITLE" />, scheda Incognito udibile fissata</translation>
 <translation id="5744751019568455640">Ecco le voci che puoi scegliere per la lettura ad alta voce delle pagine web. Se ti piace questa voce e vuoi che continui a utilizzarla, tocca il suo nome.</translation>
 <translation id="574845902699630049">Condividi come <ph name="OWNER_FULL_NAME" /></translation>
-<translation id="5749068826913805084">Chrome deve avere accesso allo spazio di archiviazione per poter scaricare file.</translation>
+<translation id="5749068826913805084">Ultimatum deve avere accesso allo spazio di archiviazione per poter scaricare file.</translation>
 <translation id="5749237766298580851">Disattivata <ph name="SEPARATOR" /> Sconsigliata</translation>
 <translation id="5752232708629533680">Condividi solo GIF</translation>
 <translation id="5753570386948603678">Elimina dalla cronologia</translation>
@@ -1145,14 +1145,14 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="5811144606237321538"><ph name="TAB_TITLE" />, schede con audio disattivato fissate selezionate</translation>
 <translation id="5814749351757353073">Rimani al passo con i tuoi siti preferiti</translation>
 <translation id="5823093032261493462">Scaricare comunque "<ph name="FILE_NAME" />" da <ph name="DOWNLOAD_DOMAIN" />?</translation>
-<translation id="5825135637446025843">Dopo il riavvio di Chrome, le informazioni salvate dal nuovo fornitore verranno utilizzate per compilare automaticamente password, passkey, indirizzi, metodi di pagamento e altri dati.</translation>
-<translation id="5828921839638612740">Puoi eliminare i dati nelle Impostazioni di Chrome</translation>
+<translation id="5825135637446025843">Dopo il riavvio di Ultimatum, le informazioni salvate dal nuovo fornitore verranno utilizzate per compilare automaticamente password, passkey, indirizzi, metodi di pagamento e altri dati.</translation>
+<translation id="5828921839638612740">Puoi eliminare i dati nelle Impostazioni di Ultimatum</translation>
 <translation id="5829586821381540080">Salvato in <ph name="FOLDER_NAME" /></translation>
 <translation id="583281660410589416">Sconosciuto</translation>
 <translation id="5833984609253377421">Condividi link</translation>
-<translation id="5839058148541733625">Dino di Chrome</translation>
+<translation id="5839058148541733625">Dino di Ultimatum</translation>
 <translation id="5841444063256914865">Scaricare comunque "<ph name="FILE_NAME" />"?</translation>
-<translation id="5847265694842662173">Chrome ha impedito a siti illeciti e inutilizzati di inviare notifiche</translation>
+<translation id="5847265694842662173">Ultimatum ha impedito a siti illeciti e inutilizzati di inviare notifiche</translation>
 <translation id="5848257610304005265">Aprire il PDF con <ph name="APP_NAME" />?</translation>
 <translation id="5849288995120328556">Interrompere la condivisione?</translation>
 <translation id="5853623416121554550">in pausa</translation>
@@ -1166,8 +1166,8 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="5865733239029070421">Invia automaticamente a Google statistiche sull'utilizzo e report sugli arresti anomali</translation>
 <translation id="5869522115854928033">Password salvate</translation>
 <translation id="5870416898561279542">Le schede e i gruppi duplicati o non utilizzati per <ph name="DAYS_INACTIVE" /> giorni vengono spostati qui<ph name="AUTODELETE_SECTION" />. Puoi modificare questa impostazione in qualsiasi momento in <ph name="DECLUTTER_SETTINGS_TITLE" />.</translation>
-<translation id="587735546353481577">Per seguire un sito, aprilo, vai al menu Chrome e tocca Segui.</translation>
-<translation id="5885378508678660271">Notifiche <ph name="SEPARATOR" /> Chrome ha rimosso queste autorizzazioni perché questo sito è pericoloso</translation>
+<translation id="587735546353481577">Per seguire un sito, aprilo, vai al menu Ultimatum e tocca Segui.</translation>
+<translation id="5885378508678660271">Notifiche <ph name="SEPARATOR" /> Ultimatum ha rimosso queste autorizzazioni perché questo sito è pericoloso</translation>
 <translation id="5899667542927581604">Nessun foglio di passkey è stato chiuso</translation>
 <translation id="5907542076239273525">Preferito salvato nella cartella <ph name="FOLDER_NAME" /></translation>
 <translation id="5911301511366365629"><ph name="TAB_TITLE" />, scheda Incognito udibile selezionata</translation>
@@ -1178,23 +1178,23 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="5942872142862698679">Google in uso per la ricerca</translation>
 <translation id="5945035219773565305">Consiglio corrente: <ph name="RECOMMENDATION" /></translation>
 <translation id="5951119116059277034">Visualizzazione della pagina attiva</translation>
-<translation id="5956665950594638604">Apri Centro assistenza di Chrome in nuova scheda</translation>
+<translation id="5956665950594638604">Apri Centro assistenza di Ultimatum in nuova scheda</translation>
 <translation id="59577092665511740">Scegli un account.</translation>
 <translation id="5958275228015807058">Puoi trovare i tuoi file e le tue pagine nella cartella Download</translation>
-<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{Chrome ha impedito a un sito che non hai visitato di recente di inviarti notifiche}other{Chrome ha impedito a siti che non hai visitato di recente di inviarti notifiche}}</translation>
+<translation id="5962499136121615854">{NUM_REVOKED_PERMISSIONS,plural, =1{Ultimatum ha impedito a un sito che non hai visitato di recente di inviarti notifiche}other{Ultimatum ha impedito a siti che non hai visitato di recente di inviarti notifiche}}</translation>
 <translation id="5962718611393537961">Tocca per comprimere</translation>
 <translation id="5964869237734432770">Interrompi descr. immagini</translation>
 <translation id="5972844218283131174">Deseleziona tutto</translation>
 <translation id="5975083100439434680">Diminuisci lo zoom</translation>
 <translation id="5977976211062815271">Su questo dispositivo</translation>
 <translation id="5978661847409534366">{ITEMS_COUNT,plural, =1{1 pagina nel tuo elenco di lettura}other{# pagine nel tuo elenco di lettura}}</translation>
-<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Chrome ha rimosso queste autorizzazioni perché non hai visitato il sito di recente</translation>
+<translation id="5992182727984874868"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" /> <ph name="SEPARATOR" /> Ultimatum ha rimosso queste autorizzazioni perché non hai visitato il sito di recente</translation>
 <translation id="5995726099713306770">Vuoi scaricare di nuovo la pagina?</translation>
 <translation id="6000066717592683814">Mantieni Google</translation>
 <translation id="6000203700195075278">Segui di nuovo</translation>
 <translation id="6011308810877101166">Migliora i suggerimenti di ricerca</translation>
 <translation id="6013305291643746595">Ordinamento per meno recente</translation>
-<translation id="6022659036123304283">Personalizza il tuo Chrome</translation>
+<translation id="6022659036123304283">Personalizza il tuo Ultimatum</translation>
 <translation id="6026538407078977628">Espandi a schermo intero</translation>
 <translation id="6030719887161080597">Gestisci le informazioni utilizzate dai siti per misurare il rendimento degli annunci</translation>
 <translation id="6039379616847168523">Vai alla scheda successiva</translation>
@@ -1223,7 +1223,7 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="6125864963080902918"><ph name="BEGIN_LINK" />Altri dettagli<ph name="END_LINK" /></translation>
 <translation id="6127860394906721547">Apri il gruppo di schede <ph name="TITLE_OF_GROUP" />, colore <ph name="COLOR_NAME" />, con i siti <ph name="URL_LIST" />.</translation>
 <translation id="6130303040046284160">Riduci a icona la scheda</translation>
-<translation id="6132075343662013154">Chrome ti proporrà di salvare la password</translation>
+<translation id="6132075343662013154">Ultimatum ti proporrà di salvare la password</translation>
 <translation id="6134168885321518274">Apri la barra di ricerca</translation>
 <translation id="6135608400322377268">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> scheda}other{<ph name="TAB_COUNT_MANY" /> schede}}</translation>
 <translation id="6137022273846704445">Lingua di <ph name="APP_NAME" /></translation>
@@ -1234,10 +1234,10 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="6146563240635539929">Video</translation>
 <translation id="614890671148262506">Consenti sempre le notifiche da questo sito</translation>
 <translation id="6150320133806434356">Preferito salvato</translation>
-<translation id="6150706324143004339">Aggiorna Chrome per usare e salvare i dati di Chrome nel tuo Account Google</translation>
+<translation id="6150706324143004339">Aggiorna Ultimatum per usare e salvare i dati di Ultimatum nel tuo Account Google</translation>
 <translation id="6154478581116148741">Attiva il blocco schermo in Impostazioni per esportare le tue password da questo dispositivo</translation>
 <translation id="6156323911414505561">Mostra barra dei preferiti</translation>
-<translation id="6162892189396105610">Precarica le pagine che Chrome ritiene tu possa visitare.</translation>
+<translation id="6162892189396105610">Precarica le pagine che Ultimatum ritiene tu possa visitare.</translation>
 <translation id="6165508094623778733">Scopri di più</translation>
 <translation id="6170675927290506430">Vai alle impostazioni di notifica</translation>
 <translation id="6184972259157699660"><ph name="TAB_TITLE" />, scheda Incognito con audio disattivato</translation>
@@ -1246,7 +1246,7 @@ Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione, a
 <translation id="6193448654517602979">Seleziona schede</translation>
 <translation id="6196315980958524839">Le password vengono salvate in Gestore delle password di Google su questo dispositivo</translation>
 <translation id="6202812185118613467">Accedi di nuovo per avviare la sincronizzazione</translation>
-<translation id="6204781143409202534">Chrome ha rilevato possibile spam da <ph name="DOMAIN" />.</translation>
+<translation id="6204781143409202534">Ultimatum ha rilevato possibile spam da <ph name="DOMAIN" />.</translation>
 <translation id="6205314730813004066">Privacy per gli annunci</translation>
 <translation id="6210282067670792090">Nella barra degli indirizzi, utilizza questa scorciatoia da tastiera con le scorciatoie per motori di ricerca e ricerca su sito</translation>
 <translation id="6210748933810148297">Non sei <ph name="EMAIL" />?</translation>
@@ -1260,12 +1260,12 @@ Ad esempio, alcuni siti web potrebbero rispondere alla richiesta mostrando annun
 <translation id="6247557882553405851">Gestore delle password di Google</translation>
 <translation id="6248988683584659830">Cerca nelle impostazioni</translation>
 <translation id="6250847299079540062"><ph name="TAB_TITLE" />, schede Incognito fissate selezionate</translation>
-<translation id="6251449557817521191">Visualizza qui la cronologia di Chrome</translation>
+<translation id="6251449557817521191">Visualizza qui la cronologia di Ultimatum</translation>
 <translation id="6254139308321626268">Stai visualizzando un file PDF</translation>
-<translation id="6255809143828972562">Con gli strumenti di Chrome puoi navigare in sicurezza e tenere tutto sotto controllo</translation>
+<translation id="6255809143828972562">Con gli strumenti di Ultimatum puoi navigare in sicurezza e tenere tutto sotto controllo</translation>
 <translation id="6264376385120300461">Scarica comunque</translation>
 <translation id="6264485186158353794">Torna nell'area protetta</translation>
-<translation id="6267106249090587268">Notifiche <ph name="SEPARATOR" /> Chrome ha rimosso queste autorizzazioni a causa di spam o contenuti ingannevoli</translation>
+<translation id="6267106249090587268">Notifiche <ph name="SEPARATOR" /> Ultimatum ha rimosso queste autorizzazioni a causa di spam o contenuti ingannevoli</translation>
 <translation id="6276708887952587684">Visualizza il codice sorgente della pagina</translation>
 <translation id="6277522088822131679">Si è verificato un problema durante la stampa della pagina. Riprova.</translation>
 <translation id="6278428485366576908">Tema</translation>
@@ -1281,7 +1281,7 @@ Ad esempio, alcuni siti web potrebbero rispondere alla richiesta mostrando annun
 <translation id="6312687380483398334">App web (modalità silenziosa)</translation>
 <translation id="6315386555979018699">Elimina e continua</translation>
 <translation id="6316139424528454185">Vers. Android non supportata</translation>
-<translation id="631839948975905034">Blocca le finestre Incognito quando esci da Chrome</translation>
+<translation id="631839948975905034">Blocca le finestre Incognito quando esci da Ultimatum</translation>
 <translation id="6324916366299863871">Modifica scorciatoia</translation>
 <translation id="6324977638108296054">Impossibile creare un link al testo evidenziato</translation>
 <translation id="6333140779060797560">Condividi tramite <ph name="APPLICATION" /></translation>
@@ -1297,13 +1297,13 @@ Ad esempio, alcuni siti web potrebbero rispondere alla richiesta mostrando annun
 <translation id="6356893102071098867">Verifica di aver scelto l'account corretto</translation>
 <translation id="6363990818884053551">Per avviare la sincronizzazione devi verificare la tua identità</translation>
 <translation id="6364438453358674297">Rimuovere il suggerimento dalla cronologia?</translation>
-<translation id="6380100320871303656">Precarica più di frequente le pagine che Chrome ritiene tu possa visitare. Questa impostazione potrebbe comportare un maggior utilizzo dei dati.</translation>
+<translation id="6380100320871303656">Precarica più di frequente le pagine che Ultimatum ritiene tu possa visitare. Questa impostazione potrebbe comportare un maggior utilizzo dei dati.</translation>
 <translation id="6382848304055775421">Esportazione in corso…</translation>
 <translation id="6388152137132427505">Condividi sempre con prudenza. I link scadono tra 48 ore.</translation>
 <translation id="6394791151443660613">Cerca: <ph name="SEARCH_QUERY" /></translation>
 <translation id="6397616442223433927">Di nuovo online</translation>
 <translation id="6399363707848566877">Ora puoi aggiungere facilmente schede ai gruppi qui</translation>
-<translation id="6401458660421980302">Per inviare questa scheda a un altro dispositivo, accedi a Chrome su quel dispositivo</translation>
+<translation id="6401458660421980302">Per inviare questa scheda a un altro dispositivo, accedi a Ultimatum su quel dispositivo</translation>
 <translation id="6404511346730675251">Modifica preferito</translation>
 <translation id="6406506848690869874">Sincronizzazione</translation>
 <translation id="6408370409308816490"><ph name="TAB_TITLE" />, scheda Incognito condivisa fissata selezionata</translation>
@@ -1323,24 +1323,24 @@ Ad esempio, alcuni siti web potrebbero rispondere alla richiesta mostrando annun
 <translation id="6452534462676960500">Nuova attività</translation>
 <translation id="6459045781120991510">Sondaggi</translation>
 <translation id="6461962085415701688">Impossibile aprire il file.</translation>
-<translation id="6464977750820128603">Puoi vedere i siti che visiti in Chrome e impostare dei timer per ciascuno di essi.\n\nGoogle riceve informazioni sui siti per i quali imposti dei timer e sul tempo che trascorri a visitarli. Queste informazioni sono utilizzate al fine di migliorare Benessere digitale.</translation>
+<translation id="6464977750820128603">Puoi vedere i siti che visiti in Ultimatum e impostare dei timer per ciascuno di essi.\n\nGoogle riceve informazioni sui siti per i quali imposti dei timer e sul tempo che trascorri a visitarli. Queste informazioni sono utilizzate al fine di migliorare Benessere digitale.</translation>
 <translation id="6468703991511753953">Al momento la barra degli indirizzi è in basso</translation>
-<translation id="6470181189905173055">Le pagine che hai aperto in Chrome mentre usavi <ph name="APP_LABEL" /> verranno visualizzate qui.</translation>
+<translation id="6470181189905173055">Le pagine che hai aperto in Ultimatum mentre usavi <ph name="APP_LABEL" /> verranno visualizzate qui.</translation>
 <translation id="6473086018775716761">Elenco di opzioni di condivisione aperto nella parte inferiore dello schermo.</translation>
 <translation id="6475951671322991020">Scarica video</translation>
 <translation id="6477928892249167417">Questi siti sembrano importanti per te:</translation>
-<translation id="6479881432656947268">Visita il Chrome Web Store</translation>
-<translation id="6481963882741794338">Collega Chrome e altri servizi Google per la personalizzazione e altri scopi</translation>
+<translation id="6479881432656947268">Visita il Ultimatum Web Store</translation>
+<translation id="6481963882741794338">Collega Ultimatum e altri servizi Google per la personalizzazione e altri scopi</translation>
 <translation id="6482749332252372425">Download di <ph name="FILE_NAME" /> non riuscito a causa dello spazio di archiviazione insufficiente.</translation>
 <translation id="6486420406192123355">Questo file PDF proviene da un sito che utilizza una connessione non sicura</translation>
 <translation id="650224091954855786">{FILE_COUNT,plural, =1{File scaricato}other{# download completati}}</translation>
-<translation id="6508722015517270189">Riavvia Chrome</translation>
+<translation id="6508722015517270189">Riavvia Ultimatum</translation>
 <translation id="6513924416597632811">Copia il link alla pagina dei risultati di ricerca per: <ph name="SEARCH_QUERY" />. Fonte: <ph name="PAGE_URL" /></translation>
 <translation id="6518133107902771759">Verifica</translation>
 <translation id="6521218807522232085">Crea, salva e gestisci le tue password in modo da poter accedere facilmente</translation>
 <translation id="6527303717912515753">Condividi</translation>
-<translation id="652948702951888897">Cronologia di Chrome</translation>
-<translation id="6532866250404780454">I siti che visiti in Chrome non verranno mostrati. Tutti i timer dei siti saranno eliminati.</translation>
+<translation id="652948702951888897">Cronologia di Ultimatum</translation>
+<translation id="6532866250404780454">I siti che visiti in Ultimatum non verranno mostrati. Tutti i timer dei siti saranno eliminati.</translation>
 <translation id="6539092367496845964">Si è verificato un problema. Riprova più tardi.</translation>
 <translation id="6541983376925655882">{NUM_HOURS,plural, =1{Eseguito 1 ora fa}other{Eseguito # ore fa}}</translation>
 <translation id="6545017243486555795">Cancella tutti i dati</translation>
@@ -1355,7 +1355,7 @@ Ad esempio, alcuni siti web potrebbero rispondere alla richiesta mostrando annun
 <translation id="6569373978618239158">Vedrai storie di <ph name="SITE_NAME" /> quando aprirai una nuova scheda. I siti che segui vengono salvati nel tuo Account Google. Puoi gestirli nelle impostazioni di Discover.</translation>
 <translation id="657177046675873214">Per trovare i tuoi preferiti su tutti i dispositivi, attiva l'opzione "Preferiti" nelle impostazioni</translation>
 <translation id="6573096386450695060">Consenti sempre</translation>
-<translation id="6573431926118603307">Le schede aperte in Chrome sugli altri dispositivi verranno visualizzate qui.</translation>
+<translation id="6573431926118603307">Le schede aperte in Ultimatum sugli altri dispositivi verranno visualizzate qui.</translation>
 <translation id="6583199322650523874">Aggiungi la pagina corrente ai Preferiti</translation>
 <translation id="6588043302623806746">Usa DNS sicuro</translation>
 <translation id="6590471736817333463">Risparmia fino al 60% di dati</translation>
@@ -1363,28 +1363,28 @@ Ad esempio, alcuni siti web potrebbero rispondere alla richiesta mostrando annun
 <translation id="6594347733515723558">Ordina e visualizza</translation>
 <translation id="6595046016124923392">Le immagini vengono inviate a Google per migliorare le descrizioni.</translation>
 <translation id="661266467055912436">Migliora il livello di sicurezza per te e per chiunque sul web.</translation>
-<translation id="6621391692573306628">Per inviare questa scheda a un altro dispositivo, accedi a Chrome su entrambi i dispositivi</translation>
+<translation id="6621391692573306628">Per inviare questa scheda a un altro dispositivo, accedi a Ultimatum su entrambi i dispositivi</translation>
 <translation id="6627583120233659107">Modifica cartella</translation>
 <translation id="6633067410344541938">Sblocca la modalità in incognito</translation>
 <translation id="6636623428211296678">Scopri altre impostazioni qui sotto oppure termina ora</translation>
-<translation id="6637100877383020115">Per contribuire a migliorare l'app, Chrome invia a Google dati sull'utilizzo e sugli arresti anomali. <ph name="BEGIN_UMA_LINK" />Gestisci<ph name="END_UMA_LINK" /></translation>
+<translation id="6637100877383020115">Per contribuire a migliorare l'app, Ultimatum invia a Google dati sull'utilizzo e sugli arresti anomali. <ph name="BEGIN_UMA_LINK" />Gestisci<ph name="END_UMA_LINK" /></translation>
 <translation id="6641780377503683465">Rimuovi <ph name="INTEREST" /></translation>
 <translation id="6642299196749785472">Allega schede</translation>
 <translation id="6647441008198474441">Gli URL che visiti vengono inviati a Google per prevedere quali siti potresti visitare in futuro</translation>
 <translation id="6648977384226967773">{CONTACT,plural, =1{<ph name="CONTACT_PREVIEW" />\u2026 e altri <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" />}other{<ph name="CONTACT_PREVIEW" />\u2026 e altri <ph name="NUMBER_OF_ADDITIONAL_CONTACTS" />}}</translation>
 <translation id="6649642165559792194">Anteprima immagine <ph name="BEGIN_NEW" />Novità<ph name="END_NEW" /></translation>
 <translation id="6659594942844771486">Scheda</translation>
-<translation id="6661521899577697780">Attivazione di Chrome Finds aperta nella parte inferiore dello schermo</translation>
+<translation id="6661521899577697780">Attivazione di Ultimatum Finds aperta nella parte inferiore dello schermo</translation>
 <translation id="666731172850799929">Apri in <ph name="APP_NAME" /></translation>
 <translation id="6669390930482049506">Avvisami</translation>
-<translation id="6670767097276846646">Alcune estensioni possono aggiungere motori di ricerca a Chrome</translation>
+<translation id="6670767097276846646">Alcune estensioni possono aggiungere motori di ricerca a Ultimatum</translation>
 <translation id="6671495933530132209">Copia immagine</translation>
 <translation id="6672697278890207089">Inserisci la passphrase</translation>
 <translation id="6672917148207387131">Aggiungi <ph name="DOMAIN" /></translation>
 <translation id="6674571176963658787">Per avviare la sincronizzazione devi inserire la tua passphrase</translation>
-<translation id="6676927815633975364">Accedi a questo sito e a Chrome</translation>
+<translation id="6676927815633975364">Accedi a questo sito e a Ultimatum</translation>
 <translation id="6684262542644248484">Accedi a un sito web</translation>
-<translation id="6684809838922667136">Migliora Chrome</translation>
+<translation id="6684809838922667136">Migliora Ultimatum</translation>
 <translation id="6689436252814043643">Modalità Lettura non disponibile</translation>
 <translation id="669971068476817798">Tocca Salva</translation>
 <translation id="6700279777779583398">Selezioni salvate</translation>
@@ -1408,18 +1408,18 @@ Ad esempio, alcuni siti web potrebbero rispondere alla richiesta mostrando annun
 <translation id="6764137532716892442">Gruppo di schede <ph name="GROUP_TITLE" /> condiviso con nuova attività</translation>
 <translation id="6767294960381293877">Elenco di dispositivi con cui condividere una scheda aperto nella parte inferiore dello schermo.</translation>
 <translation id="6783664456110886353">{TAB_COUNT,plural, =1{<ph name="INCOGNITO_TAB_COUNT" /> scheda Incognito e <ph name="TAB_COUNT_ONE" /> altra scheda verranno chiuse}other{<ph name="INCOGNITO_TAB_COUNT" /> scheda Incognito e altre <ph name="TAB_COUNT_MANY" /> schede verranno chiuse}}</translation>
-<translation id="6785476624617658922">Termini di servizio aggiuntivi di Chrome e ChromeOS</translation>
+<translation id="6785476624617658922">Termini di servizio aggiuntivi di Ultimatum e UltimatumOS</translation>
 <translation id="6786747875388722282">Estensioni</translation>
 <translation id="6787600234697426339">Limite di <ph name="MAX_INSTANCE_COUNT" /> finestre raggiunto</translation>
 <translation id="6795633245022906657">Apri rapidamente una nuova scheda. Per modificare questa scorciatoia, vai a Impostazioni.</translation>
-<translation id="679588508577699489">Imposta Chrome come browser predefinito</translation>
+<translation id="679588508577699489">Imposta Ultimatum come browser predefinito</translation>
 <translation id="679956319013005046">Per impostare il servizio preferito per la compilazione automatica, devi prima aggiungerlo nelle <ph name="BEGIN_LINK" />Impostazioni di Android<ph name="END_LINK" /> .</translation>
 <translation id="6802555630140434547">La finestra verrà chiusa</translation>
 <translation id="6803791793483522764">Rivedi le notifiche</translation>
 <translation id="6809470175540814047">Apri nella finestra Incognito</translation>
 <translation id="6811034713472274749">La pagina è pronta per essere visualizzata</translation>
 <translation id="6813359536773993594">{FILE_COUNT,plural, =1{Immagini, 1 immagine nell'elenco}other{Immagini, # immagini nell'elenco}}</translation>
-<translation id="6813446258015311409">Accedi a Chrome, foglio aperto.</translation>
+<translation id="6813446258015311409">Accedi a Ultimatum, foglio aperto.</translation>
 <translation id="6815692190508268848">Preferenze dell'aspetto applicate</translation>
 <translation id="6817747507826986771">Condividi rapidamente questa pagina. Tocca e tieni premuto per modificare questa scorciatoia.</translation>
 <translation id="6820686453637990663">CVC</translation>
@@ -1428,7 +1428,7 @@ Ad esempio, alcuni siti web potrebbero rispondere alla richiesta mostrando annun
 <translation id="6828070228333235514">Interrompi monitoraggio prezzo</translation>
 <translation id="6830728435402077660">Non sicuro</translation>
 <translation id="6831043979455480757">Traduci</translation>
-<translation id="6835182496791325827">Ricevi una notifica quando Chrome trova i risultati migliori per le tue ricerche mentre non sei presente.</translation>
+<translation id="6835182496791325827">Ricevi una notifica quando Ultimatum trova i risultati migliori per le tue ricerche mentre non sei presente.</translation>
 <translation id="6846298663435243399">Caricamento in corso…</translation>
 <translation id="6850409657436465440">Il download è ancora in corso</translation>
 <translation id="6850830437481525139"><ph name="TAB_COUNT" /> schede chiuse</translation>
@@ -1451,7 +1451,7 @@ Ad esempio, alcuni siti web potrebbero rispondere alla richiesta mostrando annun
 <translation id="6886500155621657325">{ITEMS_COUNT,plural, =1{1 password}other{# password}}</translation>
 <translation id="688730033107341407">Quando esci, i preferiti, le password e altri dati nel tuo Account Google verranno rimossi da questo dispositivo.</translation>
 <translation id="6896758677409633944">Copia</translation>
-<translation id="6898797562238201317">Usa la tua passphrase per criptare tutti i dati di Chrome nel tuo Account Google</translation>
+<translation id="6898797562238201317">Usa la tua passphrase per criptare tutti i dati di Ultimatum nel tuo Account Google</translation>
 <translation id="6900532703269623216">Protezione avanzata</translation>
 <translation id="6903907808598579934">Attiva la sincronizzazione</translation>
 <translation id="6906448540340261898">Assicurati di poter usare sempre le password nel tuo Account Google</translation>
@@ -1461,7 +1461,7 @@ Ad esempio, alcuni siti web potrebbero rispondere alla richiesta mostrando annun
 <translation id="6910211073230771657">Eliminato</translation>
 <translation id="6916590542764765824">Gestisci estensioni</translation>
 <translation id="6918398787259831832">Se il problema persiste, <ph name="BEGIN_LINK" />richiedi ulteriori informazioni<ph name="END_LINK" /> a <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" />.</translation>
-<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Chrome ha rimosso queste autorizzazioni perché non hai visitato il sito di recente</translation>
+<translation id="6922812712751566567"><ph name="PERMISSION" /> <ph name="SEPARATOR" /> Ultimatum ha rimosso queste autorizzazioni perché non hai visitato il sito di recente</translation>
 <translation id="6927821422725196292">{TABS_COUNT,plural, =1{1 scheda}other{<ph name="NUMBER_OF_TABS" /> schede}}</translation>
 <translation id="6929224077895306814">Tutti i codici di sicurezza salvati sul dispositivo e nell'Account Google verranno eliminati</translation>
 <translation id="6933180670536678127"><ph name="TAB_TITLE" />, scheda udibile fissata selezionata</translation>
@@ -1490,30 +1490,30 @@ Ad esempio, alcuni siti web potrebbero rispondere alla richiesta mostrando annun
 <translation id="7020741890149022655">Aggiungi a Elenco lettura <ph name="BEGIN_NEW" />Novità<ph name="END_NEW" /></translation>
 <translation id="7022756207310403729">Apri nel browser</translation>
 <translation id="7029809446516969842">Password</translation>
-<translation id="7037994709569287156">Imposta Chrome come predefinito</translation>
+<translation id="7037994709569287156">Imposta Ultimatum come predefinito</translation>
 <translation id="7053256416619638731">Migliora le password su questo dispositivo</translation>
 <translation id="7053983685419859001">Blocca</translation>
 <translation id="7054588988317389591">Vuoi recuperare le descrizioni delle immagini?</translation>
-<translation id="7057969023583258980">Apri la cronologia completa di Chrome</translation>
+<translation id="7057969023583258980">Apri la cronologia completa di Ultimatum</translation>
 <translation id="7063006564040364415">Impossibile collegarsi al server di sincronizzazione.</translation>
 <translation id="7063106218165698546">Personalizza il gruppo di schede e tocca Fine</translation>
 <translation id="7071521146534760487">Gestisci account</translation>
 <translation id="707155805709242880">Scegli qui sotto i dati da sincronizzare</translation>
 <translation id="7072949719501323344"><ph name="TAB_TITLE" />, schede Incognito Picture in picture fissate selezionate</translation>
 <translation id="7077143737582773186">Scheda SD</translation>
-<translation id="7078916049958741685">Elimina i tuoi dati di Chrome anche da questo dispositivo</translation>
+<translation id="7078916049958741685">Elimina i tuoi dati di Ultimatum anche da questo dispositivo</translation>
 <translation id="7080145768121641840"><ph name="TAB_TITLE" />, scheda con audio disattivato fissata selezionata</translation>
 <translation id="7084115944294706056">Scegli posizione barra indirizzi</translation>
-<translation id="7085332316435785646">Scegli se includere la cronologia di Chrome per esperienze ancora più personalizzate nei servizi Google</translation>
-<translation id="7088681679121566888">Chrome è aggiornato</translation>
+<translation id="7085332316435785646">Scegli se includere la cronologia di Ultimatum per esperienze ancora più personalizzate nei servizi Google</translation>
+<translation id="7088681679121566888">Ultimatum è aggiornato</translation>
 <translation id="7098100324909062850"><ph name="TAB_TITLE" />, schede Incognito con audio disattivato selezionate</translation>
 <translation id="7106762743910369165">Il tuo browser è gestito dalla tua organizzazione</translation>
-<translation id="7111394291981742152">Chrome ti offre maggiore controllo sugli annunci che ti vengono mostrati e limita ciò che i siti possono imparare su di te quando ti mostrano annunci personalizzati.</translation>
+<translation id="7111394291981742152">Ultimatum ti offre maggiore controllo sugli annunci che ti vengono mostrati e limita ciò che i siti possono imparare su di te quando ti mostrano annunci personalizzati.</translation>
 <translation id="7111822978084196600">Assegna un nome a questa finestra</translation>
 <translation id="7115358764509798967">Predefinito di sistema</translation>
 <translation id="7117485132243600300">Gestisci i contenuti che segui e gli argomenti e le ricerche suggeriti</translation>
 <translation id="7119984597597798764">Chiudi <ph name="INSTANCE_TITLE" /></translation>
-<translation id="7121179479711575744">Accedi a Chrome</translation>
+<translation id="7121179479711575744">Accedi a Ultimatum</translation>
 <translation id="7136694880210472378">Imposta come predefinito</translation>
 <translation id="7136902389402789299">{NUM_SITES,plural, =1{Autorizzazioni esaminate per 1 sito}other{Autorizzazioni esaminate per # siti}}</translation>
 <translation id="7138678301420049075">Altro</translation>
@@ -1523,8 +1523,8 @@ Ad esempio, alcuni siti web potrebbero rispondere alla richiesta mostrando annun
 <translation id="7149893636342594995">Ultime 24 ore</translation>
 <translation id="71503698506017927">La crittografia delle passphrase non include metodi di pagamento e indirizzi di Google Pay.
 
-Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Chrome nel tuo account<ph name="END_LINK" />.</translation>
-<translation id="7165972437814027679">Scopri di più sul motivo per cui Chrome blocca alcuni file</translation>
+Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ultimatum nel tuo account<ph name="END_LINK" />.</translation>
+<translation id="7165972437814027679">Scopri di più sul motivo per cui Ultimatum blocca alcuni file</translation>
 <translation id="7168323970702333693">Accesso eseguito come <ph name="USER_NAME" />. Consente di aprire le impostazioni.</translation>
 <translation id="7170930892977483182">Tutti i codici di sicurezza salvati sul dispositivo e in Google Wallet verranno eliminati</translation>
 <translation id="7173114856073700355">Apri Impostazioni</translation>
@@ -1544,7 +1544,7 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="7197682514647286393">Elimina rapidamente i dati di navigazione</translation>
 <translation id="719791532916917144">Scorciatoia da tastiera</translation>
 <translation id="7207760545532569765">Ripristina <ph name="TAB_COUNT" /> schede come nuove schede in background.</translation>
-<translation id="7217781228893594884">Le schede Incognito verranno bloccate quando uscirai da Chrome</translation>
+<translation id="7217781228893594884">Le schede Incognito verranno bloccate quando uscirai da Ultimatum</translation>
 <translation id="7221869452894271364">Ricarica questa pagina</translation>
 <translation id="722681077040152344">Iscrizione a <ph name="COUNT" /> siti annullata</translation>
 <translation id="7227218174981371415">{FILE_COUNT,plural, =1{1 download in attesa}other{# download in attesa}}</translation>
@@ -1554,12 +1554,12 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="724510009481365878">Impossibile stampare la pagina</translation>
 <translation id="7248671827512403053">Applicazione</translation>
 <translation id="7253951228444156601">Controllo delle password…</translation>
-<translation id="7260367682327802201">Il tuo dispositivo Android potrebbe includere un'impostazione simile. Se la misurazione degli annunci è attiva in Chrome e sul tuo dispositivo Android, una società potrebbe essere in grado di misurare l'efficacia di un annuncio sui siti web che visiti e sulle app che utilizzi.</translation>
+<translation id="7260367682327802201">Il tuo dispositivo Android potrebbe includere un'impostazione simile. Se la misurazione degli annunci è attiva in Ultimatum e sul tuo dispositivo Android, una società potrebbe essere in grado di misurare l'efficacia di un annuncio sui siti web che visiti e sulle app che utilizzi.</translation>
 <translation id="727288900855680735">Inviare <ph name="ONE_TIME_CODE" /> a <ph name="ORIGIN" />?</translation>
 <translation id="7274013316676448362">Sito bloccato</translation>
 <translation id="7276868533747677875">Se in precedenza hai esportato le password, cerca un file CSV sul tuo dispositivo e importa le password nel gestore delle password che preferisci.</translation>
 <translation id="728377807486816582">Tocca la barra degli indirizzi</translation>
-<translation id="7289049772085228972">Disponi della funzionalità di sicurezza più efficace di Chrome</translation>
+<translation id="7289049772085228972">Disponi della funzionalità di sicurezza più efficace di Ultimatum</translation>
 <translation id="7289303553784750393">Se sei online, ma il problema persiste, puoi provare altri metodi per continuare su <ph name="SITE_ETLD_PLUS_ONE" />.</translation>
 <translation id="7290209999329137901">Impossibile rinominare</translation>
 <translation id="7291910923717764901">Descrizioni delle immagini aggiunte per questa pagina</translation>
@@ -1592,12 +1592,12 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="7400003506822844357">{FILE_COUNT,plural, =1{Altro, 1 file nell'elenco}other{Altro, # file nell'elenco}}</translation>
 <translation id="7400418766976504921">URL</translation>
 <translation id="7400424692675800399">Per aprire una nuova finestra, riduci il numero totale di finestre attive e inattive a <ph name="MAX_WINDOW_COUNT_MINUS_ONE" /> o meno.</translation>
-<translation id="7403691278183511381">Esperienza prima esecuzione di Chrome</translation>
+<translation id="7403691278183511381">Esperienza prima esecuzione di Ultimatum</translation>
 <translation id="7411224099004328643">Utente dell'Account Google</translation>
 <translation id="7419565702166471774">Utilizza sempre connessioni sicure</translation>
 <translation id="7421293530411019405">Uscire dal gruppo di schede?</translation>
 <translation id="7435356471928173109">Disattivata dall'amministratore</translation>
-<translation id="7437998757836447326">Esci da Chrome</translation>
+<translation id="7437998757836447326">Esci da Ultimatum</translation>
 <translation id="7439467816829380878">Sposta la scheda nel gruppo</translation>
 <translation id="7439749340204407129">Apri Gestione preferiti</translation>
 <translation id="7453810262525006706">Comprimi in vista laterale</translation>
@@ -1631,7 +1631,7 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="7525248386620136756">Chiusi e salvati: <ph name="TAB_GROUPS_AND_TABS_PART" /></translation>
 <translation id="7545347190366646170">Persone con accesso</translation>
 <translation id="7553482318994371148">Riapri schede chiuse</translation>
-<translation id="7554643625247105821">Impossibile controllare la versione di Chrome</translation>
+<translation id="7554643625247105821">Impossibile controllare la versione di Ultimatum</translation>
 <translation id="7557508262441527045">Account disconnesso</translation>
 <translation id="7573665567024262965">Seleziona le tue app predefinite</translation>
 <translation id="757855969265046257">{FILES,plural, =1{<ph name="FILES_DOWNLOADED_ONE" /> file scaricato}other{<ph name="FILES_DOWNLOADED_MANY" /> file scaricati}}</translation>
@@ -1647,7 +1647,7 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="7612619742409846846">Accesso effettuato a Google come</translation>
 <translation id="7612989789287281429">Accesso in corso…</translation>
 <translation id="7619072057915878432">Download di <ph name="FILE_NAME" /> non riuscito a causa di errori di rete.</translation>
-<translation id="7626032353295482388">Ti diamo il benvenuto in Chrome</translation>
+<translation id="7626032353295482388">Ti diamo il benvenuto in Ultimatum</translation>
 <translation id="7628417132421583481">Vai a Gestore delle password</translation>
 <translation id="7630202231528827509">URL del fornitore</translation>
 <translation id="7638584964844754484">Passphrase sbagliata</translation>
@@ -1662,7 +1662,7 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="7666185984446444960">Chiusi: <ph name="TAB_GROUPS_AND_TABS_PART" /></translation>
 <translation id="7682724950699840886">Prova i seguenti suggerimenti: assicurati di avere spazio sufficiente sul dispositivo e prova a esportare di nuovo.</translation>
 <translation id="7686086654630106285">Scopri di più sugli annunci suggeriti dai siti</translation>
-<translation id="7690596512217303514">Impossibile aprire Chrome sul dispositivo. Per risolvere il problema, scarica l'ultimo aggiornamento di Chrome dallo store.</translation>
+<translation id="7690596512217303514">Impossibile aprire Ultimatum sul dispositivo. Per risolvere il problema, scarica l'ultimo aggiornamento di Ultimatum dallo store.</translation>
 <translation id="7691043218961417207">Esplora i contenuti da seguire</translation>
 <translation id="7692761875510935111">Apri rapidamente nel browser. Per modificare questa scorciatoia, tocca e tieni premuto.</translation>
 <translation id="7697383401610880082">Punto di trascinamento</translation>
@@ -1670,7 +1670,7 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="7702420606070050505">Riquadro inferiore Attività recente aperto a schermo intero</translation>
 <translation id="7707922173985738739">Verranno utilizzati i dati mobili</translation>
 <translation id="7708994397325774423">Recupera tutte le tue password</translation>
-<translation id="7714077993070342304">Apri il menu Chrome</translation>
+<translation id="7714077993070342304">Apri il menu Ultimatum</translation>
 <translation id="7733878270780732638">Spazio sul dispositivo insufficiente.</translation>
 <translation id="7740287852186792672">Risultati della ricerca</translation>
 <translation id="774403695779169686"><ph name="TAB_TITLE" />, scheda Incognito condivisa selezionata</translation>
@@ -1697,9 +1697,9 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="7821130663268546430">Puoi trovare tutte le schede aperte nel Selettore di schede</translation>
 <translation id="7822705602465980873">Se hai eseguito l'accesso, questi dati vengono collegati al tuo Account Google per proteggerti nei servizi Google, ad esempio aumentando la protezione in Gmail dopo un incidente di sicurezza.</translation>
 <translation id="7824665136384946951">La tua organizzazione ha disattivato Navigazione sicura</translation>
-<translation id="7826342993930002256">Il tuo Chrome, ovunque</translation>
+<translation id="7826342993930002256">Il tuo Ultimatum, ovunque</translation>
 <translation id="7844171778363018843">Nessun dato selezionato da sincronizzare</translation>
-<translation id="784453721355882533">Prova Gemini in Chrome per ottenere risposte, informazioni e altro ancora.</translation>
+<translation id="784453721355882533">Prova Gemini in Ultimatum per ottenere risposte, informazioni e altro ancora.</translation>
 <translation id="7846161022626028328">Si è verificato un errore. Riprova.</translation>
 <translation id="7846296061357476882">Servizi Google</translation>
 <translation id="784652447248278262">Finestra corrente</translation>
@@ -1709,10 +1709,10 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="7853202427316060426">Attività</translation>
 <translation id="7859988229622350291">Non tradurre mai</translation>
 <translation id="7866213166286285359">Traduci le pagine qui</translation>
-<translation id="7873610418439765081">Prova Gemini in Chrome per ottenere risposte, informazioni e altro ancora dal pulsante Altre opzioni.</translation>
+<translation id="7873610418439765081">Prova Gemini in Ultimatum per ottenere risposte, informazioni e altro ancora dal pulsante Altre opzioni.</translation>
 <translation id="7875915731392087153">Crea email</translation>
 <translation id="7876243839304621966">Rimuovi tutto</translation>
-<translation id="7886917304091689118">In esecuzione in Chrome</translation>
+<translation id="7886917304091689118">In esecuzione in Ultimatum</translation>
 <translation id="7887174313503389866">Fai un tour guidato dei controlli per la privacy e la sicurezza più importanti. Per altre opzioni, vai alle impostazioni individuali.</translation>
 <translation id="7913993612870913335">{FILE_COUNT,plural, =1{1 download è stato bloccato dalla tua organizzazione}other{# download sono stati bloccati dalla tua organizzazione}}</translation>
 <translation id="7914399737746719723">App installata</translation>
@@ -1721,7 +1721,7 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="7921782882718083488">Riassumi questa pagina</translation>
 <translation id="7926975587469166629">Nickname carta</translation>
 <translation id="7927073875790626822">XR</translation>
-<translation id="7929587383660661825">Chrome rimuove automaticamente le autorizzazioni dai siti con notifiche intrusive o che non hai visitato di recente</translation>
+<translation id="7929587383660661825">Ultimatum rimuove automaticamente le autorizzazioni dai siti con notifiche intrusive o che non hai visitato di recente</translation>
 <translation id="7934668619883965330">Impossibile scaricare il file. Formato file non supportato.</translation>
 <translation id="7942131818088350342"><ph name="PRODUCT_NAME" /> è obsoleto.</translation>
 <translation id="7944772052836377867">La sincronizzazione deve verificare la tua identità</translation>
@@ -1738,7 +1738,7 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="7971136598759319605">Attivo 1 giorno fa</translation>
 <translation id="7975379999046275268">Anteprima pagina <ph name="BEGIN_NEW" />Novità<ph name="END_NEW" /></translation>
 <translation id="7977451675950311423">Ricevi un avviso se utilizzi una password che è stata compromessa a causa di una violazione dei dati.</translation>
-<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Chrome ha rimosso queste autorizzazioni perché non hai visitato il sito di recente</translation>
+<translation id="7987499071758862048"><ph name="PERMISSION_1" />, <ph name="PERMISSION_2" />, <ph name="PERMISSION_3" /> <ph name="SEPARATOR" /> Ultimatum ha rimosso queste autorizzazioni perché non hai visitato il sito di recente</translation>
 <translation id="7995059495660416932">Vedrai i contenuti non appena saranno disponibili</translation>
 <translation id="799576009106109668">Navigherai più velocemente perché i contenuti vengono caricati in modo proattivo in base alla pagina web che stai visitando</translation>
 <translation id="7998918019931843664">Riapri la scheda chiusa</translation>
@@ -1756,17 +1756,17 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="804335162455518893">Scheda SD non trovata</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> scheda Incognito}other{<ph name="TAB_COUNT_NORMAL" /> schede Incognito}}</translation>
 <translation id="8051695050440594747"><ph name="MEGABYTES" /> MB disponibili</translation>
-<translation id="8058746566562539958">Apri in nuova scheda di Chrome</translation>
+<translation id="8058746566562539958">Apri in nuova scheda di Ultimatum</translation>
 <translation id="8062594758852531064">Precaricamento esteso:</translation>
 <translation id="8063895661287329888">Impossibile aggiungere preferito.</translation>
 <translation id="8066816452984416180">Aggiungi rapidamente questa pagina ai preferiti. Tocca e tieni premuto per modificare questa scorciatoia.</translation>
-<translation id="8072436850275034464">Puoi riaprire le schede che hai chiuso di recente su tutti i dispositivi su cui utilizzi Chrome</translation>
+<translation id="8072436850275034464">Puoi riaprire le schede che hai chiuso di recente su tutti i dispositivi su cui utilizzi Ultimatum</translation>
 <translation id="8073388330009372546">Immagine in nuova scheda</translation>
 <translation id="8076492880354921740">Schede</translation>
 <translation id="8078096376109663956">Condividi soltanto il testo</translation>
 <translation id="8078348702936632821">Fissa questa scorciatoia</translation>
 <translation id="8084285576995584326">Controlla i dati del tuo Account Google</translation>
-<translation id="8084864785646838999">Parte della tua cronologia potrebbe non essere mostrata qui. Per vedere tutta la cronologia di Chrome, apri la cronologia completa del browser. Inoltre, il tuo Account Google potrebbe avere altre forme di cronologia di navigazione all'indirizzo <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
+<translation id="8084864785646838999">Parte della tua cronologia potrebbe non essere mostrata qui. Per vedere tutta la cronologia di Ultimatum, apri la cronologia completa del browser. Inoltre, il tuo Account Google potrebbe avere altre forme di cronologia di navigazione all'indirizzo <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="8088176524274673045">Per condividere i contenuti con le persone qui vicino, fa' scansionare loro questo codice QR</translation>
 <translation id="8090732854597034573">Se hai bisogno di aiuto, rivolgiti al tuo genitore</translation>
 <translation id="8101414242770404289">Nessuna scheda: <ph name="TIME_PERIOD" /></translation>
@@ -1774,10 +1774,10 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="810433609302852">Riquadro inferiore con notifica di promozione della funzionalità suggerita e passaggi per l'utilizzo</translation>
 <translation id="8105893657415066307"><ph name="DESCRIPTION" /> <ph name="SEPARATOR" /> <ph name="FILE_SIZE" /></translation>
 <translation id="8107530384992929318">Chiudi opzioni di ordinamento</translation>
-<translation id="8110024788458304985">Contribuisci a migliorare le funzionalità e le prestazioni di Chrome</translation>
-<translation id="8110087112193408731">Vuoi mostrare la tua attività di Chrome in Benessere digitale?</translation>
+<translation id="8110024788458304985">Contribuisci a migliorare le funzionalità e le prestazioni di Ultimatum</translation>
+<translation id="8110087112193408731">Vuoi mostrare la tua attività di Ultimatum in Benessere digitale?</translation>
 <translation id="8118117428362942925">Se hai bisogno di aiuto, rivolgiti al tuo genitore (<ph name="PARENT_NAME" />)</translation>
-<translation id="8118151008374483324">Accedi a Chrome per avere schede e altro su tutti i tuoi dispositivi</translation>
+<translation id="8118151008374483324">Accedi a Ultimatum per avere schede e altro su tutti i tuoi dispositivi</translation>
 <translation id="8120286190326371840">Nessuna password compromessa su questo dispositivo</translation>
 <translation id="8122623268651408616">Ordinamento per più recente</translation>
 <translation id="8127542551745560481">Modifica home page</translation>
@@ -1818,7 +1818,7 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="8260126382462817229">Prova ad accedere nuovamente</translation>
 <translation id="8261506727792406068">Elimina</translation>
 <translation id="82619448491672958">Vedi altre schede</translation>
-<translation id="8265730590513812063">Apri il menu Chrome</translation>
+<translation id="8265730590513812063">Apri il menu Ultimatum</translation>
 <translation id="8266753737658117282">Continua con <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8266862848225348053">Percorso di download</translation>
 <translation id="8271267069224406035">Segnala come spam</translation>
@@ -1832,7 +1832,7 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="8317318757008452355">Apri le opzioni per stampare</translation>
 <translation id="8320212361750431956">Attività recente</translation>
 <translation id="832514020744584629"><ph name="PREF_TITLE" />  <ph name="BEGIN_NEW" />Novità<ph name="END_NEW" /></translation>
-<translation id="8342727528718219152">Chrome ti avviserà quando dei siti potrebbero inviare troppe notifiche</translation>
+<translation id="8342727528718219152">Ultimatum ti avviserà quando dei siti potrebbero inviare troppe notifiche</translation>
 <translation id="834313815369870491">Non tradurre mai i siti</translation>
 <translation id="8348215005712416247"><ph name="TAB_TITLE" />, schede Incognito con registrazione fissate selezionate</translation>
 <translation id="8348430946834215779">Utilizza HTTPS quando possibile e ricevi un avviso prima di caricare i siti che non lo supportano</translation>
@@ -1846,12 +1846,12 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="8398389123831319859">Tocca due volte e tieni premuto per passare alla modalità Incognito</translation>
 <translation id="8402673309244746971">Vai a Stai seguendo</translation>
 <translation id="8413126021676339697">Mostra cronologia completa</translation>
-<translation id="8413795581997394485">Protegge da siti, download ed estensioni noti per essere pericolosi. Quando visiti un sito, Chrome invia una parte offuscata dell'URL a Google tramite un server di tutela della privacy che nasconde il tuo indirizzo IP. Se un sito effettua attività sospette, vengono inviati anche URL completi e frammenti dei contenuti delle pagine.</translation>
+<translation id="8413795581997394485">Protegge da siti, download ed estensioni noti per essere pericolosi. Quando visiti un sito, Ultimatum invia una parte offuscata dell'URL a Google tramite un server di tutela della privacy che nasconde il tuo indirizzo IP. Se un sito effettua attività sospette, vengono inviati anche URL completi e frammenti dei contenuti delle pagine.</translation>
 <translation id="8414396119627470038">Accedi a <ph name="SITE_ETLD_PLUS_ONE" /> con <ph name="IDENTITY_PROVIDER_ETLD_PLUS_ONE" /></translation>
 <translation id="8419144699778179708">Consente di eliminare la cronologia, anche nella casella di ricerca.</translation>
 <translation id="8419244640277402268">Includi</translation>
 <translation id="8422250855136581222">Nessuna scheda su questo dispositivo</translation>
-<translation id="842386925677997438">Strumenti per la sicurezza di Chrome</translation>
+<translation id="842386925677997438">Strumenti per la sicurezza di Ultimatum</translation>
 <translation id="8427875596167638501">La scheda di anteprima è aperta nella parte inferiore dello schermo</translation>
 <translation id="8428213095426709021">Impostazioni</translation>
 <translation id="8430824733382774043">Condividi solo screenshot</translation>
@@ -1859,7 +1859,7 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="8438566539970814960">Migliora le ricerche e le attività di navigazione</translation>
 <translation id="8439974325294139057"><ph name="LANG" />: lingua pronta, riavvia <ph name="APP_NAME" />.</translation>
 <translation id="8442258441309440798">Nessuna notizia disponibile</translation>
-<translation id="8443209985646068659">Imp. aggiornare Chrome</translation>
+<translation id="8443209985646068659">Imp. aggiornare Ultimatum</translation>
 <translation id="8443600937324357591">Sposta scheda in un'altra finestra</translation>
 <translation id="8445448999790540984">Impossibile esportare le password</translation>
 <translation id="8446884382197647889">Scopri di più</translation>
@@ -1868,7 +1868,7 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="8455675988389029454">Trova i preferiti, le password e altri dati su tutti i dispositivi</translation>
 <translation id="8458341576712814616">Scorciatoia</translation>
 <translation id="8458413889418591446">Per tornare rapidamente ai siti che hai visitato, sincronizza la cronologia e le schede</translation>
-<translation id="84594714173170813">Continua a usare i dati di Chrome nel tuo Account Google</translation>
+<translation id="84594714173170813">Continua a usare i dati di Ultimatum nel tuo Account Google</translation>
 <translation id="8460008946585880786">Trascina una scheda sopra un'altra</translation>
 <translation id="8460448946170646641">Esamina i controlli per la privacy e la sicurezza più importanti</translation>
 <translation id="8460932807646981183">Gestisci motori di ricerca e ricerca nei siti</translation>
@@ -1890,8 +1890,8 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="8540136935098276800">Inserisci un URL nel formato corretto</translation>
 <translation id="854522910157234410">Apri questa pagina</translation>
 <translation id="8547466829003330976">Rivedi i PDF con l'AI</translation>
-<translation id="8551513938758868521">Blocca le schede Incognito quando esci da Chrome</translation>
-<translation id="8559961053328923750">Chrome limita la quantità totale di dati che i siti possono condividere tramite il browser per misurare il rendimento dell'annuncio</translation>
+<translation id="8551513938758868521">Blocca le schede Incognito quando esci da Ultimatum</translation>
+<translation id="8559961053328923750">Ultimatum limita la quantità totale di dati che i siti possono condividere tramite il browser per misurare il rendimento dell'annuncio</translation>
 <translation id="8559990750235505898">Proponi di tradurre le pagine in altre lingue</translation>
 <translation id="8560602726703398413">Trova il tuo elenco di lettura nei preferiti</translation>
 <translation id="85618473456579127">Tocca profilo in alto a destra</translation>
@@ -1904,12 +1904,12 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="859046281437143747">Monitora il prezzo dal pulsante Altre opzioni</translation>
 <translation id="859064343657890103">Gruppo di schede <ph name="TAB_GROUP_TITLE" /> eliminato</translation>
 <translation id="860043288473659153">Nome del titolare della carta</translation>
-<translation id="8602358303461588329">Accedi a Chrome, foglio chiuso.</translation>
+<translation id="8602358303461588329">Accedi a Ultimatum, foglio chiuso.</translation>
 <translation id="860282621117673749">Avvisi su cali di prezzo</translation>
 <translation id="8611922158252451755">Chiunque abbia il link può modificare tutte le schede, quindi condividilo con prudenza. Il link scade tra 48 ore.</translation>
 <translation id="8616006591992756292">Il tuo Account Google potrebbe avere altre forme di cronologia di navigazione all'indirizzo <ph name="BEGIN_LINK" />myactivity.google.com<ph name="END_LINK" />.</translation>
 <translation id="8617240290563765734">Aprire l'URL consigliato specificato nei contenuti scaricati?</translation>
-<translation id="8629093325209491835">Apri il menu Chrome &gt; Impostazioni</translation>
+<translation id="8629093325209491835">Apri il menu Ultimatum &gt; Impostazioni</translation>
 <translation id="8634050254805484913">Nascosto su schermi stretti</translation>
 <translation id="8635399646025169806">Mantenere il gruppo di schede?</translation>
 <translation id="8636825310635137004">Attiva la sincronizzazione per recuperare le tue schede dagli altri dispositivi.</translation>
@@ -1928,15 +1928,15 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="8715300232952757586">La scheda <ph name="TAB_TITLE" /> verrà chiusa</translation>
 <translation id="8723453889042591629">Traduci rapidamente questa pagina. Tocca e tieni premuto per modificare questa scorciatoia.</translation>
 <translation id="8725066075913043281">Riprova</translation>
-<translation id="8727043961453758442">Ottieni il massimo da Chrome</translation>
+<translation id="8727043961453758442">Ottieni il massimo da Ultimatum</translation>
 <translation id="8731268612289859741">Codice di sicurezza</translation>
 <translation id="8738163682604285902">Visualizzare modalità Lettura?</translation>
 <translation id="8746155870861185046">Condividi evidenziazione</translation>
 <translation id="8748850008226585750">Contenuti nascosti</translation>
 <translation id="8754448020583829686">Copia senza link</translation>
 <translation id="8756969031206844760">Aggiornare la password?</translation>
-<translation id="8765470054473112089">Quando digiti nella barra degli indirizzi o nella casella di ricerca, Chrome invia ciò che digiti al tuo motore di ricerca predefinito per ricevere suggerimenti migliori. Questa opzione è disattivata nella modalità Incognito</translation>
-<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Chrome ha rilevato una password inefficace che potresti migliorare}other{Chrome ha rilevato # password inefficaci che potresti migliorare}}</translation>
+<translation id="8765470054473112089">Quando digiti nella barra degli indirizzi o nella casella di ricerca, Ultimatum invia ciò che digiti al tuo motore di ricerca predefinito per ricevere suggerimenti migliori. Questa opzione è disattivata nella modalità Incognito</translation>
+<translation id="8765617695893461815">{NUM_PASSWORDS,plural, =1{Ultimatum ha rilevato una password inefficace che potresti migliorare}other{Ultimatum ha rilevato # password inefficaci che potresti migliorare}}</translation>
 <translation id="8766529642647037772">Vuoi creare un link evidenziato come questo?</translation>
 <translation id="8788265440806329501">La cronologia di navigazione è chiusa</translation>
 <translation id="8790193082819560975">Tocca per cercare le opzioni di acquisto del prodotto in una nuova scheda.</translation>
@@ -1959,7 +1959,7 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="885480114717186641">Puoi richiedere il sito desktop di <ph name="HOST_NAME" /></translation>
 <translation id="8856607253650333758">Recupera descrizioni</translation>
 <translation id="8863714995118816041">Autorizzazioni consentite di nuovo per il sito <ph name="SITE_NAME" /></translation>
-<translation id="8865415417596392024">Dati di Chrome nel tuo account</translation>
+<translation id="8865415417596392024">Dati di Ultimatum nel tuo account</translation>
 <translation id="8872506776304248286">Apri nell'app</translation>
 <translation id="8890668505403261809">Cerca nelle schede Incognito</translation>
 <translation id="8892234476517513962">Hai già eseguito l'accesso</translation>
@@ -1971,7 +1971,7 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="8922289737868596582">Usa il pulsante Altre opzioni per scaricare le pagine da usare offline</translation>
 <translation id="8924575305646776101"><ph name="BEGIN_LINK" />Scopri di più<ph name="END_LINK" /></translation>
 <translation id="892496902842311796">La lingua <ph name="LANG" /> è pronta</translation>
-<translation id="8937772741022875483">Vuoi rimuovere la tua attività di Chrome da Benessere digitale?</translation>
+<translation id="8937772741022875483">Vuoi rimuovere la tua attività di Ultimatum da Benessere digitale?</translation>
 <translation id="8942627711005830162">Apri nell'altra finestra</translation>
 <translation id="8945143127965743188"><ph name="LANG" />: impossibile scaricare questa lingua. Riprova più tardi.</translation>
 <translation id="8946759102391960088">Mantieni l'accesso alle tue password</translation>
@@ -1983,12 +1983,12 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="8970887620466824814">C'è stato un problema.</translation>
 <translation id="8972098258593396643">Scaricare nella cartella predefinita?</translation>
 <translation id="8987736167266086032">Riprendi da dove eri rimasto</translation>
-<translation id="8992769679401294069">I dati sono criptati con la tua passphrase. Inseriscila per utilizzare e salvare i dati di Chrome nel tuo Account Google.</translation>
+<translation id="8992769679401294069">I dati sono criptati con la tua passphrase. Inseriscila per utilizzare e salvare i dati di Ultimatum nel tuo Account Google.</translation>
 <translation id="8993760627012879038">Apri nuova scheda in mod. di navigaz. in incognito</translation>
 <translation id="8995521496079646922">Le app che hai scelto verranno usate per impostazione predefinita. Se un'app non è già presente su questo dispositivo, verrà scaricata a breve.</translation>
 <translation id="8996847606757455498">Scegli un altro fornitore</translation>
 <translation id="8998837250940831980">Impossibile ridurre a icona la scheda. Riprova più tardi.</translation>
-<translation id="9001604755921395912">Apri in una scheda Incognito di Chrome</translation>
+<translation id="9001604755921395912">Apri in una scheda Incognito di Ultimatum</translation>
 <translation id="9012585441087414258">Protezione da siti, download ed estensioni noti per essere pericolosi. Se una pagina esegue operazioni sospette, vengono inviati URL e frammenti dei contenuti delle pagine a Google Navigazione sicura</translation>
 <translation id="9019199799064251516">Vuoi continuare senza blocco del profilo dell'auto?</translation>
 <translation id="9022774213089566801">Più visitati</translation>
@@ -1996,7 +1996,7 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="9027728231343310283">Annulla <ph name="SITE" /></translation>
 <translation id="9035378196785279980">Sposta in\u2026</translation>
 <translation id="9042893549633094279">Privacy e sicurezza</translation>
-<translation id="9047347135558855162">Avvia rapidamente una ricerca in Chrome</translation>
+<translation id="9047347135558855162">Avvia rapidamente una ricerca in Ultimatum</translation>
 <translation id="9050666287014529139">Passphrase</translation>
 <translation id="9055497320631373736">Sito aggiunto di nuovo ai siti potenziali</translation>
 <translation id="9057030985451135243">Scopri di più sui gruppi di schede condivisi</translation>
@@ -2004,7 +2004,7 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="9063400323119781058">Iscrizione annullata</translation>
 <translation id="9063523880881406963">Disattiva Richiedi sito desktop</translation>
 <translation id="9065203028668620118">Modifica</translation>
-<translation id="9065383040763568503">I dati memorizzati che Chrome non ritiene importanti (ad esempio siti senza impostazioni salvate o che non visiti spesso)</translation>
+<translation id="9065383040763568503">I dati memorizzati che Ultimatum non ritiene importanti (ad esempio siti senza impostazioni salvate o che non visiti spesso)</translation>
 <translation id="9067341854474068781">Nessun foglio di passkey aperto a schermo intero</translation>
 <translation id="906781307897697745">in <ph name="PRODUCT_NAME" /></translation>
 <translation id="9068568736932147490"><ph name="TAB_TITLE" />, schede Incognito udibili fissate selezionate</translation>
@@ -2014,8 +2014,8 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="9074739597929991885">Bluetooth</translation>
 <translation id="9081543426177426948">I siti che visiti non vengono salvati in modalità Incognito</translation>
 <translation id="9086455579313502267">Impossibile accedere alla rete</translation>
-<translation id="9093915805850895575">Apri in finestra di Chrome</translation>
-<translation id="909756639352028172">Per personalizzare al massimo la tua esperienza, includi Chrome in Attività web e app e nei servizi Google collegati</translation>
+<translation id="9093915805850895575">Apri in finestra di Ultimatum</translation>
+<translation id="909756639352028172">Per personalizzare al massimo la tua esperienza, includi Ultimatum in Attività web e app e nei servizi Google collegati</translation>
 <translation id="9099220545925418560">In base alla tua cronologia di navigazione. Questa impostazione non è attiva.</translation>
 <translation id="9100610230175265781">Passphrase obbligatoria</translation>
 <translation id="9101137867221042551">Gestione</translation>
@@ -2051,9 +2051,9 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="9218430445555521422">Imposta come predefinito</translation>
 <translation id="9219103736887031265">Immagini</translation>
 <translation id="9222198206152536936">Accedi come <ph name="EMAIL" /> per avere schede e altro su tutti i tuoi dispositivi</translation>
-<translation id="924447568950697217">Imposta Chrome come browser predefinito</translation>
-<translation id="926205370408745186">Rimuovi la tua attività di Chrome da Benessere digitale</translation>
-<translation id="927968626442779827">Usa la modalità Lite su Google Chrome</translation>
+<translation id="924447568950697217">Imposta Ultimatum come browser predefinito</translation>
+<translation id="926205370408745186">Rimuovi la tua attività di Ultimatum da Benessere digitale</translation>
+<translation id="927968626442779827">Usa la modalità Lite su Ultimatum</translation>
 <translation id="928550791203542716">Stai seguendo <ph name="SITE_NAME" /></translation>
 <translation id="930124987204876019">Elimina cronologia, cookie, dati dei siti, svuota la cache…</translation>
 <translation id="930834144334005936">Reimposta la modalità attuale <ph name="MODE_NAME" /> su Ricerca</translation>
@@ -2061,7 +2061,7 @@ Per modificare questa impostazione, <ph name="BEGIN_LINK" />elimina i dati di Ch
 <translation id="939598580284253335">Inserisci passphrase</translation>
 <translation id="94161319503679839"><ph name="TAB_TITLE" />, scheda Incognito Picture in picture fissata</translation>
 <translation id="945522503751344254">Invia feedback</translation>
-<translation id="95817756606698420">Chrome può usare <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> per le ricerche in Cina. Puoi modificare questa preferenza nelle <ph name="BEGIN_LINK" />Impostazioni<ph name="END_LINK" />.</translation>
+<translation id="95817756606698420">Ultimatum può usare <ph name="BEGIN_BOLD" />Sogou<ph name="END_BOLD" /> per le ricerche in Cina. Puoi modificare questa preferenza nelle <ph name="BEGIN_LINK" />Impostazioni<ph name="END_LINK" />.</translation>
 <translation id="961856697154696964">Elimina dati navigazione</translation>
 <translation id="963246339335003378">Apri Task Manager</translation>
 <translation id="966131775676567255">Eliminazione dei dati dell'account in corso…</translation>

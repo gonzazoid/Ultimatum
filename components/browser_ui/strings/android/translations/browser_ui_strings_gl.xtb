@@ -5,20 +5,20 @@
 <translation id="1036348656032585052">Desactivar</translation>
 <translation id="1046742265332833834">Tema azul</translation>
 <translation id="1070329623210597193">Ficheiros que pode ver ou editar este sitio</translation>
-<translation id="1073417869336441572">Para axudarnos a mellorar Chrome, cóntanos por que permitiches as cookies de terceiros. <ph name="BEGIN_LINK" />Enviar comentarios<ph name="END_LINK" /></translation>
+<translation id="1073417869336441572">Para axudarnos a mellorar Ultimatum, cóntanos por que permitiches as cookies de terceiros. <ph name="BEGIN_LINK" />Enviar comentarios<ph name="END_LINK" /></translation>
 <translation id="1074758928858737435">Podes solicitar que se mostre a versión para ordenadores dos sitios</translation>
 <translation id="1109482864356262001">As funcións que requiran sensores de movemento ou de luz non estarán dispoñibles</translation>
-<translation id="1126523729897810826">Completa as accións suxeridas máis abaixo para sacarlle o máximo partido a Chrome</translation>
+<translation id="1126523729897810826">Completa as accións suxeridas máis abaixo para sacarlle o máximo partido a Ultimatum</translation>
 <translation id="113098737392899175">Navega polas páxinas cun cursor de texto cando se conecta un teclado</translation>
 <translation id="1148624853678088576">Xa terminaches</translation>
-<translation id="1149644372535087155">Gardar os contrasinais en Chrome</translation>
+<translation id="1149644372535087155">Gardar os contrasinais en Ultimatum</translation>
 <translation id="1178015372320901893">Panel inferior dos meus atallos</translation>
 <translation id="1178581264944972037">Pausar</translation>
 <translation id="1181037720776840403">Eliminar</translation>
 <translation id="1192844206376121885">Ao realizar esta acción, eliminaranse todos os datos e as cookies que almacenase <ph name="ORIGIN" />.</translation>
 <translation id="1199963004393929848">Tema verde</translation>
 <translation id="1201402288615127009">Seguinte</translation>
-<translation id="1240190568154816272">Consellos de Chrome</translation>
+<translation id="1240190568154816272">Consellos de Ultimatum</translation>
 <translation id="1242008676835033345">Cookie inserida en <ph name="WEBSITE_URL" /></translation>
 <translation id="1263609676484797429">Toca Apps (Aplicacións)  &gt; Default Apps (Aplicacións predeterminadas)</translation>
 <translation id="1272079795634619415">Deter</translation>
@@ -38,7 +38,7 @@
 <translation id="1396327438254055134">Permite que un sitio use o optimizador de V8.</translation>
 <translation id="1409338233051621926">Toca Aplicacións e, a continuación, Aplicacións predeterminadas</translation>
 <translation id="1415402041810619267">URL truncado</translation>
-<translation id="1415855080660575082">Permite que Chrome comparta as pestanas recentes co teu dispositivo para que se mostren na lista de aplicacións e nos resultados de busca do aparello. Activa ou desactiva esta opción na configuración de Chrome.</translation>
+<translation id="1415855080660575082">Permite que Ultimatum comparta as pestanas recentes co teu dispositivo para que se mostren na lista de aplicacións e nos resultados de busca do aparello. Activa ou desactiva esta opción na configuración de Ultimatum.</translation>
 <translation id="1420688843103859429">Pasa dous dedos no panel táctil para navegar cara adiante ou cara atrás</translation>
 <translation id="1432650420699700107">Os sitios poden pedir permiso para conectarse a calquera dispositivo da túa rede local</translation>
 <translation id="1442081309487427303">Activar as ligazóns do modo de lectura</translation>
@@ -52,7 +52,7 @@
 <translation id="1532175480576580256">Panel inferior dos meus atallos aberto a altura completa</translation>
 <translation id="1538031354170655462">Normalmente os sitios usan Near Field Communication (NFC) para interactuar con localizadores ou dispositivos próximos (por exemplo, para o escaneamento de indicadores ou o pago sen contacto)</translation>
 <translation id="1547123415014299762">Permítense as cookies de terceiros</translation>
-<translation id="1569054338208717605">Co motor V8 de Chrome, os sitios son máis rápidos, pero un chisco menos resistentes aos ataques</translation>
+<translation id="1569054338208717605">Co motor V8 de Ultimatum, os sitios son máis rápidos, pero un chisco menos resistentes aos ataques</translation>
 <translation id="1593426485665524382">Novas accións dispoñibles preto da parte superior da pantalla</translation>
 <translation id="1594521731409209842">Belisca a pantalla para cambiar o tamaño da foto</translation>
 <translation id="1599268789440304082">Abriuse a folla de configuración</translation>
@@ -73,14 +73,14 @@
 <translation id="1717996979683942279">Cando esta opción está activada, os sitios poden pedir permiso para xestionar as ventás en todas as pantallas. Cando está desactivada, non poden xestionalas.</translation>
 <translation id="1738912554587725807">Panel inferior de coleccións de temas de aparencia da páxina Nova pestana</translation>
 <translation id="1743802530341753419">Preguntar antes de permitir que os sitios se conecten a un dispositivo (recomendado)</translation>
-<translation id="1766455884659449403">Recibe notificacións de Consellos de Chrome</translation>
+<translation id="1766455884659449403">Recibe notificacións de Consellos de Ultimatum</translation>
 <translation id="1777815584158991902">Panel inferior do feed de Discover</translation>
 <translation id="1779089405699405702">Descodificador de imaxes</translation>
 <translation id="1781533683087883868">Desactivar as ligazóns do modo de lectura</translation>
 <translation id="1785415724048343560">Recoméndase para gozar da mellor experiencia</translation>
 <translation id="1796588414813960292">As funcións que necesiten reproducir sons non estarán dispoñibles</translation>
-<translation id="1799920918471566157">Consellos de Chrome</translation>
-<translation id="1816835383954230954">Cando esta opción está activada, Chrome execútase máis rápido e as funcións que usen JavaScript deberían funcionar tal como se deseñaron. Se está desactivada, redúcese o rendemento, pero o motor V8 é máis resistente os ataques.</translation>
+<translation id="1799920918471566157">Consellos de Ultimatum</translation>
+<translation id="1816835383954230954">Cando esta opción está activada, Ultimatum execútase máis rápido e as funcións que usen JavaScript deberían funcionar tal como se deseñaron. Se está desactivada, redúcese o rendemento, pero o motor V8 é máis resistente os ataques.</translation>
 <translation id="1818308510395330587">Para permitir que <ph name="APP_NAME" /> utilice a realidade aumentada, tamén debes activar a cámara en <ph name="BEGIN_LINK" />Configuración de Android<ph name="END_LINK" />.</translation>
 <translation id="1822318649925991542">Cambia a posición para personalizar a túa experiencia de navegación</translation>
 <translation id="1848033246551405023">Tipo de letra sen serifas</translation>
@@ -135,7 +135,7 @@
 <translation id="2315043854645842844">A selección do certificado do cliente non é compatible co sistema operativo.</translation>
 <translation id="2347601491101454548">Panel inferior dos meus atallos aberto a altura media</translation>
 <translation id="2359808026110333948">Continuar</translation>
-<translation id="2379925928934107488">Aplícaselles o tema escuro aos sitios sempre que é posible cando Chrome está configurado con ese tema</translation>
+<translation id="2379925928934107488">Aplícaselles o tema escuro aos sitios sempre que é posible cando Ultimatum está configurado con ese tema</translation>
 <translation id="2390272837142897736">Aumentar zoom</translation>
 <translation id="2397689164757137845">Permitida • Precisa</translation>
 <translation id="2402980924095424747"><ph name="MEGABYTES" /> MB</translation>
@@ -147,7 +147,7 @@
 <translation id="2433507940547922241">Aparencia</translation>
 <translation id="2434158240863470628">Completouse a descarga <ph name="SEPARATOR" /> <ph name="BYTES_DOWNLOADED" /></translation>
 <translation id="2442870161001914531">Solicitar sempre o sitio para ordenadores</translation>
-<translation id="2445311670906052406">Agora Chrome comparte as pestanas recentes co teu dispositivo. Poderás velas na lista de aplicacións e nos resultados de busca do teu dispositivo. Desactiva esta opción cando queiras na configuración de Chrome.</translation>
+<translation id="2445311670906052406">Agora Ultimatum comparte as pestanas recentes co teu dispositivo. Poderás velas na lista de aplicacións e nos resultados de busca do teu dispositivo. Desactiva esta opción cando queiras na configuración de Ultimatum.</translation>
 <translation id="245322989586167203">Os sitios adoitan conectarse aos portos en serie para ofrecerche determinadas funcións relacionadas coa transferencia de datos (por exemplo, configurar a túa rede)</translation>
 <translation id="2469312991797799607">Ao realizar esta acción, eliminaranse todos os datos e as cookies de <ph name="ORIGIN" /> e dos seus subsitios</translation>
 <translation id="2482878487686419369">Notificacións</translation>
@@ -159,7 +159,7 @@
 <translation id="2536779053640817375">Permitida esta vez • Precisa</translation>
 <translation id="2544997614631598250">Cor de tema escuro</translation>
 <translation id="2546283357679194313">Cookies e datos dos sitios</translation>
-<translation id="2553552004849639664">Obtén a máxima protección de Chrome contra as ameazas en liña</translation>
+<translation id="2553552004849639664">Obtén a máxima protección de Ultimatum contra as ameazas en liña</translation>
 <translation id="2570922361219980984">O acceso á localización tamén está desactivado neste dispositivo. Actívao na <ph name="BEGIN_LINK" />configuración de Android<ph name="END_LINK" />.</translation>
 <translation id="257931822824936280">Vista ampliada (fai clic para contraela).</translation>
 <translation id="2586657967955657006">Portapapeis</translation>
@@ -168,7 +168,7 @@
 <translation id="2606760465469169465">Verificación automática</translation>
 <translation id="2610903128639500624">Xestionar en <ph name="BEGIN_LINK1" />configuración de Android<ph name="END_LINK1" />
 
-Protección avanzada controla estas opcións de configuración de Chrome:
+Protección avanzada controla estas opcións de configuración de Ultimatum:
 • A opción Usar sempre conexións seguras está activada.
 • O Especialista en optimización de JavaScript está desactivado. <ph name="BEGIN_LINK2" />Xestionar excepcións do sitio<ph name="END_LINK2" /></translation>
 <translation id="2621115761605608342">Permite a execución de JavaScript para un sitio específico.</translation>
@@ -183,18 +183,18 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="2710883118091822664">Inicia sesión para continuar facilmente en todos os teus dispositivos</translation>
 <translation id="2713106313042589954">Apagar cámara</translation>
 <translation id="2717722538473713889">Enderezos de correo electrónico</translation>
-<translation id="2726059656860238749">Inicia Chrome co omnibox enfocado, o que reduce o tempo de inicio do sistema nos dispositivos de gama baixa.</translation>
+<translation id="2726059656860238749">Inicia Ultimatum co omnibox enfocado, o que reduce o tempo de inicio do sistema nos dispositivos de gama baixa.</translation>
 <translation id="2750481671343847896">Os sitios poden mostrar solicitudes de inicio de sesión dos servizos de identidade.</translation>
 <translation id="2787357173144933081">Iniciar rapidamente omnibox</translation>
 <translation id="2789132527330338807">Os sitios poden solicitar permiso para crear un mapa 3D do que te rodea e facer o seguimento da posición da cámara</translation>
 <translation id="2790501146643349491">Cando esta opción está activada, os sitios pechados recentemente poden terminar de enviar e recibir datos. Cando esta opción está desactivada, os sitios pechados recentemente non poden terminar de enviar nin de recibir datos.</translation>
-<translation id="2794551654724114396">Activa as notificacións para recibir consellos útiles que che axudarán a tirar o máximo proveito de Chrome</translation>
+<translation id="2794551654724114396">Activa as notificacións para recibir consellos útiles que che axudarán a tirar o máximo proveito de Ultimatum</translation>
 <translation id="2795716239552913152">Os sitios adoitan usar a túa localización para ofrecerche funcións ou información relevantes (por exemplo, noticias locais ou tendas próximas)</translation>
 <translation id="2800760947029405028">Subir unha imaxe</translation>
 <translation id="2802908157808345702">Non permitir que os sitios mostren ventás emerxentes nin usen redireccións</translation>
-<translation id="2814830417943086299">Chrome xa mostra as pestanas recentes na lista de aplicacións e nos resultados de busca do teu dispositivo. Desactiva esta opción cando queiras na configuración de Chrome.</translation>
+<translation id="2814830417943086299">Ultimatum xa mostra as pestanas recentes na lista de aplicacións e nos resultados de busca do teu dispositivo. Desactiva esta opción cando queiras na configuración de Ultimatum.</translation>
 <translation id="2822354292072154809">Seguro que queres restablecer todos os permisos do sitio <ph name="CHOSEN_OBJECT_NAME" />?</translation>
-<translation id="2848335882304088250">Xa podes aproveitar todo o que Chrome che ofrece no teu dispositivo.</translation>
+<translation id="2848335882304088250">Xa podes aproveitar todo o que Ultimatum che ofrece no teu dispositivo.</translation>
 <translation id="2850913818900871965">Solicita unha vista para dispositivos móbiles</translation>
 <translation id="2870560284913253234">Sitio</translation>
 <translation id="2874939134665556319">Pista anterior</translation>
@@ -273,7 +273,7 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="3678318839615834650">Panel inferior das tarxetas da páxina Nova pestana aberto a altura completa</translation>
 <translation id="3697164069658504920">Cando esta opción está activada, os sitios poden pedirche permiso para utilizar dispositivos USB. Cando esta opción está desactivada, os sitios non poden utilizar dispositivos USB.</translation>
 <translation id="3703430731944883733">Xestionar o feed</translation>
-<translation id="3707034683772193706">Calquera sitio que visites poderá gardar unha pequena cantidade de información con Chrome, basicamente, para confirmar que non es un bot</translation>
+<translation id="3707034683772193706">Calquera sitio que visites poderá gardar unha pequena cantidade de información con Ultimatum, basicamente, para confirmar que non es un bot</translation>
 <translation id="3708684582558000260">Non permitir que os sitios pechados rematen de enviar nin de recibir datos</translation>
 <translation id="3709818294139939629">Quitouse o acceso ao ficheiro</translation>
 <translation id="3721953990244350188">Pecha o cadro e mostra a seguinte acción dispoñible</translation>
@@ -285,13 +285,13 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="3779154269823594982">Cambiar contrasinais</translation>
 <translation id="3797520601150691162">Non se lle aplica o tema escuro a un sitio concreto</translation>
 <translation id="3803367742635802571">É posible que os sitios que visites deixen de funcionar segundo o previsto</translation>
-<translation id="3816118180265633665">Cores de Chrome</translation>
+<translation id="3816118180265633665">Cores de Ultimatum</translation>
 <translation id="381841723434055211">Números de teléfono</translation>
 <translation id="3823453485268218808">Tipo de letra monoespazado</translation>
 <translation id="3826050100957962900">Inicio de sesión de terceiros</translation>
 <translation id="3831065134033923230">Comproba os contrasinais gardados</translation>
 <translation id="3835233591525155343">Uso do dispositivo</translation>
-<translation id="3843916486309149084">Chrome volverá bloquear as cookies hoxe</translation>
+<translation id="3843916486309149084">Ultimatum volverá bloquear as cookies hoxe</translation>
 <translation id="385051799172605136">Atrás</translation>
 <translation id="3859306556332390985">Buscar cara adiante</translation>
 <translation id="389521680295183045">Os sitios poden pedirche permiso para saber cando estás utilizando o dispositivo de maneira activa</translation>
@@ -318,7 +318,7 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="4046123991198612571">Pista seguinte</translation>
 <translation id="4077310749977440510">Os sitios adoitan acceder ao portapapeis para ofrecerche determinadas funcións (por exemplo, conservar o formato do texto copiado)</translation>
 <translation id="4082080074595021446">Non se permiten excepcións para sitios web específicos porque o dispositivo Android non ten suficiente RAM.</translation>
-<translation id="4089304748532599471">Cambiaron algunhas opcións de configuración de Chrome</translation>
+<translation id="4089304748532599471">Cambiaron algunhas opcións de configuración de Ultimatum</translation>
 <translation id="4149890623864272035">Seguro que queres eliminar todos os datos locais, incluídas as cookies, e restablecer todos os permisos deste sitio web?</translation>
 <translation id="4149994727733219643">Vista simplificada de páxinas web</translation>
 <translation id="4151930093518524179">Zoom predeterminado</translation>
@@ -342,13 +342,13 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="4340799661701629185">Non permitir que os sitios envíen notificacións</translation>
 <translation id="4341577178275615435">Para activar ou desactivar a navegación por cursor de texto, usa o atallo F7</translation>
 <translation id="4402755511846832236">Impide que os sitios saiban se estás utilizando este dispositivo de maneira activa</translation>
-<translation id="4412683424767388419">Panel inferior de cores de Chrome aberto a altura media</translation>
+<translation id="4412683424767388419">Panel inferior de cores de Ultimatum aberto a altura media</translation>
 <translation id="4412992751769744546">Permitir cookies de terceiros</translation>
 <translation id="4425416282877905577">Tipo de letra con serifas</translation>
 <translation id="443121186588148776">Porto en serie</translation>
 <translation id="4434045419905280838">Ventás emerxentes e redireccións</translation>
 <translation id="443552056913301231">Eliminaranse todos os datos locais, incluídas as cookies, e restableceranse todos os permisos de <ph name="ORIGIN" /></translation>
-<translation id="4441527683895888777">Panel inferior de cores de Chrome aberto a altura completa</translation>
+<translation id="4441527683895888777">Panel inferior de cores de Ultimatum aberto a altura completa</translation>
 <translation id="4468959413250150279">Silencia o son dun sitio específico.</translation>
 <translation id="4475912480633855319">{COOKIES,plural, =1{# cookie}other{# cookies}}</translation>
 <translation id="4478158430052450698">Fai que sexa máis fácil personalizar o zoom nos diferentes sitios</translation>
@@ -370,7 +370,7 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="4655846733459137112">Toca Si para usar facilmente este contrasinal a próxima vez que inicies sesión</translation>
 <translation id="4663373278480897665">Permítese a cámara</translation>
 <translation id="4670064810192446073">Realidade virtual</translation>
-<translation id="4672315773691449562">Toca Aplicación do navegador e, a continuación, Chrome</translation>
+<translation id="4672315773691449562">Toca Aplicación do navegador e, a continuación, Ultimatum</translation>
 <translation id="4676059169848868271">Para permitir que <ph name="APP_NAME" /> use o seguimento das mans, tamén tes que activar a opción correspondente na <ph name="BEGIN_LINK" />configuración do sistema<ph name="END_LINK" />.</translation>
 <translation id="4688045258817337666">Xestionar as túas tarxetas</translation>
 <translation id="4722332387043141878">Os sitios adoitan usar os sensores de movemento e de luz do dispositivo para ofrecerche determinadas funcións (por exemplo, as relacionadas coa realidade virtual ou co seguimento da forma física)</translation>
@@ -391,7 +391,7 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="4953688446973710931">Cando esta opción está activada, os sitios poden pedirche permiso para descargar automaticamente varios ficheiros. Cando esta opción está desactivada, os sitios non poden descargar automaticamente varios ficheiros.</translation>
 <translation id="4962975101802056554">Revogar todos os permisos do dispositivo</translation>
 <translation id="4972737347717125191">Os sitios poden pedirche permiso para usar datos e dispositivos de realidade virtual</translation>
-<translation id="4973805849704516244">Panel inferior de cores de Chrome</translation>
+<translation id="4973805849704516244">Panel inferior de cores de Ultimatum</translation>
 <translation id="497421865427891073">Avanzar</translation>
 <translation id="4976702386844183910">Visitouse o <ph name="DATE" /> por última vez</translation>
 <translation id="4978178243417029856">Máis información sobre o feed de Discover</translation>
@@ -409,7 +409,7 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="5091663350197390230">Cando esta opción está activada, os sitios poden utilizar JavaScript. Cando esta opción está desactivada, os sitios non poden utilizar JavaScript.</translation>
 <translation id="5099358668261120049">Ao realizar esta acción, eliminaranse os datos e as cookies que almacenase <ph name="ORIGIN" /> ou a súa aplicación na túa pantalla de inicio.</translation>
 <translation id="5100237604440890931">Vista contraída (fai clic para ampliala).</translation>
-<translation id="5116239826668864748">Podes utilizar Chrome cando toques as ligazóns en mensaxes, en documentos e noutras aplicacións</translation>
+<translation id="5116239826668864748">Podes utilizar Ultimatum cando toques as ligazóns en mensaxes, en documentos e noutras aplicacións</translation>
 <translation id="5123685120097942451">Pestana do modo de incógnito</translation>
 <translation id="512938610812707830">Panel inferior de coleccións de temas de aparencia da páxina Nova pestana aberto a altura completa</translation>
 <translation id="5137460097045297858">Panel inferior do feed de Discover aberto a altura media</translation>
@@ -446,7 +446,7 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="5516455585884385570">Abrir a configuración de notificacións</translation>
 <translation id="5527111080432883924">Preguntar antes de permitir que os sitios lean texto e imaxes do portapapeis (recomendado)</translation>
 <translation id="5553374991681107062">Máis recentes</translation>
-<translation id="5555115555607204100">Sen o motor V8 de Chrome, os sitios serán máis lentos, pero conseguirás que Chrome sexa un chisco máis resistente aos ataques</translation>
+<translation id="5555115555607204100">Sen o motor V8 de Ultimatum, os sitios serán máis lentos, pero conseguirás que Ultimatum sexa un chisco máis resistente aos ataques</translation>
 <translation id="5556459405103347317">Volver cargar</translation>
 <translation id="5591840828808741583"><ph name="SITE_NAME" /> bloqueado</translation>
 <translation id="560980142378233747">Isto significa que as funcións do sitio deberían funcionar segundo o previsto, pero pode que teñas menos protección durante a navegación. <ph name="BEGIN_LINK" />Enviar comentarios<ph name="END_LINK" /></translation>
@@ -473,7 +473,7 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="5804241973901381774">Permisos</translation>
 <translation id="5817042798620209981">Información do sitio, cadro de diálogo</translation>
 <translation id="5822675474983796325">Panel inferior de Personaliza a páxina Nova pestana aberto a altura completa</translation>
-<translation id="5826403277762134844">Panel inferior de instrucións para gardar contrasinais en Chrome</translation>
+<translation id="5826403277762134844">Panel inferior de instrucións para gardar contrasinais en Ultimatum</translation>
 <translation id="5833899990800318936">Non permitir que os sitios utilicen JavaScript</translation>
 <translation id="583673505367439042">Os sitios poden pedirche permiso para editar ficheiros e cartafoles do teu dispositivo</translation>
 <translation id="5844448279347999754">Cando esta opción está activada, os sitios non poden pedirche permiso para acceder ao texto e ás imaxes do portapapeis. Cando esta opción está desactivada, os sitios non poden acceder ao texto nin ás imaxes do portapapeis.</translation>
@@ -502,7 +502,7 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="6012967556075291653">Atallo fixado</translation>
 <translation id="6013003831291591200">Tarefa finalizada</translation>
 <translation id="6015775454662021376">Controla o acceso deste sitio ao dispositivo</translation>
-<translation id="6022659036123304283">Personaliza Chrome</translation>
+<translation id="6022659036123304283">Personaliza Ultimatum</translation>
 <translation id="6040143037577758943">Pechar</translation>
 <translation id="6042308850641462728">Máis</translation>
 <translation id="6064125863973209585">Descargas completadas</translation>
@@ -510,20 +510,20 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="6085954183010297841">Queres eliminar a autorización para editar ficheiros? <ph name="FILE" /></translation>
 <translation id="6104860901391833523">Cando esta opción está activada, os sitios poden acceder ao modo de pantalla superposta automaticamente. Cando está desactivada, non poden acceder a ese modo automaticamente.</translation>
 <translation id="6120483543004435978">Cando esta opción está activada, os sitios poden pedirche permiso para saber se estás utilizando o dispositivo de maneira activa. Cando esta opción está desactivada, os sitios non poden saber se estás utilizando o dispositivo de maneira activa.</translation>
-<translation id="6132075343662013154">Chrome ofrecerache gardar o teu contrasinal</translation>
+<translation id="6132075343662013154">Ultimatum ofrecerache gardar o teu contrasinal</translation>
 <translation id="615886654739818377">Non permitir que os sitios xestionen ventás en todas as pantallas</translation>
 <translation id="6165508094623778733">Máis información</translation>
 <translation id="6171020522141473435">Cando esta opción está activada, os sitios poden pedirche permiso para utilizar dispositivos Bluetooth. Cando esta opción está desactivada, os sitios non poden utilizar dispositivos Bluetooth.</translation>
 <translation id="6177128806592000436">A túa conexión a este sitio non é segura</translation>
 <translation id="6181444274883918285">Engadir excepción do sitio</translation>
-<translation id="6194967801833346599">{DAYS,plural, =1{Chrome volverá bloquear as cookies mañá}other{Faltan # días para que se volvan bloquear as cookies}}</translation>
+<translation id="6194967801833346599">{DAYS,plural, =1{Ultimatum volverá bloquear as cookies mañá}other{Faltan # días para que se volvan bloquear as cookies}}</translation>
 <translation id="6196640612572343990">Bloquear cookies de terceiros</translation>
 <translation id="6205314730813004066">Privacidade nos anuncios</translation>
 <translation id="6207207788774442484">Eliminar datos e restablecer permisos</translation>
 <translation id="6211409961905616543">Os sitios poden usar sensores de movemento e de luz</translation>
 <translation id="6218508144653756827">Tema fucsia</translation>
 <translation id="6231752747840485235">Queres desinstalar <ph name="APP_NAME" />?</translation>
-<translation id="6234351944623978659">Toca a opción de aplicación de navegación &gt; Chrome</translation>
+<translation id="6234351944623978659">Toca a opción de aplicación de navegación &gt; Ultimatum</translation>
 <translation id="6260830281887654268">Panel inferior de coleccións de temas de aparencia da páxina Nova pestana aberto a altura media</translation>
 <translation id="6262191102408817757">Segundo a túa última pestana</translation>
 <translation id="6262279340360821358"><ph name="PERMISSION_1" /> e <ph name="PERMISSION_2" /> (bloqueados)</translation>
@@ -573,7 +573,7 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="6787751205395685251">Selecciona unha opción para <ph name="SITE_NAME" /></translation>
 <translation id="6790428901817661496">Reproducir</translation>
 <translation id="6818926723028410516">Selecciona elementos</translation>
-<translation id="6838525730752203626">Usa Chrome de forma predeterminada</translation>
+<translation id="6838525730752203626">Usa Ultimatum de forma predeterminada</translation>
 <translation id="6840760312327750441">Para agrupar varias pestanas, mantén premida unha delas e despois arrástraa ata outra.</translation>
 <translation id="6842868554183332230">Os sitios adoitan detectar cando estás utilizando o dispositivo de maneira activa para definir a túa dispoñibilidade nas aplicacións de chat</translation>
 <translation id="6864395892908308021">Este dispositivo non pode ler NFC</translation>
@@ -591,7 +591,7 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="6992014788289743568">Comproba os teus contrasinais para reforzar a seguranza e protexer mellor os teus datos</translation>
 <translation id="6992289844737586249">Pregunta antes de permitir que os sitios utilicen o teu micrófono (recomendado)</translation>
 <translation id="7000754031042624318">Desactivouse na configuración de Android</translation>
-<translation id="702275896380648118">Este sitio determina o que che gusta e logo suxírelles anuncios a outros sitios. Este sitio tamén obtén os teus temas de anuncios de Chrome para mostrarche anuncios máis relevantes.</translation>
+<translation id="702275896380648118">Este sitio determina o que che gusta e logo suxírelles anuncios a outros sitios. Este sitio tamén obtén os teus temas de anuncios de Ultimatum para mostrarche anuncios máis relevantes.</translation>
 <translation id="7036823721811529709">Escoitar en segundo plano</translation>
 <translation id="7044081119134178347">Permítese o uso da cámara esta vez</translation>
 <translation id="7053983685419859001">Bloquear</translation>
@@ -649,7 +649,7 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="7658239707568436148">Cancelar</translation>
 <translation id="7667547420449112975">O marabilloso mago de Oz</translation>
 <translation id="7681597159868843240">Os sitios adoitan usar os sensores de movemento do dispositivo para ofrecerche determinadas funcións (por exemplo, as relacionadas coa realidade virtual ou co seguimento da forma física)</translation>
-<translation id="7688240020069572972">Ocultar tarxeta de consellos de Chrome</translation>
+<translation id="7688240020069572972">Ocultar tarxeta de consellos de Ultimatum</translation>
 <translation id="7719367874908701697">Zoom na páxina</translation>
 <translation id="775043444390799886">Revogar permiso</translation>
 <translation id="7758789811447313947">Tema violeta</translation>
@@ -681,7 +681,7 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="8033047164036749181">Subscribirse ás notificacións deste sitio</translation>
 <translation id="8042586301629853791">Ordenar por:</translation>
 <translation id="8051193500142930381">As funcións que requiran unha cámara non estarán dispoñibles</translation>
-<translation id="8056330801132235235">Chrome predeterminado</translation>
+<translation id="8056330801132235235">Ultimatum predeterminado</translation>
 <translation id="8067883171444229417">Reproducir vídeo</translation>
 <translation id="8068648041423924542">Non se pode seleccionar o certificado.</translation>
 <translation id="8077120325605624147">Calquera sitio que visites pode mostrarche anuncios</translation>
@@ -735,10 +735,10 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="8514955299594277296">Non permitir que os sitios garden datos no teu dispositivo (non recomendado)</translation>
 <translation id="851751545965956758">Non permitir que os sitios se conecten aos dispositivos</translation>
 <translation id="8525306231823319788">Pantalla completa</translation>
-<translation id="8541410041357371550">Este sitio obtén os teus temas de anuncios de Chrome para mostrarche anuncios máis relevantes</translation>
+<translation id="8541410041357371550">Este sitio obtén os teus temas de anuncios de Ultimatum para mostrarche anuncios máis relevantes</translation>
 <translation id="854876774113449365">Os sitios que visites poderán inserir contido doutros sitios (por exemplo, imaxes, anuncios ou texto). Estes poderán pedir permiso para usar a información que garden sobre ti mentres navegas. <ph name="BEGIN_LINK" />Máis información acerca do contido inserido<ph name="END_LINK" /></translation>
 <translation id="8549127125482561383">Como mostrar solicitudes</translation>
-<translation id="8558480467877843976">Agora podes usar Chrome sempre que explores contido ou toques ligazóns en mensaxes, documentos e outras aplicacións.</translation>
+<translation id="8558480467877843976">Agora podes usar Ultimatum sempre que explores contido ou toques ligazóns en mensaxes, documentos e outras aplicacións.</translation>
 <translation id="857943718398505171">Permitido (recomendado)</translation>
 <translation id="8593422116412089302">Cando esta opción está activada, os sitios poden pedirche permiso para utilizar a información que gardasen sobre ti. Cando esta opción está desactivada, os sitios non poden pedirche permiso para utilizar a información que garden sobre ti.</translation>
 <translation id="8609465669617005112">Mover cara arriba</translation>
@@ -755,7 +755,7 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="8719283222052720129">Activa o permiso para <ph name="APP_NAME" /> en <ph name="BEGIN_LINK" />Configuración de Android<ph name="END_LINK" />.</translation>
 <translation id="8721719390026067591">Cando esta opción está activada, os sitios poden pedirche permiso para buscar dispositivos Bluetooth. Cando esta opción está desactivada, os sitios non poden buscar dispositivos Bluetooth.</translation>
 <translation id="8725066075913043281">Tentar de novo</translation>
-<translation id="8727043961453758442">Tira o máximo proveito de Chrome</translation>
+<translation id="8727043961453758442">Tira o máximo proveito de Ultimatum</translation>
 <translation id="8730621377337864115">Feito</translation>
 <translation id="8737426583868847403">Os sitios para os que gardes un nivel de zoom personalizado mostraranse aquí</translation>
 <translation id="8748714929822124637">Non permitir que os sitios accedan a outros dispositivos da túa rede local</translation>
@@ -763,13 +763,13 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="8775741625735357092">Podes activar a barra de marcadores en Configuración &gt; Aparencia</translation>
 <translation id="8800034312320686233">O sitio non funciona?</translation>
 <translation id="8801436777607969138">Bloquea JavaScript para un sitio específico.</translation>
-<translation id="8801657293260363985">V8 é o motor de Chrome para JavaScript e WebAssembly que se usa para mellorar o rendemento dos sitios</translation>
+<translation id="8801657293260363985">V8 é o motor de Ultimatum para JavaScript e WebAssembly que se usa para mellorar o rendemento dos sitios</translation>
 <translation id="8803526663383843427">Se a función está activada</translation>
 <translation id="8805385115381080995">Navegarás máis rápido porque é menos problable que os sitios che pidan que verifiques que es unha persoa real</translation>
 <translation id="881644524232657178">Cando esta opción está activada, os sitios poden usar os sensores de movemento e de luz do dispositivo. Cando está desactivada, non os poden usar.</translation>
 <translation id="8847988622838149491">USB</translation>
 <translation id="8874790741333031443">Proba a permitir de maneira temporal as cookies de terceiros. Terás menos protección, pero é máis probable que as funcións do sitio vaian segundo o previsto.</translation>
-<translation id="8889294078294184559">Cando navegues, os sitios poderán facer comprobacións con Chrome e verificar con outros sitios que xa visitases que es unha persoa real</translation>
+<translation id="8889294078294184559">Cando navegues, os sitios poderán facer comprobacións con Ultimatum e verificar con outros sitios que xa visitases que es unha persoa real</translation>
 <translation id="8899807382908246773">Anuncios intrusivos</translation>
 <translation id="8903921497873541725">Achegar</translation>
 <translation id="8919911527569629802">Inicia sesión en calquera sitio web</translation>
@@ -795,7 +795,7 @@ Protección avanzada controla estas opcións de configuración de Chrome:
 <translation id="9138037198177304356">O acceso ás notificacións está permitido</translation>
 <translation id="9138217887606523162">Zoom actual: <ph name="ZOOM_LEVEL" /> %%</translation>
 <translation id="915112772806845021">Os sitios usan esta función para acceder automaticamente ao modo de pantalla superposta. Isto permíteche seguir vendo un vídeo mentres fas outras tarefas na pantalla.</translation>
-<translation id="9156722768168878035">Permite que Chrome mostre as pestanas recentes na lista de aplicacións e nos resultados de busca do teu dispositivo. Desactiva esta opción cando queiras na configuración de Chrome.</translation>
+<translation id="9156722768168878035">Permite que Ultimatum mostre as pestanas recentes na lista de aplicacións e nos resultados de busca do teu dispositivo. Desactiva esta opción cando queiras na configuración de Ultimatum.</translation>
 <translation id="9162462602695099906">Esta páxina é perigosa</translation>
 <translation id="9182556968660520230">Non permitir que os sitios reproduzan contido protexido</translation>
 <translation id="947156494302904893">Os sitios que visites poden verificar que es unha persoa real e non un bot</translation>
