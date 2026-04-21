@@ -10,6 +10,7 @@
 namespace extensions {
 
 namespace {
+/*
 void GetExtensionNameAndId(const Extension* extension,
                            std::string* name,
                            std::string* id) {
@@ -17,6 +18,7 @@ void GetExtensionNameAndId(const Extension* extension,
   *id = extension ? extension->id() : "[test]";
   *name = extension ? extension->name() : "test";
 }
+*/
 
 // Context object for UserMayInstall, instead of passing a lot of arguments
 // around.
