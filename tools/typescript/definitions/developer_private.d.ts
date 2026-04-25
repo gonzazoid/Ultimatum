@@ -453,6 +453,8 @@ declare global {
       export function installDroppedFile(): Promise<void>;
       export function loadUnpacked(options: LoadUnpackedOptions):
           Promise<LoadError|null>;
+      export function loadCRX(options: LoadUnpackedOptions):
+          Promise<LoadError|null>;
       export function notifyDragInstallInProgress(): void;
       export function openDevTools(properties: OpenDevToolsProperties):
           Promise<void>;

@@ -39,6 +39,10 @@ ${this.showPackDialog_ ? html`
   </extensions-pack-dialog>` : ''}
 <div id="devDrawer" ?expanded="${this.expanded_}">
   <div id="buttonStrip">
+    <cr-button ?hidden="${!this.canLoadUnpacked_()}" id="loadCRX"
+        @click="${this.onLoadCRXClick_}">
+      load .crx
+    </cr-button>
     <cr-button ?hidden="${!this.canLoadUnpacked_()}" id="loadUnpacked"
         @click="${this.onLoadUnpackedClick_}">
       $i18n{toolbarLoadUnpacked}
