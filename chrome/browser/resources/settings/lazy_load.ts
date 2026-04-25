@@ -120,6 +120,7 @@ import './your_saved_info_page/identity_docs_page.js';
 import './your_saved_info_page/travel_page.js';
 
 import './hashnet_page/hashnet_page.js';
+import './profiles/profile_page.js';
 
 // <if expr="not is_chromeos">
 export {ScreenAiInstallStatus} from '/shared/settings/a11y_page/ax_annotations_browser_proxy.js';
@@ -349,3 +350,4 @@ export {SettingsIdentityDocsPageElement} from './your_saved_info_page/identity_d
 export {SettingsTravelPageElement} from './your_saved_info_page/travel_page.js';
 
 export {HashNetPageElement} from './hashnet_page/hashnet_page.js';
+export {ProfilePageElement} from './profiles/profile_page.js';

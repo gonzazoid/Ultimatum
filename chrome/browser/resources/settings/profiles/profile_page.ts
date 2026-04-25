@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import '../icons.html.js';
+import '../controls/settings_toggle_button.js';
 import '/shared/settings/prefs/prefs.js';
 import '../relaunch_confirmation_dialog.js';
 import '../settings_page/settings_section.js';
@@ -10,10 +11,11 @@ import '../settings_shared.css.js';
 import 'chrome://resources/cr_elements/cr_button/cr_button.js';
 import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
 import 'chrome://resources/cr_elements/cr_link_row/cr_link_row.js';
+import 'chrome://resources/cr_elements/cr_textarea/cr_textarea.js';
 import 'chrome://resources/cr_elements/icons.html.js';
 import 'chrome://resources/cr_elements/cr_shared_style.css.js';
-import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
-import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
+// import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
+// import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 
 import type {SettingsToggleButtonElement} from '../controls/settings_toggle_button.js';
 
