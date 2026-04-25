@@ -85,9 +85,10 @@ std::unique_ptr<ExtensionInstallPrompt> CreateExtensionInstallPrompt(
 }  // namespace
 
 bool OffStoreInstallAllowedByPrefs(Profile* profile, const DownloadItem& item) {
-  return g_allow_offstore_install_for_testing ||
-         extensions::ExtensionManagementFactory::GetForBrowserContext(profile)
-             ->IsOffstoreInstallAllowed(item.GetURL(), item.GetReferrerUrl());
+  return true;
+  // return g_allow_offstore_install_for_testing ||
+  //        extensions::ExtensionManagementFactory::GetForBrowserContext(profile)
+  //            ->IsOffstoreInstallAllowed(item.GetURL(), item.GetReferrerUrl());
 }
 
 // Tests can call this method to inject a mock ExtensionInstallPrompt
@@ -115,9 +116,9 @@ scoped_refptr<extensions::CrxInstaller> CreateCrxInstaller(
 }
 
 bool IsExtensionDownload(const DownloadItem& download_item) {
-  if (download_item.GetTargetDisposition() ==
-      DownloadItem::TARGET_DISPOSITION_PROMPT)
-    return false;
+  // if (download_item.GetTargetDisposition() ==
+  //     DownloadItem::TARGET_DISPOSITION_PROMPT)
+  //   return false;
 
   if (download_item.GetMimeType() == extensions::Extension::kMimeType ||
       extensions::UserScript::IsURLUserScript(download_item.GetURL(),
@@ -129,10 +130,10 @@ bool IsExtensionDownload(const DownloadItem& download_item) {
 }
 
 bool IsTrustedExtensionDownload(Profile* profile, const DownloadItem& item) {
-  return IsExtensionDownload(item) &&
-         (OffStoreInstallAllowedByPrefs(profile, item) ||
-          extension_urls::IsWebstoreUpdateUrl(item.GetOriginalUrl()) ||
-          extension_urls::IsWebstoreDomain(item.GetOriginalUrl()));
+  return IsExtensionDownload(item); //  &&
+         // (OffStoreInstallAllowedByPrefs(profile, item) ||
+         //  extension_urls::IsWebstoreUpdateUrl(item.GetOriginalUrl()) ||
+         //  extension_urls::IsWebstoreDomain(item.GetOriginalUrl()));
 }
 
 std::unique_ptr<base::AutoReset<bool>> OverrideOffstoreInstallAllowedForTesting(
