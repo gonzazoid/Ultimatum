@@ -119,6 +119,8 @@ import './system_page/system_page.js';
 import './your_saved_info_page/identity_docs_page.js';
 import './your_saved_info_page/travel_page.js';
 
+import './hashnet_page/hashnet_page.js';
+
 // <if expr="not is_chromeos">
 export {ScreenAiInstallStatus} from '/shared/settings/a11y_page/ax_annotations_browser_proxy.js';
 export {CaptionsBrowserProxyImpl} from '/shared/settings/a11y_page/captions_browser_proxy.js';
@@ -345,3 +347,5 @@ export type {SystemPageBrowserProxy} from './system_page/system_page_browser_pro
 // </if>
 export {SettingsIdentityDocsPageElement} from './your_saved_info_page/identity_docs_page.js';
 export {SettingsTravelPageElement} from './your_saved_info_page/travel_page.js';
+
+export {HashNetPageElement} from './hashnet_page/hashnet_page.js';
