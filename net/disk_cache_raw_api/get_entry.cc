@@ -89,9 +89,9 @@ namespace disk_cache {
 
     size_t length = entry_->GetDataSize(0);
     entry_response_->stream0.resize(length);
-    scoped_refptr<net::WrappedIOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
-        base::span<uint8_t>(entry_response_->stream0)
-    );
+    scoped_refptr<net::IOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
+      base::span<uint8_t>(entry_response_->stream0));
+
     auto split_callback = base::SplitOnceCallback(
       base::BindOnce(&CacheStorageRawApiGetEntry::GetFirstStreamCompleted, weak_factory_.GetWeakPtr())
     );
@@ -129,9 +129,9 @@ namespace disk_cache {
     if (result.ranges == nullptr || result.ranges->size() == 0) {
       size_t length = entry_->GetDataSize(1);
       entry_response_->stream1.resize(length);
-      scoped_refptr<net::WrappedIOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
-        base::span<uint8_t>(entry_response_->stream1)
-      );
+      scoped_refptr<net::IOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
+        base::span<uint8_t>(entry_response_->stream1));
+
       auto split_callback = base::SplitOnceCallback(
         base::BindOnce(&CacheStorageRawApiGetEntry::GetSecondStreamCompleted, weak_factory_.GetWeakPtr())
       );
@@ -170,11 +170,10 @@ namespace disk_cache {
     int64_t offset = chunks_[current_chunk_num_].first;
     size_t length = chunks_[current_chunk_num_].second;
 
-    auto current_chunk = base::MakeRefCounted<net::WrappedIOBuffer>(
-        UNSAFE_BUFFERS(base::span<uint8_t>(entry_response_->stream1.data() + total_bytes_, length))
-    );
+    scoped_refptr<net::IOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
+        UNSAFE_BUFFERS(base::span<uint8_t>(entry_response_->stream1.data() + total_bytes_, length)));
 
-    int read_status = entry_->ReadSparseData(offset, current_chunk.get(), length, std::move(split_callback.first));
+    int read_status = entry_->ReadSparseData(offset, buf.get(), length, std::move(split_callback.first));
     if (read_status != net::ERR_IO_PENDING) {
       std::move(split_callback.second).Run(read_status);
     }
@@ -202,9 +201,8 @@ namespace disk_cache {
     }
 
     entry_response_->stream2.resize(length);
-    scoped_refptr<net::WrappedIOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
-      base::span<uint8_t>(entry_response_->stream2)
-    );
+    scoped_refptr<net::IOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
+        base::span<uint8_t>(entry_response_->stream2));
     auto split_callback = base::SplitOnceCallback(
       base::BindOnce(&CacheStorageRawApiGetEntry::GetThirdStreamCompleted, weak_factory_.GetWeakPtr())
     );
@@ -250,7 +248,6 @@ namespace disk_cache {
 
   void CacheStorageRawApiGetEntry::CheckQueue () {
     if (entry_) {
-      entry_->Close();
       entry_ = nullptr;
     }
 
@@ -278,5 +275,4 @@ namespace disk_cache {
     queue_.pop_front();
     RunHelper(path, backend, key, std::move(callback));
   }
-
 }

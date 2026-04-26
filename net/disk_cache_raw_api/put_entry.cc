@@ -10,11 +10,7 @@
 namespace disk_cache {
 
   CacheStorageRawApiPutEntry::CacheStorageRawApiPutEntry() {}
-  CacheStorageRawApiPutEntry::~CacheStorageRawApiPutEntry() {
-    if (entry_)
-      entry_->Close();
-    entry_ = nullptr;
-  }
+  CacheStorageRawApiPutEntry::~CacheStorageRawApiPutEntry() {}
 
   void CacheStorageRawApiPutEntry::Run(
     const base::FilePath& path,
@@ -49,6 +45,15 @@ namespace disk_cache {
   }
 
   void CacheStorageRawApiPutEntry::SendResponse (std::string status) {
+
+    current_chunk_num_ = 0;
+    total_bytes_ = 0;
+
+    if (!manage_backend_) {
+      backend_.release();
+    }
+    backend_ = nullptr;
+
     std::move(put_entry_callback_).Run(status);
 
     // CheckQueue();
@@ -82,7 +87,7 @@ namespace disk_cache {
                        weak_factory_.GetWeakPtr()));
 
     size_t length = raw_entry_->stream0.size();
-    scoped_refptr<net::WrappedIOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
+    scoped_refptr<net::IOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
         base::span<uint8_t>(raw_entry_->stream0)
     );
     int write_result = entry_->WriteData(0, 0, buf.get(), length, std::move(split_callback.first), true);
@@ -109,7 +114,7 @@ namespace disk_cache {
                        weak_factory_.GetWeakPtr()));
 
     size_t length = raw_entry_->stream1.size();
-    scoped_refptr<net::WrappedIOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
+    scoped_refptr<net::IOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
         base::span<uint8_t>(raw_entry_->stream1)
     );
     int write_result = entry_->WriteData(1, 0, buf.get(), length, std::move(split_callback.first), true);
@@ -147,8 +152,11 @@ namespace disk_cache {
         base::BindOnce(&CacheStorageRawApiPutEntry::OnChunk,
                        weak_factory_.GetWeakPtr()));
 
-    auto buf = base::MakeRefCounted<net::WrappedIOBuffer>(
-        UNSAFE_BUFFERS(base::span<uint8_t>(raw_entry_->stream1.data() + total_bytes_, length))
+    std::vector<uint8_t> chunk = std::vector<uint8_t>(
+        raw_entry_->stream1.begin() + total_bytes_,
+        raw_entry_->stream1.begin() + total_bytes_ + length);
+    scoped_refptr<net::IOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
+        base::span<uint8_t>(chunk)
     );
     total_bytes_ += length;
     current_chunk_num_++;
@@ -185,7 +193,7 @@ namespace disk_cache {
         base::BindOnce(&CacheStorageRawApiPutEntry::OnThirdStream,
                        weak_factory_.GetWeakPtr()));
 
-    scoped_refptr<net::WrappedIOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
+    scoped_refptr<net::IOBuffer> buf = base::MakeRefCounted<net::WrappedIOBuffer>(
         base::span<uint8_t>(raw_entry_->stream2)
     );
 
@@ -225,20 +233,6 @@ namespace disk_cache {
   }
 
 void CacheStorageRawApiPutEntry::CheckQueue () {
-    if (entry_) {
-      entry_->Close();
-      entry_ = nullptr;
-    }
-    raw_entry_ = nullptr;
-
-    current_chunk_num_ = 0;
-    total_bytes_ = 0;
-
-    if (!manage_backend_) {
-      backend_.release();
-    }
-    backend_ = nullptr;
-
     if (queue_.size() == 0) {
       query_cache_recursive_depth_ = 0;
       in_progress_ = false;
