@@ -135,7 +135,7 @@ void WebRequestProxyingWebSocket::Start() {
   int result =
       WebRequestEventRouter::Get(browser_context_)
           ->OnBeforeRequest(browser_context_, &info_, continuation,
-                            &redirect_url_, &should_collapse_initiator);
+                            &redirect_url_, &blocking_response_, &should_collapse_initiator);
 
   // It doesn't make sense to collapse WebSocket requests since they won't be
   // associated with a DOM element.

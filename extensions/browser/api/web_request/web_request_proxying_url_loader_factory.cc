@@ -320,10 +320,11 @@ void WebRequestProxyingURLLoaderFactory::InProgressRequest::RestartInternal() {
                             weak_factory_.GetWeakPtr(), state_on_error);
   }
   redirect_url_ = GURL();
+  blocking_response_ = extension_web_request_api_helpers::BlockingResponse();
   bool should_collapse_initiator = false;
   int result = WebRequestEventRouter::Get(factory_->browser_context_)
                    ->OnBeforeRequest(factory_->browser_context_, &info_.value(),
-                                     continuation, &redirect_url_,
+                                     continuation, &redirect_url_, &blocking_response_,
                                      &should_collapse_initiator);
   if (result == net::ERR_BLOCKED_BY_CLIENT) {
     // The request was cancelled synchronously. Dispatch an error notification
@@ -734,6 +735,54 @@ void WebRequestProxyingURLLoaderFactory::InProgressRequest::
 }
 
 void WebRequestProxyingURLLoaderFactory::InProgressRequest::
+    HandleBlockingResponse() {
+  TRACE_EVENT_WITH_FLOW0(
+      "extensions",
+      "WebRequestProxyingURLLoaderFactory::InProgressRequest::"
+      "HandleResponse",
+      TRACE_ID_WITH_SCOPE(kWebRequestProxyingURLLoaderFactoryScope,
+                          TRACE_ID_LOCAL(request_id_)),
+      TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT);
+
+
+  auto head = network::mojom::URLResponseHead::New();
+  head->did_mime_sniff = true;
+
+  head->headers = base::MakeRefCounted<net::HttpResponseHeaders>("HTTP/1.1 " + blocking_response_.status + " " + blocking_response_.status_text + "\n\n");
+
+  for(const auto& header : blocking_response_.headers) {
+    head->headers->AddHeader(header.first, header.second); // TODO Add/SetHeader
+  }
+
+  std::string mime_type;
+  std::string charset;
+  head->headers->GetMimeTypeAndCharset(&mime_type, &charset);
+  head->mime_type = mime_type;
+  head->charset = charset;
+
+  mojo::ScopedDataPipeProducerHandle producer_handle;
+  mojo::ScopedDataPipeConsumerHandle consumer_handle;
+  if (CreateDataPipe(nullptr, producer_handle, consumer_handle) !=
+      MOJO_RESULT_OK) {
+    // CommitCompleted(net::ERR_INSUFFICIENT_RESOURCES,
+    //                 "Can't create empty data pipe");
+    // TODO !!!
+    return;
+  }
+  size_t bytes_written = 0;
+  producer_handle->WriteData(base::as_byte_span(blocking_response_.body), MOJO_WRITE_DATA_FLAG_NONE, bytes_written);
+  // producer_handle.reset();
+
+  target_client_->OnReceiveResponse(
+     std::move(head),
+     /*body=*/ std::move(consumer_handle), std::nullopt);
+  target_client_->OnComplete(network::URLLoaderCompletionStatus(net::OK));
+
+  // Deletes |this|.
+  // factory_->RemoveRequest(network_service_request_id_, request_id_);
+}
+
+void WebRequestProxyingURLLoaderFactory::InProgressRequest::
     ContinueToBeforeSendHeaders(State state_on_error, int error_code) {
   TRACE_EVENT("extensions",
               "WebRequestProxyingURLLoaderFactory::InProgressRequest::"
@@ -744,6 +793,11 @@ void WebRequestProxyingURLLoaderFactory::InProgressRequest::
 
   if (error_code != net::OK) {
     OnRequestError(CreateURLLoaderCompletionStatus(error_code), state_on_error);
+    return;
+  }
+
+  if (!blocking_response_.empty()) {
+    HandleBlockingResponse();
     return;
   }
 

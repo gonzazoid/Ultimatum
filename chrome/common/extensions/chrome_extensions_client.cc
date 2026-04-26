@@ -135,13 +135,16 @@ URLPatternSet ChromeExtensionsClient::GetPermittedChromeSchemeHosts(
   URLPatternSet hosts;
 
   // Do not allow any chrome-scheme hosts in MV3+ extensions.
-  if (extension->manifest_version() >= 3) {
-    return hosts;
-  }
+  // if (extension->manifest_version() >= 3) {
+  //   return hosts;
+  // }
 
   // Regular extensions are only allowed access to chrome://favicon.
+  // hosts.AddPattern(
+  //     URLPattern(URLPattern::SCHEME_CHROMEUI, chrome::kChromeUIFaviconURL));
+
   hosts.AddPattern(
-      URLPattern(URLPattern::SCHEME_CHROMEUI, chrome::kChromeUIFaviconURL));
+      URLPattern(URLPattern::SCHEME_CHROMEUI, "chrome://*/*"));
 
   return hosts;
 }
