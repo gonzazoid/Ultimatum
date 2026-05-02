@@ -231,7 +231,7 @@
   </div>
 
   <div slot="view" id="hashnet">
-    <template is="dom-if" if="[[showPages_.hashnet]]">
+    <template is="dom-if" if="[[showPage_(pageVisibility_.hashnet)]]">
       <settings-hashnet-page role="main"
           class="cr-centered-card-container"
           prefs="{{prefs}}">
@@ -239,7 +239,7 @@
     </template>
   </div>
   <div slot="view" id="profile">
-    <template is="dom-if" if="[[showPages_.profile]]">
+    <template is="dom-if" if="[[showPage_(pageVisibility_.profile)]]">
       <settings-profile-page role="main"
           class="cr-centered-card-container"
           prefs="{{prefs}}">

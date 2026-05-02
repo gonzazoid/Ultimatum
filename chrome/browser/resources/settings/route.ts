@@ -165,8 +165,8 @@ function createRoutes(): SettingsRoutes {
 
   // Root page.
   r.BASIC = new Route('/');
-  r.HASH_NET = new Route('/hashnet', '#Net');
-  r.PROFILE = new Route('/profile', 'Profile');
+  r.HASH_NET = r.BASIC.createSection('/hashnet', 'hashnet', '#Net');
+  r.PROFILE = r.BASIC.createSection('/profile', 'profile', 'Profile');
 
   r.ABOUT = r.BASIC.createSection(
       '/help', 'about', loadTimeData.getString('aboutPageTitle'));
